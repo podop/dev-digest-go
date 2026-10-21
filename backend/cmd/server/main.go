@@ -2,16 +2,16 @@
 //
 // Usage:
 //
-//	server              start the API
+//	server              start the API (migrate and seed first, unless switched off)
+//	server migrate up|down|status
+//	server seed
 //	server healthcheck  exit 0 when the local API answers GET /health (Docker HEALTHCHECK)
 package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -19,12 +19,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v5"
-
 	"dev-digest-go/backend/internal/config"
-	"dev-digest-go/backend/internal/health"
-	"dev-digest-go/backend/internal/platform/httpx"
-	"dev-digest-go/backend/internal/platform/postgres"
+	"dev-digest-go/backend/internal/platform/logging"
 )
 
 func main() {
@@ -35,8 +31,12 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, getenv func(string) string, stdout io.Writer) error {
+	cmd := ""
+	if len(args) > 1 {
+		cmd = args[1]
+	}
 	cfg, err := config.Load(getenv)
-	if len(args) > 1 && args[1] == "healthcheck" {
+	if cmd == "healthcheck" {
 		addr := ":3001"
 		if err == nil {
 			addr = cfg.Addr
@@ -47,40 +47,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout 
 		return fmt.Errorf("config: %w", err)
 	}
 
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	log := slog.New(slog.NewJSONHandler(stdout, &slog.HandlerOptions{Level: cfg.LogLevel}))
-
-	db, err := postgres.Open(ctx, cfg.DatabaseURL, log)
-	if err != nil {
-		return err
+	switch cmd {
+	case "", "serve":
+		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return serve(ctx, cfg, withGetenv(getenv), withLogOutput(stdout))
+	case "migrate":
+		return runMigrate(ctx, cfg, args[2:], stdout, logging.New(stdout, cfg.LogLevel))
+	case "seed":
+		return runSeed(ctx, cfg, stdout, logging.New(stdout, cfg.LogLevel))
+	default:
+		return fmt.Errorf("unknown command %q; %s", cmd, usage)
 	}
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-	defer sqlDB.Close()
-
-	e := httpx.New(cfg.CORSOrigins, log)
-	health.AddRoutes(e, sqlDB, log)
-
-	log.InfoContext(ctx, "api listening", "addr", cfg.Addr)
-	sc := echo.StartConfig{
-		Address:         cfg.Addr,
-		HideBanner:      true,
-		HidePort:        true,
-		GracefulTimeout: 10 * time.Second,
-		BeforeServeFunc: func(s *http.Server) error {
-			s.ReadHeaderTimeout = 5 * time.Second
-			s.IdleTimeout = 120 * time.Second
-			return nil
-		},
-	}
-	if err := sc.Start(ctx, e); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("serve: %w", err)
-	}
-	log.Info("api stopped")
-	return nil
 }
 
 // healthcheck calls the local /health endpoint; used by the container HEALTHCHECK.

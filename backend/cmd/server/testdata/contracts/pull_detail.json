@@ -1,0 +1,43 @@
+{
+  "additions": 10,
+  "author": "octo",
+  "base": "main",
+  "body": "Fixes #12",
+  "branch": "feat",
+  "commits": [
+    {
+      "author": "Octo",
+      "committed_at": "2026-01-01T00:00:00.000Z",
+      "message": "feat: x",
+      "sha": "c0ffee"
+    }
+  ],
+  "deletions": 2,
+  "files": [
+    {
+      "additions": 7,
+      "deletions": 1,
+      "patch": "@@ -1 +1 @@\n-a\n+b",
+      "path": "a.ts"
+    },
+    {
+      "additions": 3,
+      "deletions": 1,
+      "path": "b.ts"
+    }
+  ],
+  "files_count": 2,
+  "head_sha": "abc123",
+  "id": "00000000-0000-4000-8000-000000000006",
+  "linked_issue": {
+    "body": "Details",
+    "number": 12,
+    "state": "open",
+    "title": "Bug"
+  },
+  "number": 7,
+  "opened_at": "2026-01-01T00:00:00.000Z",
+  "status": "open",
+  "title": "Add feature",
+  "updated_at": "2026-01-01T00:00:00.000Z"
+}

@@ -37,6 +37,17 @@ services:
       API_ADDR: ":3001"
       DATABASE_URL: postgres://devdigest:devdigest@db:5432/devdigest?sslmode=disable
       CORS_ORIGINS: http://localhost:${WEB_PORT:-3100},http://127.0.0.1:${WEB_PORT:-3100}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Secrets file (/data/secrets.json) and clone root (/data/workspace) live on the
+      # backend_data volume, so they survive container restarts and rebuilds.
+      DEVDIGEST_DATA_DIR: /data
+      # Startup switches: migrations and seed run before listening unless set to false.
+      DB_AUTO_MIGRATE: ${DB_AUTO_MIGRATE:-true}
+      DB_AUTO_SEED: ${DB_AUTO_SEED:-true}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+    # Shutdown grace is 20 s in the app (requests) plus up to 10 s for running jobs; docker's
+    # default 10 s would SIGKILL it mid-shutdown.
+    stop_grace_period: 30s
     ports:
       - "127.0.0.1:${API_PORT:-3101}:3001"
     volumes:

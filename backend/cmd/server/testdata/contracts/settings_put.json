@@ -1,0 +1,13 @@
+{
+  "automatic_reviews": true,
+  "density": "regular",
+  "feature_models": {
+    "risk_brief": {
+      "model": "gpt-4.1",
+      "provider": "openai"
+    }
+  },
+  "polling_interval_min": 5,
+  "sync_to_folder": true,
+  "theme": "light"
+}

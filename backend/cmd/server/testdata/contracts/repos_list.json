@@ -1,0 +1,24 @@
+[
+  {
+    "clone_path": null,
+    "created_by": "00000000-0000-4000-8000-000000000004",
+    "default_branch": "main",
+    "full_name": "acme/payments-api",
+    "id": "00000000-0000-4000-8000-000000000005",
+    "last_polled_at": null,
+    "name": "payments-api",
+    "owner": "acme",
+    "workspace_id": "00000000-0000-4000-8000-000000000003"
+  },
+  {
+    "clone_path": "/data/workspace/o/r",
+    "created_by": "00000000-0000-4000-8000-000000000004",
+    "default_branch": "main",
+    "full_name": "o/r",
+    "id": "00000000-0000-4000-8000-000000000002",
+    "last_polled_at": "2026-01-01T00:00:00.000Z",
+    "name": "r",
+    "owner": "o",
+    "workspace_id": "00000000-0000-4000-8000-000000000003"
+  }
+]

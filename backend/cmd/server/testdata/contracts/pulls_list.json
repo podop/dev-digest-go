@@ -1,0 +1,23 @@
+[
+  {
+    "additions": 10,
+    "author": "octo",
+    "base": "main",
+    "branch": "feat",
+    "cost_usd": null,
+    "deletions": 2,
+    "files_count": 2,
+    "findings_counts": null,
+    "head_sha": "abc123",
+    "id": "00000000-0000-4000-8000-000000000006",
+    "last_reviewed_at": null,
+    "latest_review_id": null,
+    "latest_review_ids": [],
+    "number": 7,
+    "opened_at": "2026-01-01T00:00:00.000Z",
+    "score": null,
+    "status": "needs_review",
+    "title": "Add feature",
+    "updated_at": "2026-01-01T00:00:00.000Z"
+  }
+]

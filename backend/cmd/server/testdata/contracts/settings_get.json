@@ -1,0 +1,6 @@
+{
+  "density": "regular",
+  "polling_interval_min": 5,
+  "sync_to_folder": true,
+  "theme": "dark"
+}
