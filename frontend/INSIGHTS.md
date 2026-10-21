@@ -54,6 +54,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-22 — pnpm test -- <file> runs through the package script and took >120 s here, while pnpm exec vitest run <file> finishes in ~5 s (src/test/go-backend-contracts.test.ts) → use pnpm exec vitest run <file> for a single file
 - 2026-10-16 — @devdigest/ui Donut (vendor/ui/charts/Donut.tsx): the legend hard-codes valuePrefix '$' + value.toFixed(2), so counts read '48.00' and sub-cent costs '$0.00'; vendor/ui is not edited → use DonutChart from components/agent-metrics (inline SVG, formatValue prop) for counts or CostText values
 - 2026-10-16 — src/vendor/ui/kit/FormField.tsx:19: FormField renders its label as a sibling <label> with no htmlFor and does not wrap children, so the control inside gets NO accessible name (getByLabelText finds nothing) → wrap the control in your own <label> or pass aria-label (TextInput spreads ...rest onto <input>, so type='date' and aria-* go through)
 - 2026-10-15 — Biome a11y (lint --error-on-warnings) on CiTab ExportWizard: a <label> wrapping the vendored @devdigest/ui Textarea fails noLabelWithoutControl, and tabIndex on a <pre> fails noNoninteractiveTabindex → for a labelled or focusable, scrollable read-only text block use a native <textarea readOnly aria-label=…> ⚠ conflicts with 2026-10-15 entry (Textarea: name it with a wrapping <label>)

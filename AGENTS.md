@@ -22,7 +22,8 @@ Ports are configurable in `.env` (see `.env.example`); defaults avoid the Node s
 - Every task, right after the user's request and before planning/editing → read the
   `INSIGHTS.md` of each package it concerns (skill `engineering-insights`, step READ, below)
 - Working on the backend migration (any phase) → read `docs/migration/README.md`
-  (goal, decisions D1–D8, phases) and the research it links
+  (goal, decisions, phases) and the research it links; current state and next steps:
+  `docs/migration/STATUS.md`
 - Implementing a planned feature → its spec in `specs/`, its plan + context pack in `docs/plans/`
 - Touching `backend/` → `backend/AGENTS.md` · touching `frontend/` → `frontend/AGENTS.md`
 
@@ -39,6 +40,9 @@ Every package has the same knowledge slots:
   `frontend/src/vendor/shared/contracts/*` and `docs/migration/research/01-http-api.md`.
 - Stack decisions (user, 2026-10-21): Echo v5 for HTTP, GORM as ORM, schema owned by versioned SQL
   migrations with an up and a down (never GORM AutoMigrate). Details: `backend/AGENTS.md`.
+- The API has no auth by design (local tool), so it must refuse what a browser on another site can
+  send: JSON bodies only as `application/json`, state-changing requests with a foreign `Origin` → 403,
+  `Host` restricted to `ALLOWED_HOSTS` (DNS rebinding). Keep these when adding routes.
 
 ## Engineering skills
 Load these project skills with the Skill tool whenever a step touches Go code — every agent,

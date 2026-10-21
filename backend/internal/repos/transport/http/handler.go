@@ -3,6 +3,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -96,7 +97,11 @@ type workspaceResponse struct {
 }
 
 func (h *Handler) add(c *echo.Context) error {
-	rawURL, err := parseAddBody(c.Request().Body)
+	body, err := httpx.ReadJSONBody(c)
+	if err != nil {
+		return err
+	}
+	rawURL, err := parseAddBody(bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

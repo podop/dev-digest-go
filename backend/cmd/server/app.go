@@ -151,8 +151,9 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	pullsSvc := pullsapp.NewService(pullspg.NewStore(db), pullsgh.New(gh), log, nil)
 
 	e := httpx.New(httpx.Options{
-		Log:         log,
-		CORSOrigins: cfg.CORSOrigins,
+		Log:          log,
+		CORSOrigins:  cfg.CORSOrigins,
+		AllowedHosts: cfg.AllowedHosts,
 		RateLimit: httpx.RateLimit{
 			Enabled: cfg.RateLimitEnabled,
 			Buckets: settingshttp.RateLimitBuckets(),

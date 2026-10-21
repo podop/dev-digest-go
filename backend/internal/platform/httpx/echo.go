@@ -16,6 +16,9 @@ type Options struct {
 	Log *slog.Logger
 	// CORSOrigins is the exact list of allowed browser origins; empty allows none.
 	CORSOrigins []string
+	// AllowedHosts lists the host names (no port, case-insensitive, IPv6 in brackets) the
+	// server answers to; any other Host header gets 403. Empty switches the check off.
+	AllowedHosts []string
 	// RateLimit configures the fixed-window limiter; the zero value disables it.
 	RateLimit RateLimit
 	// Now is the clock of the rate limiter; nil means time.Now.
@@ -24,7 +27,7 @@ type Options struct {
 
 // New returns an Echo instance with the API-wide behavior of the Node server:
 //   - pre-routing (every request, including 404, 405 and preflights): request log line,
-//     security headers, CORS;
+//     security headers, the Host allowlist, CORS, the Origin check of state-changing methods;
 //   - after routing: panic recovery, rate limiting, request body rules;
 //   - the error envelope, GET routes answering HEAD, and the socket address as client IP.
 func New(opts Options) *echo.Echo {
@@ -47,7 +50,8 @@ func New(opts Options) *echo.Echo {
 		}),
 		IPExtractor: echo.ExtractIPDirect(),
 	})
-	e.Pre(requestLog(log), securityHeaders(), corsMiddleware(opts.CORSOrigins))
+	e.Pre(requestLog(log), securityHeaders(), hostCheck(opts.AllowedHosts),
+		corsMiddleware(opts.CORSOrigins), originCheck(opts.CORSOrigins))
 	e.Use(middleware.Recover())
 	if opts.RateLimit.Enabled {
 		e.Use(rateLimit(opts.RateLimit, now))

@@ -9,7 +9,7 @@ Goal: the Go backend (`backend/`) serves the same HTTP API as the Node server of
 | File | Content |
 |---|---|
 | [research/01-http-api.md](research/01-http-api.md) | all 102 routes, error envelope, validation, rate limits, SSE, client ↔ route map, wire conventions, module dependency order |
-| [research/02-data-layer.md](research/02-data-layer.md) | 21 Drizzle migrations, final schema (44 tables), access patterns, seeds, row ↔ contract mapping, GORM mapping |
+| [research/02-data-layer.md](research/02-data-layer.md) | 21 Drizzle migrations, final schema (says 44 tables; actually 46, see Corrections), access patterns, seeds, row ↔ contract mapping, GORM mapping |
 | [research/03-engine-integrations.md](research/03-engine-integrations.md) | reviewer-core, LLM providers, GitHub, git, repo-intel, jobs/SSE/shutdown, CI export, Go library choices |
 
 The wire contracts are the Zod schemas vendored in `frontend/src/vendor/shared/contracts/*`
@@ -27,6 +27,14 @@ The wire contracts are the Zod schemas vendored in `frontend/src/vendor/shared/c
 | D6 | Wire compatibility with the existing UI is mandatory: same paths, status codes, JSON field names (snake_case + the documented camelCase exceptions), error envelope, SSE frames | 2026-10-21 | goal |
 | D7 | Backend runtime image is Alpine with `git` (the backend shells out to git) | 2026-10-21 | research 03 |
 | D8 | CI export runner (Node `agent-runner` bundle vs Go runner): **decided later**, in the CI phase | 2026-10-21 | user |
+| D9 | Browser-attack hardening beyond Node parity (API has no auth): JSON bodies only as `application/json` (restores Node's 422 for `text/plain`), POST/PUT/PATCH/DELETE with a foreign `Origin` → 403, `Host` allowlist `ALLOWED_HOSTS` against DNS rebinding | 2026-10-21 | user (security review r1) |
+| D10 | The composition root (`cmd/`) may hold the `*gorm.DB` handle; querying stays in adapters | 2026-10-21 | architecture review r1 |
+
+Corrections: the Node schema after migrations 0000–0020 has **46 tables**, not 44 as research 02 and
+the Phase 1 spec state (verified on a migrated database and in Drizzle's `0020_snapshot.json`).
+
+Follow-ups (not scheduled): pin base images by digest (`golang`, `alpine`, `node`, `pgvector`);
+run `govulncheck` in CI once CI exists.
 
 ## Phases
 

@@ -142,8 +142,9 @@ func newStack(t *testing.T, o stackOpts) *stack {
 	ids := tenancy.NewResolver(tenancypg.NewStore(d.DB))
 
 	s.e = httpx.New(httpx.Options{
-		RateLimit: httpx.RateLimit{Enabled: o.rateLimit, Buckets: settingshttp.RateLimitBuckets()},
-		Now:       s.clock.Now,
+		CORSOrigins: []string{uiOrigin},
+		RateLimit:   httpx.RateLimit{Enabled: o.rateLimit, Buckets: settingshttp.RateLimitBuckets()},
+		Now:         s.clock.Now,
 	})
 	settingshttp.AddRoutes(s.e, settingshttp.NewHandler(svc, ids))
 	return s

@@ -190,7 +190,7 @@ func newEnv(t *testing.T, token string) *env {
 		},
 	})
 	svc := app.NewService(pgstore.NewStore(d.DB), githubadapter.New(client), log, nil)
-	e := httpx.New(httpx.Options{Log: log})
+	e := httpx.New(httpx.Options{Log: log, CORSOrigins: []string{uiOrigin}})
 	pullshttp.AddRoutes(e, svc, tenancy.NewResolver(tenancypg.NewStore(d.DB)))
 	ev.e = e
 	return ev
@@ -226,7 +226,7 @@ type response struct {
 	Raw    []byte
 }
 
-func (ev *env) do(method, path, body string) response {
+func (ev *env) do(method, path, body string, headers ...string) response {
 	ev.t.Helper()
 	var rd io.Reader
 	if body != "" {
@@ -235,6 +235,9 @@ func (ev *env) do(method, path, body string) response {
 	req := httptest.NewRequest(method, path, rd)
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for i := 0; i+1 < len(headers); i += 2 {
+		req.Header.Set(headers[i], headers[i+1])
 	}
 	rec := httptest.NewRecorder()
 	ev.e.ServeHTTP(rec, req)

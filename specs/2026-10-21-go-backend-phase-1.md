@@ -779,6 +779,8 @@ Operations, security, constraints
 - D8 — When do migrations and seed run? → Automatically at startup before listening, switched off by `DB_AUTO_MIGRATE=false` / `DB_AUTO_SEED=false`, plus the commands `server migrate up|down|status` and `server seed` (user, 2026-10-21; FR17, FR18).
 - D9 — What does refresh do for a cloned repo? → A Phase-1 `refresh` job: fetch with depth 50, hard reset to the remote default branch, set `last_polled_at`; no indexing (user, 2026-10-21; FR28, FR34, AC69).
 - D10 — Is the reduced Settings › Models picker acceptable? → Yes, until Phase 2. `GET /providers/:id/models` stays out of Phase 1 and returns 404, so each picker lists only its current value (user, 2026-10-21; section 9).
+- D11 (post-implementation, security review r1) — Browser-attack hardening beyond Node parity, see `docs/migration/README.md` decision D9: request bodies are parsed as JSON only for `application/json` (`text/plain` → 422 "Expected object, received string", as in Node); POST/PUT/PATCH/DELETE with an `Origin` not in `CORS_ORIGINS` → 403 `forbidden` "Origin not allowed" (this overrides the §7.1 CORS sentence "the request is still served" for state-changing methods; GET/OPTIONS unchanged, AC17–AC19 hold); `Host` must be in `ALLOWED_HOSTS` (default `localhost,127.0.0.1,[::1],backend`) → else 403 "Host not allowed". New error kind `forbidden` → 403 (user, 2026-10-21).
+- D12 (post-implementation correction) — The final Node schema has **46** tables, not 44 as written in FR15/AC29 and §8; the baseline and its test follow the real schema (verified by `TestUp_MatchesNodeSchema`).
 
 ## 17. Open questions
 No blocking question is open. Q1 and Q2 are not used (the former blocking questions became D6–D10). Each question below has the default this spec uses:

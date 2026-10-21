@@ -98,7 +98,7 @@ func wire(t *testing.T, db *gorm.DB, ws, user string) *env {
 	t.Helper()
 	queue := &fakeQueue{}
 	store := reposdb.NewStore(db)
-	e := httpx.New(httpx.Options{Log: slog.New(slog.DiscardHandler)})
+	e := httpx.New(httpx.Options{Log: slog.New(slog.DiscardHandler), CORSOrigins: []string{uiOrigin}})
 	httpapi.AddRoutes(e, app.NewService(store, queue, cloneDir), tenancy.NewResolver(tenancypg.NewStore(db)))
 	return &env{e: e, db: db, queue: queue, ws: ws, user: user}
 }

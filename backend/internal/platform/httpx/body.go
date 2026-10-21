@@ -3,6 +3,7 @@ package httpx
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"mime"
 	"net/http"
@@ -21,7 +22,7 @@ const maxBodyBytes = 1 << 20
 //   - body over the limit: 413;
 //   - application/json that is empty or not valid JSON: 400.
 //
-// A valid body is buffered and put back, so handlers read it as usual.
+// A valid body is buffered and put back; handlers read it through ReadJSONBody.
 func bodyRules() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
@@ -35,12 +36,7 @@ func bodyRules() echo.MiddlewareFunc {
 			if ct == "" && !hasBody {
 				return next(c)
 			}
-			media := ""
-			if ct != "" {
-				if m, _, err := mime.ParseMediaType(ct); err == nil {
-					media = m
-				}
-			}
+			media := mediaType(ct)
 			if media != "application/json" && media != "text/plain" {
 				return echo.NewHTTPError(http.StatusUnsupportedMediaType, "Unsupported Media Type")
 			}
@@ -67,6 +63,47 @@ func bodyRules() echo.MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// mediaType returns the lower-case media type of a Content-Type value without its parameters;
+// "" when the value is empty or malformed.
+func mediaType(contentType string) string {
+	if contentType == "" {
+		return ""
+	}
+	m, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return ""
+	}
+	return m
+}
+
+// ReadJSONBody returns the request body of an endpoint whose body is a JSON document. Handlers
+// call it instead of reading the request body themselves, so one rule decides what is JSON:
+// only a body sent as application/json (parameters such as charset allowed) is returned as it
+// came. A body of any other media type is returned as the JSON string holding its text, the way
+// Fastify hands a text/plain body to the Zod schema; a parser that expects an object then
+// answers "Expected object, received string". That keeps a cross-site "simple" request
+// (text/plain, no preflight) from being read as a command. No body and no Content-Type
+// yields an empty slice. The body rules have already limited the size.
+func ReadJSONBody(c *echo.Context) ([]byte, error) {
+	req := c.Request()
+	raw, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read request body: %w", err)
+	}
+	ct := req.Header.Get("Content-Type")
+	if ct == "" && len(raw) == 0 {
+		return raw, nil
+	}
+	if mediaType(ct) == "application/json" {
+		return raw, nil
+	}
+	text, err := json.Marshal(string(raw))
+	if err != nil {
+		return nil, fmt.Errorf("encode request body as text: %w", err)
+	}
+	return text, nil
 }
 
 func methodHasBody(method string) bool {

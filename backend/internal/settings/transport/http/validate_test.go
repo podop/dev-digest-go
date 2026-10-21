@@ -47,12 +47,12 @@ func (f fakeIdentities) Resolve(context.Context) (tenancy.Identity, error) {
 }
 
 func newRouter(svc *fakeService, ids fakeIdentities) *echo.Echo {
-	e := httpx.New(httpx.Options{})
+	e := httpx.New(httpx.Options{CORSOrigins: []string{uiOrigin}})
 	settingshttp.AddRoutes(e, settingshttp.NewHandler(svc, ids))
 	return e
 }
 
-func do(h http.Handler, method, path, contentType, body string) *httptest.ResponseRecorder {
+func do(h http.Handler, method, path, contentType, body string, headers ...string) *httptest.ResponseRecorder {
 	var req *http.Request
 	if body == "" {
 		req = httptest.NewRequest(method, path, nil)
@@ -61,6 +61,9 @@ func do(h http.Handler, method, path, contentType, body string) *httptest.Respon
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
+	}
+	for i := 0; i+1 < len(headers); i += 2 {
+		req.Header.Set(headers[i], headers[i+1])
 	}
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)

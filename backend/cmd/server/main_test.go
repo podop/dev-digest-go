@@ -75,6 +75,8 @@ type spec struct {
 	providers  providers.Options
 	remoteDir  string // directory holding <owner>/<name>.git; "" = an empty one
 	secretFile string // content of secrets.json, "" = none
+
+	allowedHosts []string // Host allowlist; nil = no Host check
 }
 
 // stack is a running server with its stubs.
@@ -100,6 +102,7 @@ func newConfig(t testing.TB, db *pgtest.Database, sp spec) config.Config {
 		Addr:             "127.0.0.1:0",
 		DatabaseURL:      db.DSN,
 		CORSOrigins:      []string{"http://localhost:3100"},
+		AllowedHosts:     sp.allowedHosts,
 		DataDir:          dataDir,
 		CloneDir:         filepath.Join(dataDir, "workspace"),
 		RateLimitEnabled: sp.rateLimit,
@@ -240,6 +243,10 @@ func (s *stack) do(method, path string, body any, headers ...string) response {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	for i := 0; i+1 < len(headers); i += 2 {
+		if headers[i] == "Host" { // net/http sends req.Host, not the header map entry
+			req.Host = headers[i+1]
+			continue
+		}
 		req.Header.Set(headers[i], headers[i+1])
 	}
 	resp, err := s.client.Do(req)

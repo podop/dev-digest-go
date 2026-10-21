@@ -15,9 +15,10 @@ import (
 // Secret values (provider keys, GitHub token) are deliberately not part of it:
 // they are read per call through the secrets store.
 type Config struct {
-	Addr             string     // listen address, e.g. ":3001"
+	Addr             string     // listen address, see the API_ADDR note on Load
 	DatabaseURL      string     // Postgres connection string
 	CORSOrigins      []string   // browser origins allowed to call the API
+	AllowedHosts     []string   // ALLOWED_HOSTS: Host header names the API answers to (DNS-rebinding guard)
 	LogLevel         slog.Level // debug | info | warn | error
 	DataDir          string     // absolute; holds secrets.json and the clone root
 	CloneDir         string     // absolute clone root, default <DataDir>/workspace
@@ -27,11 +28,23 @@ type Config struct {
 }
 
 // Load reads the configuration through getenv (os.Getenv in production).
+//
+// API_ADDR defaults to ":3001", which listens on every interface. The default is mandated by
+// the spec because the container must accept connections from outside its own network
+// namespace; docker-compose.yml then publishes the port on 127.0.0.1 only. Outside a
+// container (go run ./cmd/server, a bare binary) set API_ADDR=127.0.0.1:3001: the API has no
+// authentication and can overwrite the stored GitHub token and LLM keys, so it must not be
+// reachable from the local network.
+//
+// ALLOWED_HOSTS (comma list, default "localhost,127.0.0.1,[::1],backend") names the Host
+// headers the API answers to; anything else gets 403, which stops DNS-rebinding pages. Add the
+// service name or domain under which the API is reached when that is not one of the defaults.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Addr:             valueOr(getenv("API_ADDR"), ":3001"),
 		DatabaseURL:      getenv("DATABASE_URL"),
 		CORSOrigins:      splitList(valueOr(getenv("CORS_ORIGINS"), "http://localhost:3000")),
+		AllowedHosts:     splitList(valueOr(getenv("ALLOWED_HOSTS"), "localhost,127.0.0.1,[::1],backend")),
 		RateLimitEnabled: enabled(getenv("RATE_LIMIT_ENABLED")),
 		AutoMigrate:      enabled(getenv("DB_AUTO_MIGRATE")),
 		AutoSeed:         enabled(getenv("DB_AUTO_SEED")),

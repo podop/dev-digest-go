@@ -33,7 +33,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   shared plumbing in `internal/platform/<what>` (httpx, postgres, apperr, secrets, gitcli, github,
   retry, logging). Dependencies point inward only.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/`. GORM only in
-  `adapters/postgres` packages and `internal/platform/postgres`. Domain and app import neither.
+  `adapters/postgres` packages, `internal/platform/postgres` and `cmd/` (the composition root may
+  hold and pass the `*gorm.DB` handle, never query with it). Domain and app import neither.
 - Stores use GORM (`*gorm.DB`, `Transaction`, `clause.OnConflict`, `clause.Locking`); GORM
   `Raw`/`Exec` only for what the builder can't express (advisory locks, CTEs, DDL).
   Row structs are declared per adapter — no shared `models` package.
@@ -46,6 +47,9 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 - Secrets only via `internal/platform/secrets` (`$DEVDIGEST_DATA_DIR/secrets.json`, env fallback);
   never logged, never in errors. Git only via `internal/platform/gitcli`; the token goes through
   `GIT_CONFIG_*` env, never argv or `.git/config`.
+- Request bodies only through `httpx.ReadJSONBody` (JSON parsed only for `application/json`).
+  State-changing requests with a foreign `Origin` → 403; `Host` must be in `ALLOWED_HOSTS`
+  (default `localhost,127.0.0.1,[::1],backend`). New routes get both for free via `httpx.New`.
 - Integration tests use `internal/platform/postgres/pgtest` (one container per test binary, fresh
   DB per test) and skip under `-short`.
 

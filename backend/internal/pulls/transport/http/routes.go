@@ -5,8 +5,6 @@ package pullshttp
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -109,9 +107,9 @@ func (h *handler) postComment(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	raw, err := io.ReadAll(c.Request().Body)
+	raw, err := httpx.ReadJSONBody(c)
 	if err != nil {
-		return fmt.Errorf("read comment body: %w", err)
+		return err
 	}
 	req, issues := parseCommentInput(raw)
 	if len(issues) > 0 {

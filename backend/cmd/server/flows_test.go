@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -604,5 +605,65 @@ func TestContracts_TimestampsUseWireFormat(t *testing.T) { // AC22
 		if at, ok := repo["last_polled_at"].(string); ok && !wireTime.MatchString(at) {
 			t.Errorf("last_polled_at = %q, want ISO-8601 UTC with milliseconds", at)
 		}
+	}
+}
+
+func TestHostAllowlist(t *testing.T) { // DNS-rebinding defense
+	s := startStack(t, spec{allowedHosts: []string{"localhost", "127.0.0.1", "[::1]", "backend"}})
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(s.base, "http://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, host := range []string{"127.0.0.1:" + port, "localhost:" + port, "[::1]:" + port, "backend:3001", "LOCALHOST"} {
+		for _, path := range []string{"/health", "/settings"} {
+			if resp := s.do(http.MethodGet, path, nil, "Host", host); resp.Status != http.StatusOK {
+				t.Errorf("GET %s with Host %q = %d (%s), want 200", path, host, resp.Status, resp.Body)
+			}
+		}
+	}
+
+	wantBody := map[string]any{"error": map[string]any{"code": "forbidden", "message": "Host not allowed"}}
+	for _, host := range []string{"evil.example", "evil.example:" + port, "localhost.evil.example"} {
+		for _, path := range []string{"/health", "/settings", "/nope"} {
+			resp := s.do(http.MethodGet, path, nil, "Host", host)
+			if resp.Status != http.StatusForbidden {
+				t.Errorf("GET %s with Host %q = %d (%s), want 403", path, host, resp.Status, resp.Body)
+				continue
+			}
+			if diff := cmp.Diff(wantBody, resp.JSON(t)); diff != "" {
+				t.Errorf("GET %s with Host %q body mismatch (-want +got):\n%s", path, host, diff)
+			}
+		}
+	}
+
+	// The container HEALTHCHECK calls http://127.0.0.1:<port>/health.
+	if err := healthcheck(t.Context(), "0.0.0.0:"+port); err != nil {
+		t.Errorf("healthcheck = %v, want nil with the Host allowlist on", err)
+	}
+}
+
+func TestForeignOriginCannotChangeState(t *testing.T) { // CSRF defense
+	s := startStack(t, spec{})
+	const evil = "http://evil.example"
+	resp := s.do(http.MethodPost, "/settings/test-connection", `{"provider":"github","key":"ATTACKER"}`,
+		"Content-Type", "text/plain;charset=UTF-8", "Origin", evil)
+	want := map[string]any{"error": map[string]any{"code": "forbidden", "message": "Origin not allowed"}}
+	if resp.Status != http.StatusForbidden {
+		t.Fatalf("foreign text/plain POST = %d (%s), want 403", resp.Status, resp.Body)
+	}
+	if diff := cmp.Diff(want, resp.JSON(t)); diff != "" {
+		t.Errorf("body mismatch (-want +got):\n%s", diff)
+	}
+	if _, err := os.Stat(filepath.Join(s.cfg.DataDir, "secrets.json")); !os.IsNotExist(err) {
+		t.Errorf("secrets.json after the refused request: stat error = %v, want it absent", err)
+	}
+
+	resp = s.do(http.MethodPost, "/settings/test-connection", `{"provider":"github","key":"ATTACKER"}`, "Content-Type", "text/plain")
+	if resp.Status != http.StatusUnprocessableEntity {
+		t.Errorf("text/plain POST without Origin = %d (%s), want 422", resp.Status, resp.Body)
+	}
+	if resp := s.do(http.MethodPut, "/settings", map[string]any{"polling_interval_min": 7}, "Origin", "http://localhost:3100"); resp.Status != http.StatusOK {
+		t.Errorf("PUT /settings from the UI origin = %d (%s), want 200", resp.Status, resp.Body)
 	}
 }

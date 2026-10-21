@@ -4,7 +4,6 @@ package settingshttp
 
 import (
 	"context"
-	"io"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -109,7 +108,8 @@ func (h *Handler) testConnection(c *echo.Context) error {
 	return c.JSON(http.StatusOK, h.svc.TestConnection(c.Request().Context(), req.Provider, req.Key))
 }
 
-// readBody returns the request body; the body rules of httpx already limited its size.
+// readBody returns the request body as a JSON document (see httpx.ReadJSONBody); the body
+// rules of httpx already limited its size.
 func readBody(c *echo.Context) ([]byte, error) {
-	return io.ReadAll(c.Request().Body)
+	return httpx.ReadJSONBody(c)
 }

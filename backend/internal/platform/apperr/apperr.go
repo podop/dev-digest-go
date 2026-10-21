@@ -17,6 +17,7 @@ const (
 	KindInternal
 	KindConfig
 	KindExternalService
+	KindForbidden
 )
 
 // String returns the kind name, for logs and test failures.
@@ -38,6 +39,8 @@ func (k Kind) String() string {
 		return "config"
 	case KindExternalService:
 		return "external_service"
+	case KindForbidden:
+		return "forbidden"
 	default:
 		return "unknown"
 	}
@@ -97,6 +100,9 @@ func Config(message string) *Error { return New(KindConfig, message) }
 
 // ExternalService is a failed call to an upstream service (502).
 func ExternalService(message string) *Error { return New(KindExternalService, message) }
+
+// Forbidden is a request the server refuses to serve, such as a foreign Origin or Host (403).
+func Forbidden(message string) *Error { return New(KindForbidden, message) }
 
 // WithCode replaces the wire code, e.g. github_unavailable.
 func (e *Error) WithCode(code string) *Error {
