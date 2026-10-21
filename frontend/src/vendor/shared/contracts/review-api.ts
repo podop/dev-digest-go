@@ -1,0 +1,101 @@
+import { z } from 'zod';
+import { Finding, Verdict } from './findings.js';
+import { Intent, SmartDiff } from './brief.js';
+
+/**
+ * A2 — Review-Core API surface contracts. These extend the core
+ * Review/Finding/Intent/SmartDiff contracts with the persisted/transport shapes
+ * the reviewer endpoints return. A2 owns this file; the barrel re-exports it.
+ *
+ * Distinct from `Finding` (the raw LLM-output unit): `FindingRecord` adds the
+ * persisted row identity + action timestamps so the UI can render accept/dismiss
+ * state and the `review_id` it belongs to.
+ */
+
+export const FindingRecord = Finding.extend({
+  review_id: z.string(),
+  accepted_at: z.string().nullable(),
+  dismissed_at: z.string().nullable(),
+  // Eval case created from this finding (eval-pipeline FR19); server always sets it.
+  // nullish so older producers/fixtures that omit it stay valid.
+  eval_case_id: z.string().nullish(),
+  // Memory entry created from this finding by Learn (specs/multi-agent-review.md);
+  // only the multi-agent read model and Learn fill it, other endpoints may omit it.
+  memory_id: z.string().nullish(),
+});
+export type FindingRecord = z.infer<typeof FindingRecord>;
+
+/** A persisted review with its kept findings + grounding summary. */
+export const ReviewRecord = z.object({
+  id: z.string(),
+  pr_id: z.string(),
+  agent_id: z.string().nullable(),
+  run_id: z.string().nullable(),
+  agent_name: z.string().nullish(),
+  kind: z.enum(['summary', 'review']),
+  verdict: Verdict.nullable(),
+  summary: z.string().nullable(),
+  score: z.number().int().nullable(),
+  model: z.string().nullable(),
+  grounding: z.string().nullish(),
+  created_at: z.string(),
+  // Usage of the run that produced this review (reviews.run_id → agent_runs).
+  // Absent when the review has no run or its run was deleted.
+  cost_usd: z.number().nullish(),
+  tokens_in: z.number().int().nullish(),
+  tokens_out: z.number().int().nullish(),
+  findings: z.array(FindingRecord),
+});
+export type ReviewRecord = z.infer<typeof ReviewRecord>;
+
+/**
+ * Response of `POST /pulls/:id/review`. Each requested agent produces a run that
+ * streams over SSE at `/runs/:runId/events`; clients subscribe per run. The
+ * persisted reviews are also returned once the (synchronous) run completes.
+ */
+export const ReviewRunTarget = z.object({
+  run_id: z.string(),
+  agent_id: z.string(),
+  agent_name: z.string(),
+});
+export type ReviewRunTarget = z.infer<typeof ReviewRunTarget>;
+
+export const ReviewRunResponse = z.object({
+  pr_id: z.string(),
+  /** Parent run id when the request created a multi-agent run (2+ agentIds). */
+  multi_agent_run_id: z.string().nullish(),
+  runs: z.array(ReviewRunTarget),
+  reviews: z.array(ReviewRecord),
+});
+export type ReviewRunResponse = z.infer<typeof ReviewRunResponse>;
+
+/**
+ * Intent persisted for a PR (server/specs/05-intent-layer.md): the Intent plus
+ * the pr_id it scopes, the cache key material, and the LLM call's own usage
+ * (billed on this record + the run's trace — never on `agent_runs.cost_usd`).
+ */
+export const PrIntentRecord = Intent.extend({
+  pr_id: z.string(),
+  head_sha: z.string(),
+  input_hash: z.string(),
+  prompt_version: z.number().int(),
+  provider: z.string(),
+  model: z.string(),
+  tokens_in: z.number().int(),
+  tokens_out: z.number().int(),
+  /** null = unpriced model. */
+  cost_usd: z.number().nullable(),
+  derived_at: z.string(),
+});
+export type PrIntentRecord = z.infer<typeof PrIntentRecord>;
+
+/** GET /pulls/:id/intent — `stale` = the PR body changed since this was derived. */
+export const PrIntentResponse = z.object({
+  intent: PrIntentRecord.nullable(),
+  stale: z.boolean(),
+});
+export type PrIntentResponse = z.infer<typeof PrIntentResponse>;
+
+/** Smart-diff response for a PR (the SmartDiff). */
+export const SmartDiffResponse = SmartDiff;
+export type SmartDiffResponse = z.infer<typeof SmartDiffResponse>;

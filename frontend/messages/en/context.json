@@ -1,0 +1,117 @@
+{
+  "title": "Project Context",
+  "label": "Project context",
+  "summary": "{count, plural, one {# doc} other {# docs}} · ≈ {tokens, number} tokens total",
+  "refresh": "Refresh documents",
+  "filterLabel": "Filter documents",
+  "filterPlaceholder": "Filter documents…",
+  "noMatch": "No documents match your filter.",
+  "truncated": "Showing the first {count} documents.",
+  "loadError": "Couldn’t load documents",
+  "docList": "Documents",
+  "notCloned": {
+    "title": "Repository is not cloned yet",
+    "body": "Documents are read from the local clone. Sync the repository and they will appear here."
+  },
+  "empty": {
+    "title": "No documents match {globs}",
+    "body": "Add markdown files under specs/, docs/ or insights/ and refresh. Configured globs: {globs}."
+  },
+  "docType": {
+    "specs": "specs",
+    "docs": "docs",
+    "insights": "insights"
+  },
+  "preview": {
+    "select": "Select a document",
+    "selectBody": "Pick a document on the left to read it. Attach documents to an agent or a skill from their Context tab.",
+    "loadError": "Couldn’t load this document",
+    "notFound": "This document no longer exists in the repository.",
+    "tooLarge": "This document is larger than 256 KB and cannot be previewed.",
+    "invalidPath": "This path is not a listed document.",
+    "usedBy": "{count, plural, one {Used by # agent} other {Used by # agents}}",
+    "usedByDirect": "{name} (attached directly)",
+    "usedBySkill": "{name} (via skill {skill})",
+    "tokens": "≈ {tokens, number} tokens"
+  },
+  "mode": {
+    "label": "View mode",
+    "preview": "Preview",
+    "edit": "Edit",
+    "readOnlyHint": "Repository files are read-only — create a copy in .devdigest/specs/ to edit"
+  },
+  "editor": {
+    "field": "Document content",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "unsaved": "Unsaved changes",
+    "leaveConfirm": "You have unsaved changes to this file. Leave anyway?",
+    "loading": "Loading editor…",
+    "banner": {
+      "stale": "This file changed since you opened it. Reload to take the latest version, or keep editing and save again to overwrite it.",
+      "gone": "This file was deleted or renamed elsewhere",
+      "exists": "A file already exists at this path. Reload to see it, or keep editing and save again to overwrite it.",
+      "reload": "Reload",
+      "keep": "Keep editing"
+    }
+  },
+  "store": {
+    "list": "Store files",
+    "newFile": "New file",
+    "newFolder": "New folder",
+    "upload": "Upload markdown files",
+    "uploadInput": "Markdown files to upload",
+    "empty": "No files yet — create or upload a spec.",
+    "repoLabel": "Repository documents",
+    "actions": "Actions for {name}",
+    "rename": "Rename",
+    "delete": "Delete",
+    "renameLabel": "New path for {name}",
+    "renameHint": "Enter to save, Esc to cancel",
+    "errors": {
+      "invalidPath": "Use letters, digits, . _ - in every name, end with .md, at most 5 folder levels.",
+      "pathExists": "A file with this path already exists.",
+      "stale": "This file changed since you opened it. Refresh and try again.",
+      "gone": "This file no longer exists."
+    },
+    "deleteDialog": {
+      "title": "Delete file",
+      "body": "Delete {path}? This cannot be undone.",
+      "usedBy": "{count, plural, one {Used by # agent} other {Used by # agents}} — it will show as missing in their context.",
+      "cancel": "Cancel",
+      "confirm": "Delete",
+      "deleting": "Deleting…",
+      "deleted": "Deleted {name}"
+    },
+    "folderDialog": {
+      "title": "New folder",
+      "label": "Folder name",
+      "placeholder": "docs-x",
+      "hint": "Folders exist through their files: this creates {path}.",
+      "invalid": "Use letters, digits, . _ - in every name, at most 5 folder levels.",
+      "create": "Create",
+      "creating": "Creating…",
+      "cancel": "Cancel"
+    },
+    "uploadStatus": {
+      "progress": "Uploading {done}/{total}…",
+      "done": "{count, plural, one {# file uploaded} other {# files uploaded}}",
+      "skipped": {
+        "not_md": "{name} skipped: only .md files can be uploaded.",
+        "bad_name": "{name} skipped: the file name has characters that are not allowed.",
+        "too_large": "{name} skipped: larger than 256 KB.",
+        "not_utf8": "{name} skipped: not UTF-8 text.",
+        "has_nul": "{name} skipped: binary content."
+      }
+    }
+  },
+  "picker": {
+    "attachedList": "Attached documents",
+    "preview": "Preview",
+    "previewFile": "Preview {name}",
+    "dragHandle": "Drag to reorder {name}",
+    "missing": "missing",
+    "missingTitle": "This document is not in the repository any more. Uncheck it to remove it."
+  }
+}

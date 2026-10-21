@@ -1,0 +1,31 @@
+{
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "close": "Close",
+    "import": "Import",
+    "export": "Export",
+    "run": "Run",
+    "dismiss": "Dismiss",
+    "goHome": "Go to DevDigest"
+  },
+  "states": {
+    "loading": "Loading…",
+    "empty": "Nothing here yet",
+    "error": "Something went wrong"
+  },
+  "repoNotFound": {
+    "title": "No repo selected",
+    "body": "This repository isn't in your workspace — it may have been removed, or the link is stale. Add a repo or pick another from the switcher to get started.",
+    "cta": "Add repository"
+  },
+  "errorPage": {
+    "title": "Something went wrong",
+    "body": "This screen crashed while rendering. Try again — if it keeps happening, reload the page."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "There is nothing at this address. The link may be stale, or the page was moved."
+  }
+}

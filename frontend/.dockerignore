@@ -1,0 +1,11 @@
+node_modules
+.next
+.next-*
+coverage
+*.tsbuildinfo
+.env
+.env.local
+Dockerfile
+.dockerignore
+docs
+specs

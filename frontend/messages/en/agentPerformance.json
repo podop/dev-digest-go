@@ -1,0 +1,155 @@
+{
+  "title": "Agent Performance",
+  "dashboard": {
+    "metaTitle": "Agent Performance",
+    "crumb": "Agent Performance",
+    "subtitle": "Which agents earn their keep — accept rate is the quality signal",
+    "loading": "Loading agent performance",
+    "periodPhrase": {
+      "1d": "the last 24 hours",
+      "30d": "the last 30 days"
+    },
+    "inPeriod": "in {period}",
+    "noAgentsTitle": "No agents yet",
+    "noAgentsBody": "Create an agent and run a review to see how it performs.",
+    "noAgentsCta": "Go to Agents",
+    "noRunsTitle": "No runs in {period}",
+    "noRunsBody": "Pick a longer period or run a review",
+    "costBreakdown": "Cost breakdown",
+    "cards": {
+      "totalRuns": "Total runs",
+      "totalCost": "Total cost",
+      "avgAccept": "Avg accept rate",
+      "mostActive": "Most active agent",
+      "runsCount": "{count, plural, one {# run} other {# runs}}",
+      "acceptPercent": "{percent}% accept"
+    },
+    "table": {
+      "label": "Agents",
+      "columns": {
+        "agent": "Agent",
+        "runs": "Runs",
+        "avg_cost": "Avg cost (est.)",
+        "avg_duration": "Avg duration",
+        "accept_rate": "Accept rate",
+        "last_run": "Last run"
+      },
+      "view": "View",
+      "viewAgent": "View stats of {name}",
+      "runsOverPeriod": "Runs over the period"
+    }
+  },
+  "loadError": "Could not load agent performance.",
+  "period": {
+    "label": "Period",
+    "last24h": "Last 24 hours",
+    "last30d": "Last 30 days",
+    "custom": "Custom range…",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "apply": "Apply",
+    "errors": {
+      "invalid": "Enter a valid start and end date",
+      "endBeforeStart": "End date must be on or after start date",
+      "tooLong": "Range can be at most 366 days",
+      "startInFuture": "Start date cannot be in the future"
+    }
+  },
+  "metrics": {
+    "runs": "Runs",
+    "totalCost": "Total cost (est.)",
+    "avgCost": "Avg cost (est.)",
+    "avgDuration": "Avg duration",
+    "acceptRate": "Accept rate",
+    "noValue": "—",
+    "seconds": "{value} s",
+    "percent": "{value}%",
+    "noDecisions": "0 decisions",
+    "smallSample": "small sample",
+    "smallSampleHint": "fewer than {min} decisions",
+    "failedOrCancelled": "{count} failed or cancelled",
+    "unpriced": "{count, plural, one {# run without a cost estimate} other {# runs without a cost estimate}}",
+    "estimateLabel": "DevDigest estimate",
+    "acceptedOfDecisions": "{accepted} accepted of {decisions} decisions · {pending} pending",
+    "percentUnit": "%",
+    "secondsUnit": "s",
+    "ofDecisions": "of {decisions}",
+    "vsPrevious": "Change against the previous period of the same length",
+    "acceptUp": "Up from {previous}% in the previous period",
+    "acceptDown": "Down from {previous}% in the previous period",
+    "totalEstimate": "{total} total · DevDigest estimate"
+  },
+  "breakdown": {
+    "byStatus": "By status",
+    "done": "Done",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "bySource": "By source",
+    "local": "Local",
+    "ci": "CI",
+    "decisions": "Decisions",
+    "accepted": "Accepted",
+    "dismissed": "Dismissed",
+    "pending": "Pending",
+    "costEstimates": "Cost estimates",
+    "priced": "Priced runs",
+    "unpriced": "Unpriced runs",
+    "noRuns": "No runs in this period",
+    "byAgent": "By agent",
+    "byModel": "By model",
+    "deletedAgents": "Deleted agents",
+    "unknownModel": "Unknown model",
+    "noCost": "No cost estimate recorded in this period",
+    "estimateNote": "All costs are DevDigest estimates recorded per run (provider-reported or price-book). Reconciled billing data is not stored."
+  },
+  "statsTab": {
+    "loading": "Loading agent stats",
+    "loadError": "Could not load stats.",
+    "periodPhrase": {
+      "1d": "the last 24 hours",
+      "30d": "the last 30 days"
+    },
+    "noRunsTitle": "No runs in {period}",
+    "noRunsBody": "Pick a longer period or run a review",
+    "cardsLabel": "Agent stats",
+    "runBreakdown": "Run breakdown",
+    "mostUsedSkills": "Most-used skills",
+    "mostPulledMemory": "Most-pulled memory",
+    "findingsBySeverity": "Findings by severity",
+    "findingsByCategory": "Findings by category",
+    "costByModel": "Cost by model",
+    "noSkills": "No skills were in this agent’s prompts in this period",
+    "noMemory": "No memory was pulled into this agent’s runs in this period",
+    "noFindings": "No findings in this period",
+    "share": "{percent}%",
+    "runsOf": "{runs} of {total} runs",
+    "severityTooltip": "{label}: {critical} critical, {warning} warning, {suggestion} suggestion",
+    "severity": {
+      "critical": "Critical",
+      "warning": "Warning",
+      "suggestion": "Suggestion"
+    },
+    "history": {
+      "title": "Run history",
+      "noValue": "—",
+      "columns": {
+        "time": "Timestamp",
+        "pr": "PR",
+        "tokens": "Tokens",
+        "cost": "Cost (est.)",
+        "findings": "Findings",
+        "source": "Source",
+        "trace": "Trace"
+      },
+      "source": {
+        "local": "local",
+        "ci": "CI"
+      },
+      "status": {
+        "failed": "failed",
+        "cancelled": "cancelled"
+      },
+      "viewTrace": "View trace"
+    }
+  }
+}

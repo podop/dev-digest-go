@@ -1,0 +1,413 @@
+import { z } from 'zod';
+import type {
+  PrMeta,
+  PrDetail,
+  IssueMeta,
+  PrReviewComment,
+} from './contracts/platform.js';
+
+/**
+ * Adapter interfaces. ALL external calls go behind these interfaces.
+ * Real implementations live in `apps/api/src/adapters/*`; mock implementations
+ * live alongside for tests/dev (Services depend on the interface, not the impl).
+ */
+
+// ---------- LLM ----------
+export const ModelInfo = z.object({
+  id: z.string(),
+  provider: z.enum(['openai', 'anthropic', 'openrouter']),
+  label: z.string().nullish(),
+  created: z.number().int().nullish(),
+  /** Pricing in USD per 1M tokens (when the provider exposes it, e.g. OpenRouter). */
+  pricing: z
+    .object({ promptPerM: z.number(), completionPerM: z.number() })
+    .nullish(),
+  /** Max context window in tokens (when the provider exposes it). */
+  contextLength: z.number().int().nullish(),
+});
+export type ModelInfo = z.infer<typeof ModelInfo>;
+
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface CompletionRequest {
+  model: string;
+  messages: ChatMessage[];
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+  /**
+   * Aborts the in-flight request (e.g. the user cancelled the run). Providers
+   * pass it to the SDK call; an aborted call rejects and is never retried.
+   */
+  signal?: AbortSignal;
+}
+
+export interface CompletionResult {
+  text: string;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number | null;
+}
+
+/**
+ * Structured-output request. `schema` is a Zod schema; `schemaName` names the
+ * tool / json_schema. `maxRetries` controls reprompt-on-error.
+ */
+export interface StructuredRequest<T> {
+  model: string;
+  schema: z.ZodType<T>;
+  schemaName: string;
+  messages: ChatMessage[];
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+  maxRetries?: number;
+  /**
+   * Called once per received response — including schema-invalid retry
+   * attempts — with THAT attempt's usage, so a caller can still account for
+   * spend when the call ultimately throws. Observational: providers swallow any
+   * error it throws.
+   */
+  onUsage?: (usage: LlmUsage) => void;
+  /**
+   * Aborts the in-flight request (e.g. the user cancelled the run). Providers
+   * pass it to the SDK call; an aborted call rejects and is never retried.
+   */
+  signal?: AbortSignal;
+  /**
+   * OpenRouter session id — groups related generations (e.g. all map-reduce
+   * chunks of one review) into a session in the OpenRouter dashboard. Sent as
+   * the `session_id` body field; ignored by providers that don't support it.
+   */
+  sessionId?: string;
+}
+
+/** Usage of ONE LLM response (one attempt), reported via `onUsage`. */
+export interface LlmUsage {
+  tokensIn: number;
+  tokensOut: number;
+  /** null = the model is unpriced. */
+  costUsd: number | null;
+}
+
+export interface StructuredResult<T> {
+  data: T;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  costUsd: number | null;
+  raw: string;
+  attempts: number;
+}
+
+export interface LLMProvider {
+  readonly id: 'openai' | 'anthropic' | 'openrouter';
+  listModels(): Promise<ModelInfo[]>;
+  complete(req: CompletionRequest): Promise<CompletionResult>;
+  completeStructured<T>(req: StructuredRequest<T>): Promise<StructuredResult<T>>;
+  embed(texts: string[]): Promise<number[][]>;
+}
+
+// ---------- Embedder ----------
+export interface Embedder {
+  /** OpenAI text-embedding-3-small → 1536 dims. */
+  embed(texts: string[]): Promise<number[][]>;
+  readonly dims: number;
+}
+
+// ---------- GitHub (Octokit REST, thin) ----------
+export interface RepoRef {
+  owner: string;
+  name: string;
+}
+
+export interface GitHubReviewPayload {
+  body: string;
+  event: 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
+  comments?: { path: string; line: number; body: string }[];
+}
+
+/** Create one standalone inline review comment (or a reply to a thread). */
+export interface CreateReviewCommentInput {
+  /** Head commit the comment pins to (GitHub requires commit_id). */
+  commitId: string;
+  path: string;
+  line: number;
+  side?: 'LEFT' | 'RIGHT';
+  body: string;
+  /** When set, post as a reply to that comment's thread instead of a new one. */
+  inReplyTo?: number;
+}
+
+export interface OpenPrPayload {
+  title: string;
+  head: string;
+  base: string;
+  body: string;
+}
+
+/** A single file to write in a commit (path relative to repo root + UTF-8 text). */
+export interface CommitFile {
+  path: string;
+  contents: string;
+}
+
+export interface CommitFilesPayload {
+  /** Branch to create-or-update with the commit (e.g. "devdigest/ci"). */
+  branch: string;
+  /** Base branch to fork from when `branch` does not yet exist (e.g. "main"). */
+  base: string;
+  message: string;
+  files: CommitFile[];
+}
+
+/** A merged PR with the paths it changed (the first page of its files, de-duplicated). */
+export interface MergedPrSummary {
+  number: number;
+  title: string;
+  author: string;
+  /** ISO timestamp. */
+  merged_at: string;
+  files: string[];
+}
+
+/** One completed GitHub Actions workflow run (specs/export-to-ci.md, refresh/ingest). */
+export interface WorkflowRunSummary {
+  id: number;
+  run_attempt: number;
+  head_sha: string;
+  /** Workflow file path as GitHub reports it, e.g. ".github/workflows/x.yml". */
+  path: string;
+  event: string;
+  /** success | failure | cancelled | skipped | ... (null while not concluded). */
+  conclusion: string | null;
+  html_url: string;
+  /** Numeric id of the repository the run belongs to. */
+  repository_id: number;
+  /** Empty for fork PRs (GitHub does not populate it). */
+  pr_numbers: number[];
+  /** ISO timestamp. */
+  created_at: string;
+}
+
+/** One artifact of a workflow run. */
+export interface RunArtifactSummary {
+  id: number;
+  name: string;
+  size_in_bytes: number;
+  expired: boolean;
+  /** ISO timestamp. */
+  created_at: string;
+}
+
+export interface GitHubClient {
+  listPullRequests(repo: RepoRef): Promise<PrMeta[]>;
+  /**
+   * Merged PRs among the `limit` most recently updated closed PRs (newest
+   * update first), each with its changed paths — for "prior PRs touching these
+   * files". Reads only the first page of each PR's files.
+   */
+  listMergedPullRequests(repo: RepoRef, opts: { limit: number }): Promise<MergedPrSummary[]>;
+  getPullRequest(repo: RepoRef, n: number): Promise<PrDetail>;
+  postReview(repo: RepoRef, n: number, review: GitHubReviewPayload): Promise<{ id: string }>;
+  /** List inline review comments on a PR (for the "Files changed" tab). */
+  listReviewComments(repo: RepoRef, n: number): Promise<PrReviewComment[]>;
+  /** Create one inline review comment (or reply) on a PR; returns the new comment. */
+  createReviewComment(
+    repo: RepoRef,
+    n: number,
+    input: CreateReviewCommentInput,
+  ): Promise<PrReviewComment>;
+  openPullRequest(repo: RepoRef, payload: OpenPrPayload): Promise<{ url: string }>;
+  /**
+   * Commit `files` onto `branch` as ONE atomic commit (Git Data API: blobs →
+   * tree → commit → ref). Creates the branch from `base` if missing, else
+   * fast-forwards it. Idempotent: re-publishing just adds a new commit.
+   */
+  commitFiles(repo: RepoRef, payload: CommitFilesPayload): Promise<{ branch: string }>;
+  /** The open PR whose head is `branch`, if any (so re-publish reuses it). */
+  findOpenPr(repo: RepoRef, branch: string): Promise<{ url: string } | null>;
+  getIssue(repo: RepoRef, n: number): Promise<IssueMeta>;
+  /**
+   * Read a file at `ref` via the Contents API (server/specs/05-intent-layer.md)
+   * — the fallback when there is no local clone (or `GitClient.readFileAt`
+   * failed). Returns null for anything that isn't a small regular file at that
+   * ref (missing, directory, submodule, oversize — checked against
+   * `opts.maxBytes` before the content is decoded) rather than throwing.
+   */
+  getFileContent(repo: RepoRef, path: string, ref: string, opts?: { maxBytes?: number }): Promise<FileAtRef | null>;
+  /** GET /user — for "posting as @user". */
+  currentLogin(): Promise<string>;
+  /**
+   * Newest completed `pull_request` runs of one workflow file (by file name).
+   * A missing workflow file rejects with an error carrying `.status === 404`.
+   */
+  listWorkflowRuns(
+    repo: RepoRef,
+    workflowFile: string,
+    opts: { perPage: number },
+  ): Promise<WorkflowRunSummary[]>;
+  /** Artifacts of one workflow run (first page). */
+  listRunArtifacts(repo: RepoRef, runId: number): Promise<RunArtifactSummary[]>;
+  /**
+   * Artifact ZIP bytes; null when it is larger than `opts.maxBytes` (never
+   * returned oversize). An expired artifact rejects with `.status` 410.
+   */
+  downloadArtifact(
+    repo: RepoRef,
+    artifactId: number,
+    opts: { maxBytes: number },
+  ): Promise<Uint8Array | null>;
+}
+
+// ---------- Git (simple-git, heavy) ----------
+export interface CloneOptions {
+  depth?: number;
+  branch?: string;
+  /** Kills the git process when aborted (job timeout / shutdown). */
+  signal?: AbortSignal;
+}
+
+export interface DiffHunk {
+  file: string;
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  /** Lines present in the *new* file covered by this hunk (for grounding). */
+  newLineNumbers: number[];
+}
+
+export interface UnifiedDiff {
+  raw: string;
+  files: { path: string; additions: number; deletions: number; hunks: DiffHunk[] }[];
+}
+
+export interface BlameLine {
+  line: number;
+  sha: string;
+  author: string;
+  date: string;
+  summary: string;
+}
+
+export interface GitCommit {
+  sha: string;
+  message: string;
+  author: string;
+  date: string;
+}
+
+/** A file read at an exact commit (server/specs/05-intent-layer.md). */
+export interface FileAtRef {
+  /** Repo-relative POSIX path, as resolved (echoes the input on success). */
+  path: string;
+  content: string;
+  /** Byte size of the content. */
+  size: number;
+}
+
+export interface GitClient {
+  clone(repo: RepoRef, url: string, opts?: CloneOptions): Promise<{ path: string }>;
+  fetchPullHead(repo: RepoRef, n: number): Promise<void>;
+  /**
+   * Resync an already-cloned repo to the tip of `branch`: fetch from origin and
+   * advance the local working tree to `origin/<branch>`. Unlike `clone`'s bare
+   * `fetch` (which only moves remote-tracking refs), this moves local HEAD so a
+   * subsequent index reflects the latest code. Returns the new HEAD sha.
+   */
+  sync(repo: RepoRef, branch: string, opts?: { signal?: AbortSignal }): Promise<{ head: string }>;
+  currentHead(repo: RepoRef): Promise<string>;
+  diff(repo: RepoRef, base: string, head: string): Promise<UnifiedDiff>;
+  /**
+   * Names of files changed between two commits (`git diff --name-only base..head`).
+   * Two-dot form is intentional — we want files reachable from `head` but not `base`,
+   * matching the incremental indexer's "what moved since last_indexed_sha?" semantics.
+   * Returns an empty array when the two refs resolve to the same commit.
+   */
+  diffNameOnly(repo: RepoRef, base: string, head: string): Promise<string[]>;
+  blame(repo: RepoRef, path: string): Promise<BlameLine[]>;
+  log(repo: RepoRef, path?: string): Promise<GitCommit[]>;
+  readFile(repo: RepoRef, path: string): Promise<string>;
+  /**
+   * Read a file at an EXACT commit (not the working tree) — `git cat-file -s`
+   * (size, checked before reading) + `git show <sha>:<path>`. `sha` must match
+   * `^[0-9a-f]{7,40}$`; `path` is checked the same way as `readFile` (must
+   * resolve strictly inside the clone). Throws on an invalid sha/path or a
+   * missing/oversize object — callers fall back to `GitHubClient.getFileContent`.
+   */
+  readFileAt(repo: RepoRef, sha: string, path: string, opts?: { maxBytes?: number }): Promise<FileAtRef>;
+  /**
+   * The commit a PR's base branch should be read at: `merge-base(origin/<baseRef>,
+   * head)` when both are in the clone, else the tip of `origin/<baseRef>` (then
+   * `<baseRef>`), else null. Never fetches. `baseRef` is a branch name and `head`
+   * a commit sha; anything else (or an unresolvable pair) resolves to null rather
+   * than throwing. Returns the full 40-char sha.
+   */
+  resolveBaseCommit(repo: RepoRef, baseRef: string, head: string): Promise<string | null>;
+  clonePathFor(repo: RepoRef): string;
+}
+
+// ---------- CodeIndex (ripgrep + tree-sitter) ----------
+export interface CodeMatch {
+  path: string;
+  line: number;
+  text: string;
+}
+
+export interface CodeSymbol {
+  path: string;
+  name: string;
+  kind: string;
+  line: number;
+}
+
+export interface CodeReference {
+  fromPath: string;
+  toSymbol: string;
+  line: number;
+}
+
+export interface CodeIndex {
+  grep(repo: RepoRef, pattern: string): Promise<CodeMatch[]>;
+  symbols(repo: RepoRef): Promise<CodeSymbol[]>;
+  references(repo: RepoRef, symbol: string): Promise<CodeReference[]>;
+}
+
+// ---------- Auth (pluggable; MVP = LocalNoAuthProvider) ----------
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface AuthWorkspace {
+  id: string;
+  name: string;
+}
+
+export interface AuthProvider {
+  currentUser(req: unknown): Promise<AuthUser>;
+  currentWorkspace(req: unknown): Promise<AuthWorkspace>;
+}
+
+// ---------- Secrets (pluggable; MVP = LocalSecretsProvider) ----------
+export type SecretKey =
+  | 'OPENAI_API_KEY'
+  | 'ANTHROPIC_API_KEY'
+  | 'GITHUB_TOKEN'
+  | 'DATABASE_URL'
+  | (string & {});
+
+export interface SecretsProvider {
+  get(key: SecretKey): Promise<string | undefined>;
+  /**
+   * Persist a secret (BYO key entered via the UI). Optional — read-only
+   * providers (e.g. the env-only MVP backend) may omit it.
+   */
+  set?(key: SecretKey, value: string): Promise<void>;
+}

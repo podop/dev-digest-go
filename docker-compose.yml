@@ -1,0 +1,66 @@
+# DevDigest (Go backend): three containers — database, backend, frontend.
+#   docker compose up -d --build      start everything
+#   docker compose ps                 health of each service
+# Ports bind to loopback only: the API has no auth and the DB uses default credentials.
+# Never `docker compose down -v` unless you mean it: it deletes the database volume.
+name: devdigest-go
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: devdigest
+      POSTGRES_PASSWORD: devdigest
+      POSTGRES_DB: devdigest
+    ports:
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U devdigest -d devdigest"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      # Build-time only: parallel downloads (go mod, npm) get reset on the default bridge
+      # network under WSL2; the running containers still use the compose network.
+      network: host
+    restart: unless-stopped
+    env_file:
+      - path: .env          # optional: LLM keys, GITHUB_TOKEN (see .env.example)
+        required: false
+    environment:
+      API_ADDR: ":3001"
+      DATABASE_URL: postgres://devdigest:devdigest@db:5432/devdigest?sslmode=disable
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-3100},http://127.0.0.1:${WEB_PORT:-3100}
+    ports:
+      - "127.0.0.1:${API_PORT:-3101}:3001"
+    volumes:
+      - backend_data:/data   # repository clones + local secrets file
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      network: host   # see backend.build.network
+      args:
+        # The browser calls the API directly, so this is the host-side URL.
+        NEXT_PUBLIC_API_BASE: http://localhost:${API_PORT:-3101}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3100}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+    name: devdigest_go_pgdata
+  backend_data:
+    name: devdigest_go_backend_data

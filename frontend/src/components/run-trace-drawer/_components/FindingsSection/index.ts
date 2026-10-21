@@ -1,0 +1,1 @@
+export { FindingsSection } from "./FindingsSection";

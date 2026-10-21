@@ -1,0 +1,79 @@
+{
+  "block": {
+    "intent": "Intent",
+    "blast": "Blast radius",
+    "risks": "Risk areas",
+    "history": "PR history"
+  },
+  "noRisks": "No notable risks flagged.",
+  "noHistory": "No prior PRs overlap these files.",
+  "overlap": "{count} overlap",
+  "unavailable": "Brief not available yet.",
+  "unavailableHint": "Run a review or open the PR to compute it.",
+  "why": {
+    "title": "git-why",
+    "blame": "blame",
+    "noHistory": "No history available for this line.",
+    "noCommits": "No commits found for this line."
+  },
+  "title": "PR Brief",
+  "empty": {
+    "body": "Generate a summary, risk areas and a review focus list from this PR's intent, blast radius, findings and attached specs. One model call is made with the Risk Brief model.",
+    "cta": "Generate brief"
+  },
+  "generating": "Generating the brief…",
+  "refresh": "Refresh",
+  "retry": "Retry",
+  "staleHint": "New commits since this brief was generated",
+  "error": {
+    "title": "Could not load the brief",
+    "body": "The brief could not be loaded.",
+    "generateFailed": "Could not generate the brief: {message}",
+    "generateFailedGeneric": "Could not generate the brief."
+  },
+  "missing": {
+    "item": "Generated without: {input} ({reason})",
+    "itemDetail": "Generated without: {input} ({reason}, {detail})",
+    "input": {
+      "intent": "intent",
+      "blast": "blast radius",
+      "specs": "spec documents",
+      "linked_issue": "linked issue",
+      "description": "description"
+    },
+    "reason": {
+      "not_derived": "not derived yet",
+      "degraded": "unavailable",
+      "no_review_run": "no review run yet",
+      "none_attached": "no documents attached",
+      "over_budget": "over the size budget",
+      "unreadable": "unreadable",
+      "not_linked": "not linked",
+      "fetch_failed": "could not be fetched",
+      "empty": "empty"
+    }
+  },
+  "banner": {
+    "verdict": {
+      "requestChanges": "Request changes",
+      "approve": "Approve",
+      "comment": "Comment"
+    },
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}",
+    "blockers": "{count, plural, one { · # blocker} other { · # blockers}}",
+    "prScore": "PR SCORE",
+    "cost": "Cost of this brief · tokens in→out"
+  },
+  "risk": {
+    "severity": {
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low"
+    }
+  },
+  "focus": {
+    "title": "Review focus — read these first",
+    "empty": "No focus items."
+  },
+  "notInDiff": "File not in this PR's diff"
+}

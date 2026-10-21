@@ -1,0 +1,59 @@
+{
+  "title": "Blast radius",
+  "stat": {
+    "symbols": "{count, plural, one {symbol} other {symbols}}",
+    "callers": "{count, plural, one {caller} other {callers}}",
+    "endpoints": "{count, plural, one {endpoint} other {endpoints}}",
+    "crons": "{count, plural, one {cron} other {crons}}"
+  },
+  "view": {
+    "tree": "Tree",
+    "graph": "Graph",
+    "label": "Blast radius view"
+  },
+  "callerCount": "{count, plural, one {# caller} other {# callers}}",
+  "callers": "Callers",
+  "endpointsAffected": "Affected endpoints",
+  "cronsAffected": "Affected cron jobs",
+  "noDownstream": "{count, plural, one {# changed symbol} other {# changed symbols}}, no downstream callers found.",
+  "noSymbols": "No symbols declared in the changed files.",
+  "error": {
+    "title": "Couldn’t load the blast radius",
+    "body": "The index could not be read. Try again."
+  },
+  "degraded": {
+    "badge": "Degraded",
+    "reason": {
+      "flag_off": "Repo intelligence is turned off, so callers could not be looked up.",
+      "index_failed": "Indexing this repo failed, so callers could not be looked up.",
+      "index_partial": "The index of this repo is partial, so some callers may be missing.",
+      "repo_too_large": "This repo is too large to index fully, so some callers may be missing.",
+      "no_data": "There is no index data for the files of this PR yet.",
+      "unknown": "The index could not answer fully."
+    },
+    "notImpact": "This is unknown, not “no impact”.",
+    "resync": "Resync",
+    "resyncStarted": "Resync started — reload this card in a minute."
+  },
+  "graph": {
+    "empty": "No downstream callers to graph.",
+    "ariaLabel": "Blast radius graph",
+    "moreSymbols": "{count, plural, one {+# more symbol} other {+# more symbols}} — see tree view",
+    "legend": {
+      "title": "Legend",
+      "symbol": "Changed symbol",
+      "caller": "Caller",
+      "endpoint": "Endpoint",
+      "cron": "Cron job"
+    }
+  },
+  "tree": {
+    "showMore": "{count, plural, one {Show # more symbol} other {Show # more symbols}}",
+    "showFewer": "Show fewer"
+  },
+  "priorPrs": {
+    "title": "Prior PRs touching these files",
+    "meta": "{author} · {date}",
+    "touched": "Touched {count, plural, one {this file} other {# of these files}}: {names}{more, plural, =0 {} other {, … +# more}}"
+  }
+}

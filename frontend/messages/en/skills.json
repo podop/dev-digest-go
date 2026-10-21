@@ -1,0 +1,223 @@
+{
+  "page": {
+    "crumbLab": "Skills Lab",
+    "crumbSkills": "Skills",
+    "heading": "Skills",
+    "subtitle": "Reusable review rules. Link a skill to an agent and it goes into that agent's prompt.",
+    "searchPlaceholder": "Search skills…",
+    "loadError": "Could not load skills.",
+    "count": "{shown} of {total}",
+    "empty": {
+      "title": "No skills yet",
+      "body": "Create a skill, or import one from a file, a URL or the community catalog."
+    },
+    "noMatch": {
+      "title": "No matching skills",
+      "body": "Try another search or type filter."
+    }
+  },
+  "filter": {
+    "all": "All"
+  },
+  "type": {
+    "rubric": "rubric",
+    "convention": "convention",
+    "security": "security",
+    "custom": "custom"
+  },
+  "source": {
+    "manual": "Manual",
+    "imported_file": "Imported",
+    "imported_url": "Imported",
+    "community": "Community",
+    "extracted": "Extracted"
+  },
+  "card": {
+    "agents": "{count, plural, =0 {no agents} one {# agent} other {# agents}}",
+    "pull": "{value} pull",
+    "accept": "{value} accept",
+    "noStat": "—",
+    "enableLabel": "Enable {name}",
+    "sourceTitle": "Imported from {ref}",
+    "versionTitle": "Current version v{version}",
+    "deleteLabel": "Delete {name}",
+    "statsTitle": "Last 30 days"
+  },
+  "menu": {
+    "add": "Add Skill",
+    "create": "Create from scratch",
+    "file": "Import from file (.md, .zip)",
+    "url": "Import from URL",
+    "community": "Search community skills…",
+    "fileTooLarge": "The file is too large to import (max {mb} MB).",
+    "fileReadError": "Could not read the file.",
+    "previewFailed": "Import failed: {message}"
+  },
+  "create": {
+    "title": "Create skill",
+    "subtitle": "A skill is Markdown text that goes into the prompt of every agent that links it.",
+    "cancel": "Cancel",
+    "create": "Create skill",
+    "creating": "Creating…",
+    "defaultBody": "Flag … when …\n\n- Point to the exact line.\n- Explain why it matters.",
+    "bodyPlaceholder": "The rule, in Markdown."
+  },
+  "fields": {
+    "name": "Name",
+    "namePlaceholder": "pr-quality-rubric",
+    "nameError": "Use a kebab-case slug: lowercase letters, digits and single dashes (max {max}).",
+    "description": "Description",
+    "descriptionPlaceholder": "Flag new branches that have no assertion.",
+    "descriptionHint": "The skill's interface: one directive sentence saying when it applies, e.g. 'Flag new branches that have no assertion.' The model sees it above the body.",
+    "descriptionCount": "{count} / {max}",
+    "type": "Type",
+    "body": "Skill body",
+    "bodyHint": "The text sent to the model, under the skill's name and description."
+  },
+  "importUrl": {
+    "title": "Import from URL",
+    "subtitle": "An https:// link to a Markdown file or a .zip archive. GitHub blob links work too.",
+    "label": "URL",
+    "placeholder": "https://github.com/org/repo/blob/main/skills/SKILL.md",
+    "fetch": "Fetch preview",
+    "fetching": "Fetching…",
+    "cancel": "Cancel",
+    "error": "Could not import this URL: {message}"
+  },
+  "community": {
+    "title": "Community skills",
+    "subtitle": "A vetted catalog shipped with DevDigest. Nothing is fetched from the internet.",
+    "searchPlaceholder": "Search community skills…",
+    "allTags": "All",
+    "loadError": "Could not load community skills.",
+    "retry": "Retry",
+    "empty": {
+      "title": "No matching skills",
+      "body": "Try a different search or tag."
+    },
+    "stars": "★ {count}",
+    "import": "Import",
+    "importing": "Loading…",
+    "importError": "Could not load this skill: {message}"
+  },
+  "importPreview": {
+    "title": "Review before importing",
+    "sourceFile": "File",
+    "sourceUrl": "URL",
+    "sourceCommunity": "Community",
+    "trust": "A skill is instructions injected into your agents' prompts. Only import skills you have read and trust. Imported skills are saved <b>disabled</b>. Enable one after reviewing it.",
+    "body": "Skill body",
+    "rendered": "Rendered",
+    "raw": "Raw",
+    "included": "Included files",
+    "ignored": "Ignored files",
+    "warnings": "Sanitizer warnings",
+    "ignoredRow": "{path} — {reason}",
+    "reason": {
+      "executable": "executable, never read",
+      "not_markdown": "not markdown",
+      "reference_doc": "reference doc, not imported",
+      "too_large": "too large",
+      "other": "{reason}"
+    },
+    "cancel": "Cancel",
+    "confirm": "Confirm import",
+    "importing": "Importing…",
+    "imported": "Imported \"{name}\" (disabled until you enable it)"
+  },
+  "imported": {
+    "banner": "Imported from {ref}. Read it before enabling: it becomes instructions in your agents' prompts."
+  },
+  "delete": {
+    "title": "Delete skill",
+    "body": "Delete \"{name}\"? Its versions go too. This cannot be undone.",
+    "linked": "It is linked to these agents, which will lose it:",
+    "notLinked": "No agent links this skill.",
+    "cancel": "Cancel",
+    "confirm": "Delete skill",
+    "deleting": "Deleting…",
+    "deleted": "Deleted \"{name}\""
+  },
+  "editor": {
+    "listTitle": "Skills",
+    "crumbFallback": "Skill",
+    "loadErrorTitle": "Couldn’t load this skill",
+    "loadErrorBody": "It may have been deleted.",
+    "tabs": {
+      "config": "Config",
+      "context": "Context",
+      "preview": "Preview",
+      "versions": "Versions",
+      "stats": "Stats",
+      "evals": "Evals"
+    },
+    "unsavedConfirm": "You have unsaved changes to this skill. Leave anyway?",
+    "disabled": "disabled"
+  },
+  "config": {
+    "title": "Configuration",
+    "enabled": "Enabled",
+    "unsaved": "unsaved",
+    "tokens": "~{count} tokens",
+    "save": "Save skill",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "snapshotNote": "Saving snapshots v{version}",
+    "saved": "Saved",
+    "savedVersion": "Saved as v{version}",
+    "stale": "Someone saved a newer version. Your draft is kept; save again to overwrite it.",
+    "dangerZone": "Danger zone",
+    "dangerBody": "Deleting a skill removes it from every agent that links it.",
+    "delete": "Delete skill"
+  },
+  "preview": {
+    "caption": "Rendered as the reviewing agent receives it"
+  },
+  "versions": {
+    "title": "Version history",
+    "caption": "Every save snapshots the body so eval runs stay reproducible against the exact text they scored. Restore writes an old version as a new one.",
+    "current": "Current",
+    "restore": "Restore",
+    "restoring": "Restoring…",
+    "restoreConfirm": "Restore v{version}? It is saved as a new version.",
+    "restoreDirty": "Save or cancel your changes before restoring.",
+    "restored": "Restored v{from} as v{version}",
+    "showDiff": "Show diff against the current version",
+    "noDiff": "Same text as the current version.",
+    "noMessage": "—",
+    "loadError": "Could not load the versions.",
+    "empty": "No versions yet.",
+    "diff": "Diff",
+    "count": "{count, plural, one {# version} other {# versions}}"
+  },
+  "stats": {
+    "title": "Last {days} days",
+    "pullRate": "Pull frequency",
+    "acceptRate": "Accept rate",
+    "findings": "Findings",
+    "pullRateHint": "{cited} of {attached} runs with this skill produced a finding citing it.",
+    "acceptRateHint": "{accepted} accepted · {dismissed} dismissed",
+    "byCategory": "Findings by category",
+    "usedBy": "Agents using this skill",
+    "none": "None yet.",
+    "notUsed": "No agent links this skill.",
+    "loadError": "Could not load the stats.",
+    "empty": {
+      "title": "No stats yet",
+      "body": "Stats accumulate from review runs. Link this skill to an agent and run a review."
+    },
+    "usedByCard": "Used by",
+    "agentsUnit": " {count, plural, one {agent} other {agents}}",
+    "findingsDays": "Findings ({days}d)",
+    "open": "Open"
+  },
+  "context": {
+    "noRepoTitle": "No repository selected",
+    "noRepoBody": "Pick a repository in the sidebar to attach its documents to this skill.",
+    "loadError": "Couldn’t load the attached documents",
+    "title": "Project context to use",
+    "badge": "{attached} attached",
+    "hint": "Any agent using this skill inherits these documents.",
+    "serializesAs": "Serializes as"
+  }
+}

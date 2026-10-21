@@ -1,0 +1,1 @@
+export { ArchitectureCard } from "./ArchitectureCard";

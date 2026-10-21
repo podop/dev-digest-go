@@ -1,0 +1,35 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  block: { display: "flex", flexDirection: "column", gap: 12, marginTop: 28 } satisfies CSSProperties,
+  head: { display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" } satisfies CSSProperties,
+  h2: { flex: 1, margin: 0, fontSize: 16, fontWeight: 600 } satisfies CSSProperties,
+  note: { margin: 0, fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
+  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
+  card: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    padding: 14,
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+  } satisfies CSSProperties,
+  cardHead: { display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" } satisfies CSSProperties,
+  location: { fontSize: 12.5, color: "var(--text-muted)", overflowWrap: "anywhere" } satisfies CSSProperties,
+  groupTitle: { fontSize: 14, fontWeight: 500, color: "var(--text-primary)", overflowWrap: "anywhere" } satisfies CSSProperties,
+  takes: { listStyle: "none", margin: 0, padding: 0, display: "flex", gap: 10, overflowX: "auto" } satisfies CSSProperties,
+  take: {
+    flex: "1 0 200px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 6,
+    padding: "8px 10px",
+    background: "var(--bg-base)",
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+  } satisfies CSSProperties,
+  persona: { fontSize: 12.5, fontWeight: 600, color: "var(--text-secondary)", overflowWrap: "anywhere" } satisfies CSSProperties,
+  ignored: { fontSize: 12.5, color: "var(--text-muted)" } satisfies CSSProperties,
+  noteTitle: { fontSize: 13, color: "var(--text-primary)", overflowWrap: "anywhere" } satisfies CSSProperties,
+} as const;

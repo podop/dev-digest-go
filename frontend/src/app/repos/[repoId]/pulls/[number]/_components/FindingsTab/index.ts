@@ -1,0 +1,1 @@
+export { FindingsTab } from "./FindingsTab";

@@ -1,0 +1,46 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  scroll: { overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-elevated)" } satisfies CSSProperties,
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 } satisfies CSSProperties,
+  th: {
+    padding: "9px 14px",
+    textAlign: "left",
+    fontSize: 10.5,
+    fontWeight: 700,
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    color: "var(--text-muted)",
+    background: "var(--bg-surface)",
+    borderBottom: "1px solid var(--border)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  td: { padding: "11px 14px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" } satisfies CSSProperties,
+  muted: { color: "var(--text-muted)" } satisfies CSSProperties,
+  link: { color: "var(--accent-text)" } satisfies CSSProperties,
+  source: (source: "local" | "ci"): CSSProperties => ({
+    display: "inline-block",
+    minWidth: 52,
+    fontSize: 11.5,
+    fontWeight: 600,
+    padding: "2px 8px",
+    borderRadius: 4,
+    color: source === "ci" ? "var(--warn)" : "var(--text-secondary)",
+    background: source === "ci" ? "var(--warn-bg)" : "var(--bg-hover)",
+  }),
+  status: { marginLeft: 8, fontSize: 11.5, color: "var(--crit)" } satisfies CSSProperties,
+  traceButton: {
+    all: "unset",
+    cursor: "pointer",
+    fontSize: 12.5,
+    color: "var(--text-secondary)",
+  } satisfies CSSProperties,
+  srOnly: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+} as const;

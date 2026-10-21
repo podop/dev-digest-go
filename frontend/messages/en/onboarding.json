@@ -1,0 +1,78 @@
+{
+  "title": "Onboarding Tour",
+  "heading": "Onboarding for <repo>{name}</repo>",
+  "meta": "Generated from index of {count, number} files · last refreshed {when}",
+  "toc": "On this page",
+  "collapse": "Toggle section {title}",
+  "regenerate": "Regenerate",
+  "regenerating": "Regenerating…",
+  "share": "Share link",
+  "shareCopied": "Link copied",
+  "shareFailed": "Copy failed",
+  "generate": {
+    "title": "No tour yet",
+    "body": "DevDigest reads the repo index and a few root files, then makes exactly one LLM call with {model} to write a five-part tour: architecture, critical paths, run locally, reading path and first tasks.",
+    "bodyUnknownModel": "DevDigest reads the repo index and a few root files, then makes exactly one LLM call with the model configured for Onboarding Tour in Settings to write a five-part tour: architecture, critical paths, run locally, reading path and first tasks.",
+    "cta": "Generate tour",
+    "generating": "Generating…",
+    "indexNotReady": "Index this repo first — the repository has no indexed files yet.",
+    "status": "Generating… (one LLM call)"
+  },
+  "stale": {
+    "title": "This tour may be out of date",
+    "body": "The repository index or the tour prompt changed since it was generated.",
+    "indexChanged": "The index changed since this tour was generated.",
+    "promptChanged": "The tour prompt was updated since this tour was generated."
+  },
+  "errors": {
+    "inProgress": "Already generating — a tour is already being generated for this repository.",
+    "indexNotReady": "The repository has no indexed files yet.",
+    "providerNotConfigured": "No API key is set for the Onboarding Tour model.",
+    "providerSettings": "Open Feature models",
+    "generationFailed": "The tour could not be generated. The previous tour was kept.",
+    "withCode": "{message} ({code})"
+  },
+  "loadError": {
+    "title": "Couldn’t load the onboarding tour"
+  },
+  "sections": {
+    "architecture": "Architecture overview",
+    "critical-paths": "Critical paths",
+    "run-locally": "How to run locally",
+    "reading-path": "Guided reading path",
+    "first-tasks": "First tasks"
+  },
+  "empty": "Not enough information",
+  "arch": {
+    "diagramLabel": "Architecture diagram",
+    "nodeKind": {
+      "entry": "entry point",
+      "module": "module",
+      "store": "data store",
+      "external": "external service"
+    }
+  },
+  "paths": {
+    "open": "Open",
+    "openAria": "Open {path} on GitHub",
+    "criticalList": "Critical paths",
+    "readingList": "Guided reading path"
+  },
+  "run": {
+    "list": "Run steps",
+    "empty": "No run steps found in this repo",
+    "reviewWarning": "Generated from the repo's files — review each command before running it.",
+    "copy": "Copy command {n}",
+    "copied": "Copied",
+    "copyFailed": "Copy failed"
+  },
+  "tasks": {
+    "list": "First tasks",
+    "complexity": {
+      "low": "Low complexity",
+      "medium": "Medium complexity",
+      "high": "High complexity"
+    }
+  },
+  "updated": "Tour updated"
+}

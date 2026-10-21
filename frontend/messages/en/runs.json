@@ -1,0 +1,235 @@
+{
+  "viewTrace": "View trace",
+  "finding": {
+    "trifecta": "trifecta"
+  },
+  "column": {
+    "noFindings": "No findings.",
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}"
+  },
+  "conflicts": {
+    "title": "Where agents disagree",
+    "onlyConflicts": "Show only conflicts",
+    "empty": "No conflicts — the agents agree on every flagged location.",
+    "didNotFlag": "did not flag"
+  },
+  "tabs": {
+    "noSummary": "No summary."
+  },
+  "trace": {
+    "configuration": "Configuration",
+    "stats": "Stats",
+    "promptAssembly": "Prompt assembly",
+    "toolCalls": "Tool calls",
+    "rawOutput": "Raw output",
+    "noToolCalls": "No tool calls recorded.",
+    "findings": "Findings",
+    "noFindings": "No findings for this run.",
+    "suggestedFix": "Suggested fix:",
+    "collapse": "collapse",
+    "expand": "expand",
+    "config": {
+      "model": "Model",
+      "provider": "Provider",
+      "memoryPulled": "Memory pulled",
+      "specsRead": "Specs read",
+      "specTokens": "~{tokens} tok",
+      "items": "{count, plural, one {# item} other {# items}}",
+      "none": "none",
+      "skills": "Skills"
+    },
+    "stat": {
+      "duration": "DURATION",
+      "tokens": "TOKENS",
+      "cost": "COST",
+      "findings": "FINDINGS"
+    },
+    "prompt": {
+      "system": "System",
+      "intent": "PR intent (dynamic)",
+      "skills": "Skills (dynamic)",
+      "memory": "Memory (dynamic)",
+      "repoMap": "Repo skeleton — repo-intel (dynamic)",
+      "specs": "Project context (dynamic)",
+      "callers": "Callers of changed symbols — repo-intel (dynamic)",
+      "user": "User / diff (dynamic)",
+      "tokens": "~{tokens} tokens",
+      "copy": "Copy",
+      "fullscreen": "Open fullscreen",
+      "search": "Search in this block…",
+      "noMatches": "No matches for “{q}”."
+    },
+    "tools": {
+      "args": "args",
+      "result": "result",
+      "previewTruncated": "(preview truncated)",
+      "ms": "{ms}ms"
+    },
+    "projectContext": {
+      "title": "Project context · attached specs",
+      "tokens": "~{tokens} / {budget} tokens",
+      "docTokens": "~{tokens} tokens",
+      "copy": "Copy {path}",
+      "viaAgent": "agent",
+      "viaSkill": "skill {name}",
+      "status": {
+        "included": "included",
+        "missing": "missing",
+        "too_large": "too large",
+        "over_budget": "over budget",
+        "unreadable": "unreadable"
+      }
+    }
+  },
+  "drawer": {
+    "title": "Agent run · {agent}",
+    "run": "Run",
+    "pr": "PR #{number}",
+    "running": "running",
+    "completed": "completed",
+    "copyRawOutput": "Copy raw output",
+    "copied": "Copied!",
+    "tracePending": "Trace is written when the run completes — see the Live log tab.",
+    "loadingTrace": "Loading trace…",
+    "noTrace": "No trace available yet.",
+    "tabs": {
+      "trace": "trace",
+      "log": "log"
+    }
+  },
+  "stats": {
+    "na": "n/a",
+    "empty": {
+      "title": "No runs yet",
+      "body": "Run this agent on a PR to populate accept-rate, findings volume, cost and latency aggregates."
+    },
+    "metric": {
+      "acceptRate": "ACCEPT RATE",
+      "dismissRate": "DISMISS RATE",
+      "runs": "RUNS",
+      "avgFindingsPerRun": "AVG FINDINGS/RUN",
+      "totalCost": "TOTAL COST",
+      "avgCostPerRun": "AVG COST/RUN",
+      "avgLatency": "AVG LATENCY"
+    },
+    "findingsCount": "{count, plural, one {# finding} other {# findings}}",
+    "findingOutcomes": "Finding outcomes",
+    "outcome": {
+      "accepted": "Accepted",
+      "dismissed": "Dismissed",
+      "pending": "Pending"
+    },
+    "sharePct": "({pct}%)",
+    "findingsBySeverity": "Findings by severity",
+    "findingsTrend": "FINDINGS TREND",
+    "costAndLatency": "Cost & latency",
+    "moreRunsNeeded": "more runs needed"
+  },
+  "severity": {
+    "critical": "Critical",
+    "warning": "Warning",
+    "suggestion": "Suggestion"
+  },
+  "page": {
+    "title": "Multi-Agent Review",
+    "subtitle": "this PR through every enabled agent in parallel",
+    "selectPr": "Select PR",
+    "prItem": "#{number} · {title}",
+    "view": {
+      "columns": "columns",
+      "tabs": "tabs"
+    },
+    "runAll": "Run all agents",
+    "running": "Running…",
+    "meta": "{count} agents · fan-out via p-queue · {duration}s total · {cost}",
+    "noAgents": {
+      "title": "Enable agents to run reviews",
+      "body": "Multi-agent review runs the PR through every enabled agent in parallel. You have no agents enabled yet.",
+      "cta": "Go to Agents"
+    },
+    "noRun": {
+      "title": "No multi-agent run yet",
+      "bodyReady": "Run all enabled agents on this PR to see N columns + conflicts.",
+      "bodySelect": "Select a PR to begin.",
+      "cta": "Run all agents"
+    },
+    "crumb": "Multi-Agent Review"
+  },
+  "multiAgent": {
+    "list": {
+      "title": "Multi-Agent Review",
+      "subtitle": "Recent multi-agent runs for the active repository.",
+      "crumb": "Multi-Agent Review",
+      "newReview": "New multi-agent review",
+      "loadError": "Could not load multi-agent runs.",
+      "emptyTitle": "No multi-agent run yet",
+      "emptyBody": "Pick several agents and run them in parallel on a pull request to compare their reviews side by side.",
+      "noRepoTitle": "Import a repository",
+      "noRepoBody": "Multi-agent review works on the pull requests of an imported repository.",
+      "noRepoCta": "Import a repository",
+      "prLabel": "#{number} · {title}",
+      "unknownPr": "Pull request unavailable",
+      "agents": "{count, plural, one {# agent} other {# agents}}",
+      "running": "{count} running",
+      "runsLabel": "Recent multi-agent runs"
+    },
+    "configure": {
+      "title": "Configure run",
+      "subtitle": "Choose a pull request and the agents to run on it in parallel.",
+      "crumb": "New multi-agent review",
+      "prStep": "Pull request",
+      "prSelectLabel": "Pull request",
+      "prPlaceholder": "Select a pull request",
+      "prItem": "#{number} · {title}",
+      "noPulls": "No pull requests",
+      "noPullsBody": "This repository has no pull requests to review yet.",
+      "pullsError": "Could not load pull requests.",
+      "agentsStep": "Agents",
+      "pickPrFirst": "Pick a pull request first",
+      "noAgents": "No agents yet — create one",
+      "agentsError": "Could not load agents.",
+      "agentDisabled": "disabled",
+      "selectAll": "Select all",
+      "clear": "Clear",
+      "estimate": "{time} · {cost}",
+      "noEstimate": "—",
+      "footer": "≈ {time} · {cost} · parallel fan-out",
+      "footerTimeOnly": "≈ {time} · parallel fan-out",
+      "footerNone": "no estimate yet",
+      "run": "Run multi-agent review ({count})",
+      "running": "Starting…",
+      "minAgents": "Select at least 2 agents.",
+      "noRepoTitle": "Import a repository",
+      "noRepoBody": "Multi-agent review works on the pull requests of an imported repository.",
+      "noRepoCta": "Import a repository"
+    },
+    "results": {
+      "title": "Multi-Agent Results",
+      "crumb": "Results",
+      "prLabel": "#{number} · {title}",
+      "unknownPr": "Pull request unavailable",
+      "agentsParallel": "{count, plural, one {# agent} other {# agents}} · parallel",
+      "configureRun": "Configure run",
+      "viewLabel": "Layout",
+      "view": {
+        "columns": "Columns",
+        "tabs": "Tabs"
+      },
+      "status": {
+        "running": "running",
+        "done": "done",
+        "failed": "failed",
+        "cancelled": "cancelled"
+      },
+      "deletedAgent": "Deleted agent",
+      "failedNoError": "The agent failed without an error message.",
+      "findingsOf": "Findings of {agent}",
+      "summaryOf": "Summary of {agent}",
+      "learned": "Learned",
+      "notCompared": "{count, plural, one {# agent} other {# agents}} not finished or failed — not compared.",
+      "notFound": "Multi-agent run not found",
+      "backToList": "Back to multi-agent runs",
+      "loadError": "Could not load this multi-agent run."
+    }
+  }
+}

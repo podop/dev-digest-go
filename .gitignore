@@ -1,0 +1,29 @@
+# secrets / local config
+.env
+.env.local
+
+# Go
+/dev-digest-go
+backend/bin/
+*.test
+*.out
+
+# Node / Next.js
+node_modules/
+.next/
+.next-*/
+coverage/
+*.tsbuildinfo
+
+# Claude Code harness outputs
+.sdd/
+
+# IDE
+.idea/workspace.xml
+.idea/shelf/
+
+*.log
+.DS_Store
+
+# personal Claude Code settings
+.claude/settings.local.json
