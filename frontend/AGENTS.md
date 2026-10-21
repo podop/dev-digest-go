@@ -31,3 +31,7 @@
 
 ## Do not touch
 - `src/vendor/ui` (`@devdigest/ui`) — vendored primitives; compose, don't edit.
+- Lint = Biome, linter only, config `biome.jsonc` here (copied from dev-digest's root; must stay
+  `.jsonc`, `vcs.root` points at the repo root `.gitignore`). Never run `biome check --write`,
+  `biome format` or enable the formatter — it would rewrite the whole package. Rules set to
+  `info` are known debt: fix their hits, then delete the line.
