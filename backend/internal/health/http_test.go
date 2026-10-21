@@ -34,7 +34,7 @@ func TestRoutes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			log := slog.New(slog.DiscardHandler)
-			e := httpx.New(nil, log)
+			e := httpx.New(httpx.Options{Log: log})
 			health.AddRoutes(e, fakePinger{err: tc.pingErr}, log)
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))

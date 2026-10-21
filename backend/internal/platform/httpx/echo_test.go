@@ -3,6 +3,8 @@ package httpx_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/labstack/echo/v5"
 
+	"dev-digest-go/backend/internal/platform/apperr"
 	"dev-digest-go/backend/internal/platform/httpx"
 )
 
@@ -18,12 +21,80 @@ const webOrigin = "http://localhost:3100"
 
 func newTestEcho(t *testing.T) *echo.Echo {
 	t.Helper()
-	e := httpx.New([]string{webOrigin}, slog.New(slog.DiscardHandler))
-	e.GET("/ok", func(c *echo.Context) error { return c.JSON(http.StatusOK, map[string]bool{"ok": true}) })
+	return newTestEchoLog(t, slog.New(slog.DiscardHandler))
+}
+
+func newTestEchoLog(t *testing.T, log *slog.Logger) *echo.Echo {
+	t.Helper()
+	return newEcho(t, httpx.Options{Log: log, CORSOrigins: []string{webOrigin}})
+}
+
+// newEcho builds the API instance with the routes the tests in this package exercise.
+func newEcho(t *testing.T, opts httpx.Options) *echo.Echo {
+	t.Helper()
+	if opts.Log == nil {
+		opts.Log = slog.New(slog.DiscardHandler)
+	}
+	e := httpx.New(opts)
+	okJSON := func(c *echo.Context) error { return c.JSON(http.StatusOK, map[string]bool{"ok": true}) }
+	e.GET("/ok", okJSON)
+	e.GET("/settings", okJSON)
+	e.GET("/repos", okJSON)
+	e.GET("/health", okJSON)
+	e.GET("/health/ready", okJSON)
+	e.PUT("/settings", echoBody)
+	e.POST("/settings/test-connection", okJSON)
+	e.POST("/echo", echoBody)
+	e.DELETE("/echo", echoBody)
 	e.GET("/boom", func(c *echo.Context) error { return errors.New("db password leaked in message") })
 	e.GET("/panic", func(c *echo.Context) error { panic("bug") })
 	e.GET("/teapot", func(c *echo.Context) error { return echo.NewHTTPError(http.StatusTeapot, "short and stout") })
+	e.GET("/apperr/:kind", func(c *echo.Context) error { return appErrorFor(c.Param("kind")) })
+	e.GET("/apperr-wrapped", func(c *echo.Context) error {
+		return fmt.Errorf("load repo: %w", apperr.Conflict("already added").WithDetails(map[string]string{"repo": "a/b"}))
+	})
+	e.GET("/pulls/:id", func(c *echo.Context) error {
+		id, err := httpx.PathUUID(c, "id")
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, map[string]string{"id": id})
+	})
 	return e
+}
+
+// echoBody answers 200 with the body length and the body itself, as the handler sees it.
+func echoBody(c *echo.Context) error {
+	b, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, map[string]any{"len": len(b), "body": string(b)})
+}
+
+func appErrorFor(kind string) error {
+	switch kind {
+	case "invalid_input":
+		return apperr.InvalidInput("bad value")
+	case "not_found":
+		return apperr.NotFound("no such thing")
+	case "conflict":
+		return apperr.Conflict("already there")
+	case "payload_too_large":
+		return apperr.PayloadTooLarge("too big")
+	case "validation":
+		return apperr.Validation("invalid")
+	case "internal":
+		return apperr.Internal("broken")
+	case "config":
+		return apperr.Config("missing setting")
+	case "external_service":
+		return apperr.ExternalService("upstream down").WithCause(errors.New("dial tcp 10.0.0.1: refused"))
+	case "custom_code":
+		return apperr.ExternalService("GitHub unavailable").WithCode("github_unavailable")
+	default:
+		return apperr.New(apperr.Kind(0), "unclassified")
+	}
 }
 
 func TestErrorEnvelope(t *testing.T) {

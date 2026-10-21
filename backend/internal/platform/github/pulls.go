@@ -1,0 +1,297 @@
+package github
+
+import (
+	"context"
+	"net/url"
+	"strconv"
+	"time"
+)
+
+// PullSummary is a pull request as GitHub lists it. Diff stats are not part of
+// the list payload.
+type PullSummary struct {
+	Number    int
+	Title     string
+	Author    string // "unknown" when GitHub has no user
+	Branch    string // head ref
+	Base      string // base ref
+	HeadSHA   string
+	Status    string // open | closed | merged
+	OpenedAt  time.Time
+	UpdatedAt time.Time
+}
+
+// File is one changed file of a pull request. Patch is nil when GitHub gives
+// none (binary or too large).
+type File struct {
+	Path      string
+	Additions int
+	Deletions int
+	Patch     *string
+}
+
+// Commit is one commit of a pull request.
+type Commit struct {
+	SHA         string
+	Message     string
+	Author      string
+	CommittedAt *time.Time
+}
+
+// PullDetail is a pull request with its files (at most MaxFiles, merged by
+// path) and commits (at most MaxCommits).
+type PullDetail struct {
+	PullSummary
+	Body       *string
+	Additions  int
+	Deletions  int
+	FilesCount int // GitHub's changed_files, which may exceed len(Files)
+	Files      []File
+	Commits    []Commit
+}
+
+// Issue is a GitHub issue.
+type Issue struct {
+	Number int
+	Title  string
+	Body   *string
+	State  string
+}
+
+type apiUser struct {
+	Login string `json:"login"`
+}
+
+type apiPull struct {
+	Number int      `json:"number"`
+	Title  string   `json:"title"`
+	User   *apiUser `json:"user"`
+	Head   struct {
+		Ref string `json:"ref"`
+		SHA string `json:"sha"`
+	} `json:"head"`
+	Base struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
+	State        string     `json:"state"`
+	MergedAt     *time.Time `json:"merged_at"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	Body         *string    `json:"body"`
+	Additions    int        `json:"additions"`
+	Deletions    int        `json:"deletions"`
+	ChangedFiles int        `json:"changed_files"`
+}
+
+type apiIssue struct {
+	Number int     `json:"number"`
+	Title  string  `json:"title"`
+	Body   *string `json:"body"`
+	State  string  `json:"state"`
+}
+
+type apiFile struct {
+	Filename  string  `json:"filename"`
+	Additions int     `json:"additions"`
+	Deletions int     `json:"deletions"`
+	Patch     *string `json:"patch"`
+}
+
+type apiCommit struct {
+	SHA    string `json:"sha"`
+	Commit struct {
+		Message string `json:"message"`
+		Author  *struct {
+			Name string     `json:"name"`
+			Date *time.Time `json:"date"`
+		} `json:"author"`
+	} `json:"commit"`
+	Author *apiUser `json:"author"`
+}
+
+func login(u *apiUser) string {
+	if u == nil || u.Login == "" {
+		return "unknown"
+	}
+	return u.Login
+}
+
+func mapStatus(state string, mergedAt *time.Time) string {
+	switch {
+	case mergedAt != nil:
+		return "merged"
+	case state == "closed":
+		return "closed"
+	default:
+		return "open"
+	}
+}
+
+func (p apiPull) summary() PullSummary {
+	return PullSummary{
+		Number:    p.Number,
+		Title:     p.Title,
+		Author:    login(p.User),
+		Branch:    p.Head.Ref,
+		Base:      p.Base.Ref,
+		HeadSHA:   p.Head.SHA,
+		Status:    mapStatus(p.State, p.MergedAt),
+		OpenedAt:  p.CreatedAt,
+		UpdatedAt: p.UpdatedAt,
+	}
+}
+
+// ListPullRequests returns one page of up to 50 pull requests of any state,
+// most recently updated first.
+func (c *Client) ListPullRequests(ctx context.Context, owner, name string) ([]PullSummary, error) {
+	token, err := c.currentToken()
+	if err != nil {
+		return nil, err
+	}
+	q := url.Values{
+		"state":     {"all"},
+		"sort":      {"updated"},
+		"direction": {"desc"},
+		"per_page":  {"50"},
+	}
+	pulls, err := getJSON[[]apiPull](ctx, c, token, repoPath(owner, name)+"/pulls", q)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]PullSummary, len(pulls))
+	for i, p := range pulls {
+		out[i] = p.summary()
+	}
+	return out, nil
+}
+
+// GetPullRequest fetches a pull request with up to MaxFiles files and
+// MaxCommits commits, all within DetailTimeout. Files with the same path are
+// merged into one entry.
+func (c *Client) GetPullRequest(ctx context.Context, owner, name string, number int) (PullDetail, error) {
+	token, err := c.currentToken()
+	if err != nil {
+		return PullDetail{}, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.detailTimeout)
+	defer cancel()
+
+	base := repoPath(owner, name) + "/pulls/" + strconv.Itoa(number)
+	pr, err := getJSON[apiPull](ctx, c, token, base, nil)
+	if err != nil {
+		return PullDetail{}, err
+	}
+	files, err := paginateCapped[apiFile](ctx, c, token, base+"/files", MaxFiles)
+	if err != nil {
+		return PullDetail{}, err
+	}
+	commits, err := paginateCapped[apiCommit](ctx, c, token, base+"/commits", MaxCommits)
+	if err != nil {
+		return PullDetail{}, err
+	}
+
+	detail := PullDetail{
+		PullSummary: pr.summary(),
+		Body:        pr.Body,
+		Additions:   pr.Additions,
+		Deletions:   pr.Deletions,
+		FilesCount:  pr.ChangedFiles,
+	}
+	raw := make([]File, len(files))
+	for i, f := range files {
+		raw[i] = File{Path: f.Filename, Additions: f.Additions, Deletions: f.Deletions, Patch: f.Patch}
+	}
+	detail.Files = MergeSamePath(raw)
+	detail.Commits = make([]Commit, len(commits))
+	for i, cm := range commits {
+		author := login(cm.Author)
+		if cm.Commit.Author != nil && cm.Commit.Author.Name != "" {
+			author = cm.Commit.Author.Name
+		}
+		var at *time.Time
+		if cm.Commit.Author != nil {
+			at = cm.Commit.Author.Date
+		}
+		detail.Commits[i] = Commit{SHA: cm.SHA, Message: cm.Commit.Message, Author: author, CommittedAt: at}
+	}
+	return detail, nil
+}
+
+// paginateCapped reads pages of PageSize until a short page or max items.
+func paginateCapped[T any](ctx context.Context, c *Client, token, path string, max int) ([]T, error) {
+	var out []T
+	for page := 1; len(out) < max; page++ {
+		q := url.Values{"per_page": {strconv.Itoa(PageSize)}, "page": {strconv.Itoa(page)}}
+		items, err := getJSON[[]T](ctx, c, token, path, q)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, items...)
+		if len(items) < PageSize {
+			break
+		}
+	}
+	if len(out) > max {
+		out = out[:max]
+	}
+	return out, nil
+}
+
+// MergeSamePath folds entries with the same path into one, in first-seen order:
+// additions and deletions are summed and non-empty patches joined with a
+// newline. GitHub lists a file/symlink type change as two entries.
+func MergeSamePath(files []File) []File {
+	out := make([]File, 0, len(files))
+	index := make(map[string]int, len(files))
+	for _, f := range files {
+		i, seen := index[f.Path]
+		if !seen {
+			index[f.Path] = len(out)
+			out = append(out, f)
+			continue
+		}
+		prev := &out[i]
+		prev.Additions += f.Additions
+		prev.Deletions += f.Deletions
+		var patches []string
+		for _, p := range []*string{prev.Patch, f.Patch} {
+			if p != nil && *p != "" {
+				patches = append(patches, *p)
+			}
+		}
+		if len(patches) > 0 {
+			joined := patches[0]
+			for _, p := range patches[1:] {
+				joined += "\n" + p
+			}
+			prev.Patch = &joined
+		}
+	}
+	return out
+}
+
+// GetIssue fetches one issue.
+func (c *Client) GetIssue(ctx context.Context, owner, name string, number int) (Issue, error) {
+	token, err := c.currentToken()
+	if err != nil {
+		return Issue{}, err
+	}
+	raw, err := getJSON[apiIssue](ctx, c, token, repoPath(owner, name)+"/issues/"+strconv.Itoa(number), nil)
+	if err != nil {
+		return Issue{}, err
+	}
+	return Issue{Number: raw.Number, Title: raw.Title, Body: raw.Body, State: raw.State}, nil
+}
+
+// CurrentLogin returns the login of the token's owner (GET /user).
+func (c *Client) CurrentLogin(ctx context.Context) (string, error) {
+	token, err := c.currentToken()
+	if err != nil {
+		return "", err
+	}
+	u, err := getJSON[apiUser](ctx, c, token, "/user", nil)
+	if err != nil {
+		return "", err
+	}
+	return u.Login, nil
+}
