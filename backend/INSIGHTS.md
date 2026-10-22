@@ -11,6 +11,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-23 — a per-file cache in a one-pass clone scan keeps every file's full text alive because symbol names/labels are substrings of it (degraded blast scan: 845 MiB live heap) → keep per-file state only while scanning that file, strings.Clone what is stored, share identical scans and cap concurrent scans (repointel/app/blast.go, blast_load_test.go)
 - 2026-10-22 — a 1,024-slot chan per SSE subscriber costs ~105 KB each (2,000 streams = 213 MB) → runbus uses a growing slice queue + 1-slot wake channel + pump goroutine (≈3.5 KB idle); callers must drain C() or Close (platform/runbus state.go)
 - 2026-10-22 — per-name ReferenceLines over a hostile clone file is O(names × size) between ctx checks (1,000 names × 2 MB: 31–89 s, cancel ignored) → one Aho-Corasick pass per file with a ctx tick every ~32K units of work, plus a binary-search enclosing-symbol index (repointel/domain/refscan.go; differential test vs ReferenceLines)
 - 2026-10-22 — a panic on a pool worker goroutine (reviewer/app mapOrdered → LLM port/provider adapter) bypasses the run's recover and kills the whole server → workers recover, stop the pool and re-raise on the caller after wg.Wait (pool.go; TestRun_APanicInAProviderFailsOnlyThatRun); same rule for project-context reader goroutines (readRunDocSafely)
@@ -47,6 +48,8 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-23 — JS-parity numbers/dates: strconv rounds exact ties to even but JS toFixed rounds away from zero (0.125→'0.13') → reviewer/domain.ToFixed (big.Rat); V8 Date.parse accepts a lower-case 'z' and Feb 30 (rolls over) and zod datetime() errors do not stop superRefine → see performance/domain/period.go, blast/domain/history.go
+- 2026-10-23 — echo/v5@5.4.0 graceful shutdown (http.Server.Shutdown) never cancels in-flight request contexts — a long generation outlives the 20 s grace and Start reports DeadlineExceeded → generations run on the request ctx plus a service stop (platform/inflight Flights/Markers) that cmd calls before stopping Echo (inflight/shutdown_test.go real-listener proof)
 - 2026-10-22 — JS-parity text: x/text collate.New(language.English) equals Node localeCompare(b,'en') (0 mismatches / 20k pairs; Collator not goroutine-safe → one per sort); JS String.trim trims U+FEFF but not U+0085, strings.TrimSpace does the reverse → use reviewer/domain.JSTrim
 - 2026-10-22 — echo/v5 AutoHandleHEAD runs the GET handler for HEAD, so an SSE route opens a stream on HEAD → answer HEAD explicitly before subscribing (TestEvents_HeadAnswersHeadersAndReleasesTheSubscription)
 - 2026-10-22 — Go encoding/json escapes U+2028/U+2029 even with SetEscapeHTML(false), JSON.stringify never does → SSE data lines un-escape them pairwise (reviews/transport/http sse.go unescapeLineSeparators; golden line_separators_are_not_escaped_by_node)
@@ -71,6 +74,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Recurring Errors & Fixes
 <!-- error message → cause → fix -->
+- 2026-10-23 — flaky tests under full-gate load: (1) a context derived via context.AfterFunc learns of the parent's cancel on another goroutine, so 'no read after cancel' must count reads that START with a cancelled ctx, not a total; (2) tiny SO_RCVBUF/SO_SNDBUF make TCP window probes load-dependent — stall a non-reading SSE client with a server-side net.Conn wrapper; (3) assert a goroutine's result with a bounded wait, not select default (parity onboarding bounded reads, cmd/server stallListener, brief TestShutdown)
 - 2026-10-22 — httpx rate limiter 429 renders as code internal_error (Node parity quirk, ratelimit_test.go) → a new 429 that must say rate_limited writes httpx.ErrorBody itself (reviews SSE stream caps)
 - 2026-10-22 — go build ./cmd/... (one main package matched) from backend/ writes a 25 MB 'server' binary into the tree → use go build -o /dev/null ./...; /backend/server is now git-ignored
 - 2026-10-22 — golden generator (tsx) fails with a spurious EADDRINUSE when TMPDIR is a long path (IPC socket path too long, e.g. the Claude scratchpad) → run it with a short TMPDIR such as /tmp/ac68
@@ -82,6 +86,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Session Notes
 <!-- YYYY-MM-DD — one-line summary of a meaningful session -->
+- 2026-10-23 — Phase 5 implemented (W0–W4, 10+7 parallel lanes) and review r1 fixes committed at 6f5028f; review r2 (security + verify) and the Phase 5 handoff are pending — resume per docs/migration/STATUS.md and the migration-progress memory
 - 2026-10-22 — reviews Phase 4 done: W1 ran 8 parallel lanes and W2 6 on W0 contract code; gate needed one fix round (caller-scan DoS, queued cancel after eviction, SSE caps); the W0 smoke test disproved the Echo ReadTimeout risk before any lane built on it
 - 2026-10-22 — Phase 3 (repo-intel) implemented in 5 waves; review gate arch PASS, security PASS after r1 fixes (3 MEDIUM hostile-clone DoS + 5 LOW closed), plan-verify PASS; AC3066 5,000-file index 28.7 s after the ResolveReferences rewrite — see docs/migration/STATUS.md
 - 2026-10-22 — Phase 2 (agents, skills, conventions, project-context + minimal LLM layer) implemented in 4 waves of parallel implementer lanes; review gate arch PASS, security PASS (4 LOW fixed), plan-verify 220 PASS/0 FAIL; left: AC301 + Phase 1 AC97 UI walkthroughs — see docs/migration/STATUS.md
