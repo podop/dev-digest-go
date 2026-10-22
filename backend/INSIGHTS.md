@@ -11,11 +11,13 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-22 — ordering names in tests or queries by the default collation: it puts no-then-chains before n-plus-one-gate, while the API (GET /agents, D203) orders by name COLLATE "C" → use COLLATE "C" wherever byte order is expected (seed TestSeed_WritesAgentsSkillsAndLinks failed on exactly this)
 - 2026-10-22 — internal/platform/httpx hostName: Go net/http accepts a Host header whose port part is not numeric (Host: localhost:3100.evil.com reached handlers, security r2, live-checked) — cutting at the first ':' turned it into an allowed host → only an empty or 1–5-digit port counts as a match; a non-empty ALLOWED_HOSTS without a valid entry must fail closed, never disable the check
 - 2026-10-22 — internal/platform/httpx + transports: reading the request body as JSON regardless of Content-Type let any website send text/plain POST/PUT (no preflight) that overwrote saved secrets — security review r1, confirmed live → read bodies only via httpx.ReadJSONBody (JSON only for application/json; text/plain → 422 "Expected object, received string"), keep the foreign-Origin 403 and ALLOWED_HOSTS guards in httpx.New
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-22 — cmd/server startup: work that runs before listen against Phase 2 tables (conventions FailInterrupted) must not be fatal — DB_AUTO_MIGRATE=false on an empty DB still has to serve /health (Phase 1 AC33; TestStartup_AutoMigrateOff failed with 'relation convention_scans does not exist') → log the error and keep starting
 - 2026-10-22 — unique-violation detection without importing pgx/pgconn (only an indirect dependency): errors.As(err, &interface{ SQLState() string }) and compare "23505" (skills, conventions, projectcontext postgres adapters)
 - 2026-10-22 — conventions scan errors: redact provider keys before truncating to 500 chars — truncating first can leave half a key unredacted (TestExtract_RedactsKeysBeforeCutting, checked by mutation)
 - 2026-10-22 — projectcontext: "store" context files are rows in the context_files table (path, content, version) — Node never writes to the clone, .devdigest/specs/ is only a path prefix; the clone stays read-only via platform/clonefs → don't add filesystem writes for context files

@@ -1,9 +1,11 @@
 // Package seed writes the starter data of the Go backend: the default workspace, the system
 // user, four user settings and the demo repository acme/payments-api with PR #482, its four
-// files and one commit.
+// files and one commit, plus the four built-in agents, nine built-in skills and their links
+// (knowledge.go).
 //
 // The seed is idempotent. Rows are matched by natural key and never overwritten; the only
-// update is filling a file patch that is still null. The whole run is one transaction.
+// update is filling a file patch that is still null. The agents, skills and links are written
+// only for a new workspace or one with no agent and no skill. The whole run is one transaction.
 package seed
 
 import (
@@ -76,6 +78,18 @@ type Tx interface {
 	// EnsureFile inserts the file, or, when it exists with a null patch, fills the patch.
 	EnsureFile(ctx context.Context, prID string, f File) (inserted, patchFilled bool, err error)
 	EnsureCommit(ctx context.Context, prID string, c Commit) (inserted bool, err error)
+
+	// HasAgentsOrSkills reports whether the workspace has at least one agent or skill.
+	HasAgentsOrSkills(ctx context.Context, workspaceID string) (bool, error)
+	// EnsureAgent inserts the agent unless the workspace already has one of that name.
+	// Seeded agents get no version snapshot.
+	EnsureAgent(ctx context.Context, a Agent) (id string, inserted bool, err error)
+	// EnsureSkill inserts the skill and its version-1 snapshot unless the workspace already
+	// has a skill of that name.
+	EnsureSkill(ctx context.Context, sk Skill) (id string, inserted bool, err error)
+	// LinkAgentSkills links the skills to the agent, in order, unless the agent already has
+	// a link; it returns the number of links written.
+	LinkAgentSkills(ctx context.Context, agentID string, skillIDs []string) (linked int, err error)
 }
 
 // Result counts the rows a run inserted, per entity.
@@ -91,6 +105,9 @@ type Result struct {
 	Files         int
 	Commits       int
 	PatchesFilled int
+	Agents        int
+	Skills        int
+	AgentSkills   int
 }
 
 // Seeder runs the seed.
@@ -127,7 +144,8 @@ func (s *Seeder) Run(ctx context.Context) (Result, error) {
 	s.log.InfoContext(ctx, "seed complete",
 		"workspaces", res.Workspaces, "users", res.Users, "members", res.Members,
 		"settings", res.Settings, "repos", res.Repos, "pull_requests", res.PullRequests,
-		"pr_files", res.Files, "pr_commits", res.Commits, "patches_filled", res.PatchesFilled)
+		"pr_files", res.Files, "pr_commits", res.Commits, "patches_filled", res.PatchesFilled,
+		"agents", res.Agents, "skills", res.Skills, "agent_skills", res.AgentSkills)
 	return res, nil
 }
 
@@ -138,6 +156,7 @@ func (s *Seeder) write(ctx context.Context, tx Tx, res *Result) error {
 	}
 	res.WorkspaceID = workspaceID
 	res.Workspaces += b2i(inserted)
+	workspaceInserted := inserted
 
 	userID, inserted, err := tx.EnsureUser(ctx, tenancy.SystemUserEmail, tenancy.SystemUserName)
 	if err != nil {
@@ -218,7 +237,8 @@ func (s *Seeder) write(ctx context.Context, tx Tx, res *Result) error {
 		return fmt.Errorf("pr commit: %w", err)
 	}
 	res.Commits += b2i(inserted)
-	return nil
+
+	return s.writeKnowledge(ctx, tx, workspaceID, userID, workspaceInserted, res)
 }
 
 func b2i(b bool) int {

@@ -103,6 +103,56 @@ type commitRow struct {
 
 func (commitRow) TableName() string { return "pr_commits" }
 
+// The agents, skills and links tables are written through the structs below, which list
+// only the columns the seed sets; created_at, strategy, ci_fail_on and the other columns
+// keep their database defaults (so one transaction gives every agent the same created_at).
+type agentRow struct {
+	ID           string `gorm:"column:id;primaryKey;default:gen_random_uuid()"`
+	WorkspaceID  string `gorm:"column:workspace_id"`
+	Name         string `gorm:"column:name"`
+	Description  string `gorm:"column:description"`
+	Provider     string `gorm:"column:provider"`
+	Model        string `gorm:"column:model"`
+	SystemPrompt string `gorm:"column:system_prompt"`
+	Enabled      bool   `gorm:"column:enabled"`
+	Version      int    `gorm:"column:version"`
+	CreatedBy    string `gorm:"column:created_by"`
+}
+
+func (agentRow) TableName() string { return "agents" }
+
+type skillRow struct {
+	ID          string `gorm:"column:id;primaryKey;default:gen_random_uuid()"`
+	WorkspaceID string `gorm:"column:workspace_id"`
+	Name        string `gorm:"column:name"`
+	Description string `gorm:"column:description"`
+	Type        string `gorm:"column:type"`
+	Source      string `gorm:"column:source"`
+	Body        string `gorm:"column:body"`
+	Enabled     bool   `gorm:"column:enabled"`
+	Version     int    `gorm:"column:version"`
+}
+
+func (skillRow) TableName() string { return "skills" }
+
+type skillVersionRow struct {
+	SkillID     string `gorm:"column:skill_id"`
+	Version     int    `gorm:"column:version"`
+	Body        string `gorm:"column:body"`
+	Description string `gorm:"column:description"`
+	Message     string `gorm:"column:message"`
+}
+
+func (skillVersionRow) TableName() string { return "skill_versions" }
+
+type agentSkillRow struct {
+	AgentID string `gorm:"column:agent_id"`
+	SkillID string `gorm:"column:skill_id"`
+	Order   int    `gorm:"column:order"`
+}
+
+func (agentSkillRow) TableName() string { return "agent_skills" }
+
 // Store runs the seed against Postgres.
 type Store struct {
 	db *gorm.DB
@@ -251,4 +301,81 @@ func (t *txStore) EnsureCommit(ctx context.Context, prID string, c seed.Commit) 
 		return false, fmt.Errorf("insert pr commit: %w", res.Error)
 	}
 	return res.RowsAffected == 1, nil
+}
+
+func (t *txStore) HasAgentsOrSkills(ctx context.Context, workspaceID string) (bool, error) {
+	var found bool
+	err := t.tx.WithContext(ctx).Raw(
+		`SELECT EXISTS (SELECT 1 FROM agents WHERE workspace_id = ?) OR EXISTS (SELECT 1 FROM skills WHERE workspace_id = ?)`,
+		workspaceID, workspaceID).Scan(&found).Error
+	if err != nil {
+		return false, fmt.Errorf("count agents and skills: %w", err)
+	}
+	return found, nil
+}
+
+func (t *txStore) EnsureAgent(ctx context.Context, a seed.Agent) (string, bool, error) {
+	db := t.tx.WithContext(ctx)
+	var existing agentRow
+	err := db.Where("workspace_id = ? AND name = ?", a.WorkspaceID, a.Name).Order("created_at, id").Take(&existing).Error
+	if err == nil {
+		return existing.ID, false, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, fmt.Errorf("find agent: %w", err)
+	}
+	row := agentRow{
+		WorkspaceID: a.WorkspaceID, Name: a.Name, Description: a.Description, Provider: a.Provider,
+		Model: a.Model, SystemPrompt: a.SystemPrompt, Enabled: true, Version: 1, CreatedBy: a.CreatedBy,
+	}
+	if err := db.Create(&row).Error; err != nil {
+		return "", false, fmt.Errorf("insert agent: %w", err)
+	}
+	return row.ID, true, nil
+}
+
+func (t *txStore) EnsureSkill(ctx context.Context, sk seed.Skill) (string, bool, error) {
+	db := t.tx.WithContext(ctx)
+	var existing skillRow
+	err := db.Where("workspace_id = ? AND name = ?", sk.WorkspaceID, sk.Name).Take(&existing).Error
+	if err == nil {
+		return existing.ID, false, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, fmt.Errorf("find skill: %w", err)
+	}
+	row := skillRow{
+		WorkspaceID: sk.WorkspaceID, Name: sk.Name, Description: sk.Description, Type: sk.Type,
+		Source: "manual", Body: sk.Body, Enabled: sk.Enabled, Version: 1,
+	}
+	if err := db.Create(&row).Error; err != nil {
+		return "", false, fmt.Errorf("insert skill: %w", err)
+	}
+	snapshot := skillVersionRow{SkillID: row.ID, Version: 1, Body: sk.Body, Description: sk.Description, Message: "Created"}
+	if err := db.Create(&snapshot).Error; err != nil {
+		return "", false, fmt.Errorf("insert skill version: %w", err)
+	}
+	return row.ID, true, nil
+}
+
+func (t *txStore) LinkAgentSkills(ctx context.Context, agentID string, skillIDs []string) (int, error) {
+	if len(skillIDs) == 0 {
+		return 0, nil
+	}
+	db := t.tx.WithContext(ctx)
+	var linked int64
+	if err := db.Model(&agentSkillRow{}).Where("agent_id = ?", agentID).Count(&linked).Error; err != nil {
+		return 0, fmt.Errorf("count agent skills: %w", err)
+	}
+	if linked > 0 {
+		return 0, nil
+	}
+	rows := make([]agentSkillRow, len(skillIDs))
+	for i, id := range skillIDs {
+		rows[i] = agentSkillRow{AgentID: agentID, SkillID: id, Order: i}
+	}
+	if err := db.Create(&rows).Error; err != nil {
+		return 0, fmt.Errorf("insert agent skills: %w", err)
+	}
+	return len(rows), nil
 }

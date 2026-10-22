@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -16,11 +17,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 
+	conventionsapp "dev-digest-go/backend/internal/conventions/app"
 	"dev-digest-go/backend/internal/jobs"
+	reposapp "dev-digest-go/backend/internal/repos/app"
 	"dev-digest-go/backend/internal/settings/adapters/providers"
 )
 
@@ -43,16 +47,16 @@ var securityHeaders = map[string]string{
 	"X-Xss-Protection":                  "0",
 }
 
-func TestHTTP_UnknownRoutes(t *testing.T) { // AC1, AC2, AC20
+func TestHTTP_UnknownRoutes(t *testing.T) { // AC1, AC2, AC20, AC201
 	s := startStack(t, spec{})
 
-	resp := s.get("/agents")
-	want := map[string]any{"error": map[string]any{"code": "not_found", "message": "Route GET /agents not found"}}
+	resp := s.get("/eval/dashboard")
+	want := map[string]any{"error": map[string]any{"code": "not_found", "message": "Route GET /eval/dashboard not found"}}
 	if resp.Status != http.StatusNotFound {
-		t.Errorf("GET /agents status = %d, want 404", resp.Status)
+		t.Errorf("GET /eval/dashboard status = %d, want 404", resp.Status)
 	}
 	if diff := cmp.Diff(want, resp.JSON(t)); diff != "" {
-		t.Errorf("GET /agents body mismatch (-want +got):\n%s", diff)
+		t.Errorf("GET /eval/dashboard body mismatch (-want +got):\n%s", diff)
 	}
 
 	resp = s.post("/health?x=1", nil)
@@ -665,5 +669,145 @@ func TestForeignOriginCannotChangeState(t *testing.T) { // CSRF defense
 	}
 	if resp := s.do(http.MethodPut, "/settings", map[string]any{"polling_interval_min": 7}, "Origin", "http://localhost:3100"); resp.Status != http.StatusOK {
 		t.Errorf("PUT /settings from the UI origin = %d (%s), want 200", resp.Status, resp.Body)
+	}
+}
+
+// phase2Routes are the 38 routes Phase 2 adds (spec section 7); :id is replaced by a UUID.
+var phase2Routes = []string{
+	// agents
+	"GET /agents", "POST /agents", "GET /agents/:id", "PUT /agents/:id", "DELETE /agents/:id",
+	"GET /agents/:id/versions", "GET /agents/:id/versions/1", "GET /agents/:id/skills",
+	"POST /agents/:id/skills", "GET /agents/:id/models", "GET /providers/anthropic/models",
+	// skills
+	"GET /skills", "GET /skills/stats", "GET /skills/community", "POST /skills/import/preview",
+	"GET /skills/:id", "POST /skills", "PUT /skills/:id", "DELETE /skills/:id",
+	"GET /skills/:id/versions", "GET /skills/:id/versions/1", "POST /skills/:id/versions/1/restore",
+	"GET /skills/:id/agents", "GET /skills/:id/stats",
+	// conventions
+	"GET /repos/:id/conventions", "POST /repos/:id/conventions/extract", "PATCH /conventions/:id",
+	"POST /repos/:id/conventions/skill",
+	// project context
+	"GET /repos/:id/context", "GET /repos/:id/context/doc", "GET /agents/:id/context",
+	"PUT /agents/:id/context", "GET /skills/:id/context", "PUT /skills/:id/context",
+	"POST /repos/:id/context/files", "PUT /repos/:id/context/files",
+	"POST /repos/:id/context/files/rename", "DELETE /repos/:id/context/files",
+}
+
+// AC201: every Phase 2 route is registered; the routes outside the scope still answer the
+// router's 404 envelope.
+func TestHTTP_Phase2RoutesRegistered(t *testing.T) {
+	if len(phase2Routes) != 38 {
+		t.Fatalf("phase2Routes has %d entries, want 38", len(phase2Routes))
+	}
+	s := startStack(t, spec{})
+	const id = "00000000-0000-4000-8000-000000000001"
+	for _, route := range phase2Routes {
+		method, path, _ := strings.Cut(route, " ")
+		path = strings.ReplaceAll(path, ":id", id)
+		var body any
+		if method != http.MethodGet && method != http.MethodDelete {
+			body = map[string]any{}
+		}
+		resp := s.do(method, path, body)
+		if msg, _ := resp.errorMessage(t); strings.HasPrefix(msg, "Route ") && strings.HasSuffix(msg, " not found") {
+			t.Errorf("%s = %d %q, want the route registered", route, resp.Status, msg)
+		}
+	}
+
+	// The seed gives a fresh workspace 4 agents and 9 skills (lane J).
+	for path, n := range map[string]int{"/agents": 4, "/skills": 9} {
+		var items []any
+		if err := json.Unmarshal(s.get(path).Body, &items); err != nil || len(items) != n {
+			t.Errorf("GET %s after the seed = %d items (err %v), want %d", path, len(items), err, n)
+		}
+	}
+
+	for _, route := range []string{"GET /runs/x/events", "GET /eval/dashboard", "POST /pulls/" + id + "/review"} {
+		method, path, _ := strings.Cut(route, " ")
+		var body any
+		if method == http.MethodPost {
+			body = map[string]any{}
+		}
+		resp := s.do(method, path, body)
+		want := "Route " + route + " not found"
+		if msg, _ := resp.errorMessage(t); resp.Status != http.StatusNotFound || msg != want {
+			t.Errorf("%s = %d %q, want 404 %q", route, resp.Status, msg, want)
+		}
+	}
+}
+
+// errorMessage returns error.message of an envelope; ok is false for any other body.
+func (r response) errorMessage(t testing.TB) (string, bool) {
+	t.Helper()
+	var env struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(r.Body, &env); err != nil {
+		return "", false
+	}
+	return env.Error.Message, true
+}
+
+// memJobStore is an in-memory jobs.Store for the registration test.
+type memJobStore struct {
+	mu   sync.Mutex
+	rows map[string]string // id -> error text
+	seq  int
+}
+
+func (m *memJobStore) Insert(context.Context, string, string, json.RawMessage) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.seq++
+	id := fmt.Sprintf("job-%d", m.seq)
+	m.rows[id] = ""
+	return id, nil
+}
+func (m *memJobStore) MarkRunning(context.Context, string, time.Time) error { return nil }
+func (m *memJobStore) SetAttempts(context.Context, string, int) error       { return nil }
+func (m *memJobStore) Finish(_ context.Context, id string, _ jobs.Status, _ int, errMsg string, _ time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.rows[id] = errMsg
+	return nil
+}
+
+// AC303 (composition root): registerJobs gives conventions.extract a 300 s per-attempt limit and
+// leaves clone and refresh on the runner's 120 s default.
+func TestRegisterJobs_PerKindTimeouts(t *testing.T) {
+	tests := []struct {
+		kind     string
+		wantTook time.Duration
+	}{
+		{kind: reposapp.KindClone, wantTook: 120 * time.Second},
+		{kind: reposapp.KindRefresh, wantTook: 120 * time.Second},
+		{kind: conventionsapp.KindExtract, wantTook: 300 * time.Second},
+	}
+	for _, tc := range tests {
+		t.Run(tc.kind, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				store := &memJobStore{rows: map[string]string{}}
+				r := jobs.New(store, jobs.Options{Retries: -1})
+				block := func(ctx context.Context, _ json.RawMessage) error { <-ctx.Done(); return ctx.Err() }
+				registerJobs(r, block, block, block, conventionsapp.JobTimeout)
+
+				start := time.Now()
+				id, err := r.Enqueue(t.Context(), "ws", tc.kind, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := r.Wait(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				if took := time.Since(start); took != tc.wantTook {
+					t.Errorf("%s job ended after %v, want %v", tc.kind, took, tc.wantTook)
+				}
+				if got := store.rows[id]; !strings.Contains(got, "timed out after") {
+					t.Errorf("%s job error = %q, want a timeout", tc.kind, got)
+				}
+			})
+		})
 	}
 }

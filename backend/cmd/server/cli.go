@@ -96,5 +96,5 @@ func runSeed(ctx context.Context, cfg config.Config, stdout io.Writer, log *slog
 }
 
 func insertedRows(r seed.Result) int {
-	return r.Workspaces + r.Users + r.Members + r.Settings + r.Repos + r.PullRequests + r.Files + r.Commits
+	return r.Workspaces + r.Users + r.Members + r.Settings + r.Repos + r.PullRequests + r.Files + r.Commits + r.Agents + r.Skills + r.AgentSkills
 }

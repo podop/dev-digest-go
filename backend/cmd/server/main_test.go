@@ -21,8 +21,10 @@ import (
 
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/jobs"
+	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
 	"dev-digest-go/backend/internal/settings/adapters/providers"
+	"dev-digest-go/backend/internal/skills/adapters/urlfetch"
 )
 
 func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
@@ -77,6 +79,13 @@ type spec struct {
 	secretFile string // content of secrets.json, "" = none
 
 	allowedHosts []string // Host allowlist; nil = no Host check
+
+	// Phase 2 seams. llmURLs defaults to a closed local port so no test reaches a real provider.
+	llmURLs        llmURLs
+	llm            llm.Options          // retry backoff, budget, price book; Keys/Adapters/Logger are wire's
+	urlfetch       urlfetch.Options     // skill URL import: resolver, dialer, TLS roots
+	extractTimeout time.Duration        // conventions.extract per-attempt limit; 0 = 300 s
+	config         func(*config.Config) // adjusts the config, e.g. LLMProviderOverride, ProjectContextGlobs
 }
 
 // stack is a running server with its stubs.
@@ -108,6 +117,8 @@ func newConfig(t testing.TB, db *pgtest.Database, sp spec) config.Config {
 		RateLimitEnabled: sp.rateLimit,
 		AutoMigrate:      !sp.noMigrate,
 		AutoSeed:         !sp.noSeed,
+
+		ProjectContextGlobs: []string{config.DefaultProjectContextGlobs},
 	}
 }
 
@@ -119,6 +130,9 @@ func startStack(t testing.TB, sp spec) *stack {
 	}
 	s := &stack{t: t, db: sp.db, logs: &syncBuffer{}, gh: newGitHubStub(t), client: &http.Client{Timeout: 30 * time.Second}}
 	s.cfg = newConfig(t, sp.db, sp)
+	if sp.config != nil {
+		sp.config(&s.cfg)
+	}
 	if sp.secretFile != "" {
 		if err := os.MkdirAll(s.cfg.DataDir, 0o700); err != nil {
 			t.Fatal(err)
@@ -141,6 +155,14 @@ func startStack(t testing.TB, sp spec) *stack {
 			o.remoteBase = "file://" + s.remote
 			o.gitBinary = sp.gitBinary
 			o.jobs = sp.jobs
+			o.llmURLs = sp.llmURLs
+			if o.llmURLs == (llmURLs{}) {
+				closed := "http://127.0.0.1:1"
+				o.llmURLs = llmURLs{openAI: closed, anthropic: closed, openRouter: closed}
+			}
+			o.llm = sp.llm
+			o.urlfetch = sp.urlfetch
+			o.extractTimeout = sp.extractTimeout
 		},
 	}
 

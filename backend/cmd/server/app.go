@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -16,10 +17,21 @@ import (
 	"github.com/labstack/echo/v5"
 	"gorm.io/gorm"
 
+	agentsdb "dev-digest-go/backend/internal/agents/adapters/postgres"
+	agentsapp "dev-digest-go/backend/internal/agents/app"
+	agentshttp "dev-digest-go/backend/internal/agents/transport/http"
 	"dev-digest-go/backend/internal/config"
+	"dev-digest-go/backend/internal/conventions/adapters/clonefiles"
+	conventionspg "dev-digest-go/backend/internal/conventions/adapters/postgres"
+	conventionsapp "dev-digest-go/backend/internal/conventions/app"
+	conventionshttp "dev-digest-go/backend/internal/conventions/transport/http"
 	"dev-digest-go/backend/internal/health"
 	"dev-digest-go/backend/internal/jobs"
 	jobspg "dev-digest-go/backend/internal/jobs/adapters/postgres"
+	"dev-digest-go/backend/internal/llm"
+	"dev-digest-go/backend/internal/llm/adapters/anthropic"
+	"dev-digest-go/backend/internal/llm/adapters/mock"
+	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
 	"dev-digest-go/backend/internal/platform/gitcli"
 	"dev-digest-go/backend/internal/platform/github"
 	"dev-digest-go/backend/internal/platform/httpx"
@@ -27,6 +39,10 @@ import (
 	"dev-digest-go/backend/internal/platform/postgres"
 	"dev-digest-go/backend/internal/platform/postgres/migrate"
 	"dev-digest-go/backend/internal/platform/secrets"
+	pcclone "dev-digest-go/backend/internal/projectcontext/adapters/clonedocs"
+	pcpg "dev-digest-go/backend/internal/projectcontext/adapters/postgres"
+	pcapp "dev-digest-go/backend/internal/projectcontext/app"
+	pchttp "dev-digest-go/backend/internal/projectcontext/transport/http"
 	pullsgh "dev-digest-go/backend/internal/pulls/adapters/github"
 	pullspg "dev-digest-go/backend/internal/pulls/adapters/postgres"
 	pullsapp "dev-digest-go/backend/internal/pulls/app"
@@ -40,6 +56,11 @@ import (
 	"dev-digest-go/backend/internal/settings/adapters/providers"
 	settingsapp "dev-digest-go/backend/internal/settings/app"
 	settingshttp "dev-digest-go/backend/internal/settings/transport/http"
+	"dev-digest-go/backend/internal/skills/adapters/catalog"
+	skillspg "dev-digest-go/backend/internal/skills/adapters/postgres"
+	"dev-digest-go/backend/internal/skills/adapters/urlfetch"
+	skillsapp "dev-digest-go/backend/internal/skills/app"
+	skillshttp "dev-digest-go/backend/internal/skills/transport/http"
 	"dev-digest-go/backend/internal/tenancy"
 	tenancypg "dev-digest-go/backend/internal/tenancy/adapters/postgres"
 	"dev-digest-go/backend/migrations"
@@ -59,7 +80,21 @@ type options struct {
 	gitBinary     string            // "" = git from PATH
 	jobs          jobs.Options      // Logger is always set by serve
 	onListen      func(net.Addr)    // called once the listener is up
+
+	// llmURLs point the three provider adapters at stubs; "" = the real endpoint. Ignored with
+	// LLM_PROVIDER_OVERRIDE=mock.
+	llmURLs llmURLs
+	// llm tunes the LLM client (retry backoff, budget, price book); Keys, Adapters and Logger are
+	// always set by wire.
+	llm llm.Options
+	// urlfetch tunes the skill URL importer (resolver, dialer, TLS roots); zero = production.
+	urlfetch urlfetch.Options
+	// extractTimeout is the per-attempt limit of conventions.extract; 0 = conventionsapp.JobTimeout.
+	extractTimeout time.Duration
 }
+
+// llmURLs are the base URLs of the provider adapters.
+type llmURLs struct{ openAI, anthropic, openRouter string }
 
 type option func(*options)
 
@@ -91,11 +126,21 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 
 	o.jobs.Logger = log
 	runner := jobs.New(jobspg.NewStore(db), o.jobs)
-	e, err := wire(cfg, o, db, sqlDB, runner, log)
+	w, err := wire(cfg, o, db, sqlDB, runner, log)
 	if err != nil {
 		return err
 	}
-	return listen(ctx, cfg, o, e, runner, log)
+	defer w.llm.Close()
+
+	// Scans left running by a crash or a hard stop fail before the port accepts connections
+	// (AC264). A failing reap does not stop the API: with DB_AUTO_MIGRATE=false on an unmigrated
+	// database it still has to serve /health (Phase 1 AC33).
+	if failed, err := w.conventions.FailInterrupted(ctx); err != nil {
+		log.ErrorContext(ctx, "interrupted convention scans not failed", "error", err)
+	} else if failed > 0 {
+		log.WarnContext(ctx, "interrupted convention scans failed", "count", failed)
+	}
+	return listen(ctx, cfg, o, w.echo, runner, log)
 }
 
 // startupDB applies pending migrations and then the seed, each unless switched off (FR18).
@@ -120,8 +165,41 @@ func startupDB(ctx context.Context, cfg config.Config, db *gorm.DB, sqlDB *sql.D
 	return nil
 }
 
+// wired is what wire hands back to serve.
+type wired struct {
+	echo        *echo.Echo
+	llm         *llm.Client // closed by serve on exit
+	conventions *conventionsapp.Service
+}
+
+// registerJobs binds the job kinds. conventions.extract gets its own per-attempt limit (D208);
+// clone and refresh keep the runner's default (AC303).
+func registerJobs(r *jobs.Runner, clone, refresh, extract jobs.Handler, extractTimeout time.Duration) {
+	r.Register(reposapp.KindClone, clone)
+	r.Register(reposapp.KindRefresh, refresh)
+	r.Register(conventionsapp.KindExtract, extract, jobs.WithTimeout(extractTimeout))
+}
+
+// llmAdapters builds the provider adapters; with LLM_PROVIDER_OVERRIDE=mock every provider is a
+// deterministic mock and startup logs one warning (D214).
+func llmAdapters(cfg config.Config, urls llmURLs, log *slog.Logger) map[llm.Provider]llm.Adapter {
+	ads := map[llm.Provider]llm.Adapter{
+		llm.OpenAI:     openaicompat.NewOpenAI(openaicompat.Options{BaseURL: urls.openAI}),
+		llm.Anthropic:  anthropic.New(anthropic.Options{BaseURL: urls.anthropic}),
+		llm.OpenRouter: openaicompat.NewOpenRouter(openaicompat.Options{BaseURL: urls.openRouter}),
+	}
+	if cfg.LLMProviderOverride == config.LLMProviderMock {
+		for p := range ads {
+			ads[p] = mock.New(p, mock.Options{Delay: cfg.LLMMockDelay})
+		}
+		log.Warn("LLM_PROVIDER_OVERRIDE=mock: every LLM provider is replaced by a deterministic mock",
+			"mock_delay_ms", cfg.LLMMockDelay.Milliseconds())
+	}
+	return ads
+}
+
 // wire builds the adapters, use cases, job handlers and routes.
-func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs.Runner, log *slog.Logger) (*echo.Echo, error) {
+func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs.Runner, log *slog.Logger) (*wired, error) {
 	sec := secrets.New(filepath.Join(cfg.DataDir, secrets.FileName), o.getenv)
 	gh := github.New(github.Options{
 		BaseURL: o.githubBaseURL,
@@ -135,7 +213,25 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	if err != nil {
 		return nil, fmt.Errorf("git: %w", err)
 	}
+	// The constructors that can fail come before the LLM client, so an error never leaks its
+	// price-refresh goroutine.
+	cat, err := catalog.New()
+	if err != nil {
+		return nil, fmt.Errorf("skill catalog: %w", err)
+	}
+	pcStore := pcpg.NewStore(db)
+	tx := postgres.NewTx(db)
+	pcSvc, err := pcapp.NewService(pcStore, pcclone.Docs{}, tx, cfg.ProjectContextGlobs, log)
+	if err != nil {
+		return nil, fmt.Errorf("project context: %w", err)
+	}
 	resolver := tenancy.NewResolver(tenancypg.NewStore(db))
+
+	llmOpts := o.llm
+	llmOpts.Keys = sec
+	llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, log)
+	llmOpts.Logger = log
+	llmClient := llm.New(llmOpts)
 
 	settingsSvc := settingsapp.NewService(settingsapp.Deps{
 		Store:     settingspg.NewStore(db),
@@ -146,14 +242,45 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	reposStore := reposdb.NewStore(db)
 	reposSvc := reposapp.NewService(reposStore, runner, git.Root())
 	repoJobs := reposapp.NewJobs(reposStore, git, reposapp.JobsOptions{RemoteBase: o.remoteBase, Log: log})
-	runner.Register(reposapp.KindClone, repoJobs.Clone)
-	runner.Register(reposapp.KindRefresh, repoJobs.Refresh)
 	pullsSvc := pullsapp.NewService(pullspg.NewStore(db), pullsgh.New(gh), log, nil)
 
+	agentsSvc := agentsapp.NewService(agentsdb.NewStore(db), tx, llmClient, log)
+
+	skillsStore := skillspg.NewStore(db)
+	skillsSvc := skillsapp.NewService(skillsStore, tx, time.Now)
+	importer := skillsapp.NewImporter(urlfetch.New(o.urlfetch), cat)
+
+	convStore := conventionspg.NewStore(db)
+	convSvc := conventionsapp.NewService(convStore, convStore, runner, conventionsapp.ServiceOptions{Redact: llmClient})
+	extractTimeout := o.extractTimeout
+	if extractTimeout <= 0 {
+		extractTimeout = conventionsapp.JobTimeout
+	}
+	convJobs := conventionsapp.NewJobs(conventionsapp.JobsDeps{
+		Store:    convStore,
+		Repos:    convStore,
+		Files:    clonefiles.New(),
+		LLM:      llmClient,
+		Features: settingsSvc,
+		Redact:   llmClient,
+	}, conventionsapp.JobsOptions{Timeout: extractTimeout, Log: log})
+	registerJobs(runner, repoJobs.Clone, repoJobs.Refresh, convJobs.Extract, extractTimeout)
+
+	merger := skillsapp.NewMerger(skillsapp.MergerDeps{
+		Tx:          tx,
+		Skills:      skillsSvc,
+		Lookup:      skillsStore,
+		Agents:      agentsSvc,
+		Conventions: convSvc,
+	})
+
+	limits := skillshttp.BodyLimits()
+	maps.Copy(limits, pchttp.BodyLimits())
 	e := httpx.New(httpx.Options{
 		Log:          log,
 		CORSOrigins:  cfg.CORSOrigins,
 		AllowedHosts: cfg.AllowedHosts,
+		BodyLimits:   limits,
 		RateLimit: httpx.RateLimit{
 			Enabled: cfg.RateLimitEnabled,
 			Buckets: settingshttp.RateLimitBuckets(),
@@ -163,7 +290,12 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	settingshttp.AddRoutes(e, settingshttp.NewHandler(settingsSvc, resolver))
 	reposhttp.AddRoutes(e, reposSvc, resolver)
 	pullshttp.AddRoutes(e, pullsSvc, resolver)
-	return e, nil
+	agentshttp.AddRoutes(e, agentsSvc, resolver)
+	// Also registers POST /repos/:id/conventions/skill; conventionshttp does not.
+	skillshttp.AddRoutes(e, skillsSvc, importer, merger, resolver)
+	conventionshttp.AddRoutes(e, convSvc, resolver)
+	pchttp.AddRoutes(e, pcSvc, resolver)
+	return &wired{echo: e, llm: llmClient, conventions: convSvc}, nil
 }
 
 // listen serves e until ctx ends, then shuts HTTP and the job runner down in parallel. A
