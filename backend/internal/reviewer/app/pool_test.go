@@ -112,3 +112,20 @@ func TestMapOrdered_Empty(t *testing.T) {
 		t.Errorf("mapOrdered(nil) = %v, %v, want empty, nil", got, err)
 	}
 }
+
+func TestMapOrdered_APanicStopsThePoolAndIsRaisedOnTheCaller(t *testing.T) {
+	var started atomic.Int32
+	defer func() {
+		if r := recover(); r != "boom" {
+			t.Errorf("recovered %v, want the panic value of the worker", r)
+		}
+		if n := started.Load(); n != 1 {
+			t.Errorf("items started = %d, want 1 (no item starts after the panic)", n)
+		}
+	}()
+	_, _ = mapOrdered([]int{0, 1, 2, 3}, 1, func(_, _ int) (int, error) {
+		started.Add(1)
+		panic("boom")
+	})
+	t.Error("mapOrdered returned, want it to panic")
+}

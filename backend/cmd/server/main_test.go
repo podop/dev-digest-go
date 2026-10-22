@@ -87,6 +87,9 @@ type spec struct {
 	extractTimeout time.Duration        // conventions.extract per-attempt limit; 0 = 300 s
 	noIntelJobs    bool                 // leave the repo-intel job kinds unregistered (degraded resync)
 	config         func(*config.Config) // adjusts the config, e.g. LLMProviderOverride, ProjectContextGlobs
+
+	// Phase 4 seam: scripted provider adapters replace the real ones (options.llmAdapters).
+	llmAdapters map[llm.Provider]llm.Adapter
 }
 
 // stack is a running server with its stubs.
@@ -162,6 +165,7 @@ func startStack(t testing.TB, sp spec) *stack {
 				o.llmURLs = llmURLs{openAI: closed, anthropic: closed, openRouter: closed}
 			}
 			o.llm = sp.llm
+			o.llmAdapters = sp.llmAdapters
 			o.urlfetch = sp.urlfetch
 			o.extractTimeout = sp.extractTimeout
 			o.noRepoIntelJobs = sp.noIntelJobs

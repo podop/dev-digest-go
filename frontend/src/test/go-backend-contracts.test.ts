@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  ActiveRun,
   Agent,
+  AgentColumn,
+  AgentRunEstimate,
   AgentSkillLink,
   AgentVersion,
   AgentVersionConfig,
@@ -16,12 +19,27 @@ import {
   ContextList,
   Convention,
   ConventionScan,
+  Conflict,
+  ConflictTake,
+  FindingRecord,
   ModelInfo,
+  MultiAgentRun,
+  MultiAgentRunSummary,
   PrDetail,
   PrMeta,
   PrReviewComment,
+  ProjectContextTrace,
+  ProjectContextTraceDoc,
   Repo,
   RepoIndexState,
+  ReviewRecord,
+  ReviewRunResponse,
+  ReviewRunTarget,
+  RunLogLine,
+  RunStats,
+  RunSummary,
+  RunTrace,
+  PromptAssembly,
   SecretsStatus,
   Settings,
   Skill,
@@ -29,10 +47,12 @@ import {
   SkillImportPreview,
   SkillStats,
   SkillStatsSummary,
+  SkillUsed,
   SkillVersion,
+  ToolCall,
 } from "@devdigest/shared";
 
-// The Go backend's component tests record the response of every Phase-1 and Phase-2 route in
+// The Go backend's component tests record the response of every Phase-1 to Phase-4 route in
 // backend/cmd/server/testdata/contracts. This file parses each recording with the vendored
 // Zod contracts the UI uses, so a drift on either side fails here. The contracts themselves
 // are never edited (frontend/AGENTS.md: src/vendor/shared is the wire contract).
@@ -56,6 +76,32 @@ const resyncDegraded = z
   .object({ status: z.literal("accepted"), degraded: z.literal(true), reason: z.literal("no_handler") })
   .strict();
 const resync = z.union([resyncAccepted, resyncDegraded]);
+
+// ---- Phase 4: reviews (spec 7.2-7.6). Every nested object is strict too: an extra key anywhere is
+// a drift. ----
+const findingRecord = FindingRecord.strict();
+const reviewRecord = ReviewRecord.extend({ findings: z.array(findingRecord) }).strict();
+const reviewRunResponse = ReviewRunResponse.extend({
+  runs: z.array(ReviewRunTarget.strict()),
+  reviews: z.array(reviewRecord),
+}).strict();
+const findingAnswer = z.object({ finding: findingRecord }).strict();
+const learnAnswer = z.object({ finding: findingRecord, memoryId: uuid }).strict();
+const runTrace = RunTrace.extend({
+  config: RunTrace.shape.config.strict(),
+  stats: RunStats.strict(),
+  prompt_assembly: PromptAssembly.strict(),
+  tool_calls: z.array(ToolCall.strict()),
+  log: z.array(RunLogLine.strict()),
+  skills_used: z.array(SkillUsed.strict()).nullish(),
+  project_context: ProjectContextTrace.extend({ docs: z.array(ProjectContextTraceDoc.strict()) })
+    .strict()
+    .nullish(),
+}).strict();
+const multiAgentRun = MultiAgentRun.extend({
+  columns: z.array(AgentColumn.extend({ findings: z.array(findingRecord) }).strict()),
+  conflicts: z.array(Conflict.extend({ takes: z.array(ConflictTake.strict()) }).strict()),
+}).strict();
 
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
@@ -149,6 +195,22 @@ const contracts: Record<string, z.ZodTypeAny> = {
   repo_index_state_synth: RepoIndexState.strict(),
   repo_resync_accepted: resync,
   repo_resync_degraded: resync,
+
+  // ---- Phase 4: reviews ----
+  review_start_single: reviewRunResponse,
+  review_start_multi: reviewRunResponse,
+  review_active_runs: z.array(ActiveRun.strict()),
+  review_runs: z.array(RunSummary.strict()),
+  review_trace_completed: runTrace,
+  review_trace_ended: runTrace,
+  review_reviews: z.array(reviewRecord),
+  review_ok: ok,
+  review_accept: findingAnswer,
+  review_dismiss: findingAnswer,
+  review_learn: learnAnswer,
+  review_multi_run: multiAgentRun,
+  review_multi_list: z.array(MultiAgentRunSummary.strict()),
+  review_estimates: z.array(AgentRunEstimate.strict()),
 };
 
 const read = (name: string): unknown =>
@@ -237,5 +299,98 @@ describe("Go backend golden responses", () => {
         expect(item, key).toHaveProperty(key);
       }
     }
+  });
+
+  it("the review start answers carry an empty reviews list; one run for one agent, a parent for several", () => {
+    const single = read("review_start_single") as { multi_agent_run_id: unknown; runs: unknown[]; reviews: unknown[] };
+    expect(single.multi_agent_run_id).toBeNull();
+    expect(single.runs).toHaveLength(1);
+    expect(single.reviews).toEqual([]);
+
+    const multi = read("review_start_multi") as { multi_agent_run_id: unknown; runs: unknown[]; reviews: unknown[] };
+    expect(uuid.safeParse(multi.multi_agent_run_id).success).toBe(true);
+    expect(multi.runs).toHaveLength(3);
+    expect(multi.reviews).toEqual([]);
+  });
+
+  it("the review records have usage keys only through a run and never a grounding", () => {
+    const reviews = read("review_reviews") as Record<string, unknown>[];
+    expect(reviews.length).toBeGreaterThan(0);
+    for (const review of reviews) {
+      expect(review).not.toHaveProperty("grounding");
+      expect(review.run_id).not.toBeNull();
+      for (const key of ["cost_usd", "tokens_in", "tokens_out", "agent_name"]) expect(review, key).toHaveProperty(key);
+      for (const finding of review.findings as Record<string, unknown>[]) {
+        expect(finding.evidence).toBeNull();
+        expect(finding).toHaveProperty("eval_case_id");
+        expect(finding).not.toHaveProperty("memory_id");
+      }
+    }
+  });
+
+  it("accept and dismiss swap the two timestamps; Learn answers the memory id on the finding", () => {
+    const accepted = (read("review_accept") as { finding: Record<string, unknown> }).finding;
+    expect(accepted.accepted_at).toEqual(expect.any(String));
+    expect(accepted.dismissed_at).toBeNull();
+    expect(accepted).not.toHaveProperty("memory_id");
+
+    const dismissed = (read("review_dismiss") as { finding: Record<string, unknown> }).finding;
+    expect(dismissed.dismissed_at).toEqual(expect.any(String));
+    expect(dismissed.accepted_at).toBeNull();
+
+    const learned = read("review_learn") as { finding: { memory_id: unknown }; memoryId: string };
+    expect(learned.finding.memory_id).toBe(learned.memoryId);
+  });
+
+  it("the trace goldens are a completed and an ended run; the live log has no 'Run complete' line", () => {
+    const completed = read("review_trace_completed") as {
+      stats: { findings: number; grounding: string };
+      tool_calls: { tool: string; args: string; meta: string }[];
+      log: { msg: string }[];
+      intent: unknown;
+      memory_pulled: unknown[];
+    };
+    expect(completed.stats).toMatchObject({ findings: 2, grounding: "2/2 passed" });
+    expect(completed.tool_calls).toMatchObject([{ tool: "review_file", args: "all files", meta: "single-pass" }]);
+    expect(completed.log.at(-1)?.msg).toMatch(/^Persisted review /);
+    expect(completed.intent).toBeNull();
+    expect(completed.memory_pulled).toEqual([]);
+
+    const ended = read("review_trace_ended") as {
+      stats: { findings: number; grounding: string };
+      tool_calls: unknown[];
+      raw_output: string;
+      log: { kind: string; msg: string }[];
+      prompt_assembly: Record<string, unknown>;
+    };
+    expect(ended.stats).toMatchObject({ findings: 0, grounding: "0/0 passed" });
+    expect(ended.tool_calls).toEqual([]);
+    expect(ended.raw_output).toBe("");
+    expect(ended.log.at(-1)).toMatchObject({ kind: "error", msg: "Run cancelled by user" });
+    // The ended assembly has no callers, repo_map, pr_description or intent key.
+    expect(Object.keys(ended.prompt_assembly).sort()).toEqual(["memory", "skills", "specs", "system", "user"]);
+  });
+
+  it("the run history lists every run newest first, with the cancelled run's note and no blockers", () => {
+    const runs = read("review_runs") as { status: string; error: string | null; blockers: number | null }[];
+    expect(runs.map((r) => r.status)).toEqual(["done", "cancelled", "done"]);
+    expect(runs[1]).toMatchObject({ error: "Cancelled by user", blockers: null });
+  });
+
+  it("the multi-agent golden has done columns only in the groups, and one conflict", () => {
+    const run = read("review_multi_run") as {
+      agent_count: number;
+      columns: { status: string; agent_name: string }[];
+      conflicts: { is_conflict: boolean; takes: unknown[] }[];
+    };
+    expect(run.agent_count).toBe(3);
+    expect(run.columns.map((c) => c.agent_name)).toEqual([
+      "Performance Reviewer",
+      "Security Reviewer",
+      "Test Quality Reviewer",
+    ]);
+    expect(run.columns.every((c) => c.status === "done")).toBe(true);
+    expect(run.conflicts.map((c) => c.is_conflict)).toEqual([false, true]);
+    for (const group of run.conflicts) expect(group.takes).toHaveLength(3);
   });
 });

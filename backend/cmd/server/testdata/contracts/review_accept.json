@@ -1,0 +1,23 @@
+{
+  "finding": {
+    "accepted_at": "2026-01-01T00:00:00.000Z",
+    "category": "security",
+    "confidence": 0.9,
+    "dismissed_at": null,
+    "end_line": 7,
+    "eval_case_id": null,
+    "evidence": null,
+    "file": "src/middleware/ratelimit.ts",
+    "id": "00000000-0000-4000-8000-000000000009",
+    "kind": "finding",
+    "out_of_scope": false,
+    "rationale": "Any client can send a fresh `X-Forwarded-For` value on every request and get a new bucket, which bypasses the limiter.",
+    "review_id": "00000000-0000-4000-8000-000000000006",
+    "severity": "WARNING",
+    "skill": "pr-quality-rubric",
+    "start_line": 7,
+    "suggestion": "Key on `req.ip` with Fastify's `trustProxy` configured for your load balancer.",
+    "title": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+    "trifecta_components": null
+  }
+}

@@ -1,0 +1,273 @@
+{
+  "agent_count": 3,
+  "columns": [
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000019",
+      "agent_name": "Performance Reviewer",
+      "cost_usd": 0.00042,
+      "duration_ms": 1,
+      "error": null,
+      "findings": [
+        {
+          "accepted_at": null,
+          "category": "perf",
+          "confidence": 0.72,
+          "dismissed_at": null,
+          "end_line": 4,
+          "eval_case_id": null,
+          "evidence": null,
+          "file": "src/middleware/ratelimit.ts",
+          "id": "00000000-0000-4000-8000-000000000023",
+          "kind": "finding",
+          "memory_id": null,
+          "out_of_scope": false,
+          "rationale": "One entry is kept per distinct key forever, so memory grows with the number of clients.",
+          "review_id": "00000000-0000-4000-8000-000000000024",
+          "severity": "SUGGESTION",
+          "skill": null,
+          "start_line": 4,
+          "suggestion": "Use an LRU / TTL map, or evict buckets that have refilled completely.",
+          "title": "Bucket map grows without eviction",
+          "trifecta_components": null
+        },
+        {
+          "accepted_at": null,
+          "category": "security",
+          "confidence": 0.9,
+          "dismissed_at": null,
+          "end_line": 7,
+          "eval_case_id": null,
+          "evidence": null,
+          "file": "src/middleware/ratelimit.ts",
+          "id": "00000000-0000-4000-8000-000000000025",
+          "kind": "finding",
+          "memory_id": null,
+          "out_of_scope": false,
+          "rationale": "Any client can send a fresh `X-Forwarded-For` value on every request and get a new bucket, which bypasses the limiter.",
+          "review_id": "00000000-0000-4000-8000-000000000024",
+          "severity": "CRITICAL",
+          "skill": "n-plus-one-gate",
+          "start_line": 7,
+          "suggestion": "Key on `req.ip` with Fastify's `trustProxy` configured for your load balancer.",
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+          "trifecta_components": null
+        }
+      ],
+      "model": "deepseek/deepseek-v4-flash",
+      "provider": "openrouter",
+      "run_id": "00000000-0000-4000-8000-000000000018",
+      "score": 85,
+      "status": "done",
+      "summary": "[mock LLM] The token-bucket limiter works, but its key trusts a client-controlled header and the bucket map never shrinks.",
+      "verdict": "comment"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000017",
+      "agent_name": "Security Reviewer",
+      "cost_usd": 0.00042,
+      "duration_ms": 1,
+      "error": null,
+      "findings": [
+        {
+          "accepted_at": null,
+          "category": "perf",
+          "confidence": 0.72,
+          "dismissed_at": null,
+          "end_line": 4,
+          "eval_case_id": null,
+          "evidence": null,
+          "file": "src/middleware/ratelimit.ts",
+          "id": "00000000-0000-4000-8000-000000000026",
+          "kind": "finding",
+          "memory_id": null,
+          "out_of_scope": false,
+          "rationale": "One entry is kept per distinct key forever, so memory grows with the number of clients.",
+          "review_id": "00000000-0000-4000-8000-000000000027",
+          "severity": "SUGGESTION",
+          "skill": null,
+          "start_line": 4,
+          "suggestion": "Use an LRU / TTL map, or evict buckets that have refilled completely.",
+          "title": "Bucket map grows without eviction",
+          "trifecta_components": null
+        },
+        {
+          "accepted_at": null,
+          "category": "security",
+          "confidence": 0.9,
+          "dismissed_at": null,
+          "end_line": 7,
+          "eval_case_id": null,
+          "evidence": null,
+          "file": "src/middleware/ratelimit.ts",
+          "id": "00000000-0000-4000-8000-000000000028",
+          "kind": "finding",
+          "memory_id": null,
+          "out_of_scope": false,
+          "rationale": "Any client can send a fresh `X-Forwarded-For` value on every request and get a new bucket, which bypasses the limiter.",
+          "review_id": "00000000-0000-4000-8000-000000000027",
+          "severity": "WARNING",
+          "skill": "secret-leakage-gate",
+          "start_line": 7,
+          "suggestion": "Key on `req.ip` with Fastify's `trustProxy` configured for your load balancer.",
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+          "trifecta_components": null
+        }
+      ],
+      "model": "deepseek/deepseek-v4-flash",
+      "provider": "openrouter",
+      "run_id": "00000000-0000-4000-8000-000000000016",
+      "score": 85,
+      "status": "done",
+      "summary": "[mock LLM] The token-bucket limiter works, but its key trusts a client-controlled header and the bucket map never shrinks.",
+      "verdict": "comment"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000021",
+      "agent_name": "Test Quality Reviewer",
+      "cost_usd": 0.00042,
+      "duration_ms": 1,
+      "error": null,
+      "findings": [
+        {
+          "accepted_at": null,
+          "category": "perf",
+          "confidence": 0.72,
+          "dismissed_at": null,
+          "end_line": 4,
+          "eval_case_id": null,
+          "evidence": null,
+          "file": "src/middleware/ratelimit.ts",
+          "id": "00000000-0000-4000-8000-000000000029",
+          "kind": "finding",
+          "memory_id": null,
+          "out_of_scope": false,
+          "rationale": "One entry is kept per distinct key forever, so memory grows with the number of clients.",
+          "review_id": "00000000-0000-4000-8000-000000000030",
+          "severity": "SUGGESTION",
+          "skill": null,
+          "start_line": 4,
+          "suggestion": "Use an LRU / TTL map, or evict buckets that have refilled completely.",
+          "title": "Bucket map grows without eviction",
+          "trifecta_components": null
+        },
+        {
+          "accepted_at": null,
+          "category": "security",
+          "confidence": 0.9,
+          "dismissed_at": null,
+          "end_line": 7,
+          "eval_case_id": null,
+          "evidence": null,
+          "file": "src/middleware/ratelimit.ts",
+          "id": "00000000-0000-4000-8000-000000000031",
+          "kind": "finding",
+          "memory_id": null,
+          "out_of_scope": false,
+          "rationale": "Any client can send a fresh `X-Forwarded-For` value on every request and get a new bucket, which bypasses the limiter.",
+          "review_id": "00000000-0000-4000-8000-000000000030",
+          "severity": "WARNING",
+          "skill": "test-coverage-nudge",
+          "start_line": 7,
+          "suggestion": "Key on `req.ip` with Fastify's `trustProxy` configured for your load balancer.",
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+          "trifecta_components": null
+        }
+      ],
+      "model": "deepseek/deepseek-v4-flash",
+      "provider": "openrouter",
+      "run_id": "00000000-0000-4000-8000-000000000020",
+      "score": 85,
+      "status": "done",
+      "summary": "[mock LLM] The token-bucket limiter works, but its key trusts a client-controlled header and the bucket map never shrinks.",
+      "verdict": "comment"
+    }
+  ],
+  "conflicts": [
+    {
+      "end_line": 4,
+      "file": "src/middleware/ratelimit.ts",
+      "is_conflict": false,
+      "line": 4,
+      "takes": [
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000019",
+          "finding_ids": [
+            "00000000-0000-4000-8000-000000000023"
+          ],
+          "note": "Bucket map grows without eviction",
+          "persona": "Performance Reviewer",
+          "run_id": "00000000-0000-4000-8000-000000000018",
+          "verdict": "SUGGESTION"
+        },
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000017",
+          "finding_ids": [
+            "00000000-0000-4000-8000-000000000026"
+          ],
+          "note": "Bucket map grows without eviction",
+          "persona": "Security Reviewer",
+          "run_id": "00000000-0000-4000-8000-000000000016",
+          "verdict": "SUGGESTION"
+        },
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000021",
+          "finding_ids": [
+            "00000000-0000-4000-8000-000000000029"
+          ],
+          "note": "Bucket map grows without eviction",
+          "persona": "Test Quality Reviewer",
+          "run_id": "00000000-0000-4000-8000-000000000020",
+          "verdict": "SUGGESTION"
+        }
+      ],
+      "title": "Bucket map grows without eviction"
+    },
+    {
+      "end_line": 7,
+      "file": "src/middleware/ratelimit.ts",
+      "is_conflict": true,
+      "line": 7,
+      "takes": [
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000019",
+          "finding_ids": [
+            "00000000-0000-4000-8000-000000000025"
+          ],
+          "note": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+          "persona": "Performance Reviewer",
+          "run_id": "00000000-0000-4000-8000-000000000018",
+          "verdict": "CRITICAL"
+        },
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000017",
+          "finding_ids": [
+            "00000000-0000-4000-8000-000000000028"
+          ],
+          "note": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+          "persona": "Security Reviewer",
+          "run_id": "00000000-0000-4000-8000-000000000016",
+          "verdict": "WARNING"
+        },
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000021",
+          "finding_ids": [
+            "00000000-0000-4000-8000-000000000031"
+          ],
+          "note": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+          "persona": "Test Quality Reviewer",
+          "run_id": "00000000-0000-4000-8000-000000000020",
+          "verdict": "WARNING"
+        }
+      ],
+      "title": "Rate-limit key trusts the spoofable X-Forwarded-For header"
+    }
+  ],
+  "id": "00000000-0000-4000-8000-000000000015",
+  "pr_id": "00000000-0000-4000-8000-000000000001",
+  "pr_number": 482,
+  "pr_title": "Add rate limiting to public API endpoints",
+  "ran_at": "2026-01-01T00:00:00.000Z",
+  "repo_id": "00000000-0000-4000-8000-000000000022",
+  "total_cost_usd": 0.00126,
+  "total_duration_ms": 1
+}

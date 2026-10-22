@@ -1,0 +1,25 @@
+{
+  "finding": {
+    "accepted_at": null,
+    "category": "perf",
+    "confidence": 0.72,
+    "dismissed_at": null,
+    "end_line": 4,
+    "eval_case_id": null,
+    "evidence": null,
+    "file": "src/middleware/ratelimit.ts",
+    "id": "00000000-0000-4000-8000-000000000010",
+    "kind": "finding",
+    "memory_id": "00000000-0000-4000-8000-000000000014",
+    "out_of_scope": false,
+    "rationale": "One entry is kept per distinct key forever, so memory grows with the number of clients.",
+    "review_id": "00000000-0000-4000-8000-000000000006",
+    "severity": "SUGGESTION",
+    "skill": null,
+    "start_line": 4,
+    "suggestion": "Use an LRU / TTL map, or evict buckets that have refilled completely.",
+    "title": "Bucket map grows without eviction",
+    "trifecta_components": null
+  },
+  "memoryId": "00000000-0000-4000-8000-000000000014"
+}
