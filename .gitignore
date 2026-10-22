@@ -5,6 +5,7 @@
 # Go
 /dev-digest-go
 backend/bin/
+/backend/server
 *.test
 *.out
 

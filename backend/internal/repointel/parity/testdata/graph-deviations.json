@@ -153,11 +153,15 @@
         "gone.ts"
       ],
       "files_from_walk": false,
-      "deviation": "D3019 failure handling: gone.ts is in the walked file list but does not exist when read; it contributes no specifier and the rest of the graph survives (Node drops the whole graph). The test must pass this explicit list instead of walking.",
+      "deviation": "D3019 failure handling: gone.ts is in the walked file list but does not exist when read; it contributes no specifier and the rest of the graph survives (Node drops the whole graph). a.ts still gets its edge to gone.ts: the target is a walked file (spec 7.5 step 5). The test must pass this explicit list instead of walking.",
       "expected_edges": [
         {
           "from": "a.ts",
           "to": "b.ts"
+        },
+        {
+          "from": "a.ts",
+          "to": "gone.ts"
         },
         {
           "from": "b.ts",

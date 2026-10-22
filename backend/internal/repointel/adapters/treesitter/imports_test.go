@@ -45,7 +45,8 @@ func TestImports(t *testing.T) {
 		{"ts import after its use", "a.ts", "run();\nimport { run } from './r';\n", []string{"./r"}},
 		{"ts tsx jsx element is a value use", "a.tsx", "import { Foo } from './foo';\nconst e = <Foo />;\n", []string{"./foo"}},
 		{"ts tsx member jsx element", "a.tsx", "import * as UI from './ui';\nconst e = <UI.Button />;\n", []string{"./ui"}},
-		{"ts tsx lower-case tag is intrinsic", "a.tsx", "import foo from './foo';\nconst e = <foo />;\n", nil},
+		{"ts tsx lower-case tag still counts as a value use (Node keeps the import)", "a.tsx", "import foo from './foo';\nconst e = <foo />;\n", []string{"./foo"}},
+		{"ts export type star is type-only", "a.ts", "export type * from './a';\nexport type * as ns from './b';\nexport * from './c';\n", []string{"./c"}},
 		{"ts tsx unused import is elided", "a.tsx", "import { Foo } from './foo';\n", nil},
 		// Re-exports.
 		{

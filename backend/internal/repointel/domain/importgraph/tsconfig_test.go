@@ -21,7 +21,7 @@ func TestLoadAliases_Candidates(t *testing.T) {
 			name: "star pattern, baseUrl dot",
 			tree: fakeTree{"tsconfig.json": `{"compilerOptions":{"baseUrl":".","paths":{"@/*":["src/*"]}}}`},
 			spec: "@/lib/util",
-			want: []string{"src/lib/util"},
+			want: []string{"src/lib/util", "@/lib/util"},
 		},
 		{
 			name: "no baseUrl: relative to the file that declares paths",
@@ -33,7 +33,7 @@ func TestLoadAliases_Candidates(t *testing.T) {
 			name: "baseUrl moves the base",
 			tree: fakeTree{"tsconfig.json": `{"compilerOptions":{"baseUrl":"./src","paths":{"@/*":["lib/*"]}}}`},
 			spec: "@/a",
-			want: []string{"src/lib/a"},
+			want: []string{"src/lib/a", "src/@/a"},
 		},
 		{
 			name: "substitutions are tried in order",
@@ -90,7 +90,7 @@ func TestLoadAliases_Candidates(t *testing.T) {
 				"config/base.json": `{"compilerOptions":{"baseUrl":"..","paths":{"@old/*":["old/*"]}}}`,
 			},
 			spec: "@/a",
-			want: []string{"src/a"},
+			want: []string{"src/a", "@/a"},
 		},
 		{
 			name: "extends: parent paths apply when the child has none; base is the parent's directory",
@@ -128,7 +128,7 @@ func TestLoadAliases_Candidates(t *testing.T) {
 				"cfg/base.json": `{"compilerOptions":{"baseUrl":"${configDir}","paths":{"@/*":["${configDir}/src/*"]}}}`,
 			},
 			spec: "@/x",
-			want: []string{"src/x"},
+			want: []string{"src/x", "@/x"},
 		},
 		{
 			name: "baseUrl outside the clone yields nothing",
@@ -155,10 +155,10 @@ func TestLoadAliases_Candidates(t *testing.T) {
 			want: []string{"fine/y"},
 		},
 		{
-			name: "no paths",
+			name: "baseUrl without paths: the specifier is looked up below the base",
 			tree: fakeTree{"tsconfig.json": `{"compilerOptions":{"baseUrl":"."}}`},
 			spec: "lib/x",
-			want: nil,
+			want: []string{"lib/x"},
 		},
 		{
 			name: "compilerOptions of the wrong type",

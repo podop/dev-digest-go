@@ -353,3 +353,22 @@ func contextCancelled(t interface{ Context() context.Context }) (context.Context
 
 // cmpEmpty treats a nil and an empty slice as equal.
 func cmpEmpty() cmp.Option { return cmpopts.EquateEmpty() }
+
+type rankCall struct {
+	repoID string
+	n      int
+}
+
+// fakeRanker answers ConventionSamples with fixed paths or an error and records the call.
+type fakeRanker struct {
+	paths []string
+	err   error
+	calls int
+	last  rankCall
+}
+
+func (r *fakeRanker) ConventionSamples(_ context.Context, repoID string, n int) ([]string, error) {
+	r.calls++
+	r.last = rankCall{repoID, n}
+	return slices.Clone(r.paths), r.err
+}

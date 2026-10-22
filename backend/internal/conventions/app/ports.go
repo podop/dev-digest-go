@@ -94,6 +94,13 @@ type cloneFiles interface {
 	Read(root, rel string) (text string, ok bool)
 }
 
+// sampleRanker is what the sampler asks of repo-intel: the repo's top-ranked source paths.
+type sampleRanker interface {
+	// ConventionSamples returns up to n repo-relative source paths, best first; empty when
+	// the repo is not indexed. An error counts as no result.
+	ConventionSamples(ctx context.Context, repoID string, n int) ([]string, error)
+}
+
 // structuredLLM is the part of *llm.Client the job uses.
 type structuredLLM interface {
 	Structured(ctx context.Context, req llm.Request) (llm.Result, error)

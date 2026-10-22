@@ -185,3 +185,19 @@ func (g *fakeGit) Sync(_ context.Context, _, _, branch string) (string, error) {
 }
 
 var errBoom = errors.New("boom")
+
+// fakeTrigger records the repo-intel triggers; err makes every one fail.
+type fakeTrigger struct {
+	calls []string
+	err   error
+}
+
+func (f *fakeTrigger) TriggerIndex(_ context.Context, ws, repoID, owner, name string) error {
+	f.calls = append(f.calls, fmt.Sprintf("index %s %s %s/%s", ws, repoID, owner, name))
+	return f.err
+}
+
+func (f *fakeTrigger) TriggerRefresh(_ context.Context, ws, repoID string) error {
+	f.calls = append(f.calls, fmt.Sprintf("refresh %s %s", ws, repoID))
+	return f.err
+}

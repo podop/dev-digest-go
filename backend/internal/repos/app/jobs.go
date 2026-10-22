@@ -38,6 +38,15 @@ type gitClient interface {
 	Sync(ctx context.Context, owner, name, branch string) (string, error)
 }
 
+// indexTrigger is how the jobs hand a fresh or updated clone to repo-intel: it enqueues the
+// indexing job and returns at once.
+type indexTrigger interface {
+	// TriggerIndex enqueues the first full index of a freshly cloned repo.
+	TriggerIndex(ctx context.Context, workspaceID, repoID, owner, name string) error
+	// TriggerRefresh enqueues the incremental index after a refresh.
+	TriggerRefresh(ctx context.Context, workspaceID, repoID string) error
+}
+
 // JobsOptions tunes Jobs.
 type JobsOptions struct {
 	// RemoteBase is the host serving <owner>/<name>.git; empty means DefaultRemoteBase.
@@ -47,6 +56,9 @@ type JobsOptions struct {
 	Now func() time.Time
 	// Log receives warnings; nil discards them.
 	Log *slog.Logger
+	// Index is told about every clone and refresh that succeeded; nil means no indexing. A
+	// failure of the trigger is logged and never fails the job.
+	Index indexTrigger
 }
 
 // Jobs are the background handlers of the repos context. Register Clone under KindClone and
@@ -57,11 +69,12 @@ type Jobs struct {
 	remote string
 	now    func() time.Time
 	log    *slog.Logger
+	index  indexTrigger
 }
 
 // NewJobs builds the job handlers.
 func NewJobs(store jobStore, git gitClient, opts JobsOptions) *Jobs {
-	j := &Jobs{store: store, git: git, remote: opts.RemoteBase, now: opts.Now, log: opts.Log}
+	j := &Jobs{store: store, git: git, remote: opts.RemoteBase, now: opts.Now, log: opts.Log, index: opts.Index}
 	if j.remote == "" {
 		j.remote = DefaultRemoteBase
 	}
@@ -76,7 +89,7 @@ func NewJobs(store jobStore, git gitClient, opts JobsOptions) *Jobs {
 
 // Clone is the handler of the clone job: make sure the shallow clone of the repo exists (an
 // existing clone is fetched, a partial directory replaced), then record clone_path and
-// last_polled_at. A repo deleted before or during the clone ends the job without error and
+// last_polled_at and ask repo-intel for the first index (a failure of that is only logged). A repo deleted before or during the clone ends the job without error and
 // without touching the database.
 func (j *Jobs) Clone(ctx context.Context, payload json.RawMessage) error {
 	var p ClonePayload
@@ -102,11 +115,17 @@ func (j *Jobs) Clone(ctx context.Context, payload json.RawMessage) error {
 		}
 		return fmt.Errorf("record clone of %s: %w", repo.FullName, err)
 	}
+	if j.index != nil {
+		if err := j.index.TriggerIndex(ctx, repo.WorkspaceID, repo.ID, repo.Owner, repo.Name); err != nil {
+			j.log.WarnContext(ctx, "repo-intel index not enqueued", "repo", repo.FullName, "err", err)
+		}
+	}
 	return nil
 }
 
 // Refresh is the handler of the refresh job: fetch the remote's default branch with depth 50,
-// hard-reset the clone to it and set last_polled_at. No indexing happens. The default branch
+// hard-reset the clone to it and set last_polled_at, then ask repo-intel for an incremental
+// index (a failure of that is only logged). The default branch
 // is asked from the remote; if that fails the stored default_branch is used. A repo deleted
 // meanwhile ends the job without error.
 func (j *Jobs) Refresh(ctx context.Context, payload json.RawMessage) error {
@@ -141,6 +160,11 @@ func (j *Jobs) Refresh(ctx context.Context, payload json.RawMessage) error {
 			return nil
 		}
 		return fmt.Errorf("record refresh of %s: %w", repo.FullName, err)
+	}
+	if j.index != nil {
+		if err := j.index.TriggerRefresh(ctx, repo.WorkspaceID, repo.ID); err != nil {
+			j.log.WarnContext(ctx, "repo-intel refresh not enqueued", "repo", repo.FullName, "err", err)
+		}
 	}
 	return nil
 }

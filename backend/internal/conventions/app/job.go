@@ -32,6 +32,9 @@ type JobsDeps struct {
 	Files    cloneFiles
 	LLM      structuredLLM
 	Features featureModels
+	// Ranker supplies the ranked source files of an indexed repo; nil (or no usable answer)
+	// means the Phase 2 fallback walk.
+	Ranker sampleRanker
 	// Redact scrubs provider keys out of every error text before it is stored or logged; nil
 	// leaves texts as they are.
 	Redact redactor
@@ -171,7 +174,8 @@ func (j *Jobs) run(ctx context.Context, p ExtractPayload, sampled *[]string) err
 }
 
 // sample reads the clone and renders the prompt sample: up to 8 config files, then up to 12
-// source files chosen by the fallback rule. Unreadable, blank, binary and oversized files are
+// source files, the ranked ones when repo-intel has any in the clone's file list, else chosen by
+// the fallback rule. Unreadable, blank, binary and oversized files are
 // skipped.
 func (j *Jobs) sample(ctx context.Context, repo Repo) (domain.Sample, error) {
 	paths, err := j.d.Files.List(ctx, repo.ClonePath)
@@ -186,7 +190,11 @@ func (j *Jobs) sample(ctx context.Context, repo Repo) (domain.Sample, error) {
 	for _, p := range configs {
 		picked = append(picked, domain.SampledFile{Path: p, Kind: domain.KindConfig})
 	}
-	for _, p := range domain.PickFallbackSources(paths, domain.SampleTopN) {
+	sources := j.rankedSources(ctx, repo.ID, paths, configs)
+	if len(sources) == 0 {
+		sources = domain.PickFallbackSources(paths, domain.SampleTopN)
+	}
+	for _, p := range sources {
 		if !slices.Contains(configs, p) {
 			picked = append(picked, domain.SampledFile{Path: p, Kind: domain.KindSource})
 		}
@@ -204,6 +212,35 @@ func (j *Jobs) sample(ctx context.Context, repo Repo) (domain.Sample, error) {
 		files = append(files, f)
 	}
 	return domain.RenderSample(files), nil
+}
+
+// rankedSources asks the ranker for the repo's top files and keeps, in the returned order, those
+// that are in the clone's file list and are not picked config files (at most SampleTopN, each
+// once). A missing ranker, an error or an empty answer yields nil: the caller falls back.
+func (j *Jobs) rankedSources(ctx context.Context, repoID string, paths, configs []string) []string {
+	if j.d.Ranker == nil {
+		return nil
+	}
+	ranked, err := j.d.Ranker.ConventionSamples(ctx, repoID, domain.SampleTopN)
+	if err != nil {
+		j.log.WarnContext(ctx, "ranked samples unavailable, using fallback walk", "repo_id", repoID, "error_kind", "ranker")
+		return nil
+	}
+	present := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		present[p] = struct{}{}
+	}
+	var out []string
+	for _, p := range ranked {
+		if _, ok := present[p]; !ok || slices.Contains(configs, p) || slices.Contains(out, p) {
+			continue
+		}
+		out = append(out, p)
+		if len(out) == domain.SampleTopN {
+			break
+		}
+	}
+	return out
 }
 
 // propose makes the one structured call of a scan and decodes the validated answer.

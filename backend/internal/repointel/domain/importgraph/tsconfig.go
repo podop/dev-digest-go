@@ -26,6 +26,9 @@ type Aliases struct {
 	base string
 	// outside is true when baseUrl leaves the clone: no substitution can name a clone file.
 	outside bool
+	// hasBase is true when a baseUrl is declared: a non-relative specifier is also looked up
+	// below it, after the paths substitutions (as TypeScript and Node's resolver do).
+	hasBase bool
 	exact   []aliasPattern
 	stars   []aliasPattern
 }
@@ -198,13 +201,16 @@ func joinFrom(dir, s string) (p string, outside bool) {
 
 func (o *tsOptions) aliases() *Aliases {
 	a := &Aliases{}
-	if o.paths == nil {
+	if o.paths == nil && !o.hasBase {
 		return a
 	}
 	if o.hasBase {
-		a.base, a.outside = o.baseDir, o.baseOut
+		a.base, a.outside, a.hasBase = o.baseDir, o.baseOut, true
 	} else {
 		a.base = o.pathsDir
+	}
+	if o.paths == nil {
+		return a
 	}
 	for _, key := range o.paths.Keys {
 		raw, _ := o.paths.Get(key)
@@ -235,8 +241,9 @@ func (o *tsOptions) aliases() *Aliases {
 
 // Candidates returns the clone-relative paths (slash-separated, "." is the root) a non-relative specifier maps to, in the order they
 // are to be tried: an exact key wins, else the star pattern with the longest prefix (the first
-// declared on a tie); its substitutions are tried in order. Specifiers that match no pattern, and
-// a nil receiver, give nothing.
+// declared on a tie); its substitutions are tried in order. With a baseUrl the specifier itself,
+// joined to the base, comes last (also when no pattern matches). Without a baseUrl, specifiers that
+// match no pattern, and a nil receiver, give nothing.
 func (a *Aliases) Candidates(spec string) []string {
 	if a == nil || a.outside {
 		return nil
@@ -262,13 +269,17 @@ func (a *Aliases) Candidates(spec string) []string {
 			}
 		}
 	}
-	if pat == nil {
-		return nil
-	}
 	var out []string
-	for _, sub := range pat.subs {
-		sub = strings.Replace(sub, "*", star, 1)
-		if p, outside := joinFrom(a.base, sub); !outside {
+	if pat != nil {
+		for _, sub := range pat.subs {
+			sub = strings.Replace(sub, "*", star, 1)
+			if p, outside := joinFrom(a.base, sub); !outside {
+				out = append(out, p)
+			}
+		}
+	}
+	if a.hasBase {
+		if p, outside := joinFrom(a.base, spec); !outside {
 			out = append(out, p)
 		}
 	}

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"dev-digest-go/backend/internal/platform/gitcli"
 	"dev-digest-go/backend/internal/repos/app"
 	"dev-digest-go/backend/internal/repos/domain"
@@ -25,6 +27,10 @@ func payload(t *testing.T, v any) json.RawMessage {
 
 func newJobs(store *memStore, g *fakeGit) *app.Jobs {
 	return app.NewJobs(store, g, app.JobsOptions{Now: func() time.Time { return time0 }})
+}
+
+func newJobsWithIndex(store *memStore, g *fakeGit, tr *fakeTrigger) *app.Jobs {
+	return app.NewJobs(store, g, app.JobsOptions{Now: func() time.Time { return time0 }, Index: tr})
 }
 
 func seedRepo(t *testing.T, store *memStore, url string) domain.Repo {
@@ -227,6 +233,147 @@ func TestJobs_Refresh_Failures(t *testing.T) {
 		}
 		if g.synced {
 			t.Error("Sync ran after cancellation")
+		}
+	})
+}
+
+func TestJobs_Clone_EnqueuesIndex(t *testing.T) {
+	store := &memStore{}
+	repo := seedRepo(t, store, "https://github.com/o/r")
+	tr := &fakeTrigger{}
+
+	// The payload names another repo target; the row decides.
+	err := newJobsWithIndex(store, &fakeGit{cloneDir: "/d"}, tr).
+		Clone(t.Context(), payload(t, app.ClonePayload{RepoID: repo.ID, Owner: "x", Name: "y"}))
+	if err != nil {
+		t.Fatalf("Clone() error = %v", err)
+	}
+	want := []string{"index " + ws + " " + repo.ID + " o/r"}
+	if diff := cmp.Diff(want, tr.calls); diff != "" {
+		t.Errorf("repo-intel triggers mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestJobs_Clone_IndexEnqueueFailureDoesNotFailTheJob(t *testing.T) {
+	store := &memStore{}
+	repo := seedRepo(t, store, "https://github.com/o/r")
+	tr := &fakeTrigger{err: errBoom}
+
+	err := newJobsWithIndex(store, &fakeGit{cloneDir: "/d"}, tr).Clone(t.Context(), payload(t, app.ClonePayload{RepoID: repo.ID}))
+	if err != nil {
+		t.Fatalf("Clone() error = %v, want nil", err)
+	}
+	if len(tr.calls) != 1 {
+		t.Errorf("triggers = %v, want one attempt", tr.calls)
+	}
+	if got := store.get(repo.ID); got.ClonePath == nil {
+		t.Error("clone_path not stored")
+	}
+}
+
+func TestJobs_Clone_NoIndexWhenNothingWasCloned(t *testing.T) {
+	t.Run("git failure", func(t *testing.T) {
+		store := &memStore{}
+		repo := seedRepo(t, store, "https://github.com/o/r")
+		tr := &fakeTrigger{}
+		err := newJobsWithIndex(store, &fakeGit{cloneErr: errBoom}, tr).Clone(t.Context(), payload(t, app.ClonePayload{RepoID: repo.ID}))
+		if !errors.Is(err, errBoom) {
+			t.Fatalf("Clone() error = %v, want errBoom", err)
+		}
+		if len(tr.calls) != 0 {
+			t.Errorf("triggers = %v, want none", tr.calls)
+		}
+	})
+	t.Run("repo deleted during clone", func(t *testing.T) {
+		store := &memStore{}
+		repo := seedRepo(t, store, "https://github.com/o/r")
+		tr := &fakeTrigger{}
+		g := &fakeGit{cloneDir: "/d", onClone: func() { store.remove(repo.ID) }}
+		if err := newJobsWithIndex(store, g, tr).Clone(t.Context(), payload(t, app.ClonePayload{RepoID: repo.ID})); err != nil {
+			t.Fatalf("Clone() error = %v, want nil", err)
+		}
+		if len(tr.calls) != 0 {
+			t.Errorf("triggers = %v, want none", tr.calls)
+		}
+	})
+	t.Run("repo gone before start", func(t *testing.T) {
+		tr := &fakeTrigger{}
+		if err := newJobsWithIndex(&memStore{}, &fakeGit{}, tr).Clone(t.Context(), payload(t, app.ClonePayload{RepoID: "gone"})); err != nil {
+			t.Fatalf("Clone() error = %v, want nil", err)
+		}
+		if len(tr.calls) != 0 {
+			t.Errorf("triggers = %v, want none", tr.calls)
+		}
+	})
+}
+
+func TestJobs_Refresh_EnqueuesRefreshAfterSync(t *testing.T) {
+	store := &memStore{}
+	repo := seedRepo(t, store, "https://github.com/o/r")
+	cloned(t, store, repo)
+	tr := &fakeTrigger{}
+
+	err := newJobsWithIndex(store, &fakeGit{defaultBranch: "main"}, tr).Refresh(t.Context(), payload(t, app.RefreshPayload{RepoID: repo.ID}))
+	if err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+	want := []string{"refresh " + ws + " " + repo.ID}
+	if diff := cmp.Diff(want, tr.calls); diff != "" {
+		t.Errorf("repo-intel triggers mismatch (-want +got):\n%s", diff)
+	}
+	if got := store.get(repo.ID).LastPolledAt; got == nil || !got.Equal(time0) {
+		t.Errorf("last_polled_at = %v, want %v", got, time0)
+	}
+}
+
+func TestJobs_Refresh_IndexEnqueueFailureDoesNotFailTheJob(t *testing.T) {
+	store := &memStore{}
+	repo := seedRepo(t, store, "https://github.com/o/r")
+	cloned(t, store, repo)
+	tr := &fakeTrigger{err: errBoom}
+
+	err := newJobsWithIndex(store, &fakeGit{defaultBranch: "main"}, tr).Refresh(t.Context(), payload(t, app.RefreshPayload{RepoID: repo.ID}))
+	if err != nil {
+		t.Fatalf("Refresh() error = %v, want nil", err)
+	}
+	if len(tr.calls) != 1 {
+		t.Errorf("triggers = %v, want one attempt", tr.calls)
+	}
+}
+
+func TestJobs_Refresh_NoTriggerWithoutASuccessfulSync(t *testing.T) {
+	t.Run("sync error", func(t *testing.T) {
+		store := &memStore{}
+		repo := seedRepo(t, store, "https://github.com/o/r")
+		cloned(t, store, repo)
+		tr := &fakeTrigger{}
+		err := newJobsWithIndex(store, &fakeGit{defaultBranch: "main", syncErr: errBoom}, tr).
+			Refresh(t.Context(), payload(t, app.RefreshPayload{RepoID: repo.ID}))
+		if !errors.Is(err, errBoom) {
+			t.Fatalf("Refresh() error = %v, want errBoom", err)
+		}
+		if len(tr.calls) != 0 {
+			t.Errorf("triggers = %v, want none", tr.calls)
+		}
+	})
+	t.Run("not cloned", func(t *testing.T) {
+		store := &memStore{}
+		repo := seedRepo(t, store, "https://github.com/o/r")
+		tr := &fakeTrigger{}
+		if err := newJobsWithIndex(store, &fakeGit{}, tr).Refresh(t.Context(), payload(t, app.RefreshPayload{RepoID: repo.ID})); err == nil {
+			t.Error("Refresh(uncloned) error = nil, want an error")
+		}
+		if len(tr.calls) != 0 {
+			t.Errorf("triggers = %v, want none", tr.calls)
+		}
+	})
+	t.Run("repo deleted", func(t *testing.T) {
+		tr := &fakeTrigger{}
+		if err := newJobsWithIndex(&memStore{}, &fakeGit{}, tr).Refresh(t.Context(), payload(t, app.RefreshPayload{RepoID: "gone"})); err != nil {
+			t.Fatalf("Refresh() error = %v, want nil", err)
+		}
+		if len(tr.calls) != 0 {
+			t.Errorf("triggers = %v, want none", tr.calls)
 		}
 	})
 }

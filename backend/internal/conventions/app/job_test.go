@@ -58,6 +58,8 @@ type jobEnv struct {
 	bag    map[string]json.RawMessage
 	repos  map[string]app.Repo
 	setErr error
+	// ranker is the repo-intel port; nil means none is wired.
+	ranker *fakeRanker
 }
 
 func newJobs(t *testing.T, files map[string]string, reply func(context.Context, llm.Request) (llm.Result, error)) *jobEnv {
@@ -75,10 +77,14 @@ func (e *jobEnv) build(t *testing.T, model interface {
 	Structured(ctx context.Context, req llm.Request) (llm.Result, error)
 }, timeout time.Duration) {
 	t.Helper()
-	e.jobs = app.NewJobs(app.JobsDeps{
+	deps := app.JobsDeps{
 		Store: e.store, Repos: memRepos{e.repos}, Files: e.files, LLM: model,
 		Features: settings{bag: e.bag, err: e.setErr}, Redact: redactKey(secret),
-	}, app.JobsOptions{Timeout: timeout, Now: func() time.Time { return t0.Add(time.Minute) },
+	}
+	if e.ranker != nil {
+		deps.Ranker = e.ranker
+	}
+	e.jobs = app.NewJobs(deps, app.JobsOptions{Timeout: timeout, Now: func() time.Time { return t0.Add(time.Minute) },
 		Log: slog.New(slog.NewTextHandler(e.logs, nil))})
 }
 
@@ -189,6 +195,71 @@ func TestExtract_SampleSkipsBlankAndUnreadableFilesAndDedupesConfigs(t *testing.
 	}
 	want := []string{".eslintrc.js", "package.json", "src/a.ts"}
 	if diff := cmp.Diff(want, e.store.completed[0].Sum.SampledFiles); diff != "" {
+		t.Errorf("sampled files mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestExtract_RankedSamples(t *testing.T) {
+	files := map[string]string{
+		"package.json": `{"name":"x"}`,
+		"src/a.ts":     "a\n",
+		"src/b.ts":     "b\n",
+		"src/core.ts":  "core\n",
+		"src/util.ts":  "util\n",
+	}
+	fallback := []string{"package.json", "src/a.ts", "src/b.ts", "src/core.ts", "src/util.ts"}
+	tests := []struct {
+		name   string
+		files  map[string]string
+		ranker *fakeRanker
+		want   []string
+	}{
+		{name: "ranked files in rank order", ranker: &fakeRanker{paths: []string{"src/util.ts", "src/core.ts"}},
+			want: []string{"package.json", "src/util.ts", "src/core.ts"}},
+		{name: "unknown and config and repeated paths are dropped",
+			ranker: &fakeRanker{paths: []string{"gone.ts", "package.json", "src/core.ts", "src/core.ts", "src/b.ts"}},
+			want:   []string{"package.json", "src/core.ts", "src/b.ts"}},
+		{name: "ranker error uses the fallback walk", ranker: &fakeRanker{err: errors.New("boom")}, want: fallback},
+		{name: "nothing ranked uses the fallback walk", ranker: &fakeRanker{}, want: fallback},
+		{name: "ranked files outside the file list use the fallback walk",
+			ranker: &fakeRanker{paths: []string{"vendor/lib.ts", "gone.ts"}}, want: fallback},
+		{name: "no ranker uses the fallback walk", want: fallback},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newJobs(t, files, answer(`{"candidates":[]}`))
+			e.ranker = tc.ranker
+			e.build(t, e.model, 0)
+			if err := e.jobs.Extract(t.Context(), payload()); err != nil {
+				t.Fatalf("Extract() error = %v", err)
+			}
+			if diff := cmp.Diff(tc.want, e.store.completed[0].Sum.SampledFiles); diff != "" {
+				t.Errorf("sampled files mismatch (-want +got):\n%s", diff)
+			}
+			if tc.ranker != nil {
+				if want := (rankCall{repoID: repoID, n: 12}); tc.ranker.calls != 1 || tc.ranker.last != want {
+					t.Errorf("ConventionSamples calls = %d, last = %+v, want 1 call with %+v", tc.ranker.calls, tc.ranker.last, want)
+				}
+			}
+		})
+	}
+}
+
+func TestExtract_RankedSamplesAreCappedAtTwelve(t *testing.T) {
+	files := map[string]string{}
+	var ranked []string
+	for i := range 15 {
+		p := fmt.Sprintf("src/f%02d.ts", i)
+		files[p] = "x\n"
+		ranked = append(ranked, p)
+	}
+	e := newJobs(t, files, answer(`{"candidates":[]}`))
+	e.ranker = &fakeRanker{paths: ranked}
+	e.build(t, e.model, 0)
+	if err := e.jobs.Extract(t.Context(), payload()); err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+	if diff := cmp.Diff(ranked[:12], e.store.completed[0].Sum.SampledFiles); diff != "" {
 		t.Errorf("sampled files mismatch (-want +got):\n%s", diff)
 	}
 }

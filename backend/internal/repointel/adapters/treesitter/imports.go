@@ -215,7 +215,7 @@ func (s *importScan) importStatement(stmt *sitter.Node) {
 
 // reExport records the specifier of `export … from 'x'`.
 func (s *importScan) reExport(stmt, source *sitter.Node) {
-	if hasChildKind(stmt, "type") {
+	if hasChildKind(stmt, "type") || (s.ts && typeKeywordInError(stmt)) {
 		return
 	}
 	if s.ts {
@@ -232,6 +232,19 @@ func (s *importScan) reExport(stmt, source *sitter.Node) {
 		}
 	}
 	s.addCandidate(source, nil)
+}
+
+// typeKeywordInError reports whether the statement holds the `type` keyword inside an ERROR node.
+// The pinned TypeScript grammar (0.23.2) cannot parse `export type * from 'x'` and
+// `export type * as ns from 'x'` (TypeScript 5.0 syntax) and wraps the keyword in an ERROR child
+// of the export statement; both forms are type-only and have no specifier.
+func typeKeywordInError(stmt *sitter.Node) bool {
+	for i := range stmt.ChildCount() {
+		if c := stmt.Child(i); c != nil && c.Kind() == "ERROR" && hasChildKind(c, "type") {
+			return true
+		}
+	}
+	return false
 }
 
 func firstChildKind(n *sitter.Node, kind string) *sitter.Node {
@@ -455,11 +468,6 @@ func (s *importScan) reference(id *sitter.Node) {
 	}
 	if p := id.Parent(); p != nil {
 		switch p.Kind() {
-		case "jsx_opening_element", "jsx_closing_element", "jsx_self_closing_element":
-			// A lower-case tag name is an intrinsic element, not a reference.
-			if name[0] >= 'a' && name[0] <= 'z' {
-				return
-			}
 		case "jsx_namespace_name":
 			return
 		case "export_specifier":
