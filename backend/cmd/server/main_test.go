@@ -85,6 +85,7 @@ type spec struct {
 	llm            llm.Options          // retry backoff, budget, price book; Keys/Adapters/Logger are wire's
 	urlfetch       urlfetch.Options     // skill URL import: resolver, dialer, TLS roots
 	extractTimeout time.Duration        // conventions.extract per-attempt limit; 0 = 300 s
+	noIntelJobs    bool                 // leave the repo-intel job kinds unregistered (degraded resync)
 	config         func(*config.Config) // adjusts the config, e.g. LLMProviderOverride, ProjectContextGlobs
 }
 
@@ -163,6 +164,7 @@ func startStack(t testing.TB, sp spec) *stack {
 			o.llm = sp.llm
 			o.urlfetch = sp.urlfetch
 			o.extractTimeout = sp.extractTimeout
+			o.noRepoIntelJobs = sp.noIntelJobs
 		},
 	}
 
@@ -605,6 +607,11 @@ func TestStartup_AutoMigrateOff(t *testing.T) { // AC33
 		}
 		if got := tableNames(t, db.DB); len(got) != 0 {
 			t.Errorf("tables = %v, want none", got)
+		}
+		// AC3017: the repo-intel backfill cannot list repos on an empty database; it is logged
+		// once and does not stop the startup.
+		if failed := logLines(t, s.logs, "repo-intel backfill failed"); len(failed) != 1 {
+			t.Errorf("repo-intel backfill failure log lines = %v, want exactly one", failed)
 		}
 	})
 }

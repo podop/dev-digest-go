@@ -24,6 +24,7 @@ import (
 
 	conventionsapp "dev-digest-go/backend/internal/conventions/app"
 	"dev-digest-go/backend/internal/jobs"
+	inteldomain "dev-digest-go/backend/internal/repointel/domain"
 	reposapp "dev-digest-go/backend/internal/repos/app"
 	"dev-digest-go/backend/internal/settings/adapters/providers"
 )
@@ -791,7 +792,7 @@ func TestRegisterJobs_PerKindTimeouts(t *testing.T) {
 				store := &memJobStore{rows: map[string]string{}}
 				r := jobs.New(store, jobs.Options{Retries: -1})
 				block := func(ctx context.Context, _ json.RawMessage) error { <-ctx.Done(); return ctx.Err() }
-				registerJobs(r, block, block, block, conventionsapp.JobTimeout)
+				registerJobs(r, block, block, block, conventionsapp.JobTimeout, nil)
 
 				start := time.Now()
 				id, err := r.Enqueue(t.Context(), "ws", tc.kind, nil)
@@ -808,6 +809,65 @@ func TestRegisterJobs_PerKindTimeouts(t *testing.T) {
 					t.Errorf("%s job error = %q, want a timeout", tc.kind, got)
 				}
 			})
+		})
+	}
+}
+
+// AC3013 (composition root): the three repo-intel kinds are registered with a 120 s per-attempt
+// limit, and stay unregistered when the handlers are left out.
+func TestRegisterJobs_RepoIntelKinds(t *testing.T) {
+	noop := func(context.Context, json.RawMessage) error { return nil }
+	kinds := []string{inteldomain.KindIndex, inteldomain.KindRefresh, inteldomain.KindResync}
+
+	t.Run("registered", func(t *testing.T) {
+		r := jobs.New(&memJobStore{rows: map[string]string{}}, jobs.Options{Retries: -1})
+		registerJobs(r, noop, noop, noop, conventionsapp.JobTimeout, &intelHandlers{index: noop, refresh: noop, resync: noop})
+		for _, kind := range kinds {
+			limit, ok := r.Registered(kind)
+			if !ok || limit != 120*time.Second {
+				t.Errorf("Registered(%q) = %v, %v, want 2m0s, true", kind, limit, ok)
+			}
+		}
+	})
+	t.Run("left out", func(t *testing.T) {
+		r := jobs.New(&memJobStore{rows: map[string]string{}}, jobs.Options{Retries: -1})
+		registerJobs(r, noop, noop, noop, conventionsapp.JobTimeout, nil)
+		for _, kind := range kinds {
+			if _, ok := r.Registered(kind); ok {
+				t.Errorf("Registered(%q) = true, want false", kind)
+			}
+		}
+	})
+}
+
+// Wiring of the repo-intel routes and of the test seam that leaves the job kinds out (FR3004).
+func TestResync_Wiring(t *testing.T) {
+	const repoID = "7b2f6c1e-3d2a-4c5b-9a41-0f6e2d8c9b10"
+	tests := []struct {
+		name        string
+		noIntelJobs bool
+		want        map[string]any
+	}{
+		{name: "registered", want: map[string]any{"status": "accepted"}},
+		{name: "kinds unregistered", noIntelJobs: true, want: map[string]any{"status": "accepted", "degraded": true, "reason": "no_handler"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := startStack(t, spec{noIntelJobs: tc.noIntelJobs})
+			resp := s.post("/repos/"+repoID+"/resync", nil)
+			if resp.Status != http.StatusAccepted {
+				t.Fatalf("POST /repos/%s/resync = %d %s, want 202", repoID, resp.Status, resp.Body)
+			}
+			got := resp.Obj(t)
+			delete(got, "jobId")
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("POST /repos/%s/resync body mismatch (-want +got):\n%s", repoID, diff)
+			}
+			if !tc.noIntelJobs {
+				if _, ok := resp.Obj(t)["jobId"].(string); !ok {
+					t.Errorf("POST /repos/%s/resync body = %s, want a jobId", repoID, resp.Body)
+				}
+			}
 		})
 	}
 }

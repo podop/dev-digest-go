@@ -59,6 +59,9 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 - Echo v5 is not v4: handlers take `*echo.Context`; router 404/405 errors are unexported types
   (match `echo.HTTPStatusCoder`); CORS middleware panics without origins (`INSIGHTS.md`).
 - The runtime image is Alpine with `git` (not distroless): the backend shells out to git.
+- CGO is required for `internal/repointel/adapters/treesitter` (tree-sitter C runtime): host
+  `go test -race` needs `gcc`, and `CGO_ENABLED=0` builds fail. The Dockerfile build stage adds
+  `build-base`; the runtime image has no C toolchain (same musl: `alpine3.23` build, `alpine:3.23` runtime).
 - The schema already contains every table of later phases — empty ≠ unused.
 
 ## Do not touch

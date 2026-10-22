@@ -47,6 +47,13 @@ import (
 	pullspg "dev-digest-go/backend/internal/pulls/adapters/postgres"
 	pullsapp "dev-digest-go/backend/internal/pulls/app"
 	pullshttp "dev-digest-go/backend/internal/pulls/transport/http"
+	intelclone "dev-digest-go/backend/internal/repointel/adapters/clonetree"
+	intelpg "dev-digest-go/backend/internal/repointel/adapters/postgres"
+	inteltokens "dev-digest-go/backend/internal/repointel/adapters/tokenizer"
+	inteltreesitter "dev-digest-go/backend/internal/repointel/adapters/treesitter"
+	intelapp "dev-digest-go/backend/internal/repointel/app"
+	inteldomain "dev-digest-go/backend/internal/repointel/domain"
+	intelhttp "dev-digest-go/backend/internal/repointel/transport/http"
 	reposdb "dev-digest-go/backend/internal/repos/adapters/postgres"
 	reposapp "dev-digest-go/backend/internal/repos/app"
 	reposhttp "dev-digest-go/backend/internal/repos/transport/http"
@@ -91,6 +98,9 @@ type options struct {
 	urlfetch urlfetch.Options
 	// extractTimeout is the per-attempt limit of conventions.extract; 0 = conventionsapp.JobTimeout.
 	extractTimeout time.Duration
+	// noRepoIntelJobs leaves the three repo-intel job kinds unregistered, so a resync cannot be
+	// enqueued (the degraded no_handler answer) and the clone and refresh triggers log a warning.
+	noRepoIntelJobs bool
 }
 
 // llmURLs are the base URLs of the provider adapters.
@@ -140,6 +150,13 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	} else if failed > 0 {
 		log.WarnContext(ctx, "interrupted convention scans failed", "count", failed)
 	}
+	// Repos cloned before repo-intel existed get one index job each (D3005). Like the reap above,
+	// a failure is logged once and startup goes on (FR3008, Phase 1 AC33).
+	if n, err := w.backfill.Run(ctx); err != nil {
+		log.ErrorContext(ctx, "repo-intel backfill failed", "error", err)
+	} else if n > 0 {
+		log.InfoContext(ctx, "repo-intel backfill enqueued", "count", n)
+	}
 	return listen(ctx, cfg, o, w.echo, runner, log)
 }
 
@@ -170,14 +187,25 @@ type wired struct {
 	echo        *echo.Echo
 	llm         *llm.Client // closed by serve on exit
 	conventions *conventionsapp.Service
+	backfill    *intelapp.Backfill
 }
 
+// intelHandlers are the three repo-intel job handlers.
+type intelHandlers struct{ index, refresh, resync jobs.Handler }
+
 // registerJobs binds the job kinds. conventions.extract gets its own per-attempt limit (D208);
-// clone and refresh keep the runner's default (AC303).
-func registerJobs(r *jobs.Runner, clone, refresh, extract jobs.Handler, extractTimeout time.Duration) {
+// clone and refresh keep the runner's default (AC303); the repo-intel kinds run under 120 s
+// (FR3005). A nil intel leaves the repo-intel kinds unregistered.
+func registerJobs(r *jobs.Runner, clone, refresh, extract jobs.Handler, extractTimeout time.Duration, intel *intelHandlers) {
 	r.Register(reposapp.KindClone, clone)
 	r.Register(reposapp.KindRefresh, refresh)
 	r.Register(conventionsapp.KindExtract, extract, jobs.WithTimeout(extractTimeout))
+	if intel == nil {
+		return
+	}
+	r.Register(inteldomain.KindIndex, intel.index, jobs.WithTimeout(inteldomain.JobTimeout))
+	r.Register(inteldomain.KindRefresh, intel.refresh, jobs.WithTimeout(inteldomain.JobTimeout))
+	r.Register(inteldomain.KindResync, intel.resync, jobs.WithTimeout(inteldomain.JobTimeout))
 }
 
 // llmAdapters builds the provider adapters; with LLM_PROVIDER_OVERRIDE=mock every provider is a
@@ -239,9 +267,32 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		GitHub:    gh,
 		Providers: providers.New(o.providers),
 	})
+	intelStore := intelpg.NewStore(db)
+	intelFiles := intelclone.New()
+	intelAnalyzer := inteltreesitter.New()
+	intelJobs := intelapp.NewJobs(intelapp.JobsDeps{
+		Indexer: intelapp.NewIndexer(intelapp.IndexerDeps{
+			Reader:   intelStore,
+			Writer:   intelStore,
+			Tx:       tx,
+			Git:      git,
+			Files:    intelFiles,
+			Analyzer: intelAnalyzer,
+			Graph:    intelapp.NewImportGraph(intelFiles, intelAnalyzer, log),
+			Tokens:   inteltokens.New(log),
+			Redact:   llmClient,
+		}, intelapp.IndexerOptions{Log: log}),
+		Repos:  intelStore,
+		Git:    git,
+		Queue:  runner,
+		Redact: llmClient,
+	}, intelapp.JobsOptions{Log: log})
+	intelSvc := intelapp.NewService(intelStore, runner, log)
+	intelReader := intelapp.NewReader(intelStore, cfg.RepoIntelEnabled)
+
 	reposStore := reposdb.NewStore(db)
 	reposSvc := reposapp.NewService(reposStore, runner, git.Root())
-	repoJobs := reposapp.NewJobs(reposStore, git, reposapp.JobsOptions{RemoteBase: o.remoteBase, Log: log})
+	repoJobs := reposapp.NewJobs(reposStore, git, reposapp.JobsOptions{RemoteBase: o.remoteBase, Log: log, Index: intelJobs})
 	pullsSvc := pullsapp.NewService(pullspg.NewStore(db), pullsgh.New(gh), log, nil)
 
 	agentsSvc := agentsapp.NewService(agentsdb.NewStore(db), tx, llmClient, log)
@@ -262,9 +313,14 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Files:    clonefiles.New(),
 		LLM:      llmClient,
 		Features: settingsSvc,
+		Ranker:   intelReader,
 		Redact:   llmClient,
 	}, conventionsapp.JobsOptions{Timeout: extractTimeout, Log: log})
-	registerJobs(runner, repoJobs.Clone, repoJobs.Refresh, convJobs.Extract, extractTimeout)
+	var intel *intelHandlers
+	if !o.noRepoIntelJobs {
+		intel = &intelHandlers{index: intelJobs.Index, refresh: intelJobs.Refresh, resync: intelJobs.Resync}
+	}
+	registerJobs(runner, repoJobs.Clone, repoJobs.Refresh, convJobs.Extract, extractTimeout, intel)
 
 	merger := skillsapp.NewMerger(skillsapp.MergerDeps{
 		Tx:          tx,
@@ -295,7 +351,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	skillshttp.AddRoutes(e, skillsSvc, importer, merger, resolver)
 	conventionshttp.AddRoutes(e, convSvc, resolver)
 	pchttp.AddRoutes(e, pcSvc, resolver)
-	return &wired{echo: e, llm: llmClient, conventions: convSvc}, nil
+	intelhttp.AddRoutes(e, intelSvc, resolver)
+	return &wired{echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs)}, nil
 }
 
 // listen serves e until ctx ends, then shuts HTTP and the job runner down in parallel. A
