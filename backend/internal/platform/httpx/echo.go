@@ -17,7 +17,8 @@ type Options struct {
 	// CORSOrigins is the exact list of allowed browser origins; empty allows none.
 	CORSOrigins []string
 	// AllowedHosts lists the host names (no port, case-insensitive, IPv6 in brackets) the
-	// server answers to; any other Host header gets 403. Empty switches the check off.
+	// server answers to; any other Host header gets 403. Empty switches the check off; a
+	// non-empty list without a well-formed entry refuses every request.
 	AllowedHosts []string
 	// RateLimit configures the fixed-window limiter; the zero value disables it.
 	RateLimit RateLimit
@@ -50,7 +51,7 @@ func New(opts Options) *echo.Echo {
 		}),
 		IPExtractor: echo.ExtractIPDirect(),
 	})
-	e.Pre(requestLog(log), securityHeaders(), hostCheck(opts.AllowedHosts),
+	e.Pre(requestLog(log), securityHeaders(), hostCheck(opts.AllowedHosts, log),
 		corsMiddleware(opts.CORSOrigins), originCheck(opts.CORSOrigins))
 	e.Use(middleware.Recover())
 	if opts.RateLimit.Enabled {

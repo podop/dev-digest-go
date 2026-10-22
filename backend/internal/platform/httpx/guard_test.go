@@ -30,6 +30,8 @@ func TestHostCheck(t *testing.T) {
 		{"allowed name as suffix", allowed, "localhost.evil.example", http.StatusForbidden},
 		{"allowed name as prefix", allowed, "evil-localhost", http.StatusForbidden},
 		{"unbracketed ipv6", allowed, "::1", http.StatusForbidden},
+		{"allowed name with non-numeric port", allowed, "localhost:3100.evil.example", http.StatusForbidden},
+		{"no well-formed entry fails closed", []string{"::1", "localhost:x"}, "localhost:3001", http.StatusForbidden},
 		{"empty host list disables the check", nil, "evil.example", http.StatusOK},
 	}
 	for _, tc := range tests {

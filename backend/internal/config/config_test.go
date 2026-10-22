@@ -101,6 +101,7 @@ func TestLoad(t *testing.T) {
 			},
 		},
 		{name: "missing database url", env: map[string]string{}, wantErr: true},
+		{name: "allowed hosts without an entry", env: map[string]string{"DATABASE_URL": "x", "ALLOWED_HOSTS": " , "}, wantErr: true},
 		{name: "bad log level", env: map[string]string{"DATABASE_URL": "x", "LOG_LEVEL": "loud"}, wantErr: true},
 	}
 	for _, tc := range tests {

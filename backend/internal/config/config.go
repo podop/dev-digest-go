@@ -39,6 +39,8 @@ type Config struct {
 // ALLOWED_HOSTS (comma list, default "localhost,127.0.0.1,[::1],backend") names the Host
 // headers the API answers to; anything else gets 403, which stops DNS-rebinding pages. Add the
 // service name or domain under which the API is reached when that is not one of the defaults.
+// A value without any entry (e.g. ",") is an error, so the guard cannot be switched off by
+// accident.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Addr:             valueOr(getenv("API_ADDR"), ":3001"),
@@ -51,6 +53,10 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
+	}
+	if len(cfg.AllowedHosts) == 0 {
+		// Only reachable through a value like "," — it would silently switch the guard off.
+		return Config{}, errors.New("ALLOWED_HOSTS is set but names no host")
 	}
 	if err := cfg.LogLevel.UnmarshalText([]byte(valueOr(getenv("LOG_LEVEL"), "info"))); err != nil {
 		return Config{}, fmt.Errorf("LOG_LEVEL: %w", err)

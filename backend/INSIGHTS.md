@@ -11,6 +11,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-22 — internal/platform/httpx hostName: Go net/http accepts a Host header whose port part is not numeric (Host: localhost:3100.evil.com reached handlers, security r2, live-checked) — cutting at the first ':' turned it into an allowed host → only an empty or 1–5-digit port counts as a match; a non-empty ALLOWED_HOSTS without a valid entry must fail closed, never disable the check
 - 2026-10-22 — internal/platform/httpx + transports: reading the request body as JSON regardless of Content-Type let any website send text/plain POST/PUT (no preflight) that overwrote saved secrets — security review r1, confirmed live → read bodies only via httpx.ReadJSONBody (JSON only for application/json; text/plain → 422 "Expected object, received string"), keep the foreign-Origin 403 and ALLOWED_HOSTS guards in httpx.New
 
 ## Codebase Patterns
@@ -33,6 +34,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Session Notes
 <!-- YYYY-MM-DD — one-line summary of a meaningful session -->
+- 2026-10-22 — security LOW #1/#2 fixed (Host port validation, ALLOWED_HOSTS fail-closed) and AC95/AC96 passed on a throwaway compose project; only AC97 (needs GitHub token) left before Phase 2 — see docs/migration/STATUS.md
 - 2026-10-22 — Phase 1 implemented in 3 waves (S1–S19) + security fix round; review gate: arch PASS, security PASS (2 LOW open), plan-verify 185 PASS/0 FAIL/4 manual; left: AC95–AC97 manual checks, 2 LOW host/ALLOWED_HOSTS hardening — see docs/migration/STATUS.md
 - 2026-10-21 — backend skeleton: Echo v5 + GORM, error envelope/404/CORS/health matching the Node API, Alpine+git image, compose stack on 3100/3101/5433; left: Phase 1 spec → plan → implementation
 
