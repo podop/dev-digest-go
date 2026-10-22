@@ -6,6 +6,10 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/labstack/echo/v5 v5.4.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.44.0
+	github.com/tiktoken-go/tokenizer v0.7.0
+	github.com/tree-sitter/go-tree-sitter v0.25.0
+	github.com/tree-sitter/tree-sitter-javascript v0.25.0
+	github.com/tree-sitter/tree-sitter-typescript v0.23.2
 	golang.org/x/net v0.57.0
 	golang.org/x/text v0.40.0
 	gorm.io/driver/postgres v1.6.3
@@ -25,6 +29,7 @@ require (
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/docker/go-connections v0.7.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
@@ -42,6 +47,7 @@ require (
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
+	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
 	github.com/moby/moby/api v1.55.0 // indirect
