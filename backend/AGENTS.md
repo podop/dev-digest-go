@@ -31,13 +31,23 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 - Layout: `cmd/server/` is the composition root (config, wiring, migrate → seed → jobs → listen,
   shutdown). Startup reaps (conventions scans, review runs) are non-fatal. Shutdown order: the
   review executor cancels live runs (≤ 5 s) and completes the run buses so SSE streams end, in
-  parallel with the job runner (10 s); only then does Echo (own start context) drain HTTP (20 s).
-  The SSE route `GET /runs/:id/events` is exempt from rate limiting; `POST /pulls/:id/review` has
-  a 10/min bucket. Features live in `internal/<context>/{domain,app,adapters/<tech>,transport/http}`;
+  parallel with the intent, brief and onboarding services cancelling their in-flight generations
+  (≤ 5 s; Echo never cancels the context of a request in flight, so `platform/inflight` is stopped
+  before Echo) and with the job runner (10 s); only then does Echo (own start context) drain HTTP
+  (20 s). The SSE route `GET /runs/:id/events` is exempt from rate limiting; `POST /pulls/:id/review`
+  and `POST /pulls/:id/intent/refresh` have a 10/min bucket each. Phase 5 contexts: `intent`,
+  `smartdiff`, `blast`, `brief`, `onboarding`, `performance` (brief and the review hook reach
+  intent, blast, documents and roles through peers adapters). `REVIEW_INTENT_ENABLED` (default on,
+  off only on `false`) decides whether `cmd` wires `executor.Deps.Intent`; off leaves it nil, which
+  is Phase 4 behaviour exactly. Test seams in `cmd/server`: `options.now` (clock) and
+  `intentBudget` / `briefBudget` / `onboardingBudget`. Features live in
+  `internal/<context>/{domain,app,adapters/<tech>,transport/http}`;
   shared plumbing in `internal/platform/<what>` (httpx, postgres, apperr, secrets, gitcli, github,
   retry, logging). Dependencies point inward only.
 - `reviewer` (the review engine) is a shared kernel: `reviews/domain` may import `reviewer/domain`
-  and `reviews/app` may import `reviewer/app` types. Otherwise contexts reach each other only
+  and `reviews/app` may import `reviewer/app` types. `reviewer/domain` is also the kernel of the
+  Phase 5 contexts (`intent`, `brief`, `onboarding`): the JS-parity text helpers, `Intent` /
+  `RenderIntent` and the untrusted-text wrapping live there. Otherwise contexts reach each other only
   through consumer-side ports wired in `cmd/` (peers adapters may import another context's
   app/domain types); adapters never import other adapters (`cmd/` binds them, e.g. `newLLMCaller`).
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/`. GORM only in

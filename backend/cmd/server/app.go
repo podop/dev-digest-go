@@ -20,21 +20,41 @@ import (
 	agentsdb "dev-digest-go/backend/internal/agents/adapters/postgres"
 	agentsapp "dev-digest-go/backend/internal/agents/app"
 	agentshttp "dev-digest-go/backend/internal/agents/transport/http"
+	blastpeers "dev-digest-go/backend/internal/blast/adapters/peers"
+	blastpg "dev-digest-go/backend/internal/blast/adapters/postgres"
+	blastapp "dev-digest-go/backend/internal/blast/app"
+	blasthttp "dev-digest-go/backend/internal/blast/transport/http"
+	briefpeers "dev-digest-go/backend/internal/brief/adapters/peers"
+	briefpg "dev-digest-go/backend/internal/brief/adapters/postgres"
+	briefapp "dev-digest-go/backend/internal/brief/app"
+	briefhttp "dev-digest-go/backend/internal/brief/transport/http"
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/conventions/adapters/clonefiles"
 	conventionspg "dev-digest-go/backend/internal/conventions/adapters/postgres"
 	conventionsapp "dev-digest-go/backend/internal/conventions/app"
 	conventionshttp "dev-digest-go/backend/internal/conventions/transport/http"
 	"dev-digest-go/backend/internal/health"
+	intentpeers "dev-digest-go/backend/internal/intent/adapters/peers"
+	intentpg "dev-digest-go/backend/internal/intent/adapters/postgres"
+	intentapp "dev-digest-go/backend/internal/intent/app"
+	intenthttp "dev-digest-go/backend/internal/intent/transport/http"
 	"dev-digest-go/backend/internal/jobs"
 	jobspg "dev-digest-go/backend/internal/jobs/adapters/postgres"
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/llm/adapters/anthropic"
 	"dev-digest-go/backend/internal/llm/adapters/mock"
 	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
+	onbpeers "dev-digest-go/backend/internal/onboarding/adapters/peers"
+	onbpg "dev-digest-go/backend/internal/onboarding/adapters/postgres"
+	onbapp "dev-digest-go/backend/internal/onboarding/app"
+	onboardinghttp "dev-digest-go/backend/internal/onboarding/transport/http"
+	perfpg "dev-digest-go/backend/internal/performance/adapters/postgres"
+	perfapp "dev-digest-go/backend/internal/performance/app"
+	performancehttp "dev-digest-go/backend/internal/performance/transport/http"
 	"dev-digest-go/backend/internal/platform/gitcli"
 	"dev-digest-go/backend/internal/platform/github"
 	"dev-digest-go/backend/internal/platform/httpx"
+	"dev-digest-go/backend/internal/platform/inflight"
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/postgres"
 	"dev-digest-go/backend/internal/platform/postgres/migrate"
@@ -76,6 +96,9 @@ import (
 	"dev-digest-go/backend/internal/skills/adapters/urlfetch"
 	skillsapp "dev-digest-go/backend/internal/skills/app"
 	skillshttp "dev-digest-go/backend/internal/skills/transport/http"
+	smartdiffpg "dev-digest-go/backend/internal/smartdiff/adapters/postgres"
+	smartdiffapp "dev-digest-go/backend/internal/smartdiff/app"
+	smartdiffhttp "dev-digest-go/backend/internal/smartdiff/transport/http"
 	"dev-digest-go/backend/internal/tenancy"
 	tenancypg "dev-digest-go/backend/internal/tenancy/adapters/postgres"
 	"dev-digest-go/backend/migrations"
@@ -83,6 +106,10 @@ import (
 
 // httpGrace is how long in-flight requests may finish after a stop signal (FR43).
 const httpGrace = 20 * time.Second
+
+// generationDrain is how long the intent, brief and onboarding generations may take to return
+// after their cancellation, at shutdown.
+const generationDrain = 5 * time.Second
 
 // options are the seams the component tests use to point serve at stubs. Production passes
 // only the process environment and stdout.
@@ -112,6 +139,12 @@ type options struct {
 	// noRepoIntelJobs leaves the three repo-intel job kinds unregistered, so a resync cannot be
 	// enqueued (the degraded no_handler answer) and the clone and refresh triggers log a warning.
 	noRepoIntelJobs bool
+	// now is the clock of the Phase 5 services (derived_at, generated_at, the performance windows);
+	// nil = time.Now.
+	now func() time.Time
+	// intentBudget, briefBudget and onboardingBudget bound one intent derivation, brief generation
+	// and tour generation; 0 = each domain's own budget (120 s).
+	intentBudget, briefBudget, onboardingBudget time.Duration
 }
 
 // llmURLs are the base URLs of the provider adapters.
@@ -207,6 +240,11 @@ type wired struct {
 	backfill    *intelapp.Backfill
 	reviews     reviewsapp.Lifecycle
 	executor    *executor.Executor // shut down by listen before HTTP drains
+	// intent, brief and onboarding run generations on detached contexts; listen stops them before
+	// HTTP drains, because Echo never cancels the context of a request in flight (P2).
+	intent     intentapp.Stopper
+	brief      briefapp.Lifecycle
+	onboarding onbapp.Lifecycle
 }
 
 // intelHandlers are the three repo-intel job handlers.
@@ -273,6 +311,10 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		return nil, fmt.Errorf("project context: %w", err)
 	}
 	resolver := tenancy.NewResolver(tenancypg.NewStore(db))
+	now := o.now
+	if now == nil {
+		now = time.Now
+	}
 
 	llmOpts := o.llm
 	llmOpts.Keys = sec
@@ -358,7 +400,20 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	// One bus serves the executor (publishing) and the service (replay, cancel, subscribe).
 	runs := peers.NewBus(runbus.New(runbus.Options{}))
 	reviewsStore := revpg.NewStore(db)
-	reviewsExec := executor.New(executor.Deps{
+	// The intent service also serves GET/POST /pulls/:id/intent[/refresh]. The review hook is wired
+	// only while REVIEW_INTENT_ENABLED holds: a nil interface is the switch off (P5, D5001).
+	intentStore := intentpg.NewStore(db)
+	intentSvc := intentapp.NewService(intentapp.Deps{
+		Pulls:    intentStore,
+		Settings: settingsSvc,
+		LLM:      llmClient,
+		Docs:     intentpeers.NewDocs(git, gh),
+		Tickets:  intentpeers.NewTickets(gh, llmClient.Redact),
+		Store:    intentStore,
+		Clock:    now,
+		Log:      log,
+	}, intentapp.Options{Budget: o.intentBudget})
+	execDeps := executor.Deps{
 		Store:          reviewsStore,
 		Tx:             tx,
 		Bus:            runs,
@@ -367,9 +422,40 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		ProjectContext: peers.NewProjectContext(pcSvc.WithGit(git)),
 		Engine:         reviewerapp.Run,
 		Log:            log,
-	}, executor.Options{AgentConcurrency: cfg.ReviewAgentConcurrency, MapConcurrency: cfg.ReviewMapConcurrency})
+	}
+	if cfg.ReviewIntentEnabled {
+		execDeps.Intent = peers.NewIntent(intentSvc)
+	}
+	reviewsExec := executor.New(execDeps, executor.Options{AgentConcurrency: cfg.ReviewAgentConcurrency, MapConcurrency: cfg.ReviewMapConcurrency})
 	reviewsSvc := reviewsapp.NewService(reviewsapp.Deps{
 		Store: reviewsStore, Tx: tx, Executor: reviewsExec, Bus: runs, Log: log,
+	})
+
+	blastSvc := blastapp.NewService(blastpg.NewStore(db), blastpeers.NewRepoIntel(intelReader),
+		blastpeers.NewGitHub(gh), blastapp.Options{Log: log, Redact: llmClient.Redact})
+	briefSvc := briefapp.NewService(briefapp.Deps{
+		Store:     briefpg.NewStore(db),
+		Intents:   intentSvc,
+		Blast:     briefpeers.NewBlast(blastSvc),
+		Documents: briefpeers.NewDocuments(reviewsStore, peers.NewProjectContext(pcSvc.WithGit(git))),
+		Issues:    briefpeers.NewIssues(gh),
+		Roles:     briefpeers.Roles{},
+		LLM:       llmClient,
+		Models:    settingsSvc,
+		Clock:     now,
+		Log:       log,
+		Budget:    o.briefBudget,
+	})
+	onbSvc := onbapp.NewService(onbapp.Deps{
+		Store:       onbpg.NewStore(db),
+		IndexStates: onbpeers.NewIndexStates(intelSvc),
+		Index:       onbpeers.NewIndex(intelReader),
+		Blobs:       onbpeers.NewBlobs(git),
+		LLM:         llmClient,
+		Models:      settingsSvc,
+		Now:         now,
+		Log:         log,
+		Budget:      o.onboardingBudget,
 	})
 
 	limits := skillshttp.BodyLimits()
@@ -382,7 +468,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		RateLimit: httpx.RateLimit{
 			Enabled: cfg.RateLimitEnabled,
 			Buckets: append(settingshttp.RateLimitBuckets(),
-				httpx.Bucket{Method: http.MethodPost, Path: "/pulls/:id/review", Limit: 10}),
+				httpx.Bucket{Method: http.MethodPost, Path: "/pulls/:id/review", Limit: 10},
+				httpx.Bucket{Method: http.MethodPost, Path: intenthttp.RefreshPath, Limit: 10}),
 			// A live run stream is long-lived and reconnects on its own: it never counts.
 			Exempt: []httpx.Route{{Method: http.MethodGet, Path: "/runs/:id/events"}},
 		},
@@ -398,15 +485,23 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	pchttp.AddRoutes(e, pcSvc, resolver)
 	intelhttp.AddRoutes(e, intelSvc, resolver)
 	reviewshttp.AddRoutes(e, reviewsSvc, resolver)
+	intenthttp.AddRoutes(e, intentSvc, resolver)
+	smartdiffhttp.AddRoutes(e, smartdiffapp.NewService(smartdiffpg.NewStore(db)), resolver)
+	blasthttp.AddRoutes(e, blastSvc, resolver)
+	briefhttp.AddRoutes(e, briefSvc, resolver)
+	onboardinghttp.AddRoutes(e, onbSvc, resolver)
+	// GET /agents/performance is a static route, so it wins over GET /agents/:id.
+	performancehttp.AddRoutes(e, perfapp.NewService(perfpg.NewStore(db), now), resolver)
 	return &wired{
 		echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs),
-		reviews: reviewsSvc, executor: reviewsExec,
+		reviews: reviewsSvc, executor: reviewsExec, intent: intentSvc, brief: briefSvc, onboarding: onbSvc,
 	}, nil
 }
 
 // listen serves w.echo until ctx ends. On stop the review executor shuts down first (every live
 // run is cancelled, up to 5 s to record itself, then every run bus completes so the SSE streams
-// end) in parallel with the job runner (10 s); only then does Echo get its stop signal and drain
+// end) in parallel with the intent, brief and onboarding generations (cancelled, up to 5 s to
+// return) and the job runner (10 s); only then does Echo get its stop signal and drain
 // the remaining requests (20 s grace, FR43, FR4042). Echo runs on its own context for that
 // reason: the signal context would stop it before the runs could finish. A server that cannot
 // drain within the grace period makes the process fail; runs and jobs that do not settle in time
@@ -422,13 +517,37 @@ func listen(ctx context.Context, cfg config.Config, o options, w *wired, runner 
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		<-stopCtx.Done()
-		if err := w.executor.Shutdown(context.WithoutCancel(ctx)); err != nil {
-			if errors.Is(err, executor.ErrNotDrained) {
-				log.Warn("review runs did not finish recording; the next start reaps them", "error", err)
-			} else {
-				log.Error("review executor shutdown", "error", err)
+		// Echo never cancels the context of a request in flight, so the generations of the
+		// intent, brief and onboarding requests are stopped here, together with the review runs
+		// and before Echo gets its stop signal (P2, NFR5010).
+		var stopping sync.WaitGroup
+		stopping.Go(func() {
+			if err := w.executor.Shutdown(context.WithoutCancel(ctx)); err != nil {
+				if errors.Is(err, executor.ErrNotDrained) {
+					log.Warn("review runs did not finish recording; the next start reaps them", "error", err)
+				} else {
+					log.Error("review executor shutdown", "error", err)
+				}
 			}
+		})
+		for name, stopper := range map[string]func(context.Context) error{
+			"intent derivations":     w.intent.Shutdown,
+			"brief generations":      w.brief.Shutdown,
+			"onboarding generations": w.onboarding.Shutdown,
+		} {
+			stopping.Go(func() {
+				sctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), generationDrain)
+				defer cancel()
+				if err := stopper(sctx); err != nil {
+					if errors.Is(err, inflight.ErrNotDrained) {
+						log.Warn("generations did not return before the deadline", "service", name, "error", err)
+					} else {
+						log.Error("generations shutdown", "service", name, "error", err)
+					}
+				}
+			})
 		}
+		stopping.Wait()
 		stopEcho()
 	})
 	wg.Go(func() {

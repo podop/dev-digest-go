@@ -285,20 +285,18 @@ func TestHTTP_SkillStaticRoutesBeforeID(t *testing.T) {
 	}
 }
 
-// AC203: /agents/performance is not an agent id.
-func TestHTTP_AgentsPerformanceIsAValidationError(t *testing.T) {
+// Phase 2 AC203 (a 422 on "id") is superseded by Phase 5 FR5011/AC5016: /agents/performance is a
+// static route that wins over /agents/:id.
+func TestHTTP_AgentsPerformanceIsNotAnAgentID(t *testing.T) {
 	s := startStack(t, spec{})
 	resp := s.get("/agents/performance?period=30d")
-	if resp.Status != http.StatusUnprocessableEntity || resp.errorCode(t) != "validation_error" {
-		t.Fatalf("GET /agents/performance = %d %s, want 422 validation_error", resp.Status, resp.Body)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("GET /agents/performance = %d %.200s, want 200", resp.Status, resp.Body)
 	}
-	e, _ := resp.Obj(t)["error"].(map[string]any)
-	details, _ := e["details"].([]any)
-	if len(details) == 0 {
-		t.Fatalf("error %v has no details", e)
-	}
-	if got := details[0].(map[string]any)["instancePath"]; got != "/id" {
-		t.Errorf("details[0].instancePath = %v, want /id", got)
+	for _, key := range []string{"period", "summary", "agents"} {
+		if _, ok := resp.Obj(t)[key]; !ok {
+			t.Errorf("GET /agents/performance body lacks %q", key)
+		}
 	}
 }
 
