@@ -29,6 +29,7 @@ The wire contracts are the Zod schemas vendored in `frontend/src/vendor/shared/c
 | D8 | CI export runner (Node `agent-runner` bundle vs Go runner): **decided later**, in the CI phase | 2026-10-21 | user |
 | D9 | Browser-attack hardening beyond Node parity (API has no auth): JSON bodies only as `application/json` (restores Node's 422 for `text/plain`), POST/PUT/PATCH/DELETE with a foreign `Origin` → 403, `Host` allowlist `ALLOWED_HOSTS` against DNS rebinding | 2026-10-21 | user (security review r1) |
 | D10 | The composition root (`cmd/`) may hold the `*gorm.DB` handle; querying stays in adapters | 2026-10-21 | architecture review r1 |
+| D11 | Phase 2 pulls a **minimal LLM layer** forward from Phase 4 (structured completion + model listing for OpenAI, Anthropic, OpenRouter; price book; prompt log) so `conventions/extract` works end to end; Phase 4 reuses and extends it | 2026-10-22 | user |
 
 Corrections: the Node schema after migrations 0000–0020 has **46 tables**, not 44 as research 02 and
 the Phase 1 spec state (verified on a migrated database and in Drizzle's `0020_snapshot.json`).
@@ -43,7 +44,7 @@ Order follows the module dependencies in research 01 §6.
 | Phase | Scope | Routes |
 |---|---|---|
 | 1 | Platform (error envelope, validation, body limits, rate limits, security headers, health, single-tenant context, migrations, seed) + settings, repos (git clone jobs), pulls (GitHub sync, diff), workspace, polling | 2 + 14 |
-| 2 | agents, skills, conventions, project-context | 38 |
+| 2 | agents, skills, conventions, project-context + minimal LLM layer (D11) | 38 |
 | 3 | repo-intel (indexing, rank, repo map) | 2 |
 | 4 | reviews: reviewer-core engine, LLM providers, run bus + SSE, multi-agent | 15 |
 | 5 | intent, smart-diff, blast, brief, onboarding, performance | 11 |
