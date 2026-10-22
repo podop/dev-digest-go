@@ -65,9 +65,15 @@ func New(opts Options) *Client {
 		openRouterTimeout: opts.OpenRouterTimeout,
 		retry:             retry.Default(),
 	}
-	if c.http == nil {
-		c.http = &http.Client{}
+	// Never follow a provider's redirect: Go keeps custom headers such as Anthropic's x-api-key
+	// on a cross-host redirect, so the key would reach another host. Copy, don't mutate, an
+	// injected client.
+	hc := http.Client{}
+	if c.http != nil {
+		hc = *c.http
 	}
+	hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	c.http = &hc
 	if c.timeout <= 0 {
 		c.timeout = DefaultTimeout
 	}

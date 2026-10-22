@@ -20,6 +20,9 @@ func Open(ctx context.Context, dsn string, log *slog.Logger) (*gorm.DB, error) {
 			SlowThreshold:             200 * time.Millisecond,
 			LogLevel:                  logger.Warn,
 			IgnoreRecordNotFoundError: true,
+			// Failed and slow queries are logged; with values inlined, they would write skill
+			// bodies, context files and scan errors into the log (NFR202). Placeholders only.
+			ParameterizedQueries: true,
 		}),
 		DisableAutomaticPing: true,
 	})

@@ -644,3 +644,20 @@ func restart(t testing.TB, db *pgtest.Database) {
 		t.Fatalf("serve() = %v after the stop signal, want nil", err)
 	}
 }
+
+// NFR202: a failed query (here the unique name violation behind 409) must not write the
+// skill body into the log; the GORM logger prints placeholders only.
+func TestSkills_FailedInsertDoesNotLogTheBody(t *testing.T) {
+	const body = "Private skill body that must stay out of the log 7b2e."
+	s := startStack(t, spec{})
+	skill := map[string]any{"name": "dup-skill-nfr202", "type": "custom", "description": "d", "body": body}
+	if resp := s.post("/skills", skill); resp.Status != http.StatusCreated {
+		t.Fatalf("POST /skills = %d %s, want 201", resp.Status, resp.Body)
+	}
+	if resp := s.post("/skills", skill); resp.Status != http.StatusConflict {
+		t.Fatalf("POST /skills with a taken name = %d %s, want 409", resp.Status, resp.Body)
+	}
+	if logs := s.logs.String(); strings.Contains(logs, body) {
+		t.Errorf("server log holds the skill body:\n%s", logs)
+	}
+}

@@ -169,3 +169,21 @@ func TestCountModels_badBodyAndUnknownProvider(t *testing.T) {
 		t.Error("CountModels(github) error = nil, want an error")
 	}
 }
+
+func TestCountModels_redirectIsNotFollowed(t *testing.T) {
+	var reached atomic.Int32
+	other := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		reached.Add(1)
+		models(w, "claude-a")
+	})
+	s := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+"/models", http.StatusTemporaryRedirect)
+	})
+	c := providers.New(providers.Options{AnthropicBaseURL: s.URL, Retry: &fastRetry})
+	if _, err := c.CountModels(t.Context(), app.Anthropic, "ak-secret"); err == nil {
+		t.Errorf("CountModels(anthropic) after a 307 = nil error, want a failure")
+	}
+	if n := reached.Load(); n != 0 {
+		t.Errorf("redirect target got %d request(s), want 0: the key must not follow a redirect", n)
+	}
+}
