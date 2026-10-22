@@ -1,0 +1,15 @@
+{
+  "history": [
+    {
+      "author": "octo-dev",
+      "files_overlap": [
+        "src/api/users.ts",
+        "src/config.ts"
+      ],
+      "merged_at": "2026-10-01T10:00:00Z",
+      "notes": "",
+      "pr_number": 470,
+      "title": "Tune the limiter"
+    }
+  ]
+}

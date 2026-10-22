@@ -90,6 +90,11 @@ type spec struct {
 
 	// Phase 4 seam: scripted provider adapters replace the real ones (options.llmAdapters).
 	llmAdapters map[llm.Provider]llm.Adapter
+
+	// Phase 5 seams: the clock of the intent, brief, onboarding and performance services, and the
+	// budgets of one intent derivation, brief generation and tour generation (0 = 120 s each).
+	now                                         func() time.Time
+	intentBudget, briefBudget, onboardingBudget time.Duration
 }
 
 // stack is a running server with its stubs.
@@ -169,6 +174,8 @@ func startStack(t testing.TB, sp spec) *stack {
 			o.urlfetch = sp.urlfetch
 			o.extractTimeout = sp.extractTimeout
 			o.noRepoIntelJobs = sp.noIntelJobs
+			o.now = sp.now
+			o.intentBudget, o.briefBudget, o.onboardingBudget = sp.intentBudget, sp.briefBudget, sp.onboardingBudget
 		},
 	}
 

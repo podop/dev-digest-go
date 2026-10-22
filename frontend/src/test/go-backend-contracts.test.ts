@@ -7,10 +7,19 @@ import {
   ActiveRun,
   Agent,
   AgentColumn,
+  AgentPeriodMetrics,
+  AgentPerf,
+  AgentPerfRow,
   AgentRunEstimate,
   AgentSkillLink,
+  AgentStats,
   AgentVersion,
   AgentVersionConfig,
+  BlastCaller,
+  BlastRadius,
+  BriefMissingInput,
+  CategoryCount,
+  ChangedSymbol,
   CommunitySkill,
   ConnTestResult,
   ContextAttachments,
@@ -21,26 +30,54 @@ import {
   ConventionScan,
   Conflict,
   ConflictTake,
+  CostSegment,
+  DownstreamImpact,
   FindingRecord,
+  Intent,
+  IntentSource,
+  IntentTrace,
   ModelInfo,
   MultiAgentRun,
   MultiAgentRunSummary,
+  ONBOARDING_LIMITS,
+  OnboardingArchitecture,
+  OnboardingEdge,
+  OnboardingFirstTask,
+  OnboardingNode,
+  OnboardingPathItem,
+  OnboardingRunStep,
+  OnboardingTour,
+  OnboardingTourNone,
+  OnboardingTourReady,
+  PerfSummary,
+  PeriodInfo,
+  PrBrief,
+  PrBriefResponse,
   PrDetail,
+  PrHistory,
+  PrHistoryItem,
+  PrIntentRecord,
+  PrIntentResponse,
   PrMeta,
   PrReviewComment,
   ProjectContextTrace,
   ProjectContextTraceDoc,
   Repo,
   RepoIndexState,
+  ReviewFocusItem,
   ReviewRecord,
   ReviewRunResponse,
   ReviewRunTarget,
+  Risk,
+  Risks,
+  RunHistoryItem,
   RunLogLine,
   RunStats,
   RunSummary,
   RunTrace,
   PromptAssembly,
   SecretsStatus,
+  SeverityBucket,
   Settings,
   Skill,
   SkillAgentRef,
@@ -49,7 +86,12 @@ import {
   SkillStatsSummary,
   SkillUsed,
   SkillVersion,
+  SmartDiff,
+  SmartDiffFile,
+  SmartDiffGroup,
+  StatPoint,
   ToolCall,
+  UsageCount,
 } from "@devdigest/shared";
 
 // The Go backend's component tests record the response of every Phase-1 to Phase-4 route in
@@ -97,10 +139,84 @@ const runTrace = RunTrace.extend({
   project_context: ProjectContextTrace.extend({ docs: z.array(ProjectContextTraceDoc.strict()) })
     .strict()
     .nullish(),
+  intent: IntentTrace.extend({ sources: z.array(IntentSource.strict()).nullish() })
+    .strict()
+    .nullish(),
 }).strict();
 const multiAgentRun = MultiAgentRun.extend({
   columns: z.array(AgentColumn.extend({ findings: z.array(findingRecord) }).strict()),
   conflicts: z.array(Conflict.extend({ takes: z.array(ConflictTake.strict()) }).strict()),
+}).strict();
+
+// ---- Phase 5: intent, smart diff, blast, prior PRs, brief, onboarding, performance (spec 7.3). Every
+// nested object is strict as well: a key the contract lacks is a drift. ----
+const intentSource = IntentSource.strict();
+const intentSnapshot = Intent.extend({ sources: z.array(intentSource).nullish() }).strict();
+const prIntentResponse = PrIntentResponse.extend({
+  intent: PrIntentRecord.extend({ sources: z.array(intentSource).nullish() }).strict().nullable(),
+}).strict();
+const smartDiff = SmartDiff.extend({
+  groups: z.array(SmartDiffGroup.extend({ files: z.array(SmartDiffFile.strict()) }).strict()),
+  split_suggestion: SmartDiff.shape.split_suggestion.strict(),
+}).strict();
+const blastRadius = BlastRadius.extend({
+  changed_symbols: z.array(ChangedSymbol.strict()),
+  downstream: z.array(DownstreamImpact.extend({ callers: z.array(BlastCaller.strict()) }).strict()),
+}).strict();
+const prHistory = PrHistory.extend({ history: z.array(PrHistoryItem.strict()) }).strict();
+const prBrief = PrBrief.extend({
+  risks: Risks.extend({ risks: z.array(Risk.strict()) }).strict(),
+  review_focus: z.array(ReviewFocusItem.strict()).max(8),
+  intent: intentSnapshot.nullable(),
+  blast: blastRadius.nullable(),
+  missing_inputs: z.array(BriefMissingInput.strict()),
+}).strict();
+const prBriefResponse = PrBriefResponse.extend({ brief: prBrief.nullable() }).strict();
+
+const tourLimits = ONBOARDING_LIMITS;
+const onboardingTour = OnboardingTour.extend({
+  architecture: OnboardingArchitecture.extend({
+    nodes: z.array(OnboardingNode.strict()).max(tourLimits.nodesMax),
+    edges: z.array(OnboardingEdge.strict()).max(tourLimits.edgesMax),
+  }).strict(),
+  critical_paths: z.array(OnboardingPathItem.strict()).max(tourLimits.criticalPathsMax),
+  run_steps: z.array(OnboardingRunStep.strict()).max(tourLimits.runStepsMax),
+  reading_path: z.array(OnboardingPathItem.strict()).max(tourLimits.readingPathMax),
+  first_tasks: z.array(OnboardingFirstTask.strict()).max(tourLimits.firstTasksMax),
+}).strict();
+const onboardingState = z.discriminatedUnion("status", [
+  OnboardingTourNone.strict(),
+  OnboardingTourReady.extend({ tour: onboardingTour }).strict(),
+]);
+
+const trend = z.array(StatPoint.strict());
+const metrics = AgentPeriodMetrics.strict();
+const costSegments = z.array(CostSegment.strict());
+const perfSummary = PerfSummary.extend({
+  most_active: z.object({ agent_id: z.string(), agent_name: z.string(), runs: z.number().int() }).strict().nullable(),
+}).strict();
+const agentPerf = AgentPerf.extend({
+  period: PeriodInfo.strict(),
+  summary: perfSummary,
+  previous_summary: perfSummary,
+  runs_trend: trend,
+  agents: z.array(AgentPerfRow.extend({ metrics, previous: metrics, runs_trend: trend }).strict()),
+  cost_by_agent: costSegments,
+  cost_by_model: costSegments,
+}).strict();
+const agentStats = AgentStats.extend({
+  period: PeriodInfo.strict(),
+  metrics,
+  previous: metrics,
+  runs_trend: trend,
+  cost_by_model: costSegments,
+  skills_used: z.array(UsageCount.strict()),
+  memory_pulled: z.array(UsageCount.strict()),
+  findings_by_severity: z.array(SeverityBucket.strict()),
+  findings_by_category: z.array(CategoryCount.strict()),
+  run_history: z.array(
+    RunHistoryItem.extend({ pr: z.object({ id: z.string(), repo_id: z.string(), number: z.number().int() }).strict().nullable() }).strict(),
+  ),
 }).strict();
 
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
@@ -211,6 +327,23 @@ const contracts: Record<string, z.ZodTypeAny> = {
   review_multi_run: multiAgentRun,
   review_multi_list: z.array(MultiAgentRunSummary.strict()),
   review_estimates: z.array(AgentRunEstimate.strict()),
+
+  // ---- Phase 5 ----
+  intent_none: prIntentResponse,
+  intent_refresh: prIntentResponse,
+  review_trace_with_intent: runTrace,
+  smart_diff: smartDiff,
+  blast_full: blastRadius,
+  blast_degraded: blastRadius,
+  history: prHistory,
+  history_empty: prHistory,
+  brief_none: prBriefResponse,
+  brief_generated: prBriefResponse,
+  onboarding_none: onboardingState,
+  onboarding_ready: onboardingState,
+  onboarding_stale: onboardingState,
+  agents_performance: agentPerf,
+  agent_stats: agentStats,
 };
 
 const read = (name: string): unknown =>
@@ -392,5 +525,84 @@ describe("Go backend golden responses", () => {
     expect(run.columns.every((c) => c.status === "done")).toBe(true);
     expect(run.conflicts.map((c) => c.is_conflict)).toEqual([false, true]);
     for (const group of run.conflicts) expect(group.takes).toHaveLength(3);
+  });
+
+  it("the intent goldens: none, then a derived record with every source's detail key and the mock usage", () => {
+    expect(read("intent_none")).toEqual({ intent: null, stale: false });
+    const refreshed = read("intent_refresh") as { intent: Record<string, unknown>; stale: boolean };
+    expect(refreshed.stale).toBe(false);
+    expect(refreshed.intent).toMatchObject({
+      change_type: "feature",
+      prompt_version: 2,
+      provider: "openrouter",
+      tokens_in: 1200,
+      tokens_out: 180,
+      cost_usd: 0.00042,
+    });
+    for (const source of refreshed.intent.sources as Record<string, unknown>[]) expect(source).toHaveProperty("detail");
+  });
+
+  it("the review trace with an intent has a used intent, its assembly text and the scope event", () => {
+    const trace = read("review_trace_with_intent") as {
+      intent: { status: string; cache_hit: boolean; cost_usd: number };
+      prompt_assembly: { intent: string };
+      stats: { cost_usd: number };
+      log: { msg: string }[];
+    };
+    expect(trace.intent).toMatchObject({ status: "used", cache_hit: false, cost_usd: 0.00042 });
+    expect(trace.prompt_assembly.intent).toContain("Change type: feature");
+    expect(trace.stats.cost_usd).toBe(0.00042); // the intent call is not added to the run's cost
+    const msgs = trace.log.map((l) => l.msg);
+    expect(msgs.findIndex((m) => m.startsWith("PR intent derived"))).toBeGreaterThan(0);
+    expect(msgs.at(-2)).toMatch(/^scope: 0 out-of-scope finding\(s\) kept/);
+  });
+
+  it("the smart diff has the five groups in order and no pseudocode summary", () => {
+    const diff = read("smart_diff") as { groups: { role: string; files: Record<string, unknown>[] }[] };
+    expect(diff.groups.map((g) => g.role)).toEqual(["core", "tests", "wiring", "docs", "boilerplate"]);
+    for (const file of diff.groups.flatMap((g) => g.files)) expect(file).not.toHaveProperty("pseudocode_summary");
+  });
+
+  it("a complete blast radius has degraded false and no reason; a degraded one has both", () => {
+    const full = read("blast_full") as Record<string, unknown>;
+    expect(full.degraded).toBe(false);
+    expect(full).not.toHaveProperty("reason");
+    expect(read("blast_degraded")).toMatchObject({ degraded: true, reason: "index_partial" });
+  });
+
+  it("the history goldens: one prior PR with its overlap, and the empty list", () => {
+    const history = read("history") as { history: { notes: string; files_overlap: string[] }[] };
+    expect(history.history).toHaveLength(1);
+    const item = history.history[0];
+    expect(item?.notes).toBe("");
+    expect(item?.files_overlap).toEqual([...(item?.files_overlap ?? [])].sort());
+    expect(read("history_empty")).toEqual({ history: [] });
+  });
+
+  it("the brief goldens: none, then a grounded brief with its snapshots and no history key", () => {
+    expect(read("brief_none")).toEqual({ brief: null, stale: false });
+    const { brief, stale } = read("brief_generated") as { brief: Record<string, unknown>; stale: boolean };
+    expect(stale).toBe(false);
+    expect(brief).toMatchObject({ prompt_version: "v1", model_requests: 1, tokens_in: 1200, cost_usd: 0.00042 });
+    expect(brief).not.toHaveProperty("history");
+    expect(brief.intent).not.toBeNull();
+    expect(brief.blast).not.toBeNull();
+  });
+
+  it("the onboarding goldens: none, a fresh tour without stale_reason and a stale one", () => {
+    expect(read("onboarding_none")).toEqual({ status: "none" });
+    const ready = read("onboarding_ready") as Record<string, unknown>;
+    expect(ready).toMatchObject({ status: "ready", stale: false });
+    expect(ready).not.toHaveProperty("stale_reason");
+    expect(read("onboarding_stale")).toMatchObject({ status: "ready", stale: true, stale_reason: "index_changed" });
+  });
+
+  it("the performance goldens: a Deleted agents row last, and the stats' metrics are the agent's dashboard row", () => {
+    const perf = read("agents_performance") as {
+      agents: { agent_id: string | null; agent_name: string; metrics: unknown }[];
+    };
+    expect(perf.agents.at(-1)).toMatchObject({ agent_id: null, agent_name: "Deleted agents" });
+    const stats = read("agent_stats") as { agent_id: string; metrics: unknown };
+    expect(stats.metrics).toEqual(perf.agents.find((a) => a.agent_id === stats.agent_id)?.metrics);
   });
 });

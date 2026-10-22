@@ -1,0 +1,41 @@
+{
+  "intent": {
+    "change_type": "feature",
+    "confidence": "high",
+    "cost_usd": 0.00042,
+    "derived_at": "2026-01-01T00:00:00.000Z",
+    "derived_from": "explicit",
+    "head_sha": "a1b2c3d4e5f6",
+    "in_scope": [
+      "Add a rate-limiting middleware",
+      "Apply it to public, unauthenticated API endpoints"
+    ],
+    "input_hash": "73a4709e632123888a1892f5a837ef388bbcb020e7967df86ea40533af87c06f",
+    "intent": "[mock LLM] Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.",
+    "model": "deepseek/deepseek-v4-flash",
+    "out_of_scope": [
+      "Authentication or session changes",
+      "Internal or admin-only endpoints"
+    ],
+    "pr_id": "00000000-0000-4000-8000-000000000004",
+    "prompt_version": 2,
+    "provider": "openrouter",
+    "sources": [
+      {
+        "detail": null,
+        "kind": "title",
+        "ref": "title",
+        "status": "used"
+      },
+      {
+        "detail": null,
+        "kind": "body",
+        "ref": "body",
+        "status": "used"
+      }
+    ],
+    "tokens_in": 1200,
+    "tokens_out": 180
+  },
+  "stale": false
+}

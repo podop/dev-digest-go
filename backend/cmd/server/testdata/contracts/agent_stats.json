@@ -1,0 +1,323 @@
+{
+  "agent_id": "00000000-0000-4000-8000-000000000001",
+  "agent_name": "General Reviewer",
+  "cost_basis": "estimate",
+  "cost_by_model": [
+    {
+      "key": "gpt-4.1",
+      "label": "gpt-4.1",
+      "runs": 2,
+      "value": 0.75
+    },
+    {
+      "key": "claude-x",
+      "label": "claude-x",
+      "runs": 1,
+      "value": 0.1
+    }
+  ],
+  "findings_by_category": [
+    {
+      "category": "bug",
+      "count": 2
+    },
+    {
+      "category": "security",
+      "count": 1
+    }
+  ],
+  "findings_by_severity": [
+    {
+      "critical": 0,
+      "from": "2026-01-01T00:00:00.000Z",
+      "suggestion": 0,
+      "warning": 0
+    },
+    {
+      "critical": 0,
+      "from": "2026-01-01T00:00:00.000Z",
+      "suggestion": 0,
+      "warning": 0
+    },
+    {
+      "critical": 0,
+      "from": "2026-01-01T00:00:00.000Z",
+      "suggestion": 0,
+      "warning": 0
+    },
+    {
+      "critical": 0,
+      "from": "2026-01-01T00:00:00.000Z",
+      "suggestion": 0,
+      "warning": 0
+    },
+    {
+      "critical": 0,
+      "from": "2026-01-01T00:00:00.000Z",
+      "suggestion": 0,
+      "warning": 0
+    },
+    {
+      "critical": 1,
+      "from": "2026-01-01T00:00:00.000Z",
+      "suggestion": 1,
+      "warning": 1
+    }
+  ],
+  "memory_pulled": [
+    {
+      "key": "remember A",
+      "label": "remember A",
+      "runs": 2
+    },
+    {
+      "key": "remember B",
+      "label": "remember B",
+      "runs": 1
+    }
+  ],
+  "metrics": {
+    "accept_rate": 0.5,
+    "accepted": 1,
+    "avg_cost_usd": 0.283333,
+    "avg_duration_ms": 2000,
+    "decisions": 2,
+    "dismissed": 1,
+    "findings_total": 3,
+    "last_run_at": "2026-01-01T00:00:00.000Z",
+    "pending": 1,
+    "priced_runs": 3,
+    "runs": 4,
+    "runs_cancelled": 1,
+    "runs_ci": 1,
+    "runs_done": 2,
+    "runs_failed": 1,
+    "runs_local": 3,
+    "small_sample": true,
+    "total_cost_usd": 0.85,
+    "unpriced_runs": 1
+  },
+  "min_decisions": 5,
+  "period": {
+    "from": "2026-01-01T00:00:00.000Z",
+    "key": "30d",
+    "to": "2026-01-01T00:00:00.000Z"
+  },
+  "previous": {
+    "accept_rate": null,
+    "accepted": 0,
+    "avg_cost_usd": 0.4,
+    "avg_duration_ms": 1500,
+    "decisions": 0,
+    "dismissed": 0,
+    "findings_total": 0,
+    "last_run_at": "2026-01-01T00:00:00.000Z",
+    "pending": 0,
+    "priced_runs": 1,
+    "runs": 1,
+    "runs_cancelled": 0,
+    "runs_ci": 0,
+    "runs_done": 1,
+    "runs_failed": 0,
+    "runs_local": 1,
+    "small_sample": false,
+    "total_cost_usd": 0.4,
+    "unpriced_runs": 0
+  },
+  "run_history": [
+    {
+      "cost_usd": 0.5,
+      "findings_count": 0,
+      "has_trace": true,
+      "pr": {
+        "id": "00000000-0000-4000-8000-000000000008",
+        "number": 482,
+        "repo_id": "00000000-0000-4000-8000-000000000009"
+      },
+      "ran_at": "2026-01-01T00:00:00.000Z",
+      "run_id": "00000000-0000-4000-8000-000000000007",
+      "source": "local",
+      "status": "done",
+      "tokens": 10
+    },
+    {
+      "cost_usd": 0.25,
+      "findings_count": 0,
+      "has_trace": true,
+      "pr": {
+        "id": "00000000-0000-4000-8000-000000000008",
+        "number": 482,
+        "repo_id": "00000000-0000-4000-8000-000000000009"
+      },
+      "ran_at": "2026-01-01T00:00:00.000Z",
+      "run_id": "00000000-0000-4000-8000-000000000010",
+      "source": "ci",
+      "status": "done",
+      "tokens": 10
+    },
+    {
+      "cost_usd": null,
+      "findings_count": 0,
+      "has_trace": false,
+      "pr": {
+        "id": "00000000-0000-4000-8000-000000000008",
+        "number": 482,
+        "repo_id": "00000000-0000-4000-8000-000000000009"
+      },
+      "ran_at": "2026-01-01T00:00:00.000Z",
+      "run_id": "00000000-0000-4000-8000-000000000011",
+      "source": "local",
+      "status": "failed",
+      "tokens": 10
+    },
+    {
+      "cost_usd": 0.1,
+      "findings_count": 0,
+      "has_trace": false,
+      "pr": {
+        "id": "00000000-0000-4000-8000-000000000008",
+        "number": 482,
+        "repo_id": "00000000-0000-4000-8000-000000000009"
+      },
+      "ran_at": "2026-01-01T00:00:00.000Z",
+      "run_id": "00000000-0000-4000-8000-000000000012",
+      "source": "local",
+      "status": "cancelled",
+      "tokens": 10
+    }
+  ],
+  "runs_trend": [
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    }
+  ],
+  "skills_used": [
+    {
+      "key": "00000000-0000-4000-8000-000000000005",
+      "label": "corner-case-hunter",
+      "runs": 2
+    },
+    {
+      "key": "00000000-0000-4000-8000-000000000006",
+      "label": "lethal-trifecta",
+      "runs": 1
+    }
+  ]
+}

@@ -1,0 +1,1045 @@
+{
+  "agents": [
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000001",
+      "agent_name": "General Reviewer",
+      "metrics": {
+        "accept_rate": 0.5,
+        "accepted": 1,
+        "avg_cost_usd": 0.283333,
+        "avg_duration_ms": 2000,
+        "decisions": 2,
+        "dismissed": 1,
+        "findings_total": 3,
+        "last_run_at": "2026-01-01T00:00:00.000Z",
+        "pending": 1,
+        "priced_runs": 3,
+        "runs": 4,
+        "runs_cancelled": 1,
+        "runs_ci": 1,
+        "runs_done": 2,
+        "runs_failed": 1,
+        "runs_local": 3,
+        "small_sample": true,
+        "total_cost_usd": 0.85,
+        "unpriced_runs": 1
+      },
+      "previous": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": 0.4,
+        "avg_duration_ms": 1500,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 0,
+        "last_run_at": "2026-01-01T00:00:00.000Z",
+        "pending": 0,
+        "priced_runs": 1,
+        "runs": 1,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 1,
+        "runs_failed": 0,
+        "runs_local": 1,
+        "small_sample": false,
+        "total_cost_usd": 0.4,
+        "unpriced_runs": 0
+      },
+      "runs_trend": [
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000002",
+      "agent_name": "Performance Reviewer",
+      "metrics": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": null,
+        "avg_duration_ms": null,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 0,
+        "last_run_at": null,
+        "pending": 0,
+        "priced_runs": 0,
+        "runs": 0,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 0,
+        "runs_failed": 0,
+        "runs_local": 0,
+        "small_sample": false,
+        "total_cost_usd": null,
+        "unpriced_runs": 0
+      },
+      "previous": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": null,
+        "avg_duration_ms": null,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 0,
+        "last_run_at": null,
+        "pending": 0,
+        "priced_runs": 0,
+        "runs": 0,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 0,
+        "runs_failed": 0,
+        "runs_local": 0,
+        "small_sample": false,
+        "total_cost_usd": null,
+        "unpriced_runs": 0
+      },
+      "runs_trend": [
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000003",
+      "agent_name": "Security Reviewer",
+      "metrics": {
+        "accept_rate": 0.6666666666666666,
+        "accepted": 2,
+        "avg_cost_usd": 0.183333,
+        "avg_duration_ms": 2033,
+        "decisions": 3,
+        "dismissed": 1,
+        "findings_total": 3,
+        "last_run_at": "2026-01-01T00:00:00.000Z",
+        "pending": 0,
+        "priced_runs": 3,
+        "runs": 3,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 3,
+        "runs_failed": 0,
+        "runs_local": 3,
+        "small_sample": true,
+        "total_cost_usd": 0.55,
+        "unpriced_runs": 0
+      },
+      "previous": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": null,
+        "avg_duration_ms": null,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 0,
+        "last_run_at": null,
+        "pending": 0,
+        "priced_runs": 0,
+        "runs": 0,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 0,
+        "runs_failed": 0,
+        "runs_local": 0,
+        "small_sample": false,
+        "total_cost_usd": null,
+        "unpriced_runs": 0
+      },
+      "runs_trend": [
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        }
+      ]
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000004",
+      "agent_name": "Test Quality Reviewer",
+      "metrics": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": null,
+        "avg_duration_ms": null,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 0,
+        "last_run_at": null,
+        "pending": 0,
+        "priced_runs": 0,
+        "runs": 0,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 0,
+        "runs_failed": 0,
+        "runs_local": 0,
+        "small_sample": false,
+        "total_cost_usd": null,
+        "unpriced_runs": 0
+      },
+      "previous": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": null,
+        "avg_duration_ms": null,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 0,
+        "last_run_at": null,
+        "pending": 0,
+        "priced_runs": 0,
+        "runs": 0,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 0,
+        "runs_failed": 0,
+        "runs_local": 0,
+        "small_sample": false,
+        "total_cost_usd": null,
+        "unpriced_runs": 0
+      },
+      "runs_trend": [
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        }
+      ]
+    },
+    {
+      "agent_id": null,
+      "agent_name": "Deleted agents",
+      "metrics": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": 0.3,
+        "avg_duration_ms": 900,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 1,
+        "last_run_at": "2026-01-01T00:00:00.000Z",
+        "pending": 1,
+        "priced_runs": 1,
+        "runs": 1,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 1,
+        "runs_failed": 0,
+        "runs_local": 1,
+        "small_sample": false,
+        "total_cost_usd": 0.3,
+        "unpriced_runs": 0
+      },
+      "previous": {
+        "accept_rate": null,
+        "accepted": 0,
+        "avg_cost_usd": 0.2,
+        "avg_duration_ms": 900,
+        "decisions": 0,
+        "dismissed": 0,
+        "findings_total": 0,
+        "last_run_at": "2026-01-01T00:00:00.000Z",
+        "pending": 0,
+        "priced_runs": 1,
+        "runs": 1,
+        "runs_cancelled": 0,
+        "runs_ci": 0,
+        "runs_done": 1,
+        "runs_failed": 0,
+        "runs_local": 1,
+        "small_sample": false,
+        "total_cost_usd": 0.2,
+        "unpriced_runs": 0
+      },
+      "runs_trend": [
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 1
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        },
+        {
+          "label": "2026-01-01T00:00:00.000Z",
+          "value": 0
+        }
+      ]
+    }
+  ],
+  "cost_basis": "estimate",
+  "cost_by_agent": [
+    {
+      "key": "00000000-0000-4000-8000-000000000001",
+      "label": "General Reviewer",
+      "runs": 3,
+      "value": 0.85
+    },
+    {
+      "key": "00000000-0000-4000-8000-000000000003",
+      "label": "Security Reviewer",
+      "runs": 3,
+      "value": 0.55
+    },
+    {
+      "key": null,
+      "label": null,
+      "runs": 1,
+      "value": 0.3
+    }
+  ],
+  "cost_by_model": [
+    {
+      "key": "gpt-4.1",
+      "label": "gpt-4.1",
+      "runs": 4,
+      "value": 1.1
+    },
+    {
+      "key": "claude-x",
+      "label": "claude-x",
+      "runs": 2,
+      "value": 0.3
+    },
+    {
+      "key": null,
+      "label": null,
+      "runs": 1,
+      "value": 0.3
+    }
+  ],
+  "min_decisions": 5,
+  "period": {
+    "from": "2026-01-01T00:00:00.000Z",
+    "key": "30d",
+    "to": "2026-01-01T00:00:00.000Z"
+  },
+  "previous_summary": {
+    "accepted": 0,
+    "avg_accept_rate": null,
+    "decisions": 0,
+    "dismissed": 0,
+    "most_active": {
+      "agent_id": "00000000-0000-4000-8000-000000000001",
+      "agent_name": "General Reviewer",
+      "runs": 1
+    },
+    "pending": 0,
+    "priced_runs": 2,
+    "runs": 2,
+    "total_cost_usd": 0.6,
+    "unpriced_runs": 0
+  },
+  "runs_trend": [
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 0
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    },
+    {
+      "label": "2026-01-01T00:00:00.000Z",
+      "value": 1
+    }
+  ],
+  "summary": {
+    "accepted": 3,
+    "avg_accept_rate": 0.6,
+    "decisions": 5,
+    "dismissed": 2,
+    "most_active": {
+      "agent_id": "00000000-0000-4000-8000-000000000001",
+      "agent_name": "General Reviewer",
+      "runs": 4
+    },
+    "pending": 2,
+    "priced_runs": 7,
+    "runs": 8,
+    "total_cost_usd": 1.7,
+    "unpriced_runs": 1
+  }
+}

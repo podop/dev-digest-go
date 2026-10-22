@@ -1,0 +1,184 @@
+{
+  "brief": {
+    "blast": {
+      "changed_symbols": [
+        {
+          "file": "src/api/public/webhooks.ts",
+          "kind": "function",
+          "name": "webhooksRoutes"
+        },
+        {
+          "file": "src/api/users.ts",
+          "kind": "function",
+          "name": "listUsers"
+        },
+        {
+          "file": "src/config.ts",
+          "kind": "variable",
+          "name": "config"
+        },
+        {
+          "file": "src/middleware/ratelimit.ts",
+          "kind": "function",
+          "name": "rateLimit"
+        }
+      ],
+      "degraded": false,
+      "downstream": [
+        {
+          "callers": [
+            {
+              "file": "src/server.ts",
+              "line": 3,
+              "name": "buildServer"
+            },
+            {
+              "file": "src/jobs/cleanup.ts",
+              "line": 5,
+              "name": "runCleanup"
+            }
+          ],
+          "crons_affected": [
+            "0 * * * *"
+          ],
+          "endpoints_affected": [
+            "GET /health",
+            "POST /webhooks/stripe"
+          ],
+          "symbol": "config"
+        },
+        {
+          "callers": [
+            {
+              "file": "src/server.ts",
+              "line": 12,
+              "name": "buildServer"
+            }
+          ],
+          "crons_affected": [],
+          "endpoints_affected": [
+            "GET /health",
+            "POST /webhooks/stripe"
+          ],
+          "symbol": "webhooksRoutes"
+        },
+        {
+          "callers": [
+            {
+              "file": "src/api/public/webhooks.ts",
+              "line": 4,
+              "name": "webhooksRoutes"
+            }
+          ],
+          "crons_affected": [],
+          "endpoints_affected": [],
+          "symbol": "rateLimit"
+        }
+      ],
+      "summary": "4 changed symbols · 4 callers · 2 endpoints · 1 cron"
+    },
+    "cost_usd": 0.00042,
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "head_sha": "a1b2c3d4e5f6",
+    "intent": {
+      "change_type": "feature",
+      "confidence": "high",
+      "derived_from": "explicit",
+      "in_scope": [
+        "Add a rate-limiting middleware",
+        "Apply it to public, unauthenticated API endpoints"
+      ],
+      "intent": "[mock LLM] Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.",
+      "out_of_scope": [
+        "Authentication or session changes",
+        "Internal or admin-only endpoints"
+      ],
+      "sources": [
+        {
+          "detail": null,
+          "kind": "title",
+          "ref": "title",
+          "status": "used"
+        },
+        {
+          "detail": null,
+          "kind": "body",
+          "ref": "body",
+          "status": "used"
+        }
+      ]
+    },
+    "missing_inputs": [
+      {
+        "input": "specs",
+        "reason": "none_attached"
+      },
+      {
+        "input": "linked_issue",
+        "reason": "not_linked"
+      }
+    ],
+    "model": "gpt-4.1",
+    "model_requests": 1,
+    "prompt_version": "v1",
+    "provider": "openai",
+    "review_focus": [
+      {
+        "file": "src/middleware/ratelimit.ts",
+        "line": 7,
+        "reason": "The bucket key is taken from a spoofable header."
+      },
+      {
+        "file": "src/api/public/webhooks.ts",
+        "line": 4,
+        "reason": "Where the limiter is attached to the public routes."
+      },
+      {
+        "file": "src/api/users.ts",
+        "line": 46,
+        "reason": "New per-user query in the loop."
+      },
+      {
+        "file": "src/config.ts",
+        "line": 12,
+        "reason": "A key-looking literal enters the config."
+      }
+    ],
+    "risks": {
+      "risks": [
+        {
+          "explanation": "The bucket key comes from `X-Forwarded-For`, so a client can dodge the limiter by sending a new value on every request.",
+          "file_refs": [
+            "src/middleware/ratelimit.ts:6-9"
+          ],
+          "kind": "security",
+          "severity": "high",
+          "title": "Rate-limit key trusts a client-controlled header"
+        },
+        {
+          "explanation": "Each user triggers its own `orgs` query, so the list endpoint now issues one query per row.",
+          "file_refs": [
+            "src/api/users.ts:45-50"
+          ],
+          "kind": "perf",
+          "severity": "medium",
+          "title": "Per-user query inside a loop"
+        },
+        {
+          "explanation": "A `stripeKey` literal is added to `config.ts`; check that it is a placeholder and not a real secret.",
+          "file_refs": [
+            "src/config.ts:12"
+          ],
+          "kind": "data",
+          "severity": "low",
+          "title": "Live-looking key committed in the config"
+        }
+      ]
+    },
+    "specs_used": [],
+    "summary": "[mock LLM] Adds a token-bucket rate limiter in front of the public webhook endpoints and moves its limits into the config.",
+    "tokens_in": 1200,
+    "tokens_out": 180
+  },
+  "stale": false
+}

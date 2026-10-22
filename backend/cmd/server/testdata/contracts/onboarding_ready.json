@@ -1,0 +1,93 @@
+{
+  "stale": false,
+  "status": "ready",
+  "tour": {
+    "architecture": {
+      "edges": [
+        {
+          "from": "core",
+          "to": "util"
+        },
+        {
+          "from": "a",
+          "to": "core"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "util",
+          "kind": "module",
+          "label": "util"
+        },
+        {
+          "id": "core",
+          "kind": "module",
+          "label": "core"
+        },
+        {
+          "id": "a",
+          "kind": "entry",
+          "label": "a"
+        }
+      ],
+      "summary": "A tiny module graph rooted at util."
+    },
+    "cost_usd": 0.002,
+    "critical_paths": [
+      {
+        "path": "src/util.ts",
+        "reason": "Used by everything."
+      },
+      {
+        "path": "src/core.ts",
+        "reason": "The core."
+      },
+      {
+        "path": "src/a.ts",
+        "reason": "An entry."
+      }
+    ],
+    "files_indexed": 6,
+    "first_tasks": [
+      {
+        "complexity": "low",
+        "path": "src/todo.ts",
+        "title": "Handle the empty case"
+      },
+      {
+        "complexity": "medium",
+        "path": "src",
+        "title": "Cover util"
+      }
+    ],
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "indexed_sha": "0123456789abcdef0123456789abcdef01234567",
+    "language": "en",
+    "model": "deepseek/deepseek-v4-flash",
+    "prompt_version": 1,
+    "provider": "openrouter",
+    "reading_path": [
+      {
+        "path": "src/util.ts",
+        "reason": "Start here."
+      },
+      {
+        "path": "src/core.ts",
+        "reason": "Then this."
+      },
+      {
+        "path": "src/a.ts",
+        "reason": "Finally this."
+      }
+    ],
+    "repo_id": "00000000-0000-4000-8000-000000000001",
+    "run_steps": [
+      {
+        "command": "pnpm install",
+        "comment": "Install the dependencies."
+      }
+    ],
+    "tokens_in": 900,
+    "tokens_out": 300
+  }
+}

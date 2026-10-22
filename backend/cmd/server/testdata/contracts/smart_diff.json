@@ -1,0 +1,75 @@
+{
+  "groups": [
+    {
+      "files": [
+        {
+          "additions": 10,
+          "deletions": 2,
+          "finding_lines": [
+            2,
+            3,
+            7,
+            9
+          ],
+          "path": "src/a.ts"
+        },
+        {
+          "additions": 3,
+          "deletions": 1,
+          "finding_lines": [],
+          "path": "src/B.ts"
+        }
+      ],
+      "role": "core"
+    },
+    {
+      "files": [
+        {
+          "additions": 20,
+          "deletions": 0,
+          "finding_lines": [],
+          "path": "src/a.test.ts"
+        }
+      ],
+      "role": "tests"
+    },
+    {
+      "files": [
+        {
+          "additions": 1,
+          "deletions": 1,
+          "finding_lines": [],
+          "path": "src/index.ts"
+        }
+      ],
+      "role": "wiring"
+    },
+    {
+      "files": [
+        {
+          "additions": 5,
+          "deletions": 0,
+          "finding_lines": [],
+          "path": "README.md"
+        }
+      ],
+      "role": "docs"
+    },
+    {
+      "files": [
+        {
+          "additions": 100,
+          "deletions": 90,
+          "finding_lines": [],
+          "path": "pnpm-lock.yaml"
+        }
+      ],
+      "role": "boilerplate"
+    }
+  ],
+  "split_suggestion": {
+    "proposed_splits": [],
+    "too_big": false,
+    "total_lines": 233
+  }
+}

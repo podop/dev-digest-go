@@ -1,0 +1,78 @@
+{
+  "changed_symbols": [
+    {
+      "file": "src/api/public/webhooks.ts",
+      "kind": "function",
+      "name": "webhooksRoutes"
+    },
+    {
+      "file": "src/api/users.ts",
+      "kind": "function",
+      "name": "listUsers"
+    },
+    {
+      "file": "src/config.ts",
+      "kind": "variable",
+      "name": "config"
+    },
+    {
+      "file": "src/middleware/ratelimit.ts",
+      "kind": "function",
+      "name": "rateLimit"
+    }
+  ],
+  "degraded": true,
+  "downstream": [
+    {
+      "callers": [
+        {
+          "file": "src/server.ts",
+          "line": 3,
+          "name": "buildServer"
+        },
+        {
+          "file": "src/jobs/cleanup.ts",
+          "line": 5,
+          "name": "runCleanup"
+        }
+      ],
+      "crons_affected": [
+        "0 * * * *"
+      ],
+      "endpoints_affected": [
+        "GET /health",
+        "POST /webhooks/stripe"
+      ],
+      "symbol": "config"
+    },
+    {
+      "callers": [
+        {
+          "file": "src/server.ts",
+          "line": 12,
+          "name": "buildServer"
+        }
+      ],
+      "crons_affected": [],
+      "endpoints_affected": [
+        "GET /health",
+        "POST /webhooks/stripe"
+      ],
+      "symbol": "webhooksRoutes"
+    },
+    {
+      "callers": [
+        {
+          "file": "src/api/public/webhooks.ts",
+          "line": 4,
+          "name": "webhooksRoutes"
+        }
+      ],
+      "crons_affected": [],
+      "endpoints_affected": [],
+      "symbol": "rateLimit"
+    }
+  ],
+  "reason": "index_partial",
+  "summary": "4 changed symbols · 4 callers · 2 endpoints · 1 cron"
+}
