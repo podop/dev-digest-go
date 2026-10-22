@@ -30,6 +30,8 @@ The wire contracts are the Zod schemas vendored in `frontend/src/vendor/shared/c
 | D9 | Browser-attack hardening beyond Node parity (API has no auth): JSON bodies only as `application/json` (restores Node's 422 for `text/plain`), POST/PUT/PATCH/DELETE with a foreign `Origin` → 403, `Host` allowlist `ALLOWED_HOSTS` against DNS rebinding | 2026-10-21 | user (security review r1) |
 | D10 | The composition root (`cmd/`) may hold the `*gorm.DB` handle; querying stays in adapters | 2026-10-21 | architecture review r1 |
 | D11 | Phase 2 pulls a **minimal LLM layer** forward from Phase 4 (structured completion + model listing for OpenAI, Anthropic, OpenRouter; price book; prompt log) so `conventions/extract` works end to end; Phase 4 reuses and extends it | 2026-10-22 | user |
+| D12 | Phase 3 parses TS/TSX/JS with the **tree-sitter grammars ast-grep uses, via CGO** (go-tree-sitter v0.25.0); the backend build stage enables CGO (`golang:1.27-alpine3.23` + `build-base`), the runtime stays Alpine + git | 2026-10-22 | user (spec D3002) |
+| D13 | The Go import graph **fixes Node's adapter bugs** instead of copying them: tsconfig `paths`/`baseUrl` resolve the way TypeScript does, a bad tsconfig or unreadable file no longer empties the graph, symlinks are not followed — ranks differ from Node on alias-using repos | 2026-10-22 | user (spec D3019) |
 
 Corrections: the Node schema after migrations 0000–0020 has **46 tables**, not 44 as research 02 and
 the Phase 1 spec state (verified on a migrated database and in Drizzle's `0020_snapshot.json`).

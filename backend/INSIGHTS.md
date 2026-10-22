@@ -11,6 +11,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-22 — a CTE + self-join UPDATE over rows bulk-inserted earlier in the same transaction (repointel ResolveReferences): the planner has no statistics for them and re-ran a HashAggregate per row — 67 s for 138k references on a 5,000-file repo (AC3066 failed at 92 s) → one GROUP BY … HAVING count(DISTINCT …)=1 subquery (≈1 s); don't ANALYZE inside the tx (SHARE UPDATE EXCLUSIVE serialises concurrent index jobs) — TestResolveReferences_FreshRowsResolveInTime
 - 2026-10-22 — path.Ext/filepath.Ext('.ts') is ".ts" while Node path.extname('.ts') is '' — files named .ts/.js would be walked in Go but not in Node → guard with domain.IsSupported, not SyntaxForPath alone (walk.json case dotfile_named_like_an_extension)
 - 2026-10-22 — decoding clone bytes with []rune(string) or strings.ToValidUTF8: replacement differs from Node Buffer.toString('utf8') (WHATWG: one U+FFFD per maximal subpart, e.g. E2 82 → 1, ED A0 80 → 3) and changes content hashes → use repointel/domain.DecodeText (matched Node on 40k random sequences)
 - 2026-10-22 — porting JS float math with Go constants: constant arithmetic is exact (1-0.85, 0.1+0.2 are not rounded like JS) and the compiler may fuse multiply-add → keep such terms in runtime float64 variables with explicit float64() conversions; graphology pagerank parity is bit-exact only that way (repointel/domain/rank/pagerank.go)
@@ -22,6 +23,10 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-22 — cmd/server test newConfig leaves RepoIntelEnabled false (zero value) while production defaults it on → tests of the ranker / flag-on behaviour set it explicitly (phase3_test.go intelOn)
+- 2026-10-22 — freezing a transaction mid-flight in an integration test: an AFTER INSERT … FOR EACH STATEMENT trigger calling pg_advisory_xact_lock(hashtextextended(key,0)) while the test holds the key on another connection; detect 'blocked' by polling pg_locks (locktype='advisory' AND NOT granted) — repointel/integration helpers_test.go (AC3040/3041/3056/3071)
+- 2026-10-22 — repointel stats key set of a normal full index is pinned by TestFull_WritesAllSevenTables and the index-state contract test → add new stats keys only conditionally (rowBudgetReached, graphFailed)
+- 2026-10-22 — Postgres text and jsonb reject U+0000 (SQLSTATE 22021 / 22P05) and invalid UTF-8, so one hostile clone file failed the whole index → clone-derived strings go through repointel/domain.SanitizeText before insert, and git-reported paths that no row can hold are dropped before IN lists (storablePaths; integration/unstorable_test.go)
 - 2026-10-22 — repointel/parity/testdata: the root .gitignore ignores node_modules/, coverage/, .next/, so walk fixtures with those dirs cannot be committed as trees → declare them in corpus/walk/cases.json and materialize in a temp dir (generator and Go test)
 - 2026-10-22 — platform/gitcli: run() output goes through limitedBuffer, which silently truncates stdout at 1 MiB → a command whose result must be complete uses runCapped and fails with ErrOutputTooLarge (DiffNames)
 - 2026-10-22 — platform/postgres: one failed SQL statement aborts the whole InTx transaction and nested InTx only joins it → wrap statements that may fail but must not poison the tx in Tx.Savepoint (ROLLBACK TO; TestSavepoint_SQLErrorDoesNotPoisonTheTransaction)
@@ -35,6 +40,8 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-22 — go-tree-sitter Node.Child(i) and Node.Parent() are O(position)/O(depth×siblings) (Parent searches from the root): a 400 KB file of '(' took ≈27 min to extract with Child(i) loops → iterate with a TreeCursor and tick a ctx guard every ~1,024 nodes (repointel treesitter guard, hostile_test.go)
+- 2026-10-22 — go-tree-sitter@v0.25.0 ParseWithOptions leaks its options via pointer.Save with no Unref (≈186 B per parse; reusing one options object doesn't help) ⚠ conflicts with 2026-10-22 entry recommending ProgressCallback → parse with ParseWith(cb, nil) + Parser.SetCancellationFlag on a C.calloc'd word raised by context.AfterFunc, freed after stop()/done (cgo forbids C retaining a Go pointer); SetCancellationFlag is removed in 0.26 (repointel/adapters/treesitter/parser.go withTree, leak_test.go)
 - 2026-10-22 — tiktoken-go/tokenizer@v0.7.0 codec.Count treats special-token literals (<|endoftext|>) as ordinary text, equal to js-tiktoken encode(t, [], []) — not Node's TiktokenTokenizer, which falls back to chars/4 → compare against encode(t,[],[]) in goldens (repointel/adapters/tokenizer tests)
 - 2026-10-22 — Go regexp (RE2) (?i) folds s with U+017F and k with U+212A (also inside [a-z]), JS /i without u does not → port JS case-insensitive regexes with explicit [sS]-style classes (repointel/domain/facts.go ci(); 120k-case cross-check vs Node)
 - 2026-10-22 — go-tree-sitter@v0.25.0 has no finalizers: Parser, Tree, TreeCursor (and Query) leak C memory unless closed; Node values need no Close; passes go test -race (checkptr) with one Parser per goroutine; ProgressCallback returning true cancels with a nil tree, parser reusable after Reset → close on every path, never share a Parser across goroutines
@@ -53,6 +60,9 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Recurring Errors & Fixes
 <!-- error message → cause → fix -->
+- 2026-10-22 — go build ./cmd/... (one main package matched) from backend/ writes a 25 MB 'server' binary into the tree → use go build -o /dev/null ./...; /backend/server is now git-ignored
+- 2026-10-22 — golden generator (tsx) fails with a spurious EADDRINUSE when TMPDIR is a long path (IPC socket path too long, e.g. the Claude scratchpad) → run it with a short TMPDIR such as /tmp/ac68
+- 2026-10-22 — repointel tests under -race: several large files parsed in parallel each exceed the 2,000 ms ParseTimeout (the index goes partial with 'parse timed out') although production parses them in ms → build fixtures from many small files, not a few 5,000-line ones
 - 2026-10-22 — 'illegal byte order mark' / literal emoji in Go test sources written via heredoc or the Edit/Write tools: escapes like \uFEFF get normalized into the raw character → write such escapes with python (chr(92)) and grep the result
 - 2026-10-22 — golden reproducibility check with git add -N + git diff --exit-code always fails (intent-to-add stages empty blobs, every file shows as new) → stage content with git add after run 1, or diff -r a copy of the first run
 - 2026-10-22 — `\restrict <token>` / `\unrestrict` lines in a pg_dump 16.15 --schema-only output break any migration runner (psql meta-commands) → strip them (and SET/set_config/COMMENT ON EXTENSION) when regenerating a baseline from a dump
@@ -60,6 +70,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Session Notes
 <!-- YYYY-MM-DD — one-line summary of a meaningful session -->
+- 2026-10-22 — Phase 3 (repo-intel) implemented in 5 waves; review gate arch PASS, security PASS after r1 fixes (3 MEDIUM hostile-clone DoS + 5 LOW closed), plan-verify PASS; AC3066 5,000-file index 28.7 s after the ResolveReferences rewrite — see docs/migration/STATUS.md
 - 2026-10-22 — Phase 2 (agents, skills, conventions, project-context + minimal LLM layer) implemented in 4 waves of parallel implementer lanes; review gate arch PASS, security PASS (4 LOW fixed), plan-verify 220 PASS/0 FAIL; left: AC301 + Phase 1 AC97 UI walkthroughs — see docs/migration/STATUS.md
 - 2026-10-22 — security LOW #1/#2 fixed (Host port validation, ALLOWED_HOSTS fail-closed) and AC95/AC96 passed on a throwaway compose project; only AC97 (needs GitHub token) left before Phase 2 — see docs/migration/STATUS.md
 - 2026-10-22 — Phase 1 implemented in 3 waves (S1–S19) + security fix round; review gate: arch PASS, security PASS (2 LOW open), plan-verify 185 PASS/0 FAIL/4 manual; left: AC95–AC97 manual checks, 2 LOW host/ALLOWED_HOSTS hardening — see docs/migration/STATUS.md
