@@ -11,6 +11,8 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-22 — net/http clients that call LLM providers must not follow redirects: Go strips Authorization on a cross-host redirect but keeps custom headers like Anthropic's x-api-key, and resends the POST body on 307/308 (security r1/r2) → copy the client and set CheckRedirect to return http.ErrUseLastResponse (llm adapters, settings/adapters/providers)
+- 2026-10-22 — platform/postgres GORM logger without ParameterizedQueries inlines all SQL values into failed (ERROR) and slow (WARN) query lines — a 409 duplicate skill wrote the whole skill body to the log (security r2 N2) → keep ParameterizedQueries: true in postgres.Open (TestSkills_FailedInsertDoesNotLogTheBody)
 - 2026-10-22 — ordering names in tests or queries by the default collation: it puts no-then-chains before n-plus-one-gate, while the API (GET /agents, D203) orders by name COLLATE "C" → use COLLATE "C" wherever byte order is expected (seed TestSeed_WritesAgentsSkillsAndLinks failed on exactly this)
 - 2026-10-22 — internal/platform/httpx hostName: Go net/http accepts a Host header whose port part is not numeric (Host: localhost:3100.evil.com reached handlers, security r2, live-checked) — cutting at the first ':' turned it into an allowed host → only an empty or 1–5-digit port counts as a match; a non-empty ALLOWED_HOSTS without a valid entry must fail closed, never disable the check
 - 2026-10-22 — internal/platform/httpx + transports: reading the request body as JSON regardless of Content-Type let any website send text/plain POST/PUT (no preflight) that overwrote saved secrets — security review r1, confirmed live → read bodies only via httpx.ReadJSONBody (JSON only for application/json; text/plain → 422 "Expected object, received string"), keep the foreign-Origin 403 and ALLOWED_HOSTS guards in httpx.New
@@ -46,6 +48,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Session Notes
 <!-- YYYY-MM-DD — one-line summary of a meaningful session -->
+- 2026-10-22 — Phase 2 (agents, skills, conventions, project-context + minimal LLM layer) implemented in 4 waves of parallel implementer lanes; review gate arch PASS, security PASS (4 LOW fixed), plan-verify 220 PASS/0 FAIL; left: AC301 + Phase 1 AC97 UI walkthroughs — see docs/migration/STATUS.md
 - 2026-10-22 — security LOW #1/#2 fixed (Host port validation, ALLOWED_HOSTS fail-closed) and AC95/AC96 passed on a throwaway compose project; only AC97 (needs GitHub token) left before Phase 2 — see docs/migration/STATUS.md
 - 2026-10-22 — Phase 1 implemented in 3 waves (S1–S19) + security fix round; review gate: arch PASS, security PASS (2 LOW open), plan-verify 185 PASS/0 FAIL/4 manual; left: AC95–AC97 manual checks, 2 LOW host/ALLOWED_HOSTS hardening — see docs/migration/STATUS.md
 - 2026-10-21 — backend skeleton: Echo v5 + GORM, error envelope/404/CORS/health matching the Node API, Alpine+git image, compose stack on 3100/3101/5433; left: Phase 1 spec → plan → implementation

@@ -3,49 +3,62 @@
 Last updated: 2026-10-22 · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
-**Phase 1 (platform + settings, repos, pulls, polling, workspace — 16 routes) is implemented and
-passed the review gate.** Manual checks AC95/AC96 passed on 2026-10-22 and both security LOWs are
-fixed; only AC97 (needs the user's GitHub token) is open before Phase 2.
+**Phase 1 (16 routes) and Phase 2 (agents, skills, conventions, project-context — 38 routes, plus a
+minimal LLM layer pulled forward from Phase 4, README D11) are implemented and passed the review
+gate.** Open before Phase 3: two manual UI walkthroughs that need the user's credentials — Phase 1
+AC97 (GitHub token) and Phase 2 AC301 (OpenAI or OpenRouter key).
 
-| Item | State |
-|---|---|
-| Spec | `specs/2026-10-21-go-backend-phase-1.md` — ready-for-planning, decisions D1–D12 |
-| Plan | `docs/plans/2026-10-21-go-backend-phase-1.md` — approved, 3 waves, S1–S19 all done |
-| Backend gate | `make backend-check` green (gofmt, build, vet, `go test -race -shuffle=on -count=1 ./...` incl. testcontainers) |
-| Frontend | contract test `pnpm exec vitest run src/test/go-backend-contracts.test.ts` 22/22; `biome lint` passes |
-| Stack | `make up` → db, backend, frontend healthy on 127.0.0.1:5433/3101/3100; migrate + seed run at startup |
-
-## Review gate (reports in `.sdd/review/2026-10-21-go-backend-phase-1/`, git-ignored, local only)
-| Reviewer | r1 | r2 (fix delta) |
+| Item | Phase 1 | Phase 2 |
 |---|---|---|
-| Architecture (`architecture-reviewer`) | PASS, 1 MEDIUM (GORM in `cmd/`) | **PASS**, 0 findings — rule amended (README D10) |
-| Security | **BLOCK**: HIGH CSRF via `text/plain`, MEDIUM DNS rebinding, 2 LOW | **PASS** — HIGH/MEDIUM closed (README D9), 2 new LOW (below) |
-| Plan verification (`plan-verifier`) | 185 PASS · 0 FAIL · 4 CANNOT_VERIFY | 185 PASS · 0 FAIL · same 4 CANNOT_VERIFY |
+| Spec | `specs/2026-10-21-go-backend-phase-1.md` | `specs/2026-10-22-go-backend-phase-2.md` — FR201–FR262, AC201–AC303, D201–D223 (D208 300 s job limit: user) |
+| Plan | `docs/plans/2026-10-21-go-backend-phase-1.md` — S1–S19 done | `docs/plans/2026-10-22-go-backend-phase-2.md` (+ `.context.md`) — S1–S25 done, 4 waves |
+| Backend gate | `make backend-check` green (gofmt, build, vet, `go test -race -shuffle=on -count=1 ./...` incl. testcontainers) — 57 packages | |
+| Frontend | `pnpm exec vitest run src/test/go-backend-contracts.test.ts` 61/61 (22 Phase 1 + 38 Phase 2 goldens + mock-scan assertion) | |
+| Stack | `make up` → db, backend, frontend healthy on 127.0.0.1:5433/3101/3100; rebuilt 2026-10-22 with Phase 2 (seed added 4 agents, 9 skills, 9 links to the existing workspace) | |
 
-Manual checks and LOW fixes after r2 (2026-10-22):
-| Item | Result |
-|---|---|
-| AC95 fresh volumes | **PASS** — throwaway project `devdigest-go-ac` (ports 3200/3201/5434, own volumes): backend container started right after db healthy (06:28:24.8Z), first healthy check 06:28:30.5Z (≈6 s, limit 60 s); `/health/ready` 200; headless Chromium on `/` ends on "Pull requests · DevDigest" for `acme/payments-api` |
-| AC96 persistence | **PASS** — fake OpenAI key saved via test-connection, `octocat/Hello-World` cloned; after `up -d --build --force-recreate backend` (new container id) secrets-status `openai:true`, `/workspace` `cloned:true`, clone HEAD intact. Project, volumes and images removed afterwards; real `devdigest_go_*` volumes untouched |
-| S19.tests | covered by AC95/AC96 above; AC97 part still open |
-| Security LOW #1 | **Fixed** — `httpx.hostName` requires an empty or 1–5-digit port (`localhost:3100.evil.com` → 403, live-checked) |
-| Security LOW #2 | **Fixed** — `config.Load` rejects an `ALLOWED_HOSTS` with no entry (`","`); `hostCheck` fails closed (403 for all) when no entry is well-formed and logs each malformed entry. Only an empty list (tests) switches it off |
+## Phase 2 review gate (reports in `.sdd/review/2026-10-22-go-backend-phase-2/`, git-ignored)
+| Reviewer | r1 (`c35aba5`) | r2 (fix delta `26620b5`) |
+|---|---|---|
+| Architecture (`architecture-reviewer`) | **PASS**, 1 optional LOW (skills importer test uses the real in-memory catalog) | not re-run (fixes are local) |
+| Security | **PASS**, 2 LOW: model output in the failed-scan log; LLM clients follow redirects with the key | **PASS** — both closed; 2 new pre-existing LOW (test-connection client follows redirects; GORM logger inlines SQL values) → **fixed in `60241b1`** with regression tests, no r3 run |
+| Plan verification (`plan-verifier`) | 205 PASS · 3 FAIL · 14 CANNOT_VERIFY | **220 PASS · 0 FAIL · 2 CANNOT_VERIFY** (AC301 + S25 done-when, both the manual walkthrough) |
+
+Manual checks done: AC295 (`GET /repos/:id/context` on a 5,000-file clone, 500 docs: 0.044–0.060 s,
+limit 3 s; throwaway compose project), AC300 (grep review: Echo/GORM placement, migration 0001 only,
+no AutoMigrate, all bodies via `ReadJSONBody`, single `httpx.New`).
+
+Phase 2 decisions worth knowing (details in the spec/plan): seed agents/skills only into a new or
+empty workspace (D213); `conventions.extract` 300 s via per-kind job timeouts, clone/refresh keep
+120 s (D208); context "store files" are `context_files` rows, the clone is read-only (`platform/clonefs`);
+the conventions→skill merge route lives in skills and runs one cross-context transaction (plan P1);
+interrupted scans are failed before listen, non-fatally (Phase 1 AC33); `LLM_PROVIDER_OVERRIDE=mock`
+swaps every provider for a deterministic mock with a startup warning (D214).
 
 ## Next steps (in order)
-1. **Manual check AC97** — five UI flows with a real `GITHUB_TOKEN` (Settings, add repo, PR list, PR
-   detail with diff, comments). Needs the user's token.
-2. Follow-ups (README): pin base images by digest; `govulncheck` once CI exists.
-3. **Phase 2** (agents, skills, conventions, project-context — 38 routes): spec → plan → waves → review
-   gate, same flow (`spec-creator` → `implementation-planner` → `implementer` lanes → architecture +
-   security + plan verification).
+1. **Manual walkthroughs (user):**
+   - Phase 2 **AC301** — with a real OpenAI/OpenRouter key and a cloned public repo: create an agent and
+     pick a model; attach skills; import a skill from the catalog and from a GitHub blob URL; run a
+     conventions scan, accept two rules, merge them into a skill linked to the agent; attach a repo doc
+     to the agent; create/edit/rename/delete a store file; pick an OpenRouter model on Settings › Models.
+     Without a key: `LLM_PROVIDER_OVERRIDE=mock` in `.env`, `docker compose up -d backend`.
+   - Phase 1 **AC97** — five UI flows with a real `GITHUB_TOKEN`.
+2. Follow-ups (README): pin base images by digest; `govulncheck` once CI exists; optional arch LOW
+   (fake catalog in `skills/app` importer tests).
+3. **Phase 3** (repo-intel: indexing, rank, repo map — 2 routes): spec → plan → waves → review gate,
+   same flow. The conventions sampler then switches from the fallback walk to the ranker (spec D211).
 
-Recipe for a fresh-volume check (AC95/AC96) without touching the real volumes: an override file that
-renames `pgdata`/`backend_data` (e.g. `devdigest_go_ac_*`), `WEB_PORT=3200 API_PORT=3201 DB_PORT=5434`,
+Recipe for a fresh-volume check without touching the real volumes: an override file that renames
+`pgdata`/`backend_data` (e.g. `devdigest_go_ac_*`), `WEB_PORT=3200 API_PORT=3201 DB_PORT=5434`,
 `docker compose -p devdigest-go-ac -f docker-compose.yml -f <override> …`; confirm with
 `config | sed -n '/^volumes:/,$p'` before `down -v --rmi local`.
+
+## Phase 1 record
+Review gate r1/r2 PASS (`.sdd/review/2026-10-21-go-backend-phase-1/`); AC95 (backend healthy ≈6 s after
+db, limit 60 s) and AC96 (key + clone survive a backend recreate) passed on a throwaway project; both
+r2 security LOWs (Host port validation, `ALLOWED_HOSTS` fail-closed) fixed in `70f6f67`.
 
 ## How to resume
 - Read `AGENTS.md`, `backend/AGENTS.md`, `backend/INSIGHTS.md`, `docs/migration/README.md`, this file.
 - `make help` lists all tasks; Go commands need `env -u GOROOT` (IDE-inherited Windows GOROOT).
-- Commits on the branch: baseline `dfb9fc7`, docs `cafa185`, Makefile `6be89f7`, wave 1 `c54f630`,
-  waves 2–3 `5b778ef`, security fixes + review docs `5334ec0`, LOW fixes + AC95/AC96 (latest).
+- Commits: Phase 1 `c54f630`…`70f6f67`; Phase 2 spec `430ec39`, plan `949acca`, waves `1205b67`,
+  `2b24b9c`, `fab4f7b`, `c35aba5`, review fixes `26620b5`, `60241b1`.
