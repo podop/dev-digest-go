@@ -2,6 +2,7 @@ package postgres_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -731,5 +732,48 @@ func TestSeed_FailureInTheDemoReviewWritesNothing(t *testing.T) {
 		if n != 0 {
 			t.Errorf("rows in %s after failed seed = %d, want 0", table, n)
 		}
+	}
+}
+
+// PullRequestHasReviewOrRun answers from either table alone, and false when both are empty.
+func TestStore_PullRequestHasReviewOrRun(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	var prID string
+	if err := d.DB.Raw(`SELECT pr_id FROM reviews LIMIT 1`).Scan(&prID).Error; err != nil || prID == "" {
+		t.Fatalf("demo pull request id = %q, error = %v", prID, err)
+	}
+	has := func(t *testing.T) bool {
+		t.Helper()
+		var got bool
+		err := seedpg.NewStore(d.DB).InTx(t.Context(), func(ctx context.Context, tx seed.Tx) error {
+			var err error
+			got, err = tx.PullRequestHasReviewOrRun(ctx, prID)
+			return err
+		})
+		if err != nil {
+			t.Fatalf("PullRequestHasReviewOrRun(%q) error = %v", prID, err)
+		}
+		return got
+	}
+	if !has(t) {
+		t.Error("PullRequestHasReviewOrRun() = false with a review and a run, want true")
+	}
+	if err := d.DB.Exec(`UPDATE reviews SET run_id = NULL`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`DELETE FROM agent_runs`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !has(t) {
+		t.Error("PullRequestHasReviewOrRun() = false with a review only, want true")
+	}
+	if err := d.DB.Exec(`DELETE FROM reviews`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if has(t) {
+		t.Error("PullRequestHasReviewOrRun() = true with neither, want false")
 	}
 }

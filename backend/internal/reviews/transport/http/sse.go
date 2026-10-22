@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/labstack/echo/v5"
 
@@ -12,10 +13,53 @@ import (
 	"dev-digest-go/backend/internal/reviews/domain"
 )
 
+// Caps on concurrently open event streams. The API has no authentication and every open stream
+// holds a subscription, a forwarding goroutine and a connection, so a local client could otherwise
+// open streams without bound. The web app opens one stream per run it shows; 32 per run leaves
+// room for several tabs and reconnects, 256 overall for many runs of a multi-agent batch. Beyond
+// either cap the request is answered 429 rate_limited before the stream is opened.
+//
+// The route stays outside the request rate limit (see the Exempt list in the composition root), so
+// a 404 or 422 answer costs no token: those are one indexed lookup each, reachable from the local
+// machine only. Opened streams are what the caps bound.
+const (
+	MaxStreamsPerRun = 32
+	MaxStreams       = 256
+)
+
+// streamSlots counts the open streams, per run and overall.
+type streamSlots struct {
+	mu     sync.Mutex
+	perRun map[string]int
+	total  int
+}
+
+func newStreamSlots() *streamSlots { return &streamSlots{perRun: map[string]int{}} }
+
+// acquire takes a slot for the run; release returns it (call it exactly once). ok is false when
+// the run or the process is at its cap.
+func (s *streamSlots) acquire(runID string) (release func(), ok bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.total >= MaxStreams || s.perRun[runID] >= MaxStreamsPerRun {
+		return nil, false
+	}
+	s.total++
+	s.perRun[runID]++
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		s.total--
+		if s.perRun[runID]--; s.perRun[runID] <= 0 {
+			delete(s.perRun, runID)
+		}
+	}, true
+}
+
 // events answers GET /runs/:id/events (spec 7.4). Everything that can fail with a JSON error
 // (422, 404) happens before the stream is opened; afterwards the handler only returns nil: a
 // failed write means the client is gone, the request context ends when it disconnects, and the
-// subscription is always released. A live stream carries no status event and simply closes when
+// subscription and the stream slot are always released. A live stream carries no status event and simply closes when
 // the run completes.
 func (h *handler) events(c *echo.Context) error {
 	id, ws, err := h.scope(c)
@@ -38,6 +82,15 @@ func (h *handler) events(c *echo.Context) error {
 		hdr.Set("x-no-compression", "1")
 		return c.NoContent(http.StatusOK)
 	}
+
+	release, ok := h.streams.acquire(id)
+	if !ok {
+		c.Response().Header().Set("Retry-After", "5")
+		return c.JSON(http.StatusTooManyRequests, httpx.ErrorBody{Error: httpx.ErrorDetail{
+			Code: "rate_limited", Message: "Too many open event streams, retry shortly",
+		}})
+	}
+	defer release()
 
 	stream, err := httpx.OpenStream(c)
 	if err != nil {

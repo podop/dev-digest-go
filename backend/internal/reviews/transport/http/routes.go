@@ -20,8 +20,9 @@ type identities interface {
 }
 
 type handler struct {
-	api app.API
-	ids identities
+	api     app.API
+	ids     identities
+	streams *streamSlots
 }
 
 // AddRoutes registers the review routes:
@@ -44,7 +45,7 @@ type handler struct {
 //
 // The paths are the keys of the rate-limit configuration in the composition root: keep them.
 func AddRoutes(e *echo.Echo, api app.API, ids identities) {
-	h := &handler{api: api, ids: ids}
+	h := &handler{api: api, ids: ids, streams: newStreamSlots()}
 	e.POST("/pulls/:id/review", h.start)
 	e.GET("/runs/:id/events", h.events)
 	e.GET("/pulls/:id/runs/active", h.activeRuns)

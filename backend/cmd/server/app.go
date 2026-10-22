@@ -58,6 +58,7 @@ import (
 	reposdb "dev-digest-go/backend/internal/repos/adapters/postgres"
 	reposapp "dev-digest-go/backend/internal/repos/app"
 	reposhttp "dev-digest-go/backend/internal/repos/transport/http"
+	"dev-digest-go/backend/internal/reviewer/adapters/llmcall"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
 	"dev-digest-go/backend/internal/reviews/adapters/peers"
 	revpg "dev-digest-go/backend/internal/reviews/adapters/postgres"
@@ -361,7 +362,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Store:          reviewsStore,
 		Tx:             tx,
 		Bus:            runs,
-		Providers:      peers.NewProviders(llmClient),
+		Providers:      peers.NewProviders(llmClient, newLLMCaller(llmClient)),
 		RepoIntel:      peers.NewRepoIntel(intelReader),
 		ProjectContext: peers.NewProjectContext(pcSvc.WithGit(git)),
 		Engine:         reviewerapp.Run,
@@ -468,4 +469,14 @@ func listen(ctx context.Context, cfg config.Config, o options, w *wired, runner 
 	}
 	log.Info("api stopped")
 	return nil
+}
+
+// newLLMCaller binds the review engine's LLM adapter to the LLM client for the reviews context's
+// provider resolver: peers does not import the reviewer adapters, this composition root does.
+func newLLMCaller(client llmcall.Structured) peers.CallerFactory {
+	return func(c peers.CallerConfig) reviewerapp.LLM {
+		return llmcall.New(llmcall.Config{
+			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, SessionID: c.SessionID, OnUsage: c.OnUsage,
+		})
+	}
 }

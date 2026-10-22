@@ -191,8 +191,12 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 		}
 
 		if attempt > reprompts {
+			// Redact before cutting: a cut may leave half a key that no longer matches. The key
+			// of this call may have been rotated since, hence scrub and not only Redact.
+			issues := truncateUTF16(c.scrub(lastIssues, key), issuesSnippet)
+			raw := truncateUTF16(c.scrub(lastRaw, key), rawSnippet)
 			msg := fmt.Sprintf("%s structured output failed schema validation for %s after %d attempt(s). Last issues:\n%s\nLast raw output (%d chars): %s",
-				name, req.SchemaName, attempt, truncateUTF16(lastIssues, issuesSnippet), UTF16Len(lastRaw), truncateUTF16(lastRaw, rawSnippet))
+				name, req.SchemaName, attempt, issues, UTF16Len(lastRaw), raw)
 			return Result{}, apperr.ExternalService(c.scrub(msg, key))
 		}
 		messages = append(messages, Message{Role: Assistant, Content: res.Raw}, Message{Role: User, Content: reprompt})

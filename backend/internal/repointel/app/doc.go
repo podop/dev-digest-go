@@ -14,8 +14,8 @@
 //
 // CallerSignatures does not read the index tables except file_rank, which only orders the rows:
 // it parses the changed files in the clone and scans the clone with Node's reference rules
-// (domain.ReferenceLines), through the CallerScan ports given to NewReader by WithCallerScan. The
-// scan has its own walk (clonetree.ScanCallers), never follows a symbolic link, bounds the files,
+// (domain.ReferenceLines; one pass per file for all names: domain.ReferenceScanner), through the
+// CallerScan ports given to NewReader by WithCallerScan. The scan has its own walk (clonetree.ScanCallers), never follows a symbolic link, bounds the files,
 // the names and the rows, honours ctx and ends after 30 s with an error.
 //
 // The remaining operations of the contract are later-phase work and have no implementation here:

@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"runtime/debug"
 	"time"
@@ -44,6 +45,11 @@ func (e *Executor) runJob(ctx context.Context, br *batchRun, job domain.Job) {
 			e.log.Error("review: run crashed", "runId", job.RunID, "agent", agent.Name, "panic", e.logText(panicText(r)), "stack", string(debug.Stack()))
 		}
 	}()
+	// The run may have waited long for its agent slot, and the bus forgets a cancelled run after
+	// its TTL: without a cancel flag the row is the truth about whether the run may still start.
+	if e.endedWhileQueued(ctx, br, job, log) {
+		return
+	}
 	e.log.Info(fmt.Sprintf("review: agent %q started (%s/%s)", agent.Name, agent.Provider, agent.Model),
 		"runId", job.RunID, "agent", agent.Name, "provider", agent.Provider, "model", agent.Model, "prId", br.b.Pull.ID)
 
@@ -81,6 +87,39 @@ func (e *Executor) runJob(ctx context.Context, br *batchRun, job domain.Job) {
 	}
 	e.log.Error(fmt.Sprintf("review: agent %q failed", agent.Name),
 		"runId", job.RunID, "agent", agent.Name, "err", firstLine(ending.Note), "durationMs", e.sinceMS(start))
+}
+
+// endedWhileQueued handles a run whose row is no longer running although the bus holds no cancel
+// flag for it (the flag was lost with the bus state, 5 minutes after CancelRun): it must make no
+// provider, LLM, repo-intel or project-context call. A cancelled row gets the normal cancelled
+// ending (event, ended trace, completed bus; the store keeps its status and note); a failed, done
+// or deleted run is left alone and re-creates no bus state. A run with a flag takes the normal
+// path, whose cancel checkpoints end it (EC4021). A failed read lets the run start: the
+// conditional status updates still guard its ending.
+func (e *Executor) endedWhileQueued(ctx context.Context, br *batchRun, job domain.Job, log *runLog) bool {
+	if e.bus.IsCancelled(job.RunID) {
+		return false
+	}
+	run, err := e.store.FindRun(ctx, br.b.WorkspaceID, job.RunID)
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		e.log.Info("review: run skipped, it was deleted while queued", "runId", job.RunID, "agent", job.Agent.Name)
+		return true
+	case err != nil:
+		e.log.Debug("review: reading the queued run failed, starting it", "runId", job.RunID, "err", e.logText(err.Error()))
+		return false
+	case run.Status == domain.StatusRunning:
+		return false
+	case run.Status == domain.StatusCancelled:
+		e.log.Info("review: run skipped, it was cancelled while queued", "runId", job.RunID, "agent", job.Agent.Name)
+		e.endRun(ctx, endInput{
+			job: job, pull: br.b.Pull, log: log,
+			ending: domain.EndingFor(domain.ErrRunCancelled, true), announce: true,
+		})
+		return true
+	}
+	e.log.Info("review: run skipped, it is no longer running", "runId", job.RunID, "agent", job.Agent.Name, "status", string(run.Status))
+	return true
 }
 
 // execute is one agent's review of the pull request; it returns the persisted finding count. On

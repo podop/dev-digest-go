@@ -36,6 +36,10 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   a 10/min bucket. Features live in `internal/<context>/{domain,app,adapters/<tech>,transport/http}`;
   shared plumbing in `internal/platform/<what>` (httpx, postgres, apperr, secrets, gitcli, github,
   retry, logging). Dependencies point inward only.
+- `reviewer` (the review engine) is a shared kernel: `reviews/domain` may import `reviewer/domain`
+  and `reviews/app` may import `reviewer/app` types. Otherwise contexts reach each other only
+  through consumer-side ports wired in `cmd/` (peers adapters may import another context's
+  app/domain types); adapters never import other adapters (`cmd/` binds them, e.g. `newLLMCaller`).
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/`. GORM only in
   `adapters/postgres` packages, `internal/platform/postgres` and `cmd/` (the composition root may
   hold and pass the `*gorm.DB` handle, never query with it). Domain and app import neither.

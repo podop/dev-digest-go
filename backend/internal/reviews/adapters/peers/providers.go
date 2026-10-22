@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"dev-digest-go/backend/internal/llm"
-	"dev-digest-go/backend/internal/reviewer/adapters/llmcall"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 	reviewsapp "dev-digest-go/backend/internal/reviews/app"
@@ -12,20 +11,42 @@ import (
 
 // LLMClient is the part of *llm.Client the providers adapter uses.
 type LLMClient interface {
-	llmcall.Structured
 	// Ready reports whether a call to the provider can be made now ("<KEY> is not configured").
 	Ready(p llm.Provider) error
 	// Redact scrubs provider keys out of a text.
 	Redact(s string) string
 }
 
+// CallerConfig is the identity of one run's LLM calls.
+type CallerConfig struct {
+	Provider  llm.Provider
+	Model     string
+	RunID     string
+	SessionID string
+	// OnUsage receives the usage of every response; nil = none.
+	OnUsage func(reviewer.Usage)
+}
+
+// CallerFactory builds the engine's LLM port for one run. cmd/server supplies it (it binds
+// reviewer/adapters/llmcall to the LLM client), so this adapter does not import another adapter.
+type CallerFactory func(CallerConfig) reviewerapp.LLM
+
 // Providers implements reviews/app.Providers over the LLM client.
-type Providers struct{ c LLMClient }
+type Providers struct {
+	c         LLMClient
+	newCaller CallerFactory
+}
 
 var _ reviewsapp.Providers = (*Providers)(nil)
 
-// NewProviders wraps the LLM client (*llm.Client).
-func NewProviders(c LLMClient) *Providers { return &Providers{c: c} }
+// NewProviders wraps the LLM client (*llm.Client) and the factory of the run's LLM port. A nil
+// factory is a wiring error and panics.
+func NewProviders(c LLMClient, newCaller CallerFactory) *Providers {
+	if c == nil || newCaller == nil {
+		panic("reviews/adapters/peers: NewProviders needs an LLM client and a caller factory")
+	}
+	return &Providers{c: c, newCaller: newCaller}
+}
 
 // Resolve checks that the provider can be called (its key is stored, or the mock override is on)
 // and returns the engine's LLM port bound to the run. It makes no call.
@@ -34,14 +55,12 @@ func (p *Providers) Resolve(_ context.Context, b reviewsapp.LLMBinding) (reviewe
 	if err := p.c.Ready(provider); err != nil {
 		return nil, err
 	}
-	cfg := llmcall.Config{
-		Client: p.c, Provider: provider, Model: b.Model, RunID: b.RunID, SessionID: b.SessionID,
-	}
+	cfg := CallerConfig{Provider: provider, Model: b.Model, RunID: b.RunID, SessionID: b.SessionID}
 	if b.OnUsage != nil {
 		on := b.OnUsage
 		cfg.OnUsage = func(u reviewer.Usage) { on(u) }
 	}
-	return llmcall.New(cfg), nil
+	return p.newCaller(cfg), nil
 }
 
 // Redact scrubs provider keys out of a text.

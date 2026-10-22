@@ -3,6 +3,7 @@ package runbus_test
 import (
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -245,31 +246,40 @@ func TestBus_ListenerMayCallTheBus(t *testing.T) {
 	}
 }
 
+// TestBus_SlowSubscriberIsCutOff publishes while one subscriber reads nothing. Publish never
+// waiting for it is shown by the loop finishing at all (it would hang on a full queue); no
+// wall-clock bound is asserted. The healthy subscriber is read in step with the publisher, so it
+// can never be more than one event behind.
 func TestBus_SlowSubscriberIsCutOff(t *testing.T) {
 	bus := runbus.New(runbus.Options{})
 	slow := bus.Subscribe("r")
 	healthy := bus.Subscribe("r")
-	var got []int
-	var wg sync.WaitGroup
-	wg.Go(func() { got = drain(healthy) })
+	defer healthy.Close()
 
-	// Fast subscriber reads concurrently; the slow one reads nothing.
-	var worst time.Duration
-	for i := 1; i <= 1_100; i++ {
-		t0 := time.Now()
-		bus.Publish("r", "info", "m", nil)
-		worst = max(worst, time.Since(t0))
+	const total = 1_100
+	var got []int
+	published := make(chan struct{})
+	go func() {
+		defer close(published)
+		for range total {
+			bus.Publish("r", "info", "m", nil)
+			ev, ok := <-healthy.C()
+			if !ok {
+				return
+			}
+			got = append(got, ev.Seq)
+		}
+	}()
+	select {
+	case <-published:
+	case <-time.After(time.Minute): // a hang guard, not a latency bound
+		t.Fatal("Publish did not return while a subscriber was not reading")
 	}
-	if worst > 10*time.Millisecond {
-		t.Errorf("slowest Publish took %v, want <= 10ms", worst)
+	if diff := cmp.Diff(seqRange(1, total), got); diff != "" {
+		t.Errorf("healthy subscriber mismatch (-want +got):\n%s", diff)
 	}
 	if n := bus.Subscribers("r"); n != 1 {
 		t.Errorf("Subscribers after the cut-off = %d, want 1 (the healthy one)", n)
-	}
-	bus.Complete("r")
-	wg.Wait()
-	if len(got) != 1_100 {
-		t.Errorf("healthy subscriber saw %d events, want 1100", len(got))
 	}
 
 	// The slow stream holds the first 1,024 events and then ends.
@@ -277,6 +287,73 @@ func TestBus_SlowSubscriberIsCutOff(t *testing.T) {
 		t.Errorf("slow subscriber's queued events mismatch (-want +got):\n%s", diff)
 	}
 	slow.Close() // already ended: no panic
+	bus.Complete("r")
+}
+
+// TestBus_PendingGrowsAndDrains keeps a subscriber a few hundred events behind, long enough for
+// the queue to be compacted, and checks no event is lost, repeated or reordered.
+func TestBus_PendingGrowsAndDrains(t *testing.T) {
+	bus := runbus.New(runbus.Options{})
+	sub := bus.Subscribe("r")
+	defer sub.Close()
+	const lag, total = 700, 5_000
+	var got []int
+	for i := 1; i <= total; i++ {
+		bus.Publish("r", "info", "m", nil)
+		if i > lag {
+			got = append(got, (<-sub.C()).Seq)
+		}
+	}
+	bus.Complete("r")
+	got = append(got, drain(sub)...)
+	if diff := cmp.Diff(seqRange(1, total), got); diff != "" {
+		t.Errorf("subscriber mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestBus_PendingAtTheBacklogIsKept: exactly Backlog pending live events are fine, one more ends
+// the stream, and the replay does not count.
+func TestBus_PendingAtTheBacklogIsKept(t *testing.T) {
+	bus := runbus.New(runbus.Options{Backlog: 4})
+	for range 10 { // a replay larger than the backlog
+		bus.Publish("r", "info", "m", nil)
+	}
+	sub := bus.Subscribe("r")
+	defer sub.Close()
+	for range 4 {
+		bus.Publish("r", "info", "m", nil)
+	}
+	if n := bus.Subscribers("r"); n != 1 {
+		t.Fatalf("Subscribers with 4 pending = %d, want 1", n)
+	}
+	bus.Publish("r", "info", "m", nil)
+	if n := bus.Subscribers("r"); n != 0 {
+		t.Errorf("Subscribers with 5 pending = %d, want 0", n)
+	}
+	if diff := cmp.Diff(seqRange(1, 14), drain(sub)); diff != "" {
+		t.Errorf("subscriber mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestBus_IdleSubscribersAreCheap guards F3a: the queue is not allocated up front. The cost per
+// subscriber was about 105 KB (a 1,024-event channel); it is now a few KB.
+func TestBus_IdleSubscribersAreCheap(t *testing.T) {
+	bus := runbus.New(runbus.Options{})
+	bus.Publish("r", "info", "m", nil)
+	const n = 500
+	subs := make([]*runbus.Subscription, 0, n)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	for range n {
+		subs = append(subs, bus.Subscribe("r"))
+	}
+	runtime.ReadMemStats(&after)
+	for _, s := range subs {
+		s.Close()
+	}
+	if per := (after.TotalAlloc - before.TotalAlloc) / n; per > 16<<10 {
+		t.Errorf("Subscribe allocated %d bytes per idle subscriber, want <= 16 KiB", per)
+	}
 }
 
 func TestBus_BacklogOption(t *testing.T) {

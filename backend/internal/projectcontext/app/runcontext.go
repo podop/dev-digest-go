@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 
 	"dev-digest-go/backend/internal/platform/gitcli"
@@ -104,7 +105,7 @@ func (s *Service) RunContext(ctx context.Context, in RunContextInput) (RunContex
 		sem <- struct{}{}
 		wg.Go(func() {
 			defer func() { <-sem }()
-			read[i], errs[i] = s.readRunDoc(ctx, in, commit, noClone, ref)
+			read[i], errs[i] = s.readRunDocSafely(ctx, in, commit, noClone, ref)
 		})
 	}
 	wg.Wait()
@@ -119,6 +120,22 @@ func (s *Service) RunContext(ctx context.Context, in RunContextInput) (RunContex
 		BudgetTokens: domain.RunBudgetTokens,
 		LogLine:      domain.RunLogLine(docs, total),
 	}, nil
+}
+
+// readRunDocSafely is readRunDoc on its own goroutine: a panic there would end the process, so it
+// becomes an unreadable document and a log line with the panic's type and stack, never its value
+// (it may quote document content).
+func (s *Service) readRunDocSafely(ctx context.Context, in RunContextInput, commit string, noClone bool, ref domain.RunDocRef) (doc domain.RunDoc, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if s.log != nil {
+				s.log.ErrorContext(ctx, "project context: reading a run document panicked",
+					"repoId", in.RepoID, "path", ref.Path, "panic", fmt.Sprintf("%T", r), "stack", string(debug.Stack()))
+			}
+			doc, err = domain.SkippedRunDoc(ref, domain.RunSourceRepo, domain.RunUnreadable), nil
+		}
+	}()
+	return s.readRunDoc(ctx, in, commit, noClone, ref)
 }
 
 // readRunDoc reads one document: a store file from the database, anything else at commit.

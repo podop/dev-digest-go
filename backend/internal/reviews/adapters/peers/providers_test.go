@@ -14,6 +14,7 @@ import (
 	"dev-digest-go/backend/internal/llm/adapters/mock"
 	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
 	"dev-digest-go/backend/internal/platform/retry"
+	"dev-digest-go/backend/internal/reviewer/adapters/llmcall"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 	"dev-digest-go/backend/internal/reviews/adapters/peers"
@@ -23,6 +24,21 @@ import (
 type keyMap map[string]string
 
 func (k keyMap) Get(name string) string { return k[name] }
+
+// testClient is what the tests hand to the providers: the client's readiness and redaction plus
+// its structured call, which the production wiring (cmd/server) binds through llmcall.
+type testClient interface {
+	peers.LLMClient
+	llmcall.Structured
+}
+
+func newProviders(c testClient) *peers.Providers {
+	return peers.NewProviders(c, func(cc peers.CallerConfig) reviewerapp.LLM {
+		return llmcall.New(llmcall.Config{
+			Client: c, Provider: cc.Provider, Model: cc.Model, RunID: cc.RunID, SessionID: cc.SessionID, OnUsage: cc.OnUsage,
+		})
+	})
+}
 
 func realClient(t *testing.T, ks keyMap, adapters map[llm.Provider]llm.Adapter) *llm.Client {
 	t.Helper()
@@ -38,7 +54,7 @@ func realClient(t *testing.T, ks keyMap, adapters map[llm.Provider]llm.Adapter) 
 func TestProviders_MissingKeyFailsWithoutACall(t *testing.T) { // FR4038, EC4017
 	// An adapter pointed at a closed port would fail differently if a call were made.
 	ad := openaicompat.NewOpenRouter(openaicompat.Options{BaseURL: "http://127.0.0.1:1"})
-	p := peers.NewProviders(realClient(t, keyMap{}, map[llm.Provider]llm.Adapter{llm.OpenRouter: ad}))
+	p := newProviders(realClient(t, keyMap{}, map[llm.Provider]llm.Adapter{llm.OpenRouter: ad}))
 	port, err := p.Resolve(t.Context(), reviewsapp.LLMBinding{Provider: "openrouter", Model: "m", RunID: "r"})
 	if port != nil || err == nil || err.Error() != "OPENROUTER_API_KEY is not configured" {
 		t.Errorf("Resolve() = %v, %v, want nil and %q", port, err, "OPENROUTER_API_KEY is not configured")
@@ -46,7 +62,7 @@ func TestProviders_MissingKeyFailsWithoutACall(t *testing.T) { // FR4038, EC4017
 }
 
 func TestProviders_UnknownProvider(t *testing.T) {
-	p := peers.NewProviders(realClient(t, keyMap{}, nil))
+	p := newProviders(realClient(t, keyMap{}, nil))
 	if _, err := p.Resolve(t.Context(), reviewsapp.LLMBinding{Provider: "nope"}); err == nil {
 		t.Error("Resolve(unknown provider) error = nil, want an error")
 	}
@@ -54,7 +70,7 @@ func TestProviders_UnknownProvider(t *testing.T) {
 
 func TestProviders_MockOverrideNeedsNoKeyAndReportsUsage(t *testing.T) {
 	ad := map[llm.Provider]llm.Adapter{llm.OpenRouter: mock.New(llm.OpenRouter, mock.Options{})}
-	p := peers.NewProviders(realClient(t, keyMap{}, ad))
+	p := newProviders(realClient(t, keyMap{}, ad))
 	var usages []reviewer.Usage
 	port, err := p.Resolve(t.Context(), reviewsapp.LLMBinding{
 		Provider: "openrouter", Model: "m", RunID: "r", SessionID: "o/n#1:A",
@@ -77,7 +93,7 @@ func TestProviders_MockOverrideNeedsNoKeyAndReportsUsage(t *testing.T) {
 
 func TestProviders_ResolveWithoutOnUsage(t *testing.T) {
 	ad := map[llm.Provider]llm.Adapter{llm.OpenAI: mock.New(llm.OpenAI, mock.Options{})}
-	p := peers.NewProviders(realClient(t, keyMap{}, ad))
+	p := newProviders(realClient(t, keyMap{}, ad))
 	port, err := p.Resolve(t.Context(), reviewsapp.LLMBinding{Provider: "openai", Model: "m", RunID: "r"})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
@@ -90,7 +106,7 @@ func TestProviders_ResolveWithoutOnUsage(t *testing.T) {
 }
 
 func TestProviders_RedactScrubsStoredKeys(t *testing.T) {
-	p := peers.NewProviders(realClient(t, keyMap{"OPENAI_API_KEY": "sk-secret-123"}, nil))
+	p := newProviders(realClient(t, keyMap{"OPENAI_API_KEY": "sk-secret-123"}, nil))
 	got := p.Redact("boom: Bearer sk-secret-123 rejected")
 	if strings.Contains(got, "sk-secret-123") || !strings.Contains(got, "[REDACTED]") {
 		t.Errorf("Redact() = %q, want the key replaced by [REDACTED]", got)
@@ -112,7 +128,7 @@ func (f *fakeLLMClient) Structured(_ context.Context, r llm.Request) (llm.Result
 
 func TestProviders_BindsTheRunIntoTheRequest(t *testing.T) {
 	f := &fakeLLMClient{}
-	p := peers.NewProviders(f)
+	p := newProviders(f)
 	port, err := p.Resolve(t.Context(), reviewsapp.LLMBinding{Provider: "anthropic", Model: "claude-x", RunID: "run-7", SessionID: "o/n#2:Ag"})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)

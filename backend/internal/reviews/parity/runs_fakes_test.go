@@ -31,6 +31,7 @@ import (
 	"dev-digest-go/backend/internal/platform/retry"
 	"dev-digest-go/backend/internal/platform/runbus"
 	pcdomain "dev-digest-go/backend/internal/projectcontext/domain"
+	"dev-digest-go/backend/internal/reviewer/adapters/llmcall"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 	"dev-digest-go/backend/internal/reviews/adapters/peers"
@@ -310,7 +311,9 @@ func newRunHarness(t *testing.T, sc *runScenario, refs map[string]string, opts h
 
 	h.exec = executor.New(executor.Deps{
 		Store: h.store, Tx: h.tx, Bus: h.bus,
-		Providers:      peers.NewProviders(h.client),
+		Providers: peers.NewProviders(h.client, func(c peers.CallerConfig) reviewerapp.LLM {
+			return llmcall.New(llmcall.Config{Client: h.client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, SessionID: c.SessionID, OnUsage: c.OnUsage})
+		}),
 		RepoIntel:      &fakeRepoIntel{h: h},
 		ProjectContext: &fakeProjectContext{h: h},
 		Engine:         reviewerapp.Run,

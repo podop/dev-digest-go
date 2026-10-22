@@ -5,10 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,6 +22,7 @@ import (
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 	"dev-digest-go/backend/internal/reviews/app"
 	"dev-digest-go/backend/internal/reviews/domain"
+	reviewshttp "dev-digest-go/backend/internal/reviews/transport/http"
 )
 
 // goldenPath is the Node SSE recording of the parity step (fastify-sse-v2 4.2.2 over a socket).
@@ -354,4 +359,118 @@ func waitClosed(t *testing.T, s *chanSub) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("subscription was not closed")
 	}
+}
+
+// streamFarm opens event streams against a server whose fake API hands out a fresh chanSub per
+// stream and remembers them in order.
+type streamFarm struct {
+	srv  *httptest.Server
+	mu   sync.Mutex
+	subs []*chanSub
+}
+
+func newStreamFarm(t *testing.T) *streamFarm {
+	t.Helper()
+	f := &streamFarm{}
+	api := &fakeAPI{events: func() (app.Subscription, error) {
+		s := newChanSub()
+		f.mu.Lock()
+		f.subs = append(f.subs, s)
+		f.mu.Unlock()
+		return s, nil
+	}}
+	f.srv = newServer(t, api)
+	return f
+}
+
+// open starts a stream of the run and returns the status, the body when it was refused, and a
+// function that disconnects the client. An accepted stream is open once its first frame arrived.
+func (f *streamFarm) open(t *testing.T, run string) (status int, body string, disconnect func()) {
+	t.Helper()
+	ctx, cancel := contextWithCancel(t)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.srv.URL+"/runs/"+run+"/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := f.srv.Client().Do(req)
+	if err != nil {
+		t.Fatalf("GET events of %s: %v", run, err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b), cancel
+	}
+	return resp.StatusCode, "", func() { cancel(); _ = resp.Body.Close() }
+}
+
+func (f *streamFarm) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.subs)
+}
+
+func (f *streamFarm) sub(i int) *chanSub {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.subs[i]
+}
+
+func wantRateLimited(t *testing.T, what string, status int, body string) {
+	t.Helper()
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("%s: status = %d, want 429 (body %q)", what, status, body)
+	}
+	var got struct {
+		Error struct{ Code, Message string }
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil || got.Error.Code != "rate_limited" || got.Error.Message == "" {
+		t.Errorf("%s: body = %q (%v), want the error envelope with code rate_limited", what, body, err)
+	}
+}
+
+func TestEvents_OpenStreamsPerRunAreCapped(t *testing.T) {
+	f := newStreamFarm(t)
+	const runA, runB = otherID, "7e1d0000-0000-4000-8000-000000000002"
+	var first func()
+	for i := range reviewshttp.MaxStreamsPerRun {
+		status, _, disconnect := f.open(t, runA)
+		if status != http.StatusOK {
+			t.Fatalf("stream %d of the run: status = %d, want 200", i+1, status)
+		}
+		if i == 0 {
+			first = disconnect
+		}
+	}
+	status, body, _ := f.open(t, runA)
+	wantRateLimited(t, "stream over the per-run cap", status, body)
+	if n := f.count(); n != reviewshttp.MaxStreamsPerRun+1 {
+		t.Fatalf("subscriptions opened = %d, want %d", n, reviewshttp.MaxStreamsPerRun+1)
+	}
+	waitClosed(t, f.sub(reviewshttp.MaxStreamsPerRun)) // the refused request released its subscription
+
+	if status, _, _ := f.open(t, runB); status != http.StatusOK {
+		t.Errorf("stream of another run: status = %d, want 200 (the cap is per run)", status)
+	}
+
+	// Closing one stream frees its slot.
+	first()
+	waitClosed(t, f.sub(0))
+	if status, body, _ := f.open(t, runA); status != http.StatusOK {
+		t.Errorf("stream after one was closed: status = %d (%s), want 200", status, body)
+	}
+}
+
+func TestEvents_OpenStreamsOverallAreCapped(t *testing.T) {
+	f := newStreamFarm(t)
+	runID := func(i int) string { return fmt.Sprintf("7e1d0000-0000-4000-8000-%012d", i) }
+	for i := range reviewshttp.MaxStreams {
+		// Runs are filled to the per-run cap one after the other.
+		run := runID(i / reviewshttp.MaxStreamsPerRun)
+		if status, body, _ := f.open(t, run); status != http.StatusOK {
+			t.Fatalf("stream %d: status = %d (%s), want 200", i+1, status, body)
+		}
+	}
+	status, body, _ := f.open(t, runID(1_000))
+	wantRateLimited(t, "stream over the overall cap", status, body)
 }

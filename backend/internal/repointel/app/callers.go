@@ -69,7 +69,8 @@ type callerKey struct{ file, symbol string }
 // in the name) the changed files declare, each labelled with its enclosing top-level symbol and
 // that symbol's signature, at most limit rows (zero or less: domain.DefaultCallerLimit). It is
 // Node's getCallerSignatures (spec section 7.11, D4004): the changed files are parsed in the
-// clone, the clone is scanned with the reference rules of domain.ReferenceLines, never the
+// clone, the clone is scanned with the reference rules of domain.ReferenceLines (one pass per file for all
+// names, domain.ReferenceScanner), never the
 // index tables except file_rank, which only orders the rows (percentile descending, stable).
 // Rows come in name order (first declaring file wins), then path byte order, then line order.
 //
@@ -201,7 +202,14 @@ func (r *Reader) symbolsOf(ctx context.Context, file, text string) (syms []domai
 // found in it. The result equals Node's name-major loop: rows of a name appear in file order and
 // line order, a name stops collecting at limit rows, and once the names up to some index hold
 // limit rows between them the later names are dropped (their rows could never be returned).
+// A file is scanned for all names in one pass (domain.ReferenceScanner), which looks at ctx every
+// few thousand units of work, so the scan timeout and a cancel are honoured inside a file.
 func (r *Reader) scanFiles(ctx context.Context, root string, files []string, names []callerName, limit int) error {
+	symbols := make([]string, len(names))
+	for i := range names {
+		symbols[i] = names[i].name
+	}
+	scanner := domain.NewReferenceScanner(symbols)
 	wanted := len(names)
 	for _, rel := range files {
 		if err := ctx.Err(); err != nil {
@@ -217,35 +225,38 @@ func (r *Reader) scanFiles(ctx context.Context, root string, files []string, nam
 		text := domain.DecodeText(raw)
 
 		var (
-			syms   []domain.Symbol
+			encl   enclosingIndex
 			parsed bool
+			hitErr error
 		)
-		for i := range names[:wanted] {
+		skip := func(i int) bool {
+			return i >= wanted || len(names[i].rows) >= limit || names[i].declFile == rel
+		}
+		hit := func(i, line int) (bool, error) {
 			n := &names[i]
-			if len(n.rows) >= limit || n.declFile == rel || !strings.Contains(text, n.name) {
-				continue
+			if !parsed {
+				parsed = true
+				syms, err := r.symbolsOf(ctx, rel, text)
+				if err != nil {
+					hitErr = err
+					return false, err
+				}
+				encl = newEnclosingIndex(syms)
 			}
-			for _, line := range domain.ReferenceLines(text, n.name) {
-				if len(n.rows) >= limit {
-					break
-				}
-				if !parsed {
-					parsed = true
-					if syms, err = r.symbolsOf(ctx, rel, text); err != nil {
-						return err
-					}
-				}
-				enc := enclosing(syms, line)
-				if enc == nil || enc.Signature == "" {
-					continue
-				}
+			if enc := encl.at(line); enc != nil && enc.Signature != "" {
 				key := callerKey{file: rel, symbol: enc.Name}
-				if _, dup := n.seen[key]; dup {
-					continue
+				if _, dup := n.seen[key]; !dup {
+					n.seen[key] = struct{}{}
+					n.rows = append(n.rows, domain.CallerSignature{File: rel, Symbol: enc.Name, Signature: enc.Signature})
 				}
-				n.seen[key] = struct{}{}
-				n.rows = append(n.rows, domain.CallerSignature{File: rel, Symbol: enc.Name, Signature: enc.Signature})
 			}
+			return len(n.rows) < limit, nil
+		}
+		if err := scanner.Scan(ctx, text, skip, hit); err != nil {
+			if hitErr != nil {
+				return hitErr
+			}
+			return fmt.Errorf("caller signatures: %w", err)
 		}
 		total := 0
 		for i := range names[:wanted] {
@@ -268,17 +279,39 @@ func allFull(names []callerName, limit int) bool {
 	return true
 }
 
-// enclosing is the symbol a hit at line belongs to: the one with the largest start line at or
-// before it whose name has no '.'; of equal lines the first extracted.
-func enclosing(syms []domain.Symbol, line int) *domain.Symbol {
-	var best *domain.Symbol
+// enclosingIndex answers "which symbol does a hit at line belong to" in O(log n): the symbol
+// with the largest start line at or before it whose name has no '.'; of equal lines the first
+// extracted.
+type enclosingIndex struct{ syms []*domain.Symbol }
+
+func newEnclosingIndex(syms []domain.Symbol) enclosingIndex {
+	cand := make([]*domain.Symbol, 0, len(syms))
 	for i := range syms {
-		s := &syms[i]
-		if s.Line <= line && !strings.Contains(s.Name, ".") && (best == nil || s.Line > best.Line) {
-			best = s
+		if !strings.Contains(syms[i].Name, ".") {
+			cand = append(cand, &syms[i])
 		}
 	}
-	return best
+	slices.SortStableFunc(cand, func(a, b *domain.Symbol) int { return a.Line - b.Line })
+	out := cand[:0]
+	for _, s := range cand {
+		if len(out) == 0 || out[len(out)-1].Line != s.Line {
+			out = append(out, s)
+		}
+	}
+	return enclosingIndex{syms: out}
+}
+
+func (e enclosingIndex) at(line int) *domain.Symbol {
+	i, _ := slices.BinarySearchFunc(e.syms, line, func(s *domain.Symbol, line int) int {
+		if s.Line <= line {
+			return -1
+		}
+		return 1
+	})
+	if i == 0 {
+		return nil
+	}
+	return e.syms[i-1]
 }
 
 // rankRows sets Rank from file_rank and, when the repo has any rank for the files, sorts by it

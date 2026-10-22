@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -80,6 +81,19 @@ func (g *fakeGit) BlobAt(_ context.Context, _, _, commit, path string, max int64
 		return nil, gitcli.ErrBlobMissing
 	}
 	return b, nil
+}
+
+// panicGit panics on the blobs named in panics and serves the others.
+type panicGit struct {
+	fakeGit
+	panics map[string]any
+}
+
+func (g *panicGit) BlobAt(ctx context.Context, owner, name, commit, path string, max int64) ([]byte, error) {
+	if v, ok := g.panics[path]; ok {
+		panic(v)
+	}
+	return g.fakeGit.BlobAt(ctx, owner, name, commit, path, max)
 }
 
 func newRunService(t *testing.T, st *runStore, g gitReader) *Service {
@@ -411,4 +425,40 @@ func TestRunContext_ReadConcurrency(t *testing.T) {
 			}
 		}
 	})
+}
+
+// A panic in one reader must neither crash the process nor lose the other documents: the document
+// becomes unreadable and the log line names the panic's type, not its value.
+func TestRunContext_ReaderPanicMarksTheDocUnreadable(t *testing.T) {
+	st := &runStore{agentPaths: []string{"docs/ok.md", "docs/boom.md", "docs/boom2.md"}}
+	g := &panicGit{
+		fakeGit: fakeGit{commit: "c0ffee", blobs: map[string][]byte{"docs/ok.md": []byte("fine")}},
+		panics:  map[string]any{"docs/boom.md": "secret document content", "docs/boom2.md": errors.New("also secret")},
+	}
+	var logs strings.Builder
+	svc, err := NewService(st, nil, nil, domain.DefaultGlobs, slog.New(slog.NewJSONHandler(&logs, nil)))
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	svc = svc.WithGit(g)
+	in := runIn
+	in.Skills = nil
+
+	got, err := svc.RunContext(t.Context(), in)
+	if err != nil {
+		t.Fatalf("RunContext() error = %v, want the panics absorbed", err)
+	}
+	want := map[string]domain.RunStatus{
+		"docs/ok.md": domain.RunIncluded, "docs/boom.md": domain.RunUnreadable, "docs/boom2.md": domain.RunUnreadable,
+	}
+	if diff := cmp.Diff(want, docStatus(got.Docs)); diff != "" {
+		t.Errorf("RunContext() statuses mismatch (-want +got):\n%s", diff)
+	}
+	out := logs.String()
+	if strings.Count(out, "reading a run document panicked") != 2 {
+		t.Errorf("log = %s, want one line per panic", out)
+	}
+	if strings.Contains(out, "secret") {
+		t.Errorf("log = %s, want no panic value", out)
+	}
 }

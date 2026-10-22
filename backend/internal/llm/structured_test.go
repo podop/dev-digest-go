@@ -137,6 +137,28 @@ func TestStructured_failureTextIsCut(t *testing.T) {
 	}
 }
 
+// A key straddling the 400-char cut must be redacted whole: cutting first would leave its prefix.
+func TestStructured_failureTextRedactsBeforeCutting(t *testing.T) {
+	t.Parallel()
+	for _, pos := range []int{380, 390, 396} {
+		ad := &fakeAdapter{reply: answer(`"` + strings.Repeat("x", pos) + openAIKey + strings.Repeat("y", 600) + `"`)}
+		c, _ := newClient(t, ad, newKeys("OPENAI_API_KEY", openAIKey), nil)
+		req := baseRequest()
+		req.Reprompts = llm.NoReprompts
+		_, err := c.Structured(t.Context(), req)
+		var ae *apperr.Error
+		if !errors.As(err, &ae) {
+			t.Fatalf("key at %d: Structured() error = %v, want apperr", pos, err)
+		}
+		if strings.Contains(ae.Message, "sk-") {
+			t.Errorf("key at %d: message = %q, want no part of the key", pos, ae.Message)
+		}
+		if pos == 380 && !strings.Contains(ae.Message, "[REDACTED]") { // later positions cut the marker itself
+			t.Errorf("key at %d: message = %q, want the redaction marker", pos, ae.Message)
+		}
+	}
+}
+
 func TestStructured_missingKeyThenSaved(t *testing.T) {
 	t.Parallel()
 	ad := &fakeAdapter{reply: answer(validAnswer)}

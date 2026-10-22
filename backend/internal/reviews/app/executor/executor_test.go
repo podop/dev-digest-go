@@ -507,6 +507,118 @@ func TestExecutor_CancelWhileTheDiffLoadsStillRecordsSkillsAndMakesNoCall(t *tes
 	}
 }
 
+// queuedHarness starts a 2-run batch with one agent slot; run-1 sits in the engine until release
+// is closed, so run-2 waits for its slot. It returns once run-1 is inside the engine.
+func queuedHarness(t *testing.T) (h *harness, release chan struct{}) {
+	t.Helper()
+	h = newHarness(t, Options{AgentConcurrency: 1}, fixedClock)
+	release = make(chan struct{})
+	entered := make(chan struct{})
+	h.engine.script = func(ctx context.Context, _ reviewerapp.Input, _ reviewerapp.LLM, _ reviewerapp.Events, _ reviewerapp.Options) (reviewer.Outcome, error) {
+		select {
+		case <-entered:
+		default:
+			close(entered)
+		}
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return defaultOutcome(), nil
+	}
+	h.exec.Start(t.Context(), h.batch(2))
+	<-entered
+	return h, release
+}
+
+// A run cancelled while it waited for its slot must stay cancelled when the bus has meanwhile
+// forgotten the cancel (TTL eviction): no provider, repo-intel, project-context or LLM work.
+func TestExecutor_QueuedRunCancelledAndEvictedDoesNoWork(t *testing.T) {
+	h, release := queuedHarness(t)
+
+	// What Service.CancelRun does, then the bus TTL passes.
+	h.bus.Publish("run-2", reviewer.EventInfo, domain.CancellationRequestedMsg, nil)
+	h.bus.Cancel("run-2")
+	h.store.mu.Lock()
+	h.store.runs["run-2"].status = domain.StatusCancelled
+	h.store.mu.Unlock()
+	h.bus.Complete("run-2")
+	h.bus.evict("run-2")
+
+	close(release)
+	h.wait()
+
+	if got := len(h.engine.inputs); got != 1 {
+		t.Errorf("engine runs = %d, want 1 (the cancelled queued run must not review)", got)
+	}
+	if got := h.prov.binding("run-2"); got.RunID != "" {
+		t.Errorf("provider resolved for the cancelled queued run: %+v", got)
+	}
+	if len(h.projc.inputs) != 1 || h.projc.inputs[0].AgentID != "agent-1" {
+		t.Errorf("project-context inputs = %+v, want run-1's only", h.projc.inputs)
+	}
+	rec := h.store.run("run-2")
+	if rec.status != domain.StatusCancelled || rec.ended != 1 || rec.trace == nil || !rec.trace.Ended {
+		t.Errorf("run-2 row = %+v, want cancelled (kept) with one ending and an ended trace", rec)
+	}
+	if rec.completion != nil && (rec.completion.TokensIn != 0 || rec.completion.FindingsCount != 0) {
+		t.Errorf("run-2 completion = %+v, want zero usage and no findings", rec.completion)
+	}
+	if !h.hasEvent("run-2", reviewer.EventError, "Run cancelled by user") || !h.bus.isCompleted("run-2") {
+		t.Errorf("run-2 events = %v completed = %v, want the cancelled ending and a completed bus", h.events("run-2"), h.bus.isCompleted("run-2"))
+	}
+	if got := h.store.run("run-1").status; got != domain.StatusDone {
+		t.Errorf("run-1 status = %q, want done", got)
+	}
+}
+
+func TestExecutor_QueuedRunThatEndedOrVanishedDoesNoWork(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		change func(h *harness)
+		want   domain.RunStatus // "" = the row is gone
+	}{
+		{"failed meanwhile", func(h *harness) {
+			h.store.mu.Lock()
+			h.store.runs["run-2"].status = domain.StatusFailed
+			h.store.mu.Unlock()
+		}, domain.StatusFailed},
+		{"done meanwhile", func(h *harness) {
+			h.store.mu.Lock()
+			h.store.runs["run-2"].status = domain.StatusDone
+			h.store.mu.Unlock()
+		}, domain.StatusDone},
+		{"deleted meanwhile", func(h *harness) { h.store.deleteRun("run-2") }, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, release := queuedHarness(t)
+			tc.change(h)
+			close(release)
+			h.wait()
+
+			if got := len(h.engine.inputs); got != 1 {
+				t.Errorf("engine runs = %d, want 1", got)
+			}
+			rec := h.store.run("run-2")
+			if rec.status != tc.want || rec.completion != nil || rec.trace != nil || rec.ended != 0 {
+				t.Errorf("run-2 row = %+v, want status %q and untouched", rec, tc.want)
+			}
+		})
+	}
+}
+
+// A failed status read must not strand the run: it starts as before.
+func TestExecutor_FindRunFailureStillRunsTheJob(t *testing.T) {
+	h := newHarness(t, Options{}, fixedClock)
+	h.store.findRunEr = errors.New("connection reset")
+	h.exec.Start(t.Context(), h.batch(1))
+	h.wait()
+
+	if got := h.store.run("run-1").status; got != domain.StatusDone {
+		t.Errorf("status = %q, want done", got)
+	}
+}
+
 func TestExecutor_PersistFailureFailsTheRunAndRollsBack(t *testing.T) {
 	h := newHarness(t, Options{}, fixedClock)
 	h.store.insertReviewEr = errors.New("disk full")

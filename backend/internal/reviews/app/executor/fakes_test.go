@@ -146,6 +146,13 @@ func (b *fakeBus) CompleteAll() {
 	}
 }
 
+// evict forgets a run's state, as the real bus does once the TTL after Complete has passed.
+func (b *fakeBus) evict(runID string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.runs, runID)
+}
+
 func (b *fakeBus) isCompleted(runID string) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -190,6 +197,7 @@ type fakeStore struct {
 	skills         map[string][]domain.ReviewSkill
 	skillsErr      error
 	insertReviewEr error
+	findRunEr      error
 	// beforeComplete runs inside CompleteRunIfRunning before the status check.
 	beforeComplete func(runID string)
 }
@@ -232,6 +240,19 @@ func (s *fakeStore) run(id string) runRec {
 		return *r
 	}
 	return runRec{}
+}
+
+func (s *fakeStore) FindRun(_ context.Context, _, runID string) (domain.RunState, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.findRunEr != nil {
+		return domain.RunState{}, s.findRunEr
+	}
+	r := s.runs[runID]
+	if r == nil {
+		return domain.RunState{}, domain.ErrNotFound
+	}
+	return domain.RunState{ID: runID, Status: r.status}, nil
 }
 
 func (s *fakeStore) PullFiles(ctx context.Context, _ string) ([]reviewer.PatchFile, error) {

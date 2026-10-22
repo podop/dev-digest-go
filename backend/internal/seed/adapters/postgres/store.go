@@ -437,14 +437,17 @@ func (t *txStore) LinkAgentSkills(ctx context.Context, agentID string, skillIDs 
 }
 
 func (t *txStore) PullRequestHasReviewOrRun(ctx context.Context, prID string) (bool, error) {
-	var found bool
-	err := t.tx.WithContext(ctx).Raw(
-		`SELECT EXISTS (SELECT 1 FROM reviews WHERE pr_id = ?) OR EXISTS (SELECT 1 FROM agent_runs WHERE pr_id = ?)`,
-		prID, prID).Scan(&found).Error
-	if err != nil {
-		return false, fmt.Errorf("count reviews and runs: %w", err)
+	db := t.tx.WithContext(ctx)
+	for _, table := range []any{&reviewRow{}, &agentRunRow{}} {
+		var ids []string
+		if err := db.Model(table).Where("pr_id = ?", prID).Limit(1).Pluck("id", &ids).Error; err != nil {
+			return false, fmt.Errorf("find reviews and runs: %w", err)
+		}
+		if len(ids) > 0 {
+			return true, nil
+		}
 	}
-	return found, nil
+	return false, nil
 }
 
 func (t *txStore) FindAgentID(ctx context.Context, workspaceID, name string) (string, bool, error) {

@@ -77,8 +77,8 @@ func (b *Bus) get(runID string) *run {
 }
 
 // Publish numbers and stamps an event and delivers it to the live subscribers. After Complete it
-// only appends to the retained buffer. A subscriber whose queue is full is ended instead of
-// waited for. data is nil or a JSON document.
+// only appends to the retained buffer. A subscriber with more than the backlog of events pending
+// is ended instead of waited for. data is nil or a JSON document.
 func (b *Bus) Publish(runID, kind, msg string, data json.RawMessage) Event {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -90,9 +90,7 @@ func (b *Bus) Publish(runID, kind, msg string, data json.RawMessage) Event {
 		return ev
 	}
 	for s := range r.subs {
-		select {
-		case s.ch <- ev:
-		default:
+		if !s.offer(ev, b.backlog) {
 			s.end()
 		}
 	}
@@ -100,26 +98,17 @@ func (b *Bus) Publish(runID, kind, msg string, data json.RawMessage) Event {
 }
 
 // Subscribe replays the buffer, then follows the live events. For a completed run the channel
-// carries the buffer and is closed.
+// carries the buffer and is closed. The caller must read the channel to its end or Close the
+// subscription.
 func (b *Bus) Subscribe(runID string) *Subscription {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	r := b.get(runID)
-	s := &Subscription{bus: b, run: r}
-	if r.completed {
-		s.ch = make(chan Event, len(r.buffer))
-	} else {
-		s.ch = make(chan Event, len(r.buffer)+b.backlog)
+	replay := slices.Clip(r.buffer) // a view: the buffer only grows at its end
+	s := newSubscription(b, r, replay, r.completed)
+	if !r.completed {
+		r.subs[s] = struct{}{}
 	}
-	for _, ev := range r.buffer {
-		s.ch <- ev
-	}
-	if r.completed {
-		s.closed = true
-		close(s.ch)
-		return s
-	}
-	r.subs[s] = struct{}{}
 	return s
 }
 
