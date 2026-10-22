@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 
 	"dev-digest-go/backend/internal/repointel/domain"
 )
@@ -120,25 +122,86 @@ func (r *Reader) persistentBlast(ctx context.Context, repoID string, changed []s
 	return res, nil
 }
 
+// maxConcurrentBlastScans is how many degraded clone scans run at once in one Reader (one per
+// process). A scan is CPU-bound on one core for up to the scan timeout and holds a few files'
+// text at a time (at most about 2 MB each, decoded and extracted: tens of MB), so two keep a
+// core free on a small host and bound the memory of all scans at a few tens of MB. Callers of
+// the same repo and changed set share one scan (blastFlights), so the limit only meets
+// different repos or changed sets.
+const maxConcurrentBlastScans = 2
+
 // blastScan is the degraded path: Node's clone scan with the regex symbol extractor, bounded for
 // a hostile clone. It answers the empty degraded result (with reason) for an unknown repo, a repo
 // without a clone path, a missing clone, no changed file, a Reader built without WithCallerScan,
-// and when the scan's own time limit (the CallerScan timeout, 30 s) ends. The end of ctx itself
-// is an error.
+// and when the scan's own time limit (the CallerScan timeout, 30 s, counted from the moment the
+// call is accepted, a wait for a free scan slot included) ends. The end of ctx itself is an error.
+//
+// Concurrent calls with the same repo, reason and set of changed files share one scan, and at
+// most maxConcurrentBlastScans scans run at a time. A waiting caller stops waiting at once when
+// its ctx ends; the scan goes on for the others, and ends when every caller has left.
 func (r *Reader) blastScan(ctx context.Context, repoID string, changed []string, reason domain.DegradedReason) (domain.BlastResult, error) {
-	empty := emptyBlast(reason)
 	if r.scan == nil || len(changed) == 0 {
-		return empty, nil
+		return emptyBlast(reason), nil
 	}
+	res, err := r.blastFlights.Do(ctx, blastScanKey(repoID, reason, changed), nil,
+		func(fctx context.Context, _ func(struct{})) (domain.BlastResult, error) {
+			return r.runBlastScan(fctx, repoID, changed, reason)
+		})
+	if err != nil {
+		if ctx.Err() != nil { // the caller gave up
+			return domain.BlastResult{}, fmt.Errorf("blast radius: %w", ctx.Err())
+		}
+		return domain.BlastResult{}, err
+	}
+	return cloneBlast(res), nil
+}
+
+// blastScanKey identifies a scan: the changed files are a set (the walk, not their order,
+// orders the answer).
+func blastScanKey(repoID string, reason domain.DegradedReason, changed []string) string {
+	set := slices.Clone(changed)
+	slices.Sort(set)
+	set = slices.Compact(set)
+	return repoID + "\x00" + string(reason) + "\x00" + strings.Join(set, "\x00")
+}
+
+// cloneBlast gives each caller of a shared scan its own slices.
+func cloneBlast(r domain.BlastResult) domain.BlastResult {
+	r.ChangedSymbols = slices.Clone(r.ChangedSymbols)
+	r.Callers = slices.Clone(r.Callers)
+	if r.FactsByFile != nil {
+		m := make(map[string]domain.BlastFacts, len(r.FactsByFile))
+		for k, v := range r.FactsByFile {
+			m[k] = v
+		}
+		r.FactsByFile = m
+	}
+	return r
+}
+
+// runBlastScan is one shared scan: it waits for a scan slot and scans, both within the scan
+// time limit. ctx is the flight's, which ends when every caller has left.
+func (r *Reader) runBlastScan(ctx context.Context, repoID string, changed []string, reason domain.DegradedReason) (domain.BlastResult, error) {
+	empty := emptyBlast(reason)
 	sctx, cancel := context.WithTimeout(ctx, r.scan.Timeout)
 	defer cancel()
+
+	select {
+	case r.blastSlots <- struct{}{}:
+		defer func() { <-r.blastSlots }()
+	case <-sctx.Done():
+		if ctx.Err() != nil {
+			return domain.BlastResult{}, fmt.Errorf("blast radius: %w", ctx.Err())
+		}
+		return empty, nil // no free slot within the time limit
+	}
 
 	res, err := r.scanClone(sctx, repoID, changed, reason)
 	if err == nil {
 		return res, nil
 	}
 	switch {
-	case ctx.Err() != nil: // the caller gave up
+	case ctx.Err() != nil: // every caller gave up
 		return domain.BlastResult{}, fmt.Errorf("blast radius: %w", ctx.Err())
 	case sctx.Err() != nil: // our time limit
 		return empty, nil
@@ -190,8 +253,10 @@ type blastScanner struct {
 	// symbols are the changed symbols in walk then extraction order; the scan looks for
 	// symbols[i].Name in every other file.
 	symbols []domain.BlastSymbol
-	// enclosing caches the enclosing-symbol index of the files extracted so far (changed files
-	// and the caller files that had a hit).
+	// enclosing holds the enclosing-symbol index of the changed files, which collectSymbols
+	// extracts anyway and a caller scan can hit again. The index of any other file lives only
+	// while that file is scanned: a file is visited once, and an index kept per hit file would
+	// keep its text reachable for the rest of the scan.
 	enclosing map[string]domain.Enclosing
 
 	// rows[i] are the callers of symbols[i] in scan order; limit[i] is how many of them can still
@@ -232,6 +297,11 @@ func (s *blastScanner) collectSymbols(ctx context.Context, walked, changed []str
 		syms, err := domain.ExtractSymbols(ctx, domain.DecodeText(raw))
 		if err != nil {
 			return fmt.Errorf("blast radius: %w", err)
+		}
+		// The names are substrings of the file text; the symbols and the index outlive the
+		// text, so each name is copied once and the copy is shared.
+		for i := range syms {
+			syms[i].Name = strings.Clone(syms[i].Name)
 		}
 		s.enclosing[rel] = enclosingOf(syms)
 		for _, x := range syms {
@@ -289,7 +359,11 @@ func (s *blastScanner) collectCallers(ctx context.Context, files []string) error
 		}
 		text := domain.DecodeText(raw)
 
-		var hitErr error
+		var (
+			hitErr error
+			enc    domain.Enclosing
+			haveEn bool
+		)
 		skip := func(i int) bool {
 			return i >= s.wanted || len(s.rows[i]) >= s.limit[i] || s.symbols[i].File == rel
 		}
@@ -297,14 +371,21 @@ func (s *blastScanner) collectCallers(ctx context.Context, files []string) error
 			if i >= s.wanted {
 				return false, nil
 			}
-			enc, err := s.enclosingFor(ctx, rel, text)
-			if err != nil {
-				hitErr = err
-				return false, err
+			if !haveEn {
+				var err error
+				if enc, err = s.enclosingFor(ctx, rel, text); err != nil {
+					hitErr = err
+					return false, err
+				}
+				haveEn = true
 			}
 			label := domain.CallerLabel(enc, rel, line)
 			k := callerRowKey{rel, label, s.symbols[i].Name}
 			if _, dup := s.seen[k]; !dup {
+				// The label can be a substring of this file's text; the row and the seen set
+				// outlive it.
+				label = strings.Clone(label)
+				k.enclosing = label
 				s.seen[k] = struct{}{}
 				s.rows[i] = append(s.rows[i], domain.BlastCaller{File: rel, Symbol: label, ViaSymbol: s.symbols[i].Name, Line: line})
 				if s.sinceCheck++; s.sinceCheck >= pruneEvery {
@@ -324,8 +405,8 @@ func (s *blastScanner) collectCallers(ctx context.Context, files []string) error
 	return nil
 }
 
-// enclosingFor returns the enclosing-symbol index of a caller file, extracting its symbols on the
-// first hit.
+// enclosingFor returns the enclosing-symbol index of a file: the kept one of a changed file, else
+// one extracted from text for the caller to use while it scans that file.
 func (s *blastScanner) enclosingFor(ctx context.Context, rel, text string) (domain.Enclosing, error) {
 	if enc, ok := s.enclosing[rel]; ok {
 		return enc, nil
@@ -334,9 +415,7 @@ func (s *blastScanner) enclosingFor(ctx context.Context, rel, text string) (doma
 	if err != nil {
 		return domain.Enclosing{}, fmt.Errorf("blast radius: %w", err)
 	}
-	enc := enclosingOf(syms)
-	s.enclosing[rel] = enc
-	return enc, nil
+	return enclosingOf(syms), nil
 }
 
 // prune applies the row bound. The answer is the first domain.MaxBlastScanCallers rows in

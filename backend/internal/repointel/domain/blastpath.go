@@ -81,7 +81,8 @@ func NewEnclosing(syms []LineName) Enclosing {
 			out = append(out, s)
 		}
 	}
-	return Enclosing{syms: out}
+	// A copy: cand has the capacity of all the symbols, and a kept index must not hold it.
+	return Enclosing{syms: slices.Clone(out)}
 }
 
 // At returns the enclosing symbol of a reference at line; ok is false when none lies at or

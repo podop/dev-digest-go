@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"dev-digest-go/backend/internal/platform/inflight"
 	"dev-digest-go/backend/internal/repointel/domain"
 	"dev-digest-go/backend/internal/repointel/domain/rank"
 )
@@ -27,12 +28,21 @@ type Reader struct {
 	src     readerSource
 	enabled bool
 	scan    *CallerScan
+
+	// blastFlights shares one degraded blast scan among identical concurrent calls and
+	// blastSlots bounds the scans that run at once (maxConcurrentBlastScans).
+	blastFlights *inflight.Flights[domain.BlastResult, struct{}]
+	blastSlots   chan struct{}
 }
 
 // NewReader builds the read port; enabled is REPO_INTEL_ENABLED. Options add the operations that
 // read the clone (WithCallerScan).
 func NewReader(src readerSource, enabled bool, opts ...ReaderOption) *Reader {
-	r := &Reader{src: src, enabled: enabled}
+	r := &Reader{
+		src: src, enabled: enabled,
+		blastFlights: inflight.NewFlights[domain.BlastResult, struct{}](inflight.FlightsConfig{}),
+		blastSlots:   make(chan struct{}, maxConcurrentBlastScans),
+	}
 	for _, o := range opts {
 		o(r)
 	}

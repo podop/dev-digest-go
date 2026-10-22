@@ -165,13 +165,17 @@ func (s *Service) generate(ctx context.Context, workspaceID string, repo domain.
 		return domain.Tour{}, ended
 	}
 
-	res, err := s.callModel(bctx, repo, provider, model, buildInput(repo, facts, roots, todos), stats)
+	input, built := buildInput(bctx, repo, facts, roots, todos)
+	if !built {
+		return domain.Tour{}, endedBy(ctx, bctx)
+	}
+	res, err := s.callModel(bctx, repo, provider, model, input, stats)
 	if err != nil {
 		return domain.Tour{}, err
 	}
 	out, err := domain.ParseOutput(res.Data)
 	if err != nil {
-		return domain.Tour{}, failedCall(err)
+		return domain.Tour{}, failedCall(classInvalidOutput)
 	}
 	content, dropped := domain.NormalizeTour(out, facts.indexed)
 	stats.dropped = &droppedLog{
@@ -205,8 +209,9 @@ func (s *Service) generate(ctx context.Context, workspaceID string, repo domain.
 }
 
 // callModel makes the one structured call (reprompted once) and maps its failures: a missing key
-// is 422 provider_not_configured, anything else 502 generation_failed. Provider texts never
-// reach the response; they are kept as the error's cause for the server log only.
+// is 422 provider_not_configured, anything else 502 generation_failed. Provider texts may echo
+// repository content, so they reach neither the response nor the server log (the error's cause is
+// a content-free classification, NFR5002).
 func (s *Service) callModel(ctx context.Context, repo domain.Repo, provider llm.Provider, model string, in domain.TourInput, stats *runStats) (llm.Result, error) {
 	msgs := domain.BuildMessages(in)
 	messages := make([]llm.Message, len(msgs))
@@ -227,13 +232,13 @@ func (s *Service) callModel(ctx context.Context, repo domain.Repo, provider llm.
 		CorrelationID: "onboarding:" + repo.ID,
 	})
 	if err != nil {
-		if ae, ok := apperr.As(err); ok && ae.Kind == apperr.KindConfig {
+		class := classifyModelError(ctx, err)
+		if class == classNotConfigured {
 			return llm.Result{}, apperr.Validation(fmt.Sprintf("The %s provider is not configured", provider)).
 				WithCode(codeProviderNotConfig).
-				WithDetails(map[string]string{"provider": string(provider)}).
-				WithCause(err)
+				WithDetails(map[string]string{"provider": string(provider)})
 		}
-		return llm.Result{}, failedCall(err)
+		return llm.Result{}, failedCall(class)
 	}
 	stats.tokensIn, stats.tokensOut, stats.costUSD = ptr(res.TokensIn), ptr(res.TokensOut), res.CostUSD
 	return res, nil
@@ -250,9 +255,37 @@ func (s *Service) requireRepo(ctx context.Context, workspaceID, repoID string) (
 	return repo, nil
 }
 
-// failedCall is the generic 502 of a model call that did not give an answer.
-func failedCall(cause error) error {
-	return apperr.ExternalService("The model call failed").WithCode(codeGenerationFailed).WithCause(cause)
+// Classes of a failed model call, as they appear in the error's cause.
+const (
+	classNotConfigured = "not_configured"
+	classTimeout       = "timeout"
+	classCancelled     = "cancelled"
+	classInvalidOutput = "invalid_output"
+	classFailed        = "failed"
+)
+
+// classifyModelError names why the call failed without reading the error text, which carries
+// provider output and, after a schema failure, the model's own output.
+func classifyModelError(ctx context.Context, err error) string {
+	if ae, ok := apperr.As(err); ok && ae.Kind == apperr.KindConfig {
+		return classNotConfigured
+	}
+	switch {
+	case errors.Is(context.Cause(ctx), context.DeadlineExceeded):
+		return classTimeout
+	case ctx.Err() != nil:
+		return classCancelled
+	}
+	return classFailed
+}
+
+// failedCall is the generic 502 of a model call that did not give an answer. The error handler
+// logs an error's cause, so the cause is only a content-free class, never the provider's text,
+// which may echo repository content (NFR5002). The outcome line already names the provider and
+// model.
+func failedCall(class string) error {
+	return apperr.ExternalService("The model call failed").WithCode(codeGenerationFailed).
+		WithCause(fmt.Errorf("model call class=%s", class))
 }
 
 // endedBy reports why the generation has to stop, nil while it may go on: the budget ran out

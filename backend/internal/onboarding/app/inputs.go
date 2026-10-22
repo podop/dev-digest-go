@@ -138,9 +138,10 @@ func (s *Service) readFiles(ctx context.Context, repo domain.Repo, sha string, r
 }
 
 // buildInput assembles the prompt input (spec 7.10.2): excerpts of the root files, the signals,
-// and the index facts.
-func buildInput(repo domain.Repo, f indexFacts, roots domain.RootTexts, todos [][]domain.TodoLine) domain.TourInput {
-	in := domain.TourInput{
+// and the index facts. The redactions are the one CPU-heavy step over repository text: ctx is
+// checked before each, and built is false once it is done (the generation has ended).
+func buildInput(ctx context.Context, repo domain.Repo, f indexFacts, roots domain.RootTexts, todos [][]domain.TodoLine) (in domain.TourInput, built bool) {
+	in = domain.TourInput{
 		RepoName:      repo.FullName,
 		DefaultBranch: repo.DefaultBranch,
 		RepoMap:       f.repoMap,
@@ -149,8 +150,14 @@ func buildInput(repo domain.Repo, f indexFacts, roots domain.RootTexts, todos []
 		TodoLines:     domain.CollectTodoLines(todos),
 		UntestedFiles: domain.FindUntestedFiles(f.ranked, f.indexed),
 	}
+	if ctx.Err() != nil {
+		return in, false
+	}
 	if roots.Readme != nil {
 		in.Readme, _ = domain.ReadmeExcerpt(*roots.Readme)
+	}
+	if ctx.Err() != nil {
+		return in, false
 	}
 	if roots.PackageJSON != nil {
 		in.PackageScripts, _ = domain.PackageScripts(*roots.PackageJSON)
@@ -161,5 +168,5 @@ func buildInput(repo domain.Repo, f indexFacts, roots domain.RootTexts, todos []
 	if roots.EnvExample != nil {
 		in.EnvNames = domain.EnvVariableNames(*roots.EnvExample)
 	}
-	return in
+	return in, ctx.Err() == nil
 }

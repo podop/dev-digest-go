@@ -759,11 +759,13 @@ func TestShutdown_CancelsAndWaitsForRunningGenerations(t *testing.T) {
 	if err := f.svc.Shutdown(ctx); err != nil {
 		t.Fatalf("Shutdown() error = %v", err)
 	}
+	// Shutdown returns once the generation released its marker; Generate's return value reaches
+	// done a moment later, so wait briefly instead of polling once.
 	select {
 	case err := <-done:
 		wantAppErr(t, err, apperr.KindExternalService, "generation_failed", "The model call failed")
-	default:
-		t.Fatal("Shutdown() returned while the generation was still running")
+	case <-time.After(2 * time.Second):
+		t.Fatal("the generation did not end after Shutdown returned")
 	}
 	if len(f.store.Saved) != 0 {
 		t.Error("a generation cancelled by Shutdown stored a brief")

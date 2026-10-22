@@ -630,8 +630,9 @@ type pbBoundedBlobs struct {
 	inFlight int
 	peak     int
 	started  int
+	late     int           // reads that started with an already-cancelled context
 	hold     chan struct{} // closed to let reads finish
-	onRead   func(started int)
+	onRead   func(ctx context.Context, started int)
 }
 
 func (b *pbBoundedBlobs) Read(ctx context.Context, _, _, _, path string, _ int64) ([]byte, bool) {
@@ -639,13 +640,16 @@ func (b *pbBoundedBlobs) Read(ctx context.Context, _, _, _, path string, _ int64
 		return nil, false
 	}
 	b.mu.Lock()
+	if ctx.Err() != nil {
+		b.late++
+	}
 	b.started++
 	b.inFlight++
 	b.peak = max(b.peak, b.inFlight)
 	started := b.started
 	b.mu.Unlock()
 	if b.onRead != nil {
-		b.onRead(started)
+		b.onRead(ctx, started)
 	}
 	select {
 	case <-b.hold:
@@ -706,12 +710,19 @@ func TestOnboardingParity_BoundedReads(t *testing.T) {
 			defer cancel()
 			blobs := &pbBoundedBlobs{scan: scan, hold: make(chan struct{})}
 			var release, abort sync.Once
-			blobs.onRead = func(started int) {
+			blobs.onRead = func(readCtx context.Context, started int) {
 				if started == domain.MaxBlobReaders { // eight in flight: let the held reads finish
 					release.Do(func() { close(blobs.hold) })
 				}
 				if c.AbortAfterRead != nil && started == *c.AbortAfterRead {
-					abort.Do(cancel)
+					abort.Do(func() {
+						cancel()
+						select {
+						case <-readCtx.Done():
+						case <-time.After(5 * time.Second):
+							t.Error("the read context did not end after the request was cancelled")
+						}
+					})
 				}
 			}
 			svc := app.NewService(app.Deps{
@@ -729,8 +740,18 @@ func TestOnboardingParity_BoundedReads(t *testing.T) {
 				if blobs.started != c.Reads {
 					t.Errorf("%d reads, want %d", blobs.started, c.Reads)
 				}
-			} else if blobs.started < c.Reads || blobs.started > c.Reads+domain.MaxBlobReaders-1 {
-				t.Errorf("%d reads after the cancel at read %d, want %d..%d", blobs.started, c.Reads, c.Reads, c.Reads+domain.MaxBlobReaders-1)
+			} else {
+				// The generation context learns of the request's cancellation through a
+				// context.AfterFunc goroutine, so how many reads start in that short window depends
+				// on scheduling. What must hold: once the readers' context is cancelled, a read
+				// starts only in a worker that passed its check just before (at most the other
+				// seven), and the cancel stops the scan before the list is done under no load.
+				if blobs.started < c.Reads {
+					t.Errorf("%d reads, want at least the %d before the cancel", blobs.started, c.Reads)
+				}
+				if blobs.late > domain.MaxBlobReaders-1 {
+					t.Errorf("%d reads started with a cancelled context, want at most %d", blobs.late, domain.MaxBlobReaders-1)
+				}
 			}
 		})
 	}

@@ -71,6 +71,16 @@ func TestRedactSecrets_HostileInputsAreLinear(t *testing.T) {
 		"dots":             strings.Repeat("a.", size/2),
 		"quote key chain":  strings.Repeat(`"a-`, size/3),
 		"userinfo schemes": strings.Repeat("a://b:", size/6),
+		"value quote runs": strings.Repeat(`a:"\`, size/4),
+		"mixed quotes":     `a:'` + strings.Repeat(`b:"\`, size/4),
+		"bearer pairs":     strings.Repeat("a: bearer ", size/10),
+		"userinfo colons":  "a://" + strings.Repeat("b:", size/2),
+		"private keys":     strings.Repeat("-----BEGIN PRIVATE KEY-----", size/27),
+		"camel key":        "password" + strings.Repeat("Ab", size/2) + "=x",
+		"unicode spaces":   strings.Repeat("a \u2003", size/5),
+		"spaced pairs":     strings.Repeat("a"+strings.Repeat(" ", 50)+":", size/52),
+		"block bodies":     "password: |\n" + strings.Repeat("  x\n", size/4),
+		"unclosed refs":    strings.Repeat("k=${x ", size/6),
 	}
 	for name, in := range inputs {
 		t.Run(name, func(t *testing.T) {
@@ -79,6 +89,50 @@ func TestRedactSecrets_HostileInputsAreLinear(t *testing.T) {
 			domain.RedactSecrets(in)
 			if d := time.Since(start); d > 20*time.Second {
 				t.Errorf("RedactSecrets took %v on %d bytes", d, len(in))
+			}
+		})
+	}
+}
+
+// A run of `${` (F2 of the Phase 5 security review): each pair's `${...}` scan ran to the end of the
+// line before failing, so 512 KiB of `a:${` took a minute and 256 KiB (below) 15 s. The failed scan is now remembered, and
+// the output is unchanged (the Node cases above and the differential below).
+func TestRedactSecrets_RunsOfDollarBraceAreLinear(t *testing.T) {
+	const size = 256 * 1024
+	inputs := map[string]string{
+		"pairs":          strings.Repeat("a:${", size/4),
+		"secret keys":    strings.Repeat("token=${", size/8),
+		"closed at end":  strings.Repeat("a:${", size/4) + "}",
+		"after a space":  strings.Repeat("a:${", size/4) + " b:${}",
+		"in a long line": strings.Repeat("x ", 100) + strings.Repeat("a:${", size/4),
+	}
+	for name, in := range inputs {
+		t.Run(name, func(t *testing.T) {
+			start := time.Now()
+			domain.RedactSecrets(in)
+			if d := time.Since(start); d > 10*time.Second {
+				t.Errorf("RedactSecrets took %v on %d bytes, want linear time (well under a second without -race)", d, len(in))
+			}
+		})
+	}
+}
+
+// The remembered failed scan must not change what is redacted: a `${` scan that ended at a space
+// or the line end hides later references that start before that point only.
+func TestRedactSecrets_FailedDollarScansDoNotHideLaterMatches(t *testing.T) {
+	tests := []struct {
+		name, in, want string
+	}{
+		{"closed after failures", "a:${ token=${x}", "a:${ token=${x}"},
+		{"secret after a space", "a:${ password=hunter2", "a:${ password=<redacted>"},
+		{"nested openers then closed", "see token=${${${x} y", "see token=<redacted> y"},
+		{"unclosed secret value", "password=${abc", "password=<redacted>"},
+		{"unclosed twice", "api_key:${a:${b", "api_key:<redacted>"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := domain.RedactSecrets(tc.in); got != tc.want {
+				t.Errorf("RedactSecrets(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}

@@ -270,7 +270,7 @@ func skipSpace(s string, i int) int {
 // matchEmbeddedPair tries the pattern at byte offset p. On failure skip is the next offset worth
 // trying: p+1, or the end of the key when an unquoted key run was scanned (every start inside the
 // run ends at the same place and fails the same way, which keeps a long a-a-a-... line linear).
-func matchEmbeddedPair(s string, p int) (m pairMatch, ok bool, skip int) {
+func matchEmbeddedPair(s string, p int, st *pairState) (m pairMatch, ok bool, skip int) {
 	if p > 0 && (isWordByte(s[p-1]) || s[p-1] == '.') { // (?<![\w.])
 		return m, false, p + 1
 	}
@@ -305,7 +305,7 @@ func matchEmbeddedPair(s string, p int) (m pairMatch, ok bool, skip int) {
 	k++
 	k = skipSpace(s, k)
 	sepEnd := k
-	end, ok := matchPairValue(s, k)
+	end, ok := matchPairValue(s, k, st)
 	if !ok {
 		return m, false, fail
 	}
@@ -319,8 +319,15 @@ func btoi(b bool) int {
 	return 0
 }
 
+// pairState carries what one line's scans have already learned, so that hostile runs stay linear.
+type pairState struct {
+	// dollarFailEnd is the offset where a failed `${` scan stopped (a space, or the end of the
+	// line): another `${` whose scan starts before it cannot find a `}` either.
+	dollarFailEnd int
+}
+
 // matchPairValue matches the value alternatives at s[k:] in order and returns the end offset.
-func matchPairValue(s string, k int) (int, bool) {
+func matchPairValue(s string, k int, st *pairState) (int, bool) {
 	if k >= len(s) {
 		return 0, false
 	}
@@ -357,8 +364,9 @@ func matchPairValue(s string, k int) (int, bool) {
 			}
 		}
 	case '$': // \$\{[^}\s]*\}
-		if k+1 < len(s) && s[k+1] == '{' {
-			for i := k + 2; i < len(s); {
+		if k+1 < len(s) && s[k+1] == '{' && k+2 >= st.dollarFailEnd {
+			i := k + 2
+			for i < len(s) {
 				if s[i] == '}' {
 					return i + 1, true
 				}
@@ -368,6 +376,9 @@ func matchPairValue(s string, k int) (int, bool) {
 				}
 				i += w
 			}
+			// No `}` in s[k+2:i]: any later `${` starting before i fails the same way (the pairs of
+			// a line are matched left to right, so k only grows).
+			st.dollarFailEnd = i
 		}
 	}
 	// (?:(?:Bearer|Basic)\s+)?[^\s,{}[\]"']+
@@ -405,9 +416,10 @@ func scanPairWord(s string, i int) int {
 
 func redactEmbedded(line string) string {
 	var sb strings.Builder
+	var st pairState
 	last := 0
 	for p := 0; p < len(line); {
-		m, ok, skip := matchEmbeddedPair(line, p)
+		m, ok, skip := matchEmbeddedPair(line, p, &st)
 		if !ok {
 			p = skip
 			continue
