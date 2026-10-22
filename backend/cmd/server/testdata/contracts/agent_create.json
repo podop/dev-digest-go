@@ -1,0 +1,14 @@
+{
+  "ci_fail_on": "critical",
+  "description": "",
+  "enabled": true,
+  "id": "00000000-0000-4000-8000-000000000005",
+  "model": "gpt-5.4",
+  "name": "Contract Reviewer",
+  "output_schema": null,
+  "provider": "openai",
+  "repo_intel": true,
+  "strategy": "single-pass",
+  "system_prompt": "Review the diff carefully.",
+  "version": 1
+}

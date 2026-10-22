@@ -1,0 +1,19 @@
+{
+  "content": "# Notes\n\nSaved again.\n",
+  "doc_type": "specs",
+  "editable": true,
+  "name": "notes.md",
+  "path": ".devdigest/specs/notes.md",
+  "size_bytes": 22,
+  "source": "store",
+  "tokens": 6,
+  "used_by": 1,
+  "used_by_agents": [
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "name": "Contract Reviewer",
+      "via": "direct"
+    }
+  ],
+  "version": 2
+}

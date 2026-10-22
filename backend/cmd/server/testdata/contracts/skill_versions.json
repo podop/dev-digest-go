@@ -1,0 +1,18 @@
+[
+  {
+    "body": "Check the contract twice.",
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "description": "Covers the wire contract",
+    "message": "Edited body",
+    "skill_id": "00000000-0000-4000-8000-000000000015",
+    "version": 2
+  },
+  {
+    "body": "Check the contract.",
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "description": "Covers the wire contract",
+    "message": "Created",
+    "skill_id": "00000000-0000-4000-8000-000000000015",
+    "version": 1
+  }
+]

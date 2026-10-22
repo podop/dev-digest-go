@@ -1,0 +1,32 @@
+[
+  {
+    "agent_id": "00000000-0000-4000-8000-000000000005",
+    "config": {
+      "ci_fail_on": "critical",
+      "model": "gpt-5.4-mini",
+      "output_schema": null,
+      "provider": "openai",
+      "repo_intel": true,
+      "skills": [],
+      "strategy": "single-pass",
+      "system_prompt": "Review the diff carefully."
+    },
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "version": 2
+  },
+  {
+    "agent_id": "00000000-0000-4000-8000-000000000005",
+    "config": {
+      "ci_fail_on": "critical",
+      "model": "gpt-5.4",
+      "output_schema": null,
+      "provider": "openai",
+      "repo_intel": true,
+      "skills": [],
+      "strategy": "single-pass",
+      "system_prompt": "Review the diff carefully."
+    },
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "version": 1
+  }
+]

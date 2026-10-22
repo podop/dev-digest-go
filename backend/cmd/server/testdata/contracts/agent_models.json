@@ -1,0 +1,7 @@
+[
+  {
+    "id": "mock/reviewer",
+    "label": "Mock reviewer (LLM_PROVIDER_OVERRIDE=mock)",
+    "provider": "openai"
+  }
+]

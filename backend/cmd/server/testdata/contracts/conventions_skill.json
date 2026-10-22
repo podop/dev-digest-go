@@ -1,0 +1,24 @@
+{
+  "linked_agents": [
+    {
+      "enabled": true,
+      "id": "00000000-0000-4000-8000-000000000005",
+      "name": "Contract Reviewer"
+    }
+  ],
+  "skill": {
+    "body": "Follow the house rules.",
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "description": "",
+    "enabled": true,
+    "evidence_files": null,
+    "id": "00000000-0000-4000-8000-000000000021",
+    "name": "house-rules",
+    "source": "extracted",
+    "source_ref": "conventions:o/r",
+    "type": "convention",
+    "updated_at": "2026-01-01T00:00:00.000Z",
+    "used_by": 1,
+    "version": 1
+  }
+}

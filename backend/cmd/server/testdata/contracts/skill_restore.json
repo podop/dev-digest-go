@@ -1,0 +1,15 @@
+{
+  "body": "Check the contract.",
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "description": "Covers the wire contract",
+  "enabled": true,
+  "evidence_files": null,
+  "id": "00000000-0000-4000-8000-000000000015",
+  "name": "contract-skill",
+  "source": "manual",
+  "source_ref": null,
+  "type": "custom",
+  "updated_at": "2026-01-01T00:00:00.000Z",
+  "used_by": 0,
+  "version": 3
+}

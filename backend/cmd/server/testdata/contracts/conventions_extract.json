@@ -1,0 +1,14 @@
+{
+  "cost_usd": null,
+  "dropped": [],
+  "error": null,
+  "finished_at": null,
+  "id": "00000000-0000-4000-8000-000000000017",
+  "kept": 0,
+  "model": null,
+  "proposed": 0,
+  "repo_id": "00000000-0000-4000-8000-000000000016",
+  "sampled_files": [],
+  "started_at": "2026-01-01T00:00:00.000Z",
+  "status": "running"
+}

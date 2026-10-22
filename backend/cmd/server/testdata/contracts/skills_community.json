@@ -1,0 +1,114 @@
+[
+  {
+    "desc": "Checks changed server code against the OWASP Top 10 web risks.",
+    "id": "owasp-top-10-review",
+    "lang": "any",
+    "name": "owasp-top-10-review",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "security",
+      "owasp",
+      "web"
+    ],
+    "type": "security"
+  },
+  {
+    "desc": "Blocks SQL built from untrusted input instead of bound parameters.",
+    "id": "sql-injection-gate",
+    "lang": "sql",
+    "name": "sql-injection-gate",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "security",
+      "sql",
+      "database"
+    ],
+    "type": "security"
+  },
+  {
+    "desc": "Enforces the Rules of Hooks and effect-dependency hygiene.",
+    "id": "react-hooks-rules",
+    "lang": "typescript",
+    "name": "react-hooks-rules",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "react",
+      "frontend",
+      "hooks"
+    ],
+    "type": "convention"
+  },
+  {
+    "desc": "Catches accessibility regressions in changed JSX.",
+    "id": "a11y-jsx-audit",
+    "lang": "typescript",
+    "name": "a11y-jsx-audit",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "accessibility",
+      "a11y",
+      "react",
+      "frontend"
+    ],
+    "type": "rubric"
+  },
+  {
+    "desc": "Finds swallowed errors, floating promises and lost causes.",
+    "id": "error-handling-discipline",
+    "lang": "typescript",
+    "name": "error-handling-discipline",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "reliability",
+      "errors",
+      "node"
+    ],
+    "type": "convention"
+  },
+  {
+    "desc": "Requires schema validation where untrusted data enters the system.",
+    "id": "input-validation-boundaries",
+    "lang": "typescript",
+    "name": "input-validation-boundaries",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "security",
+      "validation",
+      "api"
+    ],
+    "type": "security"
+  },
+  {
+    "desc": "Flags tests that cannot fail or assert nothing meaningful.",
+    "id": "test-assertion-quality",
+    "lang": "any",
+    "name": "test-assertion-quality",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "testing",
+      "quality"
+    ],
+    "type": "rubric"
+  },
+  {
+    "desc": "Catches timing-dependent async tests before they turn flaky.",
+    "id": "async-test-hygiene",
+    "lang": "typescript",
+    "name": "async-test-hygiene",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "tags": [
+      "testing",
+      "flaky",
+      "async"
+    ],
+    "type": "rubric"
+  }
+]

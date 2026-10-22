@@ -4,16 +4,34 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  Agent,
+  AgentSkillLink,
+  AgentVersion,
+  AgentVersionConfig,
+  CommunitySkill,
   ConnTestResult,
+  ContextAttachments,
+  ContextDoc,
+  ContextDocPreview,
+  ContextList,
+  Convention,
+  ConventionScan,
+  ModelInfo,
   PrDetail,
   PrMeta,
   PrReviewComment,
   Repo,
   SecretsStatus,
   Settings,
+  Skill,
+  SkillAgentRef,
+  SkillImportPreview,
+  SkillStats,
+  SkillStatsSummary,
+  SkillVersion,
 } from "@devdigest/shared";
 
-// The Go backend's component tests record the response of every Phase-1 route in
+// The Go backend's component tests record the response of every Phase-1 and Phase-2 route in
 // backend/cmd/server/testdata/contracts. This file parses each recording with the vendored
 // Zod contracts the UI uses, so a drift on either side fails here. The contracts themselves
 // are never edited (frontend/AGENTS.md: src/vendor/shared is the wire contract).
@@ -24,6 +42,13 @@ const goldenDir = path.resolve(
 
 const uuid = z.string().uuid();
 const nullableString = z.string().nullable();
+const ok = z.object({ ok: z.literal(true) }).strict();
+const agentVersion = AgentVersion.extend({ config: AgentVersionConfig.strict() }).strict();
+const conventionsState = z
+  .object({ scan: ConventionScan.strict().nullable(), conventions: z.array(Convention.strict()) })
+  .strict();
+const contextPreview = ContextDocPreview.strict();
+const attachments = ContextAttachments.strict();
 
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
@@ -62,6 +87,54 @@ const contracts: Record<string, z.ZodTypeAny> = {
   acme_pull_detail: PrDetail.strict(),
   pull_comments: z.array(PrReviewComment.strict()),
   pull_comment_create: PrReviewComment.strict(),
+
+  // ---- Phase 2: agents ----
+  agents_list: z.array(Agent.strict()),
+  agent_get: Agent.strict(),
+  agent_create: Agent.strict(),
+  agent_update: Agent.strict(),
+  agent_delete: ok,
+  agent_versions: z.array(agentVersion),
+  agent_version_get: agentVersion,
+  agent_skills_list: z.array(AgentSkillLink.strict()),
+  agent_skills_set: z.array(AgentSkillLink.strict()),
+  agent_models: z.array(ModelInfo.strict()),
+  providers_models: z.array(ModelInfo.strict()),
+
+  // ---- Phase 2: skills ----
+  skills_list: z.array(Skill.strict()),
+  skills_stats: z.array(SkillStatsSummary.strict()),
+  skills_community: z.array(CommunitySkill.strict()),
+  skill_import_preview: SkillImportPreview.strict(),
+  skill_get: Skill.strict(),
+  skill_create: Skill.strict(),
+  skill_update: Skill.strict(),
+  skill_restore: Skill.strict(),
+  skill_delete: ok,
+  skill_versions: z.array(SkillVersion.strict()),
+  skill_version_get: SkillVersion.strict(),
+  skill_agents: z.array(SkillAgentRef.strict()),
+  skill_stats: SkillStats.extend({ used_by: z.array(SkillAgentRef.strict()) }).strict(),
+
+  // ---- Phase 2: conventions ----
+  conventions_empty: conventionsState,
+  conventions_get: conventionsState,
+  conventions_extract: ConventionScan.strict(),
+  convention_patch: Convention.strict(),
+  conventions_skill: z
+    .object({ skill: Skill.strict(), linked_agents: z.array(SkillAgentRef.strict()) })
+    .strict(),
+
+  // ---- Phase 2: project context ----
+  context_list: ContextList.extend({ docs: z.array(ContextDoc.strict()) }).strict(),
+  context_doc: contextPreview,
+  context_file_create: contextPreview,
+  context_file_save: contextPreview,
+  context_file_rename: contextPreview,
+  agent_context_get: attachments,
+  agent_context_put: attachments,
+  skill_context_get: attachments,
+  skill_context_put: attachments,
 };
 
 const read = (name: string): unknown =>
@@ -79,6 +152,18 @@ describe("Go backend golden responses", () => {
   it.each(Object.entries(contracts))("%s parses with its Zod contract", (name, schema) => {
     const result = schema.safeParse(read(name));
     expect(result.success, result.success ? "" : JSON.stringify(result.error.issues, null, 2)).toBe(true);
+  });
+
+  it("the Phase 2 scan golden is the mock scan: 3 kept rules, 1 dropped, cost 0.00042", () => {
+    const state = read("conventions_get") as {
+      scan: { kept: number; proposed: number; cost_usd: number; dropped: { reason: string }[] };
+      conventions: unknown[];
+    };
+    expect(state.scan.kept).toBe(3);
+    expect(state.scan.proposed).toBe(4);
+    expect(state.scan.cost_usd).toBe(0.00042);
+    expect(state.scan.dropped.map((d) => d.reason)).toEqual(["file_not_found"]);
+    expect(state.conventions).toHaveLength(3);
   });
 
   it("settings carry the four seeded keys (Settings fills defaults, so check the raw body)", () => {

@@ -1,0 +1,20 @@
+{
+  "accept_rate": null,
+  "accepted": 0,
+  "by_category": [],
+  "by_severity": [],
+  "dismissed": 0,
+  "findings": 0,
+  "pull_rate": null,
+  "runs_attached": 0,
+  "runs_cited": 0,
+  "skill_id": "00000000-0000-4000-8000-000000000015",
+  "used_by": [
+    {
+      "enabled": true,
+      "id": "00000000-0000-4000-8000-000000000005",
+      "name": "Contract Reviewer"
+    }
+  ],
+  "window_days": 7
+}

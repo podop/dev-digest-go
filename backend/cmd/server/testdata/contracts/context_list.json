@@ -1,0 +1,32 @@
+{
+  "clone_status": "ready",
+  "docs": [
+    {
+      "doc_type": "specs",
+      "editable": true,
+      "name": "notes.md",
+      "path": ".devdigest/specs/notes.md",
+      "size_bytes": 23,
+      "source": "store",
+      "tokens": 6,
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "used_by": 0,
+      "version": 1
+    },
+    {
+      "doc_type": "docs",
+      "editable": false,
+      "name": "guide.md",
+      "path": "docs/guide.md",
+      "size_bytes": 43,
+      "source": "repo",
+      "tokens": 11,
+      "updated_at": "2026-01-01T00:00:00.000Z",
+      "used_by": 0
+    }
+  ],
+  "globs": [
+    "**/{specs,docs,insights}/**/*.md"
+  ],
+  "tokens_total": 17
+}
