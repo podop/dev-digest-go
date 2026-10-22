@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 
 	"dev-digest-go/backend/internal/agents/domain"
 	"dev-digest-go/backend/internal/platform/httpx"
@@ -196,8 +197,11 @@ func uuidValue(raw json.RawMessage, path ...any) (id string, issues []httpx.Issu
 	}
 	if !uuidPattern.MatchString(id) {
 		issues = append(issues, httpx.Issue{Code: httpx.CodeInvalidStr, Path: path, Message: "Invalid uuid"})
+		return id, issues, false
 	}
-	return id, issues, false
+	// UUIDs are case-insensitive (FR203) and Postgres returns them lower-case, so fold here;
+	// otherwise an existing skill sent upper-case would be reported as unknown.
+	return strings.ToLower(id), issues, false
 }
 
 // orderValue validates z.number().int().min(0). A non-integer is a (non-aborting) invalid_type

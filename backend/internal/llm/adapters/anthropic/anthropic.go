@@ -49,9 +49,7 @@ func New(opts Options) *Adapter {
 	if a.base == "" {
 		a.base = DefaultBaseURL
 	}
-	if a.hc == nil {
-		a.hc = &http.Client{}
-	}
+	a.hc = withoutRedirects(a.hc)
 	return a
 }
 
@@ -184,4 +182,20 @@ func (a *Adapter) ListModels(ctx context.Context, key string) ([]llm.ModelInfo, 
 		models[i] = llm.ModelInfo{ID: m.ID, Provider: llm.Anthropic, Label: &label}
 	}
 	return models, nil
+}
+
+// noRedirects stops the client at a provider's 3xx: following it would resend the key header
+// (Anthropic's x-api-key survives a cross-host redirect) and the request body to another host,
+// possibly over plain http. The 3xx is then handled like any other non-2xx answer.
+func noRedirects(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+// withoutRedirects returns a copy of hc (a new client when nil) that never follows redirects;
+// the caller's client is left unchanged.
+func withoutRedirects(hc *http.Client) *http.Client {
+	c := http.Client{}
+	if hc != nil {
+		c = *hc
+	}
+	c.CheckRedirect = noRedirects
+	return &c
 }

@@ -526,6 +526,10 @@ func TestSkills_Errors(t *testing.T) {
 	}
 	wantError(t, v.do(t, http.MethodPost, path, `{"skill_id":"`+random+`"}`), 422, "unknown_skill", "Unknown skill id(s) for this workspace: "+random)
 
+	if r := v.do(t, http.MethodPost, path, `{"skill_ids":["`+strings.ToUpper(sa)+`"]}`); r.status != 200 {
+		t.Errorf("POST skills with an upper-case existing id = %d %s, want 200 (UUIDs are case-insensitive)", r.status, r.body)
+	}
+
 	tests := []struct {
 		name string
 		body string

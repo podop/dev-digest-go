@@ -520,8 +520,8 @@ func TestScan_ProviderErrorKeyIsRedacted(t *testing.T) {
 	}
 	logs := s.logs.String()
 	assertNoSecret(t, "server log", logs, key)
-	if !strings.Contains(logs, "[REDACTED]") {
-		t.Error("no log line holds [REDACTED], want the failed-scan line to carry the scrubbed text")
+	if !strings.Contains(logs, "conventions scan failed") || !strings.Contains(logs, "error_kind") {
+		t.Error("no failed-scan log line with error_kind, want the content-free warning (NFR202)")
 	}
 }
 

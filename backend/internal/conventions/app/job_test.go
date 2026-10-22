@@ -488,3 +488,21 @@ func TestExtract_ConcurrentScans(t *testing.T) {
 		}
 	}
 }
+
+func TestExtract_FailureLogIsContentFree(t *testing.T) {
+	const modelText = "func leakedRepositoryLine() {}"
+	e := newJobs(t, goFiles(), failWith(errors.New("model answer invalid: "+modelText)))
+	if err := e.jobs.Extract(t.Context(), payload()); err != nil {
+		t.Fatalf("Extract() error = %v", err)
+	}
+	if got := *e.scan().Error; !strings.Contains(got, modelText) {
+		t.Errorf("stored error = %q, want the full failure text", got)
+	}
+	logs := e.logs.String()
+	if strings.Contains(logs, modelText) {
+		t.Errorf("log = %q, want no model output or repository line", logs)
+	}
+	if !strings.Contains(logs, "conventions scan failed") || !strings.Contains(logs, "error_kind") || !strings.Contains(logs, "error_chars") {
+		t.Errorf("log = %q, want the warning with error_kind and error_chars", logs)
+	}
+}

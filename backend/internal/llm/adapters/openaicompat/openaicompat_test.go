@@ -447,3 +447,22 @@ func TestOpenAI_cancelStopsRequest(t *testing.T) {
 		}
 	})
 }
+
+func TestOpenAI_redirectIsNotFollowed(t *testing.T) {
+	t.Parallel()
+	st := newStub(t, func(_ int, w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/elsewhere" {
+			reply(w, 200, completion(valid, usage))
+			return
+		}
+		w.Header().Set("Location", "/elsewhere")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	})
+	c := client(t, llm.OpenAI, st.openai())
+	if _, err := c.Structured(t.Context(), request(llm.OpenAI, "gpt-4.1")); err == nil {
+		t.Errorf("Structured() after a 307 = nil error, want a failure")
+	}
+	if got := st.count(); got != 1 {
+		t.Errorf("requests = %d (%v), want 1: the redirect must not be followed with the key and body", got, st.paths)
+	}
+}

@@ -188,3 +188,17 @@ func TestListModels(t *testing.T) {
 		t.Errorf("requests = %v, want one GET /v1/models with the key", rec.paths)
 	}
 }
+
+func TestStructured_redirectIsNotFollowed(t *testing.T) {
+	t.Parallel()
+	c, rec := setup(t, func(_ int, w http.ResponseWriter) {
+		w.Header().Set("Location", "/elsewhere")
+		w.WriteHeader(http.StatusTemporaryRedirect)
+	})
+	if _, err := c.Structured(t.Context(), request()); err == nil {
+		t.Errorf("Structured() after a 307 = nil error, want a failure")
+	}
+	if len(rec.paths) != 1 {
+		t.Errorf("requests = %v, want 1: the redirect must not be followed with x-api-key and the body", rec.paths)
+	}
+}

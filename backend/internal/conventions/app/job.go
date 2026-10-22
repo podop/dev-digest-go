@@ -11,6 +11,7 @@ import (
 
 	"dev-digest-go/backend/internal/conventions/domain"
 	"dev-digest-go/backend/internal/llm"
+	"dev-digest-go/backend/internal/platform/apperr"
 )
 
 const (
@@ -254,14 +255,31 @@ func (j *Jobs) propose(ctx context.Context, p ExtractPayload, repo Repo, sample 
 // write uses a context that outlives it.
 func (j *Jobs) fail(ctx context.Context, p ExtractPayload, sampled []string, cause error) {
 	text := j.failureText(ctx, cause)
+	// The stored text can quote model output (and so repository lines); the log line stays
+	// content-free (NFR202): ids, the failure kind and the stored text's length only.
 	j.log.WarnContext(context.WithoutCancel(ctx), "conventions scan failed",
-		"scan_id", p.ScanID, "repo_id", p.RepoID, "error", text)
+		"scan_id", p.ScanID, "repo_id", p.RepoID, "error_kind", failureKind(ctx, cause),
+		"error_chars", llm.UTF16Len(text))
 	wctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), failWriteTimeout)
 	defer cancel()
 	if err := j.d.Store.FailScan(wctx, p.ScanID, text, sampled, j.now()); err != nil {
 		j.log.ErrorContext(wctx, "conventions scan not marked failed",
 			"scan_id", p.ScanID, "repo_id", p.RepoID, "error", errorText(j.d.Redact, err.Error()))
 	}
+}
+
+// failureKind names the class of a scan failure for the log line, without its text.
+func failureKind(ctx context.Context, cause error) string {
+	switch ctx.Err() {
+	case context.DeadlineExceeded:
+		return "timeout"
+	case context.Canceled:
+		return "interrupted"
+	}
+	if e, ok := apperr.As(cause); ok {
+		return e.Kind.String()
+	}
+	return "internal"
 }
 
 // failureText is the error stored on a failed scan: a fixed text when the job's context ended
