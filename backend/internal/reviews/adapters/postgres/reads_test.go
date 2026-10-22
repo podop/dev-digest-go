@@ -21,7 +21,7 @@ func TestFindPull(t *testing.T) {
 	}
 	want := domain.ReviewPull{
 		ID: f.pr, WorkspaceID: f.ws, RepoID: f.repo, Number: 482, Title: "Add rate limiting", Author: "dev",
-		Base: "main", HeadSHA: "a1b2c3d4e5f6", Body: strp("the body"),
+		Base: "main", Branch: "feat", HeadSHA: "a1b2c3d4e5f6", Body: strp("the body"),
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindPull() mismatch (-want +got):\n%s", diff)

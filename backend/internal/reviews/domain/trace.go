@@ -9,6 +9,42 @@ import (
 // ToolReviewFile is the tool name of every ToolCall of a trace.
 const ToolReviewFile = "review_file"
 
+// The statuses of an IntentTrace.
+const (
+	IntentStatusUsed        = "used"
+	IntentStatusUnavailable = "unavailable"
+)
+
+// IntentTrace is the intent layer's contribution to one run's trace (Phase 5 spec 7.5): the
+// derivation that fed the run, or the reason there was none. Its tokens and cost are
+// informational and never enter the run's usage. One IntentTrace is shared, read-only, by every
+// run of a review request.
+//
+// Status IntentStatusUsed carries every field but Warning; IntentStatusUnavailable carries only
+// Warning. On the wire (spec 7.5, key order status, cache_hit, confidence, derived_from,
+// change_type, provider, model, tokens_in, tokens_out, cost_usd, sources, warning) only the keys
+// of the status are present; Confidence, ChangeType and CostUSD are null when nil.
+type IntentTrace struct {
+	// Status is IntentStatusUsed or IntentStatusUnavailable.
+	Status string
+	// CacheHit is true when the run reused a stored derivation (no LLM call for it).
+	CacheHit bool
+	// Confidence, DerivedFrom and ChangeType come from the stored row.
+	Confidence, DerivedFrom, ChangeType *string
+	Provider, Model                     string
+	TokensIn, TokensOut                 int
+	// CostUSD is nil when the derivation was unpriced.
+	CostUSD *float64
+	Sources []reviewer.IntentSource
+	// Warning is the message of the failure that made the intent unavailable.
+	Warning string
+}
+
+// UnavailableIntentTrace is the IntentTrace of a derivation that failed with warning.
+func UnavailableIntentTrace(warning string) *IntentTrace {
+	return &IntentTrace{Status: IntentStatusUnavailable, Warning: warning}
+}
+
 // CompletedTraceInput is what the trace of a successfully persisted run is built from.
 type CompletedTraceInput struct {
 	Agent      ReviewAgent
@@ -28,6 +64,8 @@ type CompletedTraceInput struct {
 	SkillsUsed  []SkillUsed
 	// ProjectContext is nil when the run had no attached documents.
 	ProjectContext *ContextTrace
+	// Intent is the request's intent result; nil when the pre-work did not run (switch off).
+	Intent *IntentTrace
 }
 
 // CompletedTrace builds the trace of a finished run (spec 7.6, "Completed"). Its slices are never
@@ -56,6 +94,7 @@ func CompletedTrace(in CompletedTraceInput) Trace {
 		Log:            nonNilLog(in.Log),
 		SkillsUsed:     nonNilSkills(in.SkillsUsed),
 		ProjectContext: in.ProjectContext,
+		Intent:         in.Intent,
 	}
 }
 
@@ -70,6 +109,9 @@ type EndedTraceInput struct {
 	SkillsUsed []SkillUsed
 	// ProjectContext is the context resolved before the run ended; nil when none.
 	ProjectContext *ContextTrace
+	// Intent is the intent result when the pre-work ran before the run ended; nil when it did
+	// not (switch off, or the diff failed before the hook).
+	Intent *IntentTrace
 }
 
 // EndedTrace builds the minimal trace of a run that ended abnormally (spec 7.6, "Ended"): its
@@ -97,6 +139,7 @@ func EndedTrace(in EndedTraceInput) Trace {
 		Log:            nonNilLog(in.Log),
 		SkillsUsed:     nonNilSkills(in.SkillsUsed),
 		ProjectContext: in.ProjectContext,
+		Intent:         in.Intent,
 	}
 }
 

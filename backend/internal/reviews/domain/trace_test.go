@@ -152,3 +152,40 @@ func TestLogFromEvents(t *testing.T) {
 		t.Errorf("LogFromEvents(nil) = %#v, want empty non-nil", got)
 	}
 }
+
+func TestTraces_CarryTheIntentTrace(t *testing.T) {
+	conf, derived, change := "medium", "explicit", "feature"
+	used := &domain.IntentTrace{
+		Status: domain.IntentStatusUsed, CacheHit: true, Confidence: &conf, DerivedFrom: &derived, ChangeType: &change,
+		Provider: "openrouter", Model: "m/x", TokensIn: 10, TokensOut: 5,
+		Sources: []reviewer.IntentSource{{Kind: "title", Ref: "title", Status: "used"}},
+	}
+	tests := []struct {
+		name   string
+		intent *domain.IntentTrace
+	}{
+		{"used", used},
+		{"unavailable", domain.UnavailableIntentTrace("OPENROUTER_API_KEY is not configured")},
+		{"none", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			completed := domain.CompletedTrace(domain.CompletedTraceInput{Agent: traceAgent, ChunkLabels: []string{"all files"}, Mode: reviewer.ModeSinglePass, Intent: tc.intent})
+			if diff := cmp.Diff(tc.intent, completed.Intent); diff != "" {
+				t.Errorf("CompletedTrace().Intent mismatch (-want +got):\n%s", diff)
+			}
+			ended := domain.EndedTrace(domain.EndedTraceInput{Agent: traceAgent, Intent: tc.intent})
+			if diff := cmp.Diff(tc.intent, ended.Intent); diff != "" {
+				t.Errorf("EndedTrace().Intent mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestUnavailableIntentTrace(t *testing.T) {
+	got := domain.UnavailableIntentTrace("boom")
+	want := &domain.IntentTrace{Status: "unavailable", Warning: "boom"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("UnavailableIntentTrace(boom) mismatch (-want +got):\n%s", diff)
+	}
+}

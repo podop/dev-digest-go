@@ -46,6 +46,12 @@ type Config struct {
 	// RepoIntelEnabled is REPO_INTEL_ENABLED, off only on "false" (after trimming). It gates only
 	// the repo-intel read port; indexing and GET /repos/:id/index-state ignore it.
 	RepoIntelEnabled bool
+	// ReviewIntentEnabled is REVIEW_INTENT_ENABLED, off only on "false" (after trimming; empty or
+	// unset is on, Phase 5 spec 7.14). It gates only the review's intent pre-work (the executor
+	// hook); the intent routes, including POST /pulls/:id/intent/refresh, work either way. The
+	// zero value is off: a hand-built Config (the component tests' newConfig) runs reviews as
+	// Phase 4 did.
+	ReviewIntentEnabled bool
 
 	LLMProviderOverride string        // LLM_PROVIDER_OVERRIDE: "" or LLMProviderMock
 	LLMMockDelay        time.Duration // LLM_MOCK_DELAY_MS, 0 to 60 s
@@ -91,6 +97,8 @@ func Load(getenv func(string) string) (Config, error) {
 		AutoMigrate:      enabled(getenv("DB_AUTO_MIGRATE")),
 		AutoSeed:         enabled(getenv("DB_AUTO_SEED")),
 		RepoIntelEnabled: enabled(getenv("REPO_INTEL_ENABLED")),
+		// Spec 7.14: on unless the trimmed value is exactly "false".
+		ReviewIntentEnabled: enabled(getenv("REVIEW_INTENT_ENABLED")),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

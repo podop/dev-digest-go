@@ -137,6 +137,53 @@ type ProjectContext interface {
 	ResolveForRun(ctx context.Context, in ProjectContextInput) (ProjectContextResult, error)
 }
 
+// IntentRequest is what the executor asks the intent layer for, once per review request, after
+// the "Diff ready" event and before the first agent run (Phase 5 spec 7.5). The derivation is
+// never forced: a stored derivation of the same key is reused.
+type IntentRequest struct {
+	WorkspaceID string
+	// Pull is the pull request as read at request time (title, body, branch, head SHA); Repo its
+	// repository (owner and name).
+	Pull domain.ReviewPull
+	Repo domain.ReviewRepo
+	// ChangedFiles are the parsed stored diff's file paths in diff order.
+	ChangedFiles []string
+	// DiffExcerpt is the raw stored diff text; the layer cuts it to what it needs.
+	DiffExcerpt string
+}
+
+// IntentResult is the outcome of an intent request. Exactly one of the two fields is set.
+type IntentResult struct {
+	// Intent is non-nil when the intent is usable (a stored derivation or a fresh one); it feeds
+	// every agent run of the request.
+	Intent *reviewer.Intent
+	// Trace is the trace.intent value of every run of the request: status used (from the stored
+	// row, cache_hit set) when Intent is non-nil, else status unavailable with its warning. It is
+	// never nil in a result of IntentResolver.Resolve.
+	Trace *domain.IntentTrace
+}
+
+// IntentEmit receives the intent layer's run events (kind info or result, see reviewer.EventInfo
+// and reviewer.EventResult; data is nil or a JSON document, for example {"warning":"intent_unavailable"})
+// while it works. The executor publishes each one to every queued run of the request. It is
+// called from the derivation's goroutine, possibly after Resolve's caller stopped waiting, and
+// must be safe for concurrent use.
+type IntentEmit func(kind, msg string, data json.RawMessage)
+
+// IntentResolver derives or reuses the PR intent of a review request (implemented by
+// adapters/peers over the intent context's service). The executor calls it only when it is
+// configured (executor.Deps.Intent non-nil = REVIEW_INTENT_ENABLED on); nil keeps Phase 4
+// behaviour exactly.
+type IntentResolver interface {
+	// Resolve never fails: any failure (key computation, ticket, doc or LLM error, the 120 s
+	// budget) becomes an unavailable result and a warning event, and the review goes on without
+	// intent. ctx ends when every run of the request has been cancelled (a single cancel does
+	// not end it): the derivation is then aborted and nothing is stored, and Resolve returns an
+	// unavailable result. Concurrent requests of the same pull request and key share one
+	// derivation.
+	Resolve(ctx context.Context, req IntentRequest, emit IntentEmit) IntentResult
+}
+
 // Store is the persistence of the context: one implementation (adapters/postgres) of the four
 // parts. Every method takes its handle from ctx, so it joins the transaction of Tx.InTx. A method
 // that takes a workspace id sees that workspace's rows only; the others act on ids that an

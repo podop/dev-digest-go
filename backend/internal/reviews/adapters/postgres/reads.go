@@ -24,7 +24,7 @@ func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.
 	}
 	return domain.ReviewPull{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, RepoID: row.RepoID, Number: row.Number,
-		Title: row.Title, Author: row.Author, Base: row.Base, HeadSHA: row.HeadSHA, Body: row.Body,
+		Title: row.Title, Author: row.Author, Base: row.Base, Branch: row.Branch, HeadSHA: row.HeadSHA, Body: row.Body,
 	}, nil
 }
 

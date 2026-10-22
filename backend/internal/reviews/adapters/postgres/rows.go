@@ -245,6 +245,7 @@ type pullRow struct {
 	Title       string  `gorm:"column:title"`
 	Author      string  `gorm:"column:author"`
 	Base        string  `gorm:"column:base"`
+	Branch      string  `gorm:"column:branch"`
 	HeadSHA     string  `gorm:"column:head_sha"`
 	Body        *string `gorm:"column:body"`
 }

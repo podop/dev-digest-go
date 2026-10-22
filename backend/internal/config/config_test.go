@@ -35,6 +35,7 @@ func TestLoad(t *testing.T) {
 				AutoMigrate:            true,
 				AutoSeed:               true,
 				RepoIntelEnabled:       true,
+				ReviewIntentEnabled:    true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -65,6 +66,7 @@ func TestLoad(t *testing.T) {
 				AutoMigrate:            false,
 				AutoSeed:               false,
 				RepoIntelEnabled:       true,
+				ReviewIntentEnabled:    true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -89,6 +91,7 @@ func TestLoad(t *testing.T) {
 				AutoMigrate:            true,
 				AutoSeed:               true,
 				RepoIntelEnabled:       true,
+				ReviewIntentEnabled:    true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -115,6 +118,7 @@ func TestLoad(t *testing.T) {
 				AutoMigrate:            true,
 				AutoSeed:               true,
 				RepoIntelEnabled:       true,
+				ReviewIntentEnabled:    true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -143,6 +147,7 @@ func TestLoad(t *testing.T) {
 				LLMProviderOverride:    "mock",
 				LLMMockDelay:           1500 * time.Millisecond,
 				RepoIntelEnabled:       true,
+				ReviewIntentEnabled:    true,
 				ProjectContextGlobs:    []string{"docs/*.md", "{a,b}/**/*.md"},
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -166,6 +171,7 @@ func TestLoad(t *testing.T) {
 				AutoSeed:               true,
 				LLMMockDelay:           60 * time.Second,
 				RepoIntelEnabled:       true,
+				ReviewIntentEnabled:    true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -254,6 +260,39 @@ func TestLoadRepoIntelEnabled(t *testing.T) {
 			}
 			if got.RepoIntelEnabled != tc.want {
 				t.Errorf("Load(REPO_INTEL_ENABLED=%q).RepoIntelEnabled = %t, want %t", tc.value, got.RepoIntelEnabled, tc.want)
+			}
+		})
+	}
+}
+
+// AC5036: REVIEW_INTENT_ENABLED is off only when its trimmed value is exactly "false" (D5001).
+func TestLoadReviewIntentEnabled(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		set   bool
+		want  bool
+	}{
+		{name: "unset", want: true},
+		{name: "empty", set: true, value: "", want: true},
+		{name: "true", set: true, value: "true", want: true},
+		{name: "upper case FALSE", set: true, value: "FALSE", want: true},
+		{name: "false with spaces", set: true, value: " false ", want: false},
+		{name: "false", set: true, value: "false", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			env := map[string]string{"DATABASE_URL": "x"}
+			if tc.set {
+				env["REVIEW_INTENT_ENABLED"] = tc.value
+			}
+			got, err := config.Load(func(k string) string { return env[k] })
+			if err != nil {
+				t.Fatalf("Load(REVIEW_INTENT_ENABLED=%q) error: %v", tc.value, err)
+			}
+			if got.ReviewIntentEnabled != tc.want {
+				t.Errorf("Load(REVIEW_INTENT_ENABLED=%q).ReviewIntentEnabled = %t, want %t", tc.value, got.ReviewIntentEnabled, tc.want)
 			}
 		})
 	}

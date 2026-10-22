@@ -47,6 +47,8 @@ services:
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       # Repo-intel read port only; indexing runs either way. Off only on the literal `false`.
       REPO_INTEL_ENABLED: ${REPO_INTEL_ENABLED:-true}
+      # Review intent pre-work (one extra LLM call per review on a cache miss). Off only on the literal `false`.
+      REVIEW_INTENT_ENABLED: ${REVIEW_INTENT_ENABLED:-true}
       # LLM mock for demos and tests (empty = real providers; the only other value is `mock`),
       # its per-call delay in ms, and the project-context file globs (empty = built-in default).
       LLM_PROVIDER_OVERRIDE: ${LLM_PROVIDER_OVERRIDE:-}

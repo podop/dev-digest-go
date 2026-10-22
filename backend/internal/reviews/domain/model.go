@@ -104,8 +104,10 @@ type ReviewPull struct {
 	Number      int
 	Title       string
 	Author      string
-	// Base is the base branch name; HeadSHA the head commit read at request time.
+	// Base is the base branch name; Branch the head branch name (pull_requests.branch);
+	// HeadSHA the head commit read at request time.
 	Base    string
+	Branch  string
 	HeadSHA string
 	// Body is the PR description; nil or blank means none.
 	Body *string
@@ -466,8 +468,8 @@ type TraceStats struct {
 	Grounding string
 }
 
-// Trace is the document stored per run in run_traces (spec 7.6). memory_pulled ([]) and intent
-// (null) are constants of Phase 4 and are left out of the type.
+// Trace is the document stored per run in run_traces (spec 7.6). memory_pulled ([]) is a constant
+// of Phases 4 and 5 and is left out of the type.
 type Trace struct {
 	// Ended marks the minimal trace of a failed, cancelled or diff-failed run: its
 	// prompt_assembly holds only system (the agent's prompt, without the guard), skills null,
@@ -485,4 +487,7 @@ type Trace struct {
 	SkillsUsed []SkillUsed
 	// ProjectContext is nil when the run had no attached documents (the key is absent).
 	ProjectContext *ContextTrace
+	// Intent is the intent layer's contribution to the run (Phase 5 spec 7.5); nil is the null
+	// "intent" key: the switch was off, or the run's diff failed before the pre-work.
+	Intent *IntentTrace
 }
