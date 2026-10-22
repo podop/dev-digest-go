@@ -3,6 +3,7 @@ package domain_test
 import (
 	"strings"
 	"testing"
+	"unicode/utf16"
 
 	"dev-digest-go/backend/internal/projectcontext/domain"
 )
@@ -70,5 +71,29 @@ func TestCloneSizeTokens(t *testing.T) {
 		if got := domain.CloneSizeTokens(tc.size); got != tc.want {
 			t.Errorf("CloneSizeTokens(%d) = %d, want %d", tc.size, got, tc.want)
 		}
+	}
+}
+
+func TestDecodeUTF8(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []byte
+		want string
+	}{
+		{"valid", []byte("héllo😀"), "héllo😀"},
+		{"truncated 3-byte sequence is one replacement", []byte("a\xe2\x82b"), "a�b"},
+		{"lone continuation bytes are one each", []byte("\x80\x80"), "��"},
+		{"overlong lead", []byte("\xc0\xaf"), "��"},
+		{"surrogate", []byte("\xed\xa0\x80"), "���"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := domain.DecodeUTF8(tc.in); got != tc.want {
+				t.Errorf("DecodeUTF8(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if got, want := len(utf16.Encode([]rune(domain.DecodeUTF8(tc.in)))), domain.UTF16Units(tc.in); got != want {
+				t.Errorf("DecodeUTF8(%q) has %d UTF-16 units, UTF16Units says %d", tc.in, got, want)
+			}
+		})
 	}
 }

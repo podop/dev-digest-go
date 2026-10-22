@@ -80,3 +80,23 @@ func invalidPrefixLen(b []byte) int {
 	}
 	return n
 }
+
+// DecodeUTF8 decodes content like JavaScript's UTF-8 decoder: each maximal
+// invalid byte sequence becomes one U+FFFD. Valid input is returned as is.
+func DecodeUTF8(content []byte) string {
+	if utf8.Valid(content) {
+		return string(content)
+	}
+	out := make([]byte, 0, len(content))
+	for i := 0; i < len(content); {
+		r, size := utf8.DecodeRune(content[i:])
+		if r != utf8.RuneError || size != 1 {
+			out = append(out, content[i:i+size]...)
+			i += size
+			continue
+		}
+		out = utf8.AppendRune(out, utf8.RuneError)
+		i += invalidPrefixLen(content[i:])
+	}
+	return string(out)
+}

@@ -770,7 +770,7 @@ Project context
   Traces: FR252, FR253, EC230 · Verify: integration
 - AC284 [context] — Given the cloned repo of AC281, when previewing `docs/a.md`, `specs/big.md`, `docs/missing.md`, `../x.md`, `` (empty) and `docs/link.md`, then 200 (`source` repo, `editable` false, `used_by_agents` listed), 413 `doc_too_large`, 404 `doc_not_found`, 400 `invalid_path`, 400 `invalid_path` and 404 `doc_not_found`; a missing `path` query gives 422.
   Traces: FR253, EC225, EC226, FR260 · Verify: integration
-- AC285 [context] — Given a directory symlink `docs/out` → `/etc` in the clone, when `docs/out/passwd.md` is previewed, then 404 `doc_not_found`, and the listing never includes a path under `docs/out`.
+- AC285 [context] — Given a directory symlink `docs/ext` → `/etc` in the clone, when `docs/ext/passwd.md` is previewed, then 404 `doc_not_found`, and the listing never includes a path under `docs/ext` (a symlinked directory with an excluded name such as `docs/out` is already 400 `invalid_path` by FR251).
   Traces: FR260, EC225, NFR205 · Verify: integration
 - AC286 [context] — Given agent X with `docs/a.md` attached directly and skill S (disabled) attached to `docs/a.md` and linked to agent Y, then the preview of `docs/a.md` has `used_by` 2 and `used_by_agents` `[{X, via:"direct"}, {Y, via:"skill", skill_name:S}]` sorted by name.
   Traces: FR252, FR253 · Verify: integration
