@@ -1,0 +1,13 @@
+{
+  "degraded": true,
+  "degradedReason": "no_data",
+  "durationMs": 0,
+  "filesIndexed": 0,
+  "filesSkipped": 0,
+  "indexerVersion": 2,
+  "lastIndexedSha": "",
+  "reason": "no_clone",
+  "repoId": "00000000-0000-4000-8000-000000000001",
+  "status": "degraded",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}

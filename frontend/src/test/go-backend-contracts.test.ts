@@ -21,6 +21,7 @@ import {
   PrMeta,
   PrReviewComment,
   Repo,
+  RepoIndexState,
   SecretsStatus,
   Settings,
   Skill,
@@ -49,6 +50,12 @@ const conventionsState = z
   .strict();
 const contextPreview = ContextDocPreview.strict();
 const attachments = ContextAttachments.strict();
+// POST /repos/:id/resync answers one of two shapes (spec 7.2); neither may carry an extra key.
+const resyncAccepted = z.object({ status: z.literal("accepted"), jobId: uuid }).strict();
+const resyncDegraded = z
+  .object({ status: z.literal("accepted"), degraded: z.literal(true), reason: z.literal("no_handler") })
+  .strict();
+const resync = z.union([resyncAccepted, resyncDegraded]);
 
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
@@ -135,6 +142,13 @@ const contracts: Record<string, z.ZodTypeAny> = {
   agent_context_put: attachments,
   skill_context_get: attachments,
   skill_context_put: attachments,
+
+  // ---- Phase 3: repo-intel ----
+  repo_index_state_full: RepoIndexState.strict(),
+  repo_index_state_degraded: RepoIndexState.strict(),
+  repo_index_state_synth: RepoIndexState.strict(),
+  repo_resync_accepted: resync,
+  repo_resync_degraded: resync,
 };
 
 const read = (name: string): unknown =>
@@ -173,6 +187,38 @@ describe("Go backend golden responses", () => {
       "sync_to_folder",
       "theme",
     ]);
+  });
+
+  it("the index-state goldens cover a full, a degraded and a synthesised state", () => {
+    const full = read("repo_index_state_full") as Record<string, unknown>;
+    expect(full.status).toBe("full");
+    for (const key of ["degraded", "degradedReason", "reason"]) expect(full).not.toHaveProperty(key);
+
+    const degraded = read("repo_index_state_degraded") as Record<string, unknown>;
+    expect(degraded).toMatchObject({ status: "degraded", reason: "no_clone", degraded: true, degradedReason: "no_data" });
+
+    const synth = read("repo_index_state_synth") as Record<string, unknown>;
+    expect(synth).toMatchObject({
+      status: "degraded",
+      filesIndexed: 0,
+      filesSkipped: 0,
+      durationMs: 0,
+      reason: "no_data",
+      lastIndexedSha: "",
+      indexerVersion: 2,
+      degraded: true,
+      degradedReason: "no_data",
+    });
+  });
+
+  it("the resync goldens are the accepted and the degraded answer, and the strict union rejects extra keys", () => {
+    expect(resyncAccepted.safeParse(read("repo_resync_accepted")).success).toBe(true);
+    expect(resyncDegraded.safeParse(read("repo_resync_degraded")).success).toBe(true);
+    // A degraded answer with a jobId, or an accepted one with `degraded`, is a drift.
+    const accepted = read("repo_resync_accepted") as object;
+    expect(resync.safeParse({ ...accepted, degraded: true }).success).toBe(false);
+    expect(resync.safeParse({ ...accepted, extra: 1 }).success).toBe(false);
+    expect(resync.safeParse({ ...(read("repo_resync_degraded") as object), jobId: "x" }).success).toBe(false);
   });
 
   it.each(["pulls_list", "acme_pulls_list"])("%s items have an id and all rollup keys", (name) => {

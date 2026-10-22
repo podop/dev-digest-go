@@ -1,0 +1,10 @@
+{
+  "durationMs": 1234,
+  "filesIndexed": 42,
+  "filesSkipped": 3,
+  "indexerVersion": 2,
+  "lastIndexedSha": "0123456789abcdef0123456789abcdef01234567",
+  "repoId": "00000000-0000-4000-8000-000000000001",
+  "status": "full",
+  "updatedAt": "2026-01-01T00:00:00.000Z"
+}

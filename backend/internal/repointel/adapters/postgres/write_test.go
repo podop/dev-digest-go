@@ -368,6 +368,46 @@ func TestResolveReferences_ResetClearsStaleResolutions(t *testing.T) {
 	}
 }
 
+// The rows of a full index are written and resolved in one transaction, so the planner has no
+// statistics for them. A resolution that re-ran an aggregate per candidate row took 67 s for the
+// 138k references of a 5,000-file clone (AC3066); this size took 16 s with it and about a second
+// without.
+func TestResolveReferences_FreshRowsResolveInTime(t *testing.T) {
+	const files, fanout = 2500, 4
+	e := newEnv(t)
+	var (
+		syms  []domain.SymbolRow
+		refs  []domain.ReferenceRow
+		edges []domain.Edge
+	)
+	file := func(i int) string { return fmt.Sprintf("src/f%05d.ts", i) }
+	for i := range files {
+		syms = append(syms, sym(file(i), fmt.Sprintf("s%05d", i), 1, true))
+		for d := 1; d <= fanout && i+d < files; d++ {
+			edges = append(edges, domain.Edge{From: file(i), To: file(i + d)})
+			refs = append(refs, domain.ReferenceRow{FromPath: file(i), ToSymbol: fmt.Sprintf("s%05d", i+d), Line: d})
+		}
+	}
+	var took time.Duration
+	err := e.tx.InTx(t.Context(), func(ctx context.Context) error {
+		must(t, e.store.InsertSymbols(ctx, e.repo, syms))
+		must(t, e.store.InsertReferences(ctx, e.repo, refs))
+		must(t, e.store.ReplaceEdges(ctx, e.repo, edges))
+		start := time.Now()
+		defer func() { took = time.Since(start) }()
+		return e.store.ResolveReferences(ctx, e.repo, false)
+	})
+	must(t, err)
+	if took > 10*time.Second {
+		t.Errorf("ResolveReferences of %d fresh references took %v, want under 10s", len(refs), took)
+	}
+	var resolved int
+	must(t, e.db.Raw(`SELECT count(*) FROM "references" WHERE repo_id = ? AND decl_file = 'src/f' || substr(to_symbol, 2) || '.ts'`, e.repo).Scan(&resolved).Error)
+	if resolved != len(refs) {
+		t.Errorf("references resolved to the file of their symbol = %d, want %d", resolved, len(refs))
+	}
+}
+
 func TestReplaceEdgesRankFacts_ReplaceTheRepoRows(t *testing.T) {
 	e := newEnv(t)
 	other := e.addRepo(t, "o", "other", "/clones/o/other")

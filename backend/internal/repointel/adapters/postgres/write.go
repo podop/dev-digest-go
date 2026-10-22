@@ -145,23 +145,22 @@ func (s *Store) ResolveReferences(ctx context.Context, repoID string, reset bool
 			return fmt.Errorf("reset decl_file: %w", err)
 		}
 	}
+	// One aggregate per reference, no second pass over it: the rows were inserted in this very
+	// transaction, so the planner has no statistics for them, and a self-join of the candidates
+	// (WITH cand ... JOIN uniq) was re-run once per candidate row (67 s for 138k references).
 	err := conn.Exec(`
-WITH cand AS (
-	SELECT r.id AS ref_id, e.to_file AS decl
+UPDATE "references" r
+SET decl_file = c.decl
+FROM (
+	SELECT r.id AS ref_id, min(e.to_file) AS decl
 	FROM "references" r
 	JOIN file_edges e ON e.repo_id = r.repo_id AND e.from_file = r.from_path
 	JOIN symbols s ON s.repo_id = r.repo_id AND s.path = e.to_file
 		AND s.name = r.to_symbol AND s.exported = true
 	WHERE r.repo_id = ?
-	GROUP BY r.id, e.to_file
-),
-uniq AS (
-	SELECT ref_id FROM cand GROUP BY ref_id HAVING count(*) = 1
-)
-UPDATE "references" r
-SET decl_file = c.decl
-FROM cand c
-JOIN uniq u ON u.ref_id = c.ref_id
+	GROUP BY r.id
+	HAVING count(DISTINCT e.to_file) = 1
+) c
 WHERE r.id = c.ref_id`, repoID).Error
 	if err != nil {
 		return fmt.Errorf("resolve references: %w", err)
