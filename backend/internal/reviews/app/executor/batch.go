@@ -2,11 +2,13 @@ package executor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"runtime/debug"
 	"sync"
 
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
+	"dev-digest-go/backend/internal/reviews/app"
 	"dev-digest-go/backend/internal/reviews/domain"
 )
 
@@ -16,6 +18,11 @@ type batchRun struct {
 	b      domain.Batch
 	diff   reviewer.Diff
 	shared *runLog
+	// intent and intentTrace are the request's intent pre-work (spec 7.5): intent is nil when it
+	// is unavailable or the switch is off, intentTrace nil only when the pre-work did not run.
+	// Both are shared read-only by every run.
+	intent      *reviewer.Intent
+	intentTrace *domain.IntentTrace
 }
 
 // runBatch executes one request: load the diff, then run the agents, at most AgentConcurrency at
@@ -44,6 +51,7 @@ func (e *Executor) runBatch(ctx context.Context, b domain.Batch) {
 	shared.info(domain.DiffReadyMsg(len(diff.Files), len(b.Jobs)), nil)
 
 	br := &batchRun{b: b, diff: diff, shared: shared}
+	br.intent, br.intentTrace = e.resolveIntent(ctx, b, diff, shared)
 	sem := make(chan struct{}, e.opts.AgentConcurrency)
 	var jobs sync.WaitGroup
 	defer jobs.Wait()
@@ -54,6 +62,72 @@ func (e *Executor) runBatch(ctx context.Context, b domain.Batch) {
 			e.runJob(ctx, br, job)
 		})
 	}
+}
+
+// resolveIntent is the request's shared pre-work (spec 7.5): once, after "Diff ready" and before
+// the first agent run, it asks the intent resolver for the PR intent and publishes the resolver's
+// events to every queued run. It never fails the review: a resolver that fails, returns no trace
+// or panics becomes an unavailable result with a warning event. The derivation's context ends
+// only when every run of the request has been cancelled (a single cancel must not starve the
+// others) or the executor shuts down (which cancels every run). With no resolver it does nothing.
+func (e *Executor) resolveIntent(ctx context.Context, b domain.Batch, diff reviewer.Diff, shared *runLog) (*reviewer.Intent, *domain.IntentTrace) {
+	if e.intent == nil {
+		return nil, nil
+	}
+	ictx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	var mu sync.Mutex
+	cancelled := make(map[string]struct{}, len(b.Jobs))
+	for _, job := range b.Jobs {
+		stop := e.bus.OnCancel(job.RunID, func() {
+			mu.Lock()
+			cancelled[job.RunID] = struct{}{}
+			all := len(cancelled) >= len(b.Jobs)
+			mu.Unlock()
+			if all {
+				cancel()
+			}
+		})
+		defer stop()
+	}
+
+	paths := make([]string, len(diff.Files))
+	for i, f := range diff.Files {
+		paths[i] = f.Path
+	}
+	res, ok := e.callIntent(ictx, app.IntentRequest{
+		WorkspaceID: b.WorkspaceID, Pull: b.Pull, Repo: b.Repo, ChangedFiles: paths, DiffExcerpt: diff.Raw,
+	}, shared)
+	if !ok {
+		return nil, domain.UnavailableIntentTrace(intentPanicWarning)
+	}
+	switch {
+	case res.Trace != nil:
+		return res.Intent, res.Trace
+	case res.Intent != nil: // the port promises a trace; keep the trace consistent with the section
+		return res.Intent, &domain.IntentTrace{Status: domain.IntentStatusUsed}
+	}
+	return nil, domain.UnavailableIntentTrace(intentPanicWarning)
+}
+
+// intentPanicWarning is the warning of an intent that is unavailable because the resolver broke
+// its contract (panicked, or answered neither an intent nor a trace); the details go to the log.
+const intentPanicWarning = "internal error"
+
+// intentWarningData is the data of the "warning: intent unavailable" event (spec 7.4.7).
+func intentWarningData() json.RawMessage { return json.RawMessage(`{"warning":"intent_unavailable"}`) }
+
+// callIntent calls the resolver; a panic is recovered, logged and published as the warning event
+// of an unavailable intent (ok false), so the batch goes on.
+func (e *Executor) callIntent(ctx context.Context, req app.IntentRequest, shared *runLog) (res app.IntentResult, ok bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			e.log.Error("review: intent resolver panicked", "prId", req.Pull.ID, "panic", e.logText(panicText(r)), "stack", string(debug.Stack()))
+			shared.info("warning: intent unavailable — "+intentPanicWarning, intentWarningData())
+			res, ok = app.IntentResult{}, false
+		}
+	}()
+	return e.intent.Resolve(ctx, req, shared.intentEmit), true
 }
 
 // loadDiff reads the pull request's stored patches once and parses them (spec 7.7.1); the step is

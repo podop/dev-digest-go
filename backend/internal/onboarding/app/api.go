@@ -10,8 +10,8 @@ import (
 // apperr errors that httpx renders; ids are UUIDs by the time they get here.
 type API interface {
 	// Get returns the stored tour with its staleness (domain.State; a nil Tour is status none) and
-	// never calls a model. The current SHA is the index state's last indexed SHA (empty: no
-	// staleness check); a stored document that fails validation reads as none. A repository
+	// never calls a model. The current SHA is the index state's last indexed SHA (empty: the tour is stale with
+	// index_changed, as Node compares the stored SHA with null); a stored document that fails validation reads as none. A repository
 	// outside the workspace is 404 code repo_not_found "Repo not found".
 	Get(ctx context.Context, workspaceID, repoID string) (domain.State, error)
 	// Generate reads the index and the clone, makes the model call, stores and returns the tour

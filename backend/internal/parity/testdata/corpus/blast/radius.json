@@ -1,0 +1,342 @@
+{
+  "note": "getBlastRadius (repo-intel application/blast-radius.ts) over fake index tables (persistent path, AC5038) and over clone fixtures (clone-scan path, AC5039). Tables use the DB column names. The Node reader's SQL is emulated by the generator: symbols of the given paths ordered by path, line, name; callers = references with decl_file IN changed AND to_symbol IN names, inner joined with file_rank on from_path, ordered rank DESC, from_path, line, to_symbol (byte order, D5009); file_facts rows of the given files. index_state.stats keys: bounded, degradedReason, durationMs, reason.",
+  "repo": { "id": "repo-1", "owner": "acme", "name": "shop" },
+  "persistent": [
+    {
+      "name": "full_index_basic",
+      "changedFiles": ["src/a.ts", "src/b.ts"],
+      "index_state": { "status": "full", "files_indexed": 40, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/a.ts", "name": "baz", "kind": "function", "line": 30, "end_line": 40 },
+        { "path": "src/a.ts", "name": "foo", "kind": "function", "line": 3, "end_line": 8 },
+        { "path": "src/a.ts", "name": "Bar", "kind": "class", "line": 10, "end_line": 28 },
+        { "path": "src/a.ts", "name": "Bar.method", "kind": "function", "line": 12, "end_line": 20 },
+        { "path": "src/b.ts", "name": "qux", "kind": "function", "line": 1, "end_line": 5 },
+        { "path": "src/x.ts", "name": "handleB", "kind": "function", "line": 30, "end_line": 60 },
+        { "path": "src/x.ts", "name": "X.run", "kind": "function", "line": 35, "end_line": 50 },
+        { "path": "src/x.ts", "name": "handleA", "kind": "function", "line": 1, "end_line": 20 },
+        { "path": "src/other.ts", "name": "baz", "kind": "function", "line": 1, "end_line": 3 }
+      ],
+      "references": [
+        { "from_path": "src/x.ts", "to_symbol": "foo", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "src/x.ts", "to_symbol": "foo", "line": 8, "decl_file": "src/a.ts" },
+        { "from_path": "src/x.ts", "to_symbol": "foo", "line": 40, "decl_file": "src/a.ts" },
+        { "from_path": "src/y.ts", "to_symbol": "Bar", "line": 2, "decl_file": "src/a.ts" },
+        { "from_path": "src/z.ts", "to_symbol": "baz", "line": 7, "decl_file": "src/other.ts" },
+        { "from_path": "src/amb.ts", "to_symbol": "foo", "line": 3, "decl_file": null },
+        { "from_path": "src/norank.ts", "to_symbol": "foo", "line": 3, "decl_file": "src/a.ts" },
+        { "from_path": "src/x.ts", "to_symbol": "qux", "line": 12, "decl_file": "src/b.ts" },
+        { "from_path": "src/y.ts", "to_symbol": "Bar.method", "line": 9, "decl_file": "src/a.ts" }
+      ],
+      "file_rank": [
+        { "path": "src/x.ts", "rank": 0.8 },
+        { "path": "src/y.ts", "rank": 0.4 },
+        { "path": "src/z.ts", "rank": 0.9 },
+        { "path": "src/amb.ts", "rank": 0.7 }
+      ],
+      "file_facts": [
+        { "path": "src/x.ts", "endpoints": ["GET /x", "POST /x"], "crons": ["nightly"] },
+        { "path": "src/y.ts", "endpoints": [], "crons": [] },
+        { "path": "src/z.ts", "endpoints": ["GET /z"], "crons": [] }
+      ]
+    },
+    {
+      "name": "enclosing_symbol_rules",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 5, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/a.ts", "name": "target", "kind": "function", "line": 1, "end_line": 3 },
+        { "path": "src/c1.ts", "name": "second", "kind": "function", "line": 10, "end_line": 20 },
+        { "path": "src/c1.ts", "name": "first", "kind": "function", "line": 10, "end_line": 20 },
+        { "path": "src/c1.ts", "name": "later", "kind": "function", "line": 50, "end_line": 60 },
+        { "path": "src/c1.ts", "name": "nolines", "kind": "function", "line": null, "end_line": null },
+        { "path": "src/c1.ts", "name": "Cls.m", "kind": "function", "line": 45, "end_line": 48 },
+        { "path": "src/c2.ts", "name": "only.dotted", "kind": "function", "line": 1, "end_line": 9 },
+        { "path": "src/c3.ts", "name": "afterRef", "kind": "function", "line": 100, "end_line": 120 }
+      ],
+      "references": [
+        { "from_path": "src/c1.ts", "to_symbol": "target", "line": 15, "decl_file": "src/a.ts" },
+        { "from_path": "src/c1.ts", "to_symbol": "target", "line": 49, "decl_file": "src/a.ts" },
+        { "from_path": "src/c1.ts", "to_symbol": "target", "line": 70, "decl_file": "src/a.ts" },
+        { "from_path": "src/c2.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "src/c3.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "src/no_symbols.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "lib/deep/dir/file.name.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts" }
+      ],
+      "file_rank": [
+        { "path": "src/c1.ts", "rank": 0.9 },
+        { "path": "src/c2.ts", "rank": 0.8 },
+        { "path": "src/c3.ts", "rank": 0.7 },
+        { "path": "src/no_symbols.ts", "rank": 0.6 },
+        { "path": "lib/deep/dir/file.name.ts", "rank": 0.5 }
+      ],
+      "file_facts": []
+    },
+    {
+      "name": "dedupe_by_file_enclosing_and_symbol_first_kept",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 5, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/a.ts", "name": "one", "kind": "function", "line": 1, "end_line": 3 },
+        { "path": "src/a.ts", "name": "two", "kind": "function", "line": 5, "end_line": 8 },
+        { "path": "src/c.ts", "name": "run", "kind": "function", "line": 1, "end_line": 99 }
+      ],
+      "references": [
+        { "from_path": "src/c.ts", "to_symbol": "one", "line": 30, "decl_file": "src/a.ts" },
+        { "from_path": "src/c.ts", "to_symbol": "one", "line": 10, "decl_file": "src/a.ts" },
+        { "from_path": "src/c.ts", "to_symbol": "one", "line": 20, "decl_file": "src/a.ts" },
+        { "from_path": "src/c.ts", "to_symbol": "two", "line": 10, "decl_file": "src/a.ts" }
+      ],
+      "file_rank": [{ "path": "src/c.ts", "rank": 0.5 }],
+      "file_facts": [{ "path": "src/c.ts", "endpoints": ["GET /c"], "crons": [] }]
+    },
+    {
+      "name": "more_than_twenty_callers_of_one_symbol_keep_the_top_twenty",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 40, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/a.ts", "name": "hot", "kind": "function", "line": 1, "end_line": 3 },
+        { "path": "src/a.ts", "name": "cold", "kind": "function", "line": 5, "end_line": 8 }
+      ],
+      "references": { "$each": [25, { "from_path": "src/c{i3}.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts" }] },
+      "extraReferences": [
+        { "from_path": "src/k1.ts", "to_symbol": "cold", "line": 2, "decl_file": "src/a.ts" },
+        { "from_path": "src/k2.ts", "to_symbol": "cold", "line": 2, "decl_file": "src/a.ts" },
+        { "from_path": "src/k3.ts", "to_symbol": "cold", "line": 2, "decl_file": "src/a.ts" }
+      ],
+      "file_rank": { "$each": [25, { "path": "src/c{i3}.ts", "rank": { "$lin": [1, -0.01] } }] },
+      "extraFileRank": [{ "path": "src/k1.ts", "rank": 0.001 }, { "path": "src/k2.ts", "rank": 0.002 }, { "path": "src/k3.ts", "rank": 0.003 }],
+      "file_facts": { "$each": [25, { "path": "src/c{i3}.ts", "endpoints": ["GET /c{i3}"], "crons": [] }] }
+    },
+    {
+      "name": "rank_ties_order_by_path_line_symbol_in_byte_order",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 10, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/a.ts", "name": "b", "kind": "function", "line": 1, "end_line": 3 },
+        { "path": "src/a.ts", "name": "a", "kind": "function", "line": 5, "end_line": 8 },
+        { "path": "src/a.ts", "name": "B", "kind": "function", "line": 9, "end_line": 12 }
+      ],
+      "references": [
+        { "from_path": "src/z.ts", "to_symbol": "a", "line": 1, "decl_file": "src/a.ts" },
+        { "from_path": "src/m.ts", "to_symbol": "b", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "src/m.ts", "to_symbol": "a", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "src/m.ts", "to_symbol": "B", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "src/m.ts", "to_symbol": "a", "line": 2, "decl_file": "src/a.ts" },
+        { "from_path": "src/M.ts", "to_symbol": "a", "line": 9, "decl_file": "src/a.ts" },
+        { "from_path": "src/\\u{e9}.ts", "to_symbol": "a", "line": 1, "decl_file": "src/a.ts" },
+        { "from_path": "src/_u.ts", "to_symbol": "a", "line": 1, "decl_file": "src/a.ts" }
+      ],
+      "file_rank": [
+        { "path": "src/z.ts", "rank": 0.5 },
+        { "path": "src/m.ts", "rank": 0.5 },
+        { "path": "src/M.ts", "rank": 0.5 },
+        { "path": "src/\\u{e9}.ts", "rank": 0.5 },
+        { "path": "src/_u.ts", "rank": 0.5 }
+      ],
+      "file_facts": []
+    },
+    {
+      "name": "missing_file_rank_rows_exclude_the_caller",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [{ "path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3 }],
+      "references": [
+        { "from_path": "src/ranked.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts" },
+        { "from_path": "src/unranked.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts" }
+      ],
+      "file_rank": [{ "path": "src/ranked.ts", "rank": 0 }],
+      "file_facts": []
+    },
+    {
+      "name": "same_name_declared_in_two_changed_files_merges_callers",
+      "changedFiles": ["src/a.ts", "src/b.ts"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/b.ts", "name": "init", "kind": "function", "line": 4, "end_line": 6 },
+        { "path": "src/a.ts", "name": "init", "kind": "function", "line": 2, "end_line": 3 },
+        { "path": "src/a.ts", "name": "init", "kind": "function", "line": 20, "end_line": 22 },
+        { "path": "src/c.ts", "name": "go", "kind": "function", "line": 1, "end_line": 30 }
+      ],
+      "references": [
+        { "from_path": "src/c.ts", "to_symbol": "init", "line": 5, "decl_file": "src/a.ts" },
+        { "from_path": "src/c.ts", "to_symbol": "init", "line": 6, "decl_file": "src/b.ts" },
+        { "from_path": "src/a.ts", "to_symbol": "init", "line": 25, "decl_file": "src/b.ts" }
+      ],
+      "file_rank": [{ "path": "src/c.ts", "rank": 0.4 }, { "path": "src/a.ts", "rank": 0.3 }],
+      "file_facts": []
+    },
+    {
+      "name": "qualified_names_only_give_no_callers",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [{ "path": "src/a.ts", "name": "Cls.method", "kind": "function", "line": 3, "end_line": 6 }],
+      "references": [{ "from_path": "src/c.ts", "to_symbol": "Cls.method", "line": 1, "decl_file": "src/a.ts" }],
+      "file_rank": [{ "path": "src/c.ts", "rank": 0.4 }],
+      "file_facts": []
+    },
+    {
+      "name": "no_symbols_in_the_changed_files",
+      "changedFiles": ["README.md", "src/data.json"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [{ "path": "src/other.ts", "name": "x", "kind": "function", "line": 1, "end_line": 2 }],
+      "references": [],
+      "file_rank": [],
+      "file_facts": []
+    },
+    {
+      "name": "case_sensitive_names_and_kinds",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/a.ts", "name": "Foo", "kind": "class", "line": 1, "end_line": 3 },
+        { "path": "src/a.ts", "name": "foo", "kind": "function", "line": 5, "end_line": 6 },
+        { "path": "src/a.ts", "name": "FOO", "kind": "enum", "line": 7, "end_line": 9 },
+        { "path": "src/a.ts", "name": "I", "kind": "interface", "line": 10, "end_line": 11 },
+        { "path": "src/a.ts", "name": "T", "kind": "type", "line": 12, "end_line": 12 }
+      ],
+      "references": [
+        { "from_path": "src/c.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts" },
+        { "from_path": "src/c.ts", "to_symbol": "FOO", "line": 2, "decl_file": "src/a.ts" },
+        { "from_path": "src/c.ts", "to_symbol": "Foo", "line": 3, "decl_file": "src/a.ts" }
+      ],
+      "file_rank": [{ "path": "src/c.ts", "rank": 0.4 }],
+      "file_facts": []
+    },
+    {
+      "name": "partial_index_keeps_the_data_and_is_flagged",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "partial", "files_indexed": 3, "files_skipped": 2, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": { "reason": "parse timed out" } },
+      "symbols": [{ "path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3 }],
+      "references": [{ "from_path": "src/c.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts" }],
+      "file_rank": [{ "path": "src/c.ts", "rank": 0.4 }],
+      "file_facts": [{ "path": "src/c.ts", "endpoints": ["GET /c"], "crons": [] }]
+    },
+    {
+      "name": "bounded_walk_is_repo_too_large",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": { "bounded": 3 } },
+      "symbols": [{ "path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3 }],
+      "references": [{ "from_path": "src/c.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts" }],
+      "file_rank": [{ "path": "src/c.ts", "rank": 0.4 }],
+      "file_facts": []
+    },
+    {
+      "name": "bounded_beats_partial",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "partial", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": { "bounded": 1 } },
+      "symbols": [{ "path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3 }],
+      "references": [],
+      "file_rank": [],
+      "file_facts": []
+    },
+    {
+      "name": "bounded_zero_is_complete",
+      "changedFiles": ["src/a.ts"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": { "bounded": 0 } },
+      "symbols": [{ "path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3 }],
+      "references": [],
+      "file_rank": [],
+      "file_facts": []
+    },
+    {
+      "name": "symbol_rows_are_ordered_by_path_line_name_in_byte_order",
+      "changedFiles": ["src/b.ts", "src/a.ts", "src/B.ts"],
+      "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc123", "indexer_version": 1, "stats": {} },
+      "symbols": [
+        { "path": "src/b.ts", "name": "z", "kind": "function", "line": 1, "end_line": 3 },
+        { "path": "src/a.ts", "name": "b", "kind": "function", "line": 5, "end_line": 6 },
+        { "path": "src/a.ts", "name": "B", "kind": "function", "line": 5, "end_line": 6 },
+        { "path": "src/a.ts", "name": "_a", "kind": "function", "line": 5, "end_line": 6 },
+        { "path": "src/a.ts", "name": "a", "kind": "function", "line": 2, "end_line": 6 },
+        { "path": "src/B.ts", "name": "m", "kind": "function", "line": 1, "end_line": 6 },
+        { "path": "src/a.ts", "name": "\\u{e9}", "kind": "function", "line": 5, "end_line": 6 }
+      ],
+      "references": [],
+      "file_rank": [],
+      "file_facts": []
+    },
+    {
+      "name": "failed_index_without_a_clone_gives_an_empty_degraded_result",
+      "changedFiles": ["src/a.ts"],
+      "repo_clone": null,
+      "index_state": { "status": "failed", "files_indexed": 0, "files_skipped": 0, "last_indexed_sha": "", "indexer_version": 1, "stats": { "reason": "boom" } },
+      "symbols": [], "references": [], "file_rank": [], "file_facts": []
+    }
+  ],
+  "clone": [
+    { "name": "flag_off_invoice_symbols_and_callers", "enabled": false, "changedFiles": ["src/billing/invoice.ts"] },
+    { "name": "flag_off_money", "enabled": false, "changedFiles": ["src/billing/money.ts"] },
+    { "name": "no_index_row_is_no_data", "enabled": true, "index_state": null, "changedFiles": ["src/billing/invoice.ts", "src/billing/money.ts"] },
+    { "name": "index_state_read_error_counts_as_none", "enabled": true, "index_state": "error", "changedFiles": ["src/billing/money.ts"] },
+    { "name": "failed_index_is_index_failed", "enabled": true, "index_state": { "status": "failed", "files_indexed": 0, "files_skipped": 0, "last_indexed_sha": "", "indexer_version": 1, "stats": { "reason": "clone missing" } }, "changedFiles": ["src/api/orders.ts"] },
+    { "name": "degraded_index_with_its_own_reason", "enabled": true, "index_state": { "status": "degraded", "files_indexed": 0, "files_skipped": 0, "last_indexed_sha": "", "indexer_version": 1, "stats": { "degradedReason": "flag_off" } }, "changedFiles": ["src/billing/money.ts"] },
+    { "name": "degraded_index_without_a_reason_is_index_failed", "enabled": true, "index_state": { "status": "degraded", "files_indexed": 0, "files_skipped": 0, "last_indexed_sha": "", "indexer_version": 1, "stats": {} }, "changedFiles": ["src/billing/money.ts"] },
+    { "name": "degraded_index_with_no_data_reason", "enabled": true, "index_state": { "status": "degraded", "files_indexed": 0, "files_skipped": 0, "last_indexed_sha": "", "indexer_version": 1, "stats": { "degradedReason": "no_data" } }, "changedFiles": ["src/billing/money.ts"] },
+    { "name": "empty_changed_files_is_no_data_and_empty", "enabled": true, "index_state": { "status": "full", "files_indexed": 3, "files_skipped": 0, "last_indexed_sha": "abc", "indexer_version": 1, "stats": {} }, "changedFiles": [] },
+    { "name": "flag_off_beats_empty_changed_files", "enabled": false, "changedFiles": [] },
+    { "name": "changed_file_without_symbols", "enabled": false, "changedFiles": ["notes.md", "src/empty.ts"] },
+    { "name": "changed_file_not_in_the_clone", "enabled": false, "changedFiles": ["src/missing.ts"] },
+    { "name": "no_clone_path", "enabled": false, "noClone": true, "changedFiles": ["src/billing/invoice.ts"] },
+    { "name": "no_repo_row", "enabled": false, "noRepo": true, "changedFiles": ["src/billing/invoice.ts"] },
+    { "name": "orders_ts_symbols", "enabled": false, "changedFiles": ["src/api/orders.ts"] },
+    { "name": "types_d_ts_declare_function", "enabled": false, "changedFiles": ["src/types.d.ts"] },
+    { "name": "dotfile_named_like_an_extension_is_not_walked", "enabled": false, "changedFiles": ["src/.ts"] },
+    { "name": "uppercase_extension_is_not_walked", "enabled": false, "changedFiles": ["src/UPPER.TS"] },
+    { "name": "mjs_and_mts", "enabled": false, "changedFiles": ["src/legacy.mjs", "src/module.mts"] },
+    { "name": "unicode_and_spaced_names", "enabled": false, "changedFiles": ["src/\\u{e9}.ts", "src/weird name.ts"] },
+    { "name": "ignored_directories_are_not_walked", "enabled": false, "changedFiles": ["dist/gen.ts", "build/b.ts"] },
+    { "name": "caller_files_in_ignored_directories_do_not_count", "enabled": false, "changedFiles": ["src/billing/invoice.ts"], "note": "dist/gen.ts and build/b.ts reference createInvoice and are not callers" },
+    { "name": "test_file_changed", "enabled": false, "changedFiles": ["test/invoice.test.ts"] },
+    { "name": "jsx_and_js_callers", "enabled": false, "changedFiles": ["src/jobs/nightly.ts", "src/lib/util.js"] },
+    {
+      "name": "size_boundary_below_two_million_bytes",
+      "enabled": false,
+      "changedFiles": ["src/big_ok.ts", "src/big_no.ts"],
+      "extraFiles": [
+        { "path": "src/big_ok.ts", "content": "export function bigOk() {}\n", "padTo": 1999999 },
+        { "path": "src/big_no.ts", "content": "export function bigNo() {}\n", "padTo": 2000000 }
+      ]
+    },
+    {
+      "name": "symbolic_links_are_not_followed",
+      "enabled": false,
+      "changedFiles": ["src/link.ts", "linkdir/money.ts", "src/billing/money.ts"],
+      "extraFiles": [
+        { "path": "src/link.ts", "link": "billing/money.ts" },
+        { "path": "linkdir", "link": "src/billing" }
+      ]
+    },
+    {
+      "name": "a_symbol_with_many_callers_is_not_capped_on_the_scan",
+      "enabled": false,
+      "changedFiles": ["src/hot.ts"],
+      "extraFiles": [
+        { "path": "src/hot.ts", "content": "export function hot() {}\n" },
+        { "path": "src/callers/c01.ts", "content": "import { hot } from '../hot';\nexport function c01() { hot(); }\n" },
+        { "path": "src/callers/c02.ts", "content": "import { hot } from '../hot';\nexport function c02() { hot(); }\n" },
+        { "path": "src/callers/c03.ts", "content": "import { hot } from '../hot';\nexport function c03() { hot(); hot(); }\nexport function c03b() { hot(); }\n" }
+      ]
+    },
+    {
+      "name": "same_name_in_changed_and_other_files",
+      "enabled": false,
+      "changedFiles": ["src/one/dup.ts"],
+      "extraFiles": [
+        { "path": "src/one/dup.ts", "content": "export function shared() { return 1; }\nexport function onlyHere() { return shared(); }\n" },
+        { "path": "src/two/dup.ts", "content": "export function shared() { return 2; }\nexport function twoCaller() { return shared(); }\n" },
+        { "path": "src/three/use.ts", "content": "import { shared } from '../one/dup';\nfunction useIt() {\n  return shared();\n}\n" }
+      ]
+    },
+    {
+      "name": "enclosing_symbol_rules_on_the_scan",
+      "enabled": false,
+      "changedFiles": ["src/lib2/target.ts"],
+      "extraFiles": [
+        { "path": "src/lib2/target.ts", "content": "export function target() {}\n" },
+        { "path": "src/lib2/user.ts", "content": "target();\nfunction first() {\n  target();\n}\nclass Box {\n  run() {\n    target();\n  }\n}\nconst later = () => target();\n" },
+        { "path": "src/lib2/plain.ts", "content": "// no declarations here\ntarget();\n" }
+      ]
+    }
+  ]
+}

@@ -26,6 +26,7 @@ import { Writer } from './lib.mts';
 import { genCallers } from './callers.mts';
 import { genDomain } from './domain.mts';
 import { genEngine } from './engine.mts';
+import { genIntent } from './intent.mts';
 import { genLlm } from './llm.mts';
 import { genMultiAgent } from './multiagent.mts';
 import { genRuns } from './runs.mts';
@@ -132,6 +133,10 @@ const N = {
   ripgrep: await load(`${S}adapters/codeindex/ripgrep.ts`),
   sourceAdapters: await load(`${S}modules/repo-intel/infrastructure/source-adapters.ts`),
   sourceQueries: await load(`${S}modules/repo-intel/application/source-queries.ts`),
+  // Intent hook (Phase 5, intent.json): the real service behind the executor.
+  intentService: await load(`${S}modules/intent/application/intent-service.ts`),
+  intentModel: await load(`${S}modules/intent/infrastructure/llm-model.ts`),
+  intentRepo: await load(`${S}modules/intent/infrastructure/repository.ts`),
 };
 
 const drizzle = ddRequire('drizzle-orm') as Mod;
@@ -164,6 +169,7 @@ try {
   await genMultiAgent(ctx);
   await genCallers(ctx);
   await genRuns(ctx);
+  await genIntent(ctx);
   ctx.writer.write('meta.json', {
     note: 'Provenance of the goldens. Regenerate with the command in gen/README.md.',
     devDigestCommit: ddHead,

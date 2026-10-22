@@ -23,6 +23,8 @@ type endInput struct {
 	usage  *reviewer.Usage
 	skills []domain.ReviewSkill
 	pc     *domain.ContextTrace
+	// intent is the request's intent trace when its pre-work ran before the run ended.
+	intent *domain.IntentTrace
 }
 
 // endRun records a failed or cancelled run so that it and the reason survive a reload: the
@@ -62,6 +64,7 @@ func (e *Executor) endRun(ctx context.Context, in endInput) {
 		Usage:          &usage,
 		SkillsUsed:     domain.SkillsUsed(in.skills),
 		ProjectContext: in.pc,
+		Intent:         in.intent,
 	})
 	e.logRecordFailure(in.job.RunID, "save ended trace", e.store.SaveTrace(ctx, in.job.RunID, trace))
 	e.bus.Complete(in.job.RunID)

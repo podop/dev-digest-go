@@ -186,8 +186,9 @@ type Finding struct {
 	TrifectaComponents []string
 	// Skill is the name of the skill rule the finding enforces; nil when none.
 	Skill *string
-	// OutOfScope is the model's scope judgment; nil means null. Phase 4 has no intent, so the
-	// engine result always carries nil and a stored finding is false (spec FR4028).
+	// OutOfScope is the model's scope judgment; nil means null. The engine result carries nil
+	// without a PR intent (the model had nothing to judge against) and a plain boolean with one
+	// (ApplyScopePolicy); a stored finding is false for nil (spec FR4028, FR5025).
 	OutOfScope *bool
 }
 
@@ -230,12 +231,15 @@ type Message struct {
 // SectionName names a prompt section in the prompt log.
 type SectionName string
 
-// The prompt sections a Phase 4 review can contain, in render order (no intent, no memory).
+// The prompt sections a review can contain, in render order (no memory). The intent pair follows
+// pr_description and appears only with a PR intent (Phase 5 spec 7.5).
 const (
 	SectionSystem         SectionName = "system"
 	SectionInjectionGuard SectionName = "injection_guard"
 	SectionTask           SectionName = "task"
 	SectionPRDescription  SectionName = "pr_description"
+	SectionIntentRule     SectionName = "intent_rule"
+	SectionIntent         SectionName = "intent"
 	SectionSkills         SectionName = "skills"
 	SectionRepoMap        SectionName = "repo_map"
 	SectionSpecsRule      SectionName = "specs_rule"
@@ -254,6 +258,8 @@ const (
 	SourceAuthor      SectionSource = "author"
 	SourceRepo        SectionSource = "repo"
 	SourceCurated     SectionSource = "curated"
+	// SourceModelDerived marks text a separate model derived (the PR intent).
+	SourceModelDerived SectionSource = "model_derived"
 )
 
 // Trust says whether the model may treat a section as instructions.
@@ -281,7 +287,8 @@ type SectionMeta struct {
 }
 
 // Assembly is the prompt of a call as the run trace records it (spec 7.8, "Trace assembly").
-// Memory and intent are always null in Phase 4 and are left out of the type.
+// Memory is always null in Phases 4 and 5 and is left out of the type; Intent is nil without a PR
+// intent.
 type Assembly struct {
 	// System is the agent's system prompt followed by the injection guard.
 	System string
@@ -291,6 +298,8 @@ type Assembly struct {
 	Specs *string
 	// Callers, RepoMap and PRDescription are nil when absent (PRDescription is the cut text).
 	Callers, RepoMap, PRDescription *string
+	// Intent is the rendered PR intent text (before wrapping); nil when the run had no intent.
+	Intent *string
 	// User is the user message.
 	User string
 }
@@ -304,8 +313,8 @@ type ProjectDoc struct {
 
 // Outcome is the result of a successful engine run.
 type Outcome struct {
-	// Review is the reduced, grounded review; its Score is recomputed from the kept findings
-	// and every kept finding's OutOfScope is nil.
+	// Review is the reduced, grounded review; its Score is recomputed from the kept findings.
+	// Every kept finding's OutOfScope is nil without a PR intent and a plain boolean with one.
 	Review Review
 	// Grounding is the summary "<kept>/<total> passed".
 	Grounding string

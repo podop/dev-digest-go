@@ -839,8 +839,13 @@ func TestBlobAt_SizeCheckedBeforeReading(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := readFile(t, log)
-	if _, err := c.BlobAt(t.Context(), "o", "r", head, "big.txt", 99); !errors.Is(err, gitcli.ErrBlobTooLarge) {
+	_, err := c.BlobAt(t.Context(), "o", "r", head, "big.txt", 99)
+	if !errors.Is(err, gitcli.ErrBlobTooLarge) {
 		t.Fatalf("BlobAt(100 bytes, max 99) error = %v, want ErrBlobTooLarge", err)
+	}
+	var bse *gitcli.BlobSizeError
+	if !errors.As(err, &bse) || bse.Size != 100 || bse.Max != 99 {
+		t.Errorf("BlobAt(100 bytes, max 99) error = %#v, want BlobSizeError{Size: 100, Max: 99}", err)
 	}
 	calls := strings.TrimPrefix(readFile(t, log), before)
 	if strings.Contains(calls, "[blob]") {
@@ -865,5 +870,9 @@ func TestBlobAt_OutputAboveTheStdoutCapIsTooLarge(t *testing.T) {
 	got, err := c.BlobAt(t.Context(), "o", "r", head, "huge.bin", 8<<20)
 	if !errors.Is(err, gitcli.ErrBlobTooLarge) || got != nil {
 		t.Errorf("BlobAt(1 MiB + 10 B, max 8 MiB) = %d bytes, %v, want nil, ErrBlobTooLarge", len(got), err)
+	}
+	var bse *gitcli.BlobSizeError
+	if !errors.As(err, &bse) || bse.Size != 1<<20+10 || bse.Max != 1<<20 {
+		t.Errorf("BlobAt(1 MiB + 10 B, max 8 MiB) error = %#v, want BlobSizeError{Size: 1 MiB + 10, Max: 1 MiB}", err)
 	}
 }

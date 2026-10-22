@@ -8,8 +8,8 @@
 //
 // Reader implements the operations of spec section 7.3 marked Phase 3: RepoMap, FileRank,
 // SymbolsInFiles, TopFilesByRank, ConventionSamples, CriticalPaths and ListIndexedFiles
-// (IndexState lives on Service), plus CallerSignatures of Phase 4 (section 7.11). With
-// REPO_INTEL_ENABLED off they return empty results (RepoMap: reason flag_off). A missing or
+// (IndexState lives on Service), plus CallerSignatures of Phase 4 (section 7.11) and BlastRadius
+// of Phase 5 (section 7.7). With REPO_INTEL_ENABLED off they return empty results (RepoMap: reason flag_off). A missing or
 // degraded index is never an error; a database error is returned to the caller.
 //
 // CallerSignatures does not read the index tables except file_rank, which only orders the rows:
@@ -18,13 +18,25 @@
 // CallerScan ports given to NewReader by WithCallerScan. The scan has its own walk (clonetree.ScanCallers), never follows a symbolic link, bounds the files,
 // the names and the rows, honours ctx and ends after 30 s with an error.
 //
-// The remaining operations of the contract are later-phase work and have no implementation here:
+// # Blast radius
 //
-//   - BlastRadius(repoID, changedFiles) returns the Node BlastResult: changed symbols, resolved
-//     callers (at most 20 per changed symbol, rank descending), impacted endpoints, facts per
-//     caller file, degraded and reason (Phase 5).
+// BlastRadius (Phase 5, spec section 7.7) has two paths. With a usable index (status full or
+// partial) it reads the index tables: the symbols of the changed files, the references resolved
+// to them (decl_file) joined with file_rank, each caller labelled with its enclosing stored
+// symbol, at most 20 callers per changed symbol in rank order, and the file_facts of the kept
+// caller files; a partial index or one with stats.bounded keeps its data tagged index_partial or
+// repo_too_large. With the switch off, no changed file or an unusable index it scans the clone
+// (the CallerScan ports of WithCallerScan, the walk of CallerSignatures, domain.ReferenceScanner)
+// with the regex symbol extractor of Node (domain.ExtractSymbols), bounded by the scan timeout
+// (30 s: the empty degraded result), 1,000 changed symbols and 5,000 caller rows, and tags the
+// answer degraded with flag_off, no_data, index_failed or the state's own reason; it has no
+// facts. Neither path fails for an unusable index; a Reader built without WithCallerScan answers
+// the empty degraded result instead of scanning.
+//
+// The remaining operation of the contract is later-phase work and has no implementation here:
+//
 //   - UnresolvedReferences(repoID, files) returns the references of the files whose decl_file is
-//     still NULL (no consumer yet).
+//     still NULL (no consumer; decision D5007).
 //
-// The phase that implements one of them extends Reader with the method of that name.
+// The phase that implements it extends Reader with the method of that name.
 package app

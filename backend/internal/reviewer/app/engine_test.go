@@ -244,7 +244,8 @@ func TestRun_OversizeSplitReportsMapReduce(t *testing.T) {
 	d := domain.ParseUnifiedDiff(domain.RawDiff([]domain.PatchFile{{Path: "big.ts", Patch: patch}}))
 	rec := &recorder{}
 	l := echoLLM(review(100, domain.VerdictApprove))
-	out, err := reviewerapp.Run(t.Context(), reviewerapp.Input{Diff: d, Strategy: domain.StrategySinglePass}, l, rec, reviewerapp.Options{})
+	// One chunk at a time: with the default concurrency the two parts' call events race.
+	out, err := reviewerapp.Run(t.Context(), reviewerapp.Input{Diff: d, Strategy: domain.StrategySinglePass}, l, rec, reviewerapp.Options{MapConcurrency: 1})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}

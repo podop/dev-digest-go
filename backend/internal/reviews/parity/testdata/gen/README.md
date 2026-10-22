@@ -1,4 +1,4 @@
-# Phase 4 parity corpus and Node golden generator (S12)
+# Phase 4 parity corpus and Node golden generator (S12; Phase 5 adds `intent.json`, S22)
 
 `../corpus/` holds committed inputs (cases, fixtures, diffs). `../goldens/*.json` are the expected outputs,
 produced by running the **Node** implementation of dev-digest (commit `d1c9093`) from the read-only checkout
@@ -16,7 +16,7 @@ there; a long path such as the Claude scratchpad breaks tsx's IPC socket with a 
 ```sh
 cd backend/internal/reviews/parity/testdata
 DD=/home/ypodop/IdeaProjects/dev-digest
-mkdir -p /tmp/p4gen
+mkdir -p /tmp/p4gen   # any short path, e.g. /tmp/p5l
 TMPDIR=/tmp/p4gen $DD/server/node_modules/.bin/tsx --tsconfig $DD/server/tsconfig.json \
   gen/generate.mts --dd $DD --out goldens
 ```
@@ -83,6 +83,7 @@ walks are sorted.
 | `callers.json` | `extractReferences`; `getCallerSignatures` over fixture clones | `corpus/callers/**` | `references[].lines`; `signatures[].rows` |
 | `runs.json` | `ReviewRunExecutor.executeRuns` through fake ports (see below) | `corpus/runs/cases.json`, `corpus/prs/*` | per scenario: `events[runId]`, `calls`, `finalRuns`, `traces`, `llmCalls`, `promptLog` |
 | `sse.json` | Fastify + fastify-sse-v2 + the real `reviewsRoutes` | `corpus/sse/cases.json` + scenarios | raw HTTP status/headers/body of `GET /runs/:id/events` |
+| `intent.json` | `ReviewRunExecutor` with the intent hook **on**: the real `IntentService` behind the executor (Phase 5, S22) | `corpus/intent/cases.json`, `corpus/prs/*` | like `runs.json` plus `resolve`, `intentCalls`, `intentLlmCalls`, `intentPromptLog`, `intentStore` (see below) |
 
 ### `engine.json` event comparison
 
@@ -123,6 +124,51 @@ Scenarios with several jobs run the agents one after another in Node (`runBounde
 `REVIEW_AGENT_CONCURRENCY`, so compare per run, not across runs. The cancel scenarios (`cancel_*`) pin the
 semantics (status `cancelled`, error `Cancelled by user`, usage recorded, final event `Run cancelled by user`); the
 position of `Cancellation requested — stopping…` between other events depends on timing in Go.
+
+### `intent.json` (Phase 5, S22: the switch-on case)
+
+`runs.json` and every other golden above are the **switch-off** case (`REVIEW_INTENT_ENABLED=false`, spec D5017) and are
+byte-identical to the Phase 4 files; `gen/intent.mts` only adds `intent.json`. Regenerate with the same command (one run
+writes everything); the two checks below (rerun identical, Phase 4 files unchanged) apply to the whole `goldens/` directory.
+
+Each scenario has the layout of a `runs.json` scenario (`input`, `events`, `busComplete`, `calls`, `finalRuns`, `traces`,
+`llmCalls`, `promptLog`, same comparison rules) and these additions:
+
+- `resolve.calls[]`: what crossed the executor's `IntentResolver` port, in call order (one per request). `input` = the
+  resolver input (`workspaceId`, `pull`, `repo`, `changedFiles` = parsed diff paths in diff order, `diffExcerptLen` and
+  `diffExcerptSha256` of the raw stored diff text, `force` false, `hasSignal`); `events[]` = what the resolver emitted
+  through `onEvent` (`kind`, `msg`, `data?`), which the executor fans out to every run; `result` = `{status:"used", intent,
+  trace}` (the `Intent` and the `IntentTrace` of spec 7.5) or `{status:"unavailable", warning}`; `signalAbortedAtReturn` =
+  the request signal was aborted when the resolver returned (every run of the request was cancelled). **S32 replays this**:
+  a fake `IntentResolver` that emits `events`, then returns `result` (blocking until its ctx ends when
+  `signalAbortedAtReturn` is true), under the real Go executor; the run events, prompts, traces and stored rows must equal
+  the golden. A scenario whose diff fails to load has `resolve.calls: []` (the hook never runs, ended traces carry `intent` null).
+- `intentCalls[]`: the intent service's own port calls in order (`settings.resolveFeatureModel`, `pulls.getCommits`, `store.get`,
+  `tickets.read`, `docs.read`, `llm.resolve`, `store.upsert` with the recorded `pr_intent` statement). Information for the
+  Phase 5 intent service tests (S23/S30); the Go executor test does not need it.
+- `intentLlmCalls[]`: the classification request (`schemaName` `IntentClassification`, `model`, `temperature` 0,
+  `maxTokens` 5000, `maxRetries` 1, `messages`). `intentPromptLog[]`: the `intent` prompt-log entry (`system`, `task`,
+  `intent_sources` sections with `items`). `intentStore.row`: the `pr_intent` row after the run (`null` when none was written).
+- `input.intent`: the scenario's fakes (feature model, commits, tickets, docs, classification script, `shortBudget`, `preseed`
+  with its computed `inputHash`: a `fresh` row hits the cache, a `stale` one is replaced).
+
+What the scenarios pin: cache miss (classification call, row upsert, `PR intent sources: …` then `PR intent derived (…)`),
+cache hit (`PR intent ready (cached, confidence=…)`, `trace.intent.cache_hit` true, no call), stale row re-derived, degraded
+sources (medium confidence), inferred intent (commits/branch/diff sources, unpriced call: no cost part), unavailable
+(classification fails, provider key missing, feature model unresolvable, 120 s budget exceeded: `warning: intent unavailable —
+<message>` with data `{"warning":"intent_unavailable"}`, no `## PR intent`, `trace.intent` = `{status:"unavailable",
+warning}`), one derivation shared by the two agent runs of a request, map-reduce chunks each carrying the `## PR intent`
+section (prompt-log sections `intent_rule`, `intent` after `pr_description`; `trace.prompt_assembly.intent` = the rendered
+text), the engine's `scope: <n> out-of-scope finding(s) kept (<c> critical)` event (counted after grounding; stored
+`outOfScope` = the coerced boolean), intent tokens/cost kept out of the run's `agent_runs` stats, a cancel of one of two
+runs (the derivation continues) and of the only run (the derivation is aborted), ended traces (failure, cancel) with
+`trace.intent`, and the diff failure that ends before the hook.
+
+Not parity data: `derived_at`/`derivedAt` (logical clock), the text of an aborted derivation when a *caller* signal ends it
+(`This operation was aborted` is Node's `DOMException` text: compare the `warning: intent unavailable — ` prefix), and the
+`runtime.node` version. The budget scenario runs the service's real 120 s `setTimeout` shortened to 20 ms (only that delay is
+rewritten); the expected text is `intent derivation exceeded its 120000ms budget`. Not covered: two *requests* joining one
+in-flight derivation (the service's single flight; tested in S23), the SSE bytes of these runs, `force` refresh.
 
 ### `sse.json`
 

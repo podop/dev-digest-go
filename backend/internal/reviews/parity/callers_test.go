@@ -98,6 +98,14 @@ func (s *callerStore) RankedPaths(context.Context, string, int) ([]domain.Ranked
 
 func (s *callerStore) Edges(context.Context, string) ([]domain.Edge, error) { return nil, nil }
 
+func (s *callerStore) ResolvedCallers(context.Context, string, []string, []string) ([]domain.ResolvedCaller, error) {
+	return nil, nil
+}
+
+func (s *callerStore) FileFacts(context.Context, string, []string) ([]domain.FileFacts, error) {
+	return nil, nil
+}
+
 // copyTree copies the fixture directory src into dst.
 func copyTree(t testing.TB, src, dst string) {
 	t.Helper()

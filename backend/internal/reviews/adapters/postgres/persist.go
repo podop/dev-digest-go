@@ -39,8 +39,9 @@ func (s *Store) InsertReview(ctx context.Context, r domain.NewReview) (string, e
 }
 
 // InsertFindings inserts the findings of a review in the given order, which is also the order a
-// read returns them in. kind defaults to "finding", out_of_scope is false, skill_id is the id of
-// the run's skill with the cited name; the model's own id and evidence are not stored.
+// read returns them in. kind defaults to "finding", out_of_scope is the engine's boolean (nil, a
+// review without a PR intent, is false), skill_id is the id of the run's skill with the cited
+// name; the model's own id and evidence are not stored.
 func (s *Store) InsertFindings(ctx context.Context, reviewID string, findings []reviewer.Finding, skillIDs map[string]string) error {
 	if len(findings) == 0 {
 		return nil
@@ -76,7 +77,7 @@ func newFindingRow(reviewID string, f reviewer.Finding, skillIDs map[string]stri
 		Suggestion: cleanPtr(f.Suggestion),
 		Confidence: f.Confidence,
 		Kind:       kind,
-		OutOfScope: false,
+		OutOfScope: f.OutOfScope != nil && *f.OutOfScope,
 	}
 	if f.TrifectaComponents != nil {
 		components := make([]string, len(f.TrifectaComponents))

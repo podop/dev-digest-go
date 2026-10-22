@@ -1,0 +1,908 @@
+{
+  "note": "classify: classifyFile(path) for every corpus path (paths are decoded from the corpus, so \\u escapes are real characters). build: buildSmartDiff(files, findings). service: SmartDiffService.get over fake tables; the \"latest review per agent\" step is SQL in Node and is emulated by the generator (see corpus/smartdiff/service.json), the rest is the Node code. A SmartDiff body never has a pseudocode_summary key.",
+  "classify": [
+    {"path": "pnpm-lock.yaml", "role": "boilerplate"},
+    {"path": "client/pnpm-lock.yaml", "role": "boilerplate"},
+    {"path": "yarn.lock", "role": "boilerplate"},
+    {"path": "packages/app/package-lock.json", "role": "boilerplate"},
+    {"path": "server/foo.lock", "role": "boilerplate"},
+    {"path": "dist/index.js", "role": "boilerplate"},
+    {"path": "build/main.js", "role": "boilerplate"},
+    {"path": "schema.generated.ts", "role": "boilerplate"},
+    {"path": "vendor/lib.min.js", "role": "boilerplate"},
+    {"path": "src/foo.test.ts", "role": "tests"},
+    {"path": "client/src/Foo.test.tsx", "role": "tests"},
+    {"path": "server/test/smart-diff.it.test.ts", "role": "tests"},
+    {"path": "server/test/helpers/pg.ts", "role": "tests"},
+    {"path": "client/src/__tests__/foo.ts", "role": "tests"},
+    {"path": "e2e/flows/05-review.flow.json", "role": "tests"},
+    {"path": "src/api/index.ts", "role": "wiring"},
+    {"path": "client/vite.config.ts", "role": "wiring"},
+    {"path": "tsconfig.base.json", "role": "wiring"},
+    {"path": ".env.local", "role": "wiring"},
+    {"path": ".github/workflows/ci.yml", "role": "wiring"},
+    {"path": "README.md", "role": "docs"},
+    {"path": "docs/onion-migration.md", "role": "docs"},
+    {"path": "CHANGELOG.md", "role": "docs"},
+    {"path": "LICENSE", "role": "docs"},
+    {"path": "src/config.ts", "role": "core"},
+    {"path": "src/api/handlers.ts", "role": "core"},
+    {"path": "client/dist/x.js", "role": "core"},
+    {"path": "__tests__/__snapshots__/x.snap", "role": "boilerplate"},
+    {"path": ".claude/skills/security/SKILL.md", "role": "wiring"},
+    {"path": "e2e/README.md", "role": "tests"},
+    {"path": "./src/foo.test.ts", "role": "tests"},
+    {"path": "src\\foo.test.ts", "role": "tests"},
+    {"path": ".\\src\\foo.test.ts", "role": "tests"},
+    {"path": "././src/foo.test.ts", "role": "tests"},
+    {"path": "src\\.\\x.ts", "role": "core"},
+    {"path": "docs\\guide.md", "role": "docs"},
+    {"path": "dist\\a.js", "role": "boilerplate"},
+    {"path": "a/b/test/c.ts", "role": "tests"},
+    {"path": "test/a.ts", "role": "tests"},
+    {"path": "a/test", "role": "core"},
+    {"path": "testing/a.ts", "role": "core"},
+    {"path": "a/tests/b.go", "role": "tests"},
+    {"path": "tests/x", "role": "tests"},
+    {"path": "pkg/__tests__/deep/er/x.ts", "role": "tests"},
+    {"path": "pkg/__snapshots__/x.ts", "role": "boilerplate"},
+    {"path": ".env", "role": "wiring"},
+    {"path": ".env.example", "role": "wiring"},
+    {"path": "apps/web/.env.production", "role": "wiring"},
+    {"path": "env.ts", "role": "core"},
+    {"path": ".github/CODEOWNERS", "role": "wiring"},
+    {"path": ".github/a/b.md", "role": "wiring"},
+    {"path": ".claude/settings.json", "role": "wiring"},
+    {"path": ".claude/README.md", "role": "wiring"},
+    {"path": "README.de.md", "role": "docs"},
+    {"path": "README", "role": "docs"},
+    {"path": "README.txt", "role": "docs"},
+    {"path": "docs/README.md", "role": "docs"},
+    {"path": "readme.md", "role": "docs"},
+    {"path": "Readme.md", "role": "docs"},
+    {"path": "NOTES.md", "role": "docs"},
+    {"path": "CHANGELOG", "role": "docs"},
+    {"path": "CHANGELOG-2026.txt", "role": "docs"},
+    {"path": "sub/LICENSE", "role": "docs"},
+    {"path": "LICENSE.txt", "role": "core"},
+    {"path": "LICENSE-MIT", "role": "core"},
+    {"path": "docs/x.ts", "role": "docs"},
+    {"path": "docs/a/b/c/d.png", "role": "docs"},
+    {"path": "doc/x.md", "role": "docs"},
+    {"path": "Docs/x.md", "role": "docs"},
+    {"path": "documentation/x.ts", "role": "core"},
+    {"path": "tsconfig.json", "role": "wiring"},
+    {"path": "foo/tsconfig.build.json", "role": "wiring"},
+    {"path": "tsconfigX.json", "role": "wiring"},
+    {"path": "tsconfig.json5", "role": "core"},
+    {"path": ".eslintrc", "role": "wiring"},
+    {"path": ".eslintrc.cjs", "role": "wiring"},
+    {"path": "a/.eslintrc.json", "role": "wiring"},
+    {"path": "eslintrc", "role": "core"},
+    {"path": "docker-compose.yml", "role": "wiring"},
+    {"path": "docker-compose.prod.yml", "role": "wiring"},
+    {"path": "docker-compose.yaml", "role": "core"},
+    {"path": "infra/docker-compose.override.yml", "role": "wiring"},
+    {"path": "Dockerfile", "role": "core"},
+    {"path": "index.ts", "role": "wiring"},
+    {"path": "index.js", "role": "wiring"},
+    {"path": "src/index.js", "role": "wiring"},
+    {"path": "src/index.tsx", "role": "core"},
+    {"path": "src/index.mjs", "role": "core"},
+    {"path": "indexes.ts", "role": "core"},
+    {"path": "a/b/index.ts", "role": "wiring"},
+    {"path": "jest.config.js", "role": "wiring"},
+    {"path": "a.config", "role": "core"},
+    {"path": "config.ts", "role": "core"},
+    {"path": "x.config.", "role": "wiring"},
+    {"path": ".config.x", "role": "wiring"},
+    {"path": "a/.config.json", "role": "wiring"},
+    {"path": "x.lock", "role": "boilerplate"},
+    {"path": ".lock", "role": "boilerplate"},
+    {"path": "a/b/.lock", "role": "boilerplate"},
+    {"path": "lock", "role": "core"},
+    {"path": "package-lock.json.bak", "role": "core"},
+    {"path": "pnpm-lock.yml", "role": "core"},
+    {"path": "my-yarn.lock", "role": "boilerplate"},
+    {"path": "dist/", "role": "boilerplate"},
+    {"path": "dist", "role": "core"},
+    {"path": "dist/a/b/c.js", "role": "boilerplate"},
+    {"path": "build", "role": "core"},
+    {"path": "build/", "role": "boilerplate"},
+    {"path": "pkg/build/x.js", "role": "core"},
+    {"path": "dist-old/a.js", "role": "core"},
+    {"path": "x.snap", "role": "boilerplate"},
+    {"path": "a/b.snap.ts", "role": "core"},
+    {"path": "a.generated.ts", "role": "boilerplate"},
+    {"path": "a.generated", "role": "core"},
+    {"path": "gen/a.generated.go", "role": "boilerplate"},
+    {"path": "x.generated.", "role": "boilerplate"},
+    {"path": "jquery.min.js", "role": "boilerplate"},
+    {"path": ".min.js", "role": "boilerplate"},
+    {"path": "a.min.jsx", "role": "core"},
+    {"path": "a.min.js.map", "role": "core"},
+    {"path": "a.test.js", "role": "core"},
+    {"path": "a.spec.ts", "role": "tests"},
+    {"path": "a.spec.tsx", "role": "core"},
+    {"path": "a/b.it.test.ts", "role": "tests"},
+    {"path": "a.test.ts.snap", "role": "boilerplate"},
+    {"path": "a.test.mts", "role": "core"},
+    {"path": "a.tests.ts", "role": "core"},
+    {"path": "atest.ts", "role": "core"},
+    {"path": ".test.ts", "role": "tests"},
+    {"path": "test.ts", "role": "core"},
+    {"path": "src/test.ts", "role": "core"},
+    {"path": "a+b.test.ts", "role": "tests"},
+    {"path": "a(1).test.ts", "role": "tests"},
+    {"path": "a[1].test.ts", "role": "tests"},
+    {"path": "a$.test.ts", "role": "tests"},
+    {"path": "a^b/x.test.ts", "role": "tests"},
+    {"path": "a|b.test.ts", "role": "tests"},
+    {"path": "a{1}.test.ts", "role": "tests"},
+    {"path": "a?.test.ts", "role": "tests"},
+    {"path": "a b/c d.test.ts", "role": "tests"},
+    {"path": "ÿ.test.ts", "role": "tests"},
+    {"path": "日本語/テスト.test.ts", "role": "tests"},
+    {"path": "docs/日本語.md", "role": "docs"},
+    {"path": "docs/😀.png", "role": "docs"},
+    {"path": "docs/a\u2028b", "role": "core"},
+    {"path": "docs/a\u2029b", "role": "core"},
+    {"path": "docs/a\rb", "role": "core"},
+    {"path": "docs/a\nb", "role": "core"},
+    {"path": "docs/a\u0085b", "role": "docs"},
+    {"path": "dist/a\nb.js", "role": "core"},
+    {"path": "build/x\u2028y", "role": "core"},
+    {"path": "e2e/a\nb", "role": "core"},
+    {"path": ".github/a\u2028b", "role": "core"},
+    {"path": ".claude/a\rb", "role": "core"},
+    {"path": "a\nb.md", "role": "docs"},
+    {"path": "a\u2028b.md", "role": "docs"},
+    {"path": "src/\u2028/x.test.ts", "role": "tests"},
+    {"path": "x/test/\nfile", "role": "core"},
+    {"path": "x/test/file\n", "role": "core"},
+    {"path": "tests/\u2029", "role": "core"},
+    {"path": "", "role": "core"},
+    {"path": "/", "role": "core"},
+    {"path": "//", "role": "core"},
+    {"path": "/dist/a.js", "role": "core"},
+    {"path": "/docs/a.md", "role": "docs"},
+    {"path": "/README.md", "role": "docs"},
+    {"path": "x//y.md", "role": "docs"},
+    {"path": "a/../README.md", "role": "docs"},
+    {"path": "..", "role": "core"},
+    {"path": "../README.md", "role": "docs"}
+  ],
+  "build": [
+    {
+      "name": "no_files",
+      "files": [],
+      "findings": [],
+      "result": {
+        "groups": [
+          {
+            "role": "core",
+            "files": []
+          },
+          {
+            "role": "tests",
+            "files": []
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 0,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "no_files_with_a_finding_on_another_file",
+      "files": [],
+      "findings": [
+        {"file": "a.ts", "start_line": 3}
+      ],
+      "result": {
+        "groups": [
+          {
+            "role": "core",
+            "files": []
+          },
+          {
+            "role": "tests",
+            "files": []
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 0,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "all_five_roles_sorted_in_english_collation",
+      "files": [
+        {"path": "src/b.ts", "additions": 3, "deletions": 1},
+        {"path": "src/B.ts", "additions": 1, "deletions": 0},
+        {"path": "src/a.ts", "additions": 10, "deletions": 2},
+        {"path": "src/_x.ts", "additions": 0, "deletions": 4},
+        {"path": "src/10.ts", "additions": 1, "deletions": 1},
+        {"path": "src/9.ts", "additions": 2, "deletions": 2},
+        {"path": "src/é.ts", "additions": 1, "deletions": 1},
+        {"path": "src/e.ts", "additions": 1, "deletions": 1},
+        {"path": "src/a-b.ts", "additions": 5, "deletions": 5},
+        {"path": "src/ab.ts", "additions": 5, "deletions": 5},
+        {"path": "src/foo.test.ts", "additions": 20, "deletions": 0},
+        {"path": "test/helpers/pg.ts", "additions": 7, "deletions": 3},
+        {"path": "src/index.ts", "additions": 1, "deletions": 1},
+        {"path": "vite.config.ts", "additions": 2, "deletions": 0},
+        {"path": "README.md", "additions": 4, "deletions": 4},
+        {"path": "docs/guide.md", "additions": 40, "deletions": 0},
+        {"path": "pnpm-lock.yaml", "additions": 1200, "deletions": 900},
+        {"path": "dist/bundle.js", "additions": 99999, "deletions": 0}
+      ],
+      "findings": [],
+      "result": {
+        "groups": [
+          {
+            "role": "core",
+            "files": [
+              {
+                "path": "src/_x.ts",
+                "additions": 0,
+                "deletions": 4,
+                "finding_lines": []
+              },
+              {
+                "path": "src/10.ts",
+                "additions": 1,
+                "deletions": 1,
+                "finding_lines": []
+              },
+              {
+                "path": "src/9.ts",
+                "additions": 2,
+                "deletions": 2,
+                "finding_lines": []
+              },
+              {
+                "path": "src/a-b.ts",
+                "additions": 5,
+                "deletions": 5,
+                "finding_lines": []
+              },
+              {
+                "path": "src/a.ts",
+                "additions": 10,
+                "deletions": 2,
+                "finding_lines": []
+              },
+              {
+                "path": "src/ab.ts",
+                "additions": 5,
+                "deletions": 5,
+                "finding_lines": []
+              },
+              {
+                "path": "src/b.ts",
+                "additions": 3,
+                "deletions": 1,
+                "finding_lines": []
+              },
+              {
+                "path": "src/B.ts",
+                "additions": 1,
+                "deletions": 0,
+                "finding_lines": []
+              },
+              {
+                "path": "src/e.ts",
+                "additions": 1,
+                "deletions": 1,
+                "finding_lines": []
+              },
+              {
+                "path": "src/é.ts",
+                "additions": 1,
+                "deletions": 1,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "tests",
+            "files": [
+              {
+                "path": "src/foo.test.ts",
+                "additions": 20,
+                "deletions": 0,
+                "finding_lines": []
+              },
+              {
+                "path": "test/helpers/pg.ts",
+                "additions": 7,
+                "deletions": 3,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "wiring",
+            "files": [
+              {
+                "path": "src/index.ts",
+                "additions": 1,
+                "deletions": 1,
+                "finding_lines": []
+              },
+              {
+                "path": "vite.config.ts",
+                "additions": 2,
+                "deletions": 0,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "docs",
+            "files": [
+              {
+                "path": "docs/guide.md",
+                "additions": 40,
+                "deletions": 0,
+                "finding_lines": []
+              },
+              {
+                "path": "README.md",
+                "additions": 4,
+                "deletions": 4,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "boilerplate",
+            "files": [
+              {
+                "path": "dist/bundle.js",
+                "additions": 99999,
+                "deletions": 0,
+                "finding_lines": []
+              },
+              {
+                "path": "pnpm-lock.yaml",
+                "additions": 1200,
+                "deletions": 900,
+                "finding_lines": []
+              }
+            ]
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 102232,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "finding_lines_distinct_ascending_other_files_ignored",
+      "files": [
+        {"path": "src/a.ts", "additions": 5, "deletions": 1},
+        {"path": "src/b.ts", "additions": 1, "deletions": 1},
+        {"path": "src/c.test.ts", "additions": 2, "deletions": 0}
+      ],
+      "findings": [
+        {"file": "src/a.ts", "start_line": 40},
+        {"file": "src/a.ts", "start_line": 7},
+        {"file": "src/a.ts", "start_line": 40},
+        {"file": "src/a.ts", "start_line": 7},
+        {"file": "src/a.ts", "start_line": 100},
+        {"file": "src/a.ts", "start_line": 9},
+        {"file": "src/c.test.ts", "start_line": 1},
+        {"file": "src/gone.ts", "start_line": 3},
+        {"file": "SRC/A.ts", "start_line": 3},
+        {"file": "./src/b.ts", "start_line": 3}
+      ],
+      "result": {
+        "groups": [
+          {
+            "role": "core",
+            "files": [
+              {
+                "path": "src/a.ts",
+                "additions": 5,
+                "deletions": 1,
+                "finding_lines": [7, 9, 40, 100]
+              },
+              {
+                "path": "src/b.ts",
+                "additions": 1,
+                "deletions": 1,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "tests",
+            "files": [
+              {
+                "path": "src/c.test.ts",
+                "additions": 2,
+                "deletions": 0,
+                "finding_lines": [1]
+              }
+            ]
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 10,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "total_lines_counts_every_file_even_boilerplate",
+      "files": [
+        {"path": "yarn.lock", "additions": 1000, "deletions": 1000},
+        {"path": "src/a.ts", "additions": 1, "deletions": 2}
+      ],
+      "findings": [],
+      "result": {
+        "groups": [
+          {
+            "role": "core",
+            "files": [
+              {
+                "path": "src/a.ts",
+                "additions": 1,
+                "deletions": 2,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "tests",
+            "files": []
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": [
+              {
+                "path": "yarn.lock",
+                "additions": 1000,
+                "deletions": 1000,
+                "finding_lines": []
+              }
+            ]
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 2003,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "duplicate_paths_are_kept_as_given",
+      "files": [
+        {"path": "src/a.ts", "additions": 1, "deletions": 0},
+        {"path": "src/a.ts", "additions": 2, "deletions": 0}
+      ],
+      "findings": [
+        {"file": "src/a.ts", "start_line": 2}
+      ],
+      "result": {
+        "groups": [
+          {
+            "role": "core",
+            "files": [
+              {
+                "path": "src/a.ts",
+                "additions": 1,
+                "deletions": 0,
+                "finding_lines": [2]
+              },
+              {
+                "path": "src/a.ts",
+                "additions": 2,
+                "deletions": 0,
+                "finding_lines": [2]
+              }
+            ]
+          },
+          {
+            "role": "tests",
+            "files": []
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 3,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "windows_separators_and_dot_slash_classify_but_keep_their_paths",
+      "files": [
+        {"path": "./src/foo.test.ts", "additions": 1, "deletions": 0},
+        {"path": "src\\bar.test.ts", "additions": 1, "deletions": 0},
+        {"path": "docs\\x.md", "additions": 1, "deletions": 0}
+      ],
+      "findings": [
+        {"file": "./src/foo.test.ts", "start_line": 5}
+      ],
+      "result": {
+        "groups": [
+          {
+            "role": "core",
+            "files": []
+          },
+          {
+            "role": "tests",
+            "files": [
+              {
+                "path": "./src/foo.test.ts",
+                "additions": 1,
+                "deletions": 0,
+                "finding_lines": [5]
+              },
+              {
+                "path": "src\\bar.test.ts",
+                "additions": 1,
+                "deletions": 0,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": [
+              {
+                "path": "docs\\x.md",
+                "additions": 1,
+                "deletions": 0,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 3,
+          "proposed_splits": []
+        }
+      }
+    }
+  ],
+  "service": [
+    {
+      "name": "two_agents_one_rerun_and_a_dismissed_finding",
+      "workspace": "ws-1",
+      "askFor": "pr-1",
+      "tables": {
+        "pr": {"id": "pr-1"},
+        "files": [
+          {"path": "src/core.ts", "additions": 30, "deletions": 4},
+          {"path": "src/core.test.ts", "additions": 12, "deletions": 0},
+          {"path": "src/index.ts", "additions": 1, "deletions": 0},
+          {"path": "README.md", "additions": 2, "deletions": 1},
+          {"path": "pnpm-lock.yaml", "additions": 100, "deletions": 90}
+        ],
+        "reviews": [
+          {"id": "r1", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T10:00:00.000Z"},
+          {"id": "r2", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T11:00:00.000Z"},
+          {"id": "r3", "agent_id": "a2", "kind": "review", "created_at": "2026-01-01T10:30:00.000Z"},
+          {"id": "r4", "agent_id": "a2", "kind": "chat", "created_at": "2026-01-01T12:00:00.000Z"}
+        ],
+        "findings": [
+          {"review_id": "r1", "file": "src/core.ts", "start_line": 1},
+          {"review_id": "r2", "file": "src/core.ts", "start_line": 12},
+          {"review_id": "r2", "file": "src/core.ts", "start_line": 4, "dismissed": true},
+          {"review_id": "r2", "file": "src/core.test.ts", "start_line": 3},
+          {"review_id": "r3", "file": "src/core.ts", "start_line": 12},
+          {"review_id": "r3", "file": "src/core.ts", "start_line": 20},
+          {"review_id": "r3", "file": "src/other.ts", "start_line": 20},
+          {"review_id": "r4", "file": "src/core.ts", "start_line": 99}
+        ]
+      },
+      "status": 200,
+      "body": {
+        "groups": [
+          {
+            "role": "core",
+            "files": [
+              {
+                "path": "src/core.ts",
+                "additions": 30,
+                "deletions": 4,
+                "finding_lines": [4, 12, 20]
+              }
+            ]
+          },
+          {
+            "role": "tests",
+            "files": [
+              {
+                "path": "src/core.test.ts",
+                "additions": 12,
+                "deletions": 0,
+                "finding_lines": [3]
+              }
+            ]
+          },
+          {
+            "role": "wiring",
+            "files": [
+              {
+                "path": "src/index.ts",
+                "additions": 1,
+                "deletions": 0,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "docs",
+            "files": [
+              {
+                "path": "README.md",
+                "additions": 2,
+                "deletions": 1,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "boilerplate",
+            "files": [
+              {
+                "path": "pnpm-lock.yaml",
+                "additions": 100,
+                "deletions": 90,
+                "finding_lines": []
+              }
+            ]
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 240,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "deleted_agents_reviews_form_one_group_newest_only",
+      "workspace": "ws-1",
+      "askFor": "pr-1",
+      "tables": {
+        "pr": {"id": "pr-1"},
+        "files": [
+          {"path": "src/a.ts", "additions": 1, "deletions": 1}
+        ],
+        "reviews": [
+          {"id": "r1", "agent_id": null, "kind": "review", "created_at": "2026-01-01T10:00:00.000Z"},
+          {"id": "r2", "agent_id": null, "kind": "review", "created_at": "2026-01-01T09:00:00.000Z"},
+          {"id": "r3", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T08:00:00.000Z"}
+        ],
+        "findings": [
+          {"review_id": "r1", "file": "src/a.ts", "start_line": 1},
+          {"review_id": "r2", "file": "src/a.ts", "start_line": 2},
+          {"review_id": "r3", "file": "src/a.ts", "start_line": 3}
+        ]
+      },
+      "status": 200,
+      "body": {
+        "groups": [
+          {
+            "role": "core",
+            "files": [
+              {
+                "path": "src/a.ts",
+                "additions": 1,
+                "deletions": 1,
+                "finding_lines": [1, 3]
+              }
+            ]
+          },
+          {
+            "role": "tests",
+            "files": []
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 2,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "pr_without_files_gives_five_empty_groups",
+      "workspace": "ws-1",
+      "askFor": "pr-1",
+      "tables": {
+        "pr": {"id": "pr-1"},
+        "files": [],
+        "reviews": [
+          {"id": "r1", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T10:00:00.000Z"}
+        ],
+        "findings": [
+          {"review_id": "r1", "file": "src/a.ts", "start_line": 1}
+        ]
+      },
+      "status": 200,
+      "body": {
+        "groups": [
+          {
+            "role": "core",
+            "files": []
+          },
+          {
+            "role": "tests",
+            "files": []
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 0,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "no_review_at_all",
+      "workspace": "ws-1",
+      "askFor": "pr-1",
+      "tables": {
+        "pr": {"id": "pr-1"},
+        "files": [
+          {"path": "src/a.ts", "additions": 1, "deletions": 1}
+        ],
+        "reviews": [],
+        "findings": []
+      },
+      "status": 200,
+      "body": {
+        "groups": [
+          {
+            "role": "core",
+            "files": [
+              {
+                "path": "src/a.ts",
+                "additions": 1,
+                "deletions": 1,
+                "finding_lines": []
+              }
+            ]
+          },
+          {
+            "role": "tests",
+            "files": []
+          },
+          {
+            "role": "wiring",
+            "files": []
+          },
+          {
+            "role": "docs",
+            "files": []
+          },
+          {
+            "role": "boilerplate",
+            "files": []
+          }
+        ],
+        "split_suggestion": {
+          "too_big": false,
+          "total_lines": 2,
+          "proposed_splits": []
+        }
+      }
+    },
+    {
+      "name": "unknown_pr_is_404",
+      "workspace": "ws-1",
+      "askFor": "pr-404",
+      "tables": {
+        "pr": null,
+        "files": [],
+        "reviews": [],
+        "findings": []
+      },
+      "error": {"name": "NotFoundError", "kind": "not_found", "code": "not_found", "message": "Pull request not found"}
+    }
+  ]
+}

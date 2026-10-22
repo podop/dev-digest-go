@@ -71,6 +71,7 @@ type Client struct {
 	token         func() string
 	baseURL       string
 	http          *http.Client
+	strict        *http.Client // copy of http that never follows a redirect (contents, merged PRs)
 	retry         retry.Options
 	timeout       time.Duration
 	detailTimeout time.Duration
@@ -95,6 +96,7 @@ func New(opts Options) *Client {
 	if c.http == nil {
 		c.http = &http.Client{}
 	}
+	c.strict = withoutRedirects(c.http)
 	if opts.Retry != nil {
 		c.retry = *opts.Retry
 	}
@@ -105,6 +107,23 @@ func New(opts Options) *Client {
 		c.detailTimeout = DefaultDetailTimeout
 	}
 	return c
+}
+
+// withoutRedirects returns a copy of hc that stops at a 3xx and hands it back as the response, so
+// the token header and the query are never resent to wherever a redirect points. The 3xx is then
+// reported like any other non-2xx answer. The caller's client is left unchanged.
+func withoutRedirects(hc *http.Client) *http.Client {
+	c := *hc
+	c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	return &c
+}
+
+// noRedirect returns a shallow copy of c whose requests never follow a redirect. Its methods
+// share the token function, retry policy and timeouts of c.
+func (c *Client) noRedirect() *Client {
+	cc := *c
+	cc.http = c.strict
+	return &cc
 }
 
 // currentToken reads the token for one public call.

@@ -1,0 +1,78 @@
+{
+  "note": "Single-flight, joining, cancellation and budget scenarios of IntentService.resolveForReview (EC5005-EC5007, spec 7.4.6). The LLM fake is gated: `classify` blocks until a `release` step and rejects with the signal's reason when its signal aborts (`llmSawAbort`, `llmAbortReason`). Callers: {signal: true} gives the caller an AbortSignal; `abort` aborts it (reason: omitted = the default AbortError 'This operation was aborted', else Error(reason)). `settle` lets pending microtasks run; `fire` runs the fake timer registered with that delay (the 120000 ms budget); `await` records the caller's result. After every step the number of live flights is recorded (`flights`). Timers are faked for the whole scenario.",
+  "scenarios": [
+    {
+      "name": "two_callers_same_key_share_one_llm_call",
+      "callers": { "A": {}, "B": {} },
+      "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "release": "ok" }, { "await": "A" }, { "await": "B" }]
+    },
+    {
+      "name": "refresh_and_review_with_the_same_key_make_one_call_ec5007",
+      "callers": { "review": {}, "refresh": { "force": true } },
+      "steps": [{ "start": "review" }, { "settle": true }, { "start": "refresh" }, { "settle": true }, { "release": "ok" }, { "await": "review" }, { "await": "refresh" }]
+    },
+    {
+      "name": "different_keys_do_not_join",
+      "callers": { "A": {}, "B": { "pull": { "title": "A different title" } } },
+      "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "release": "ok" }, { "release": "ok" }, { "await": "A" }, { "await": "B" }]
+    },
+    {
+      "name": "one_of_two_cancels_the_other_still_gets_the_record_ec5006",
+      "callers": { "A": { "signal": true }, "B": { "signal": true } },
+      "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "abort": "A", "reason": "Cancelled by user" }, { "settle": true }, { "await": "A" }, { "release": "ok" }, { "await": "B" }]
+    },
+    {
+      "name": "all_callers_cancel_aborts_the_derivation_with_the_last_reason_ec5006",
+      "callers": { "A": { "signal": true }, "B": { "signal": true } },
+      "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "abort": "A" }, { "settle": true }, { "abort": "B", "reason": "Cancelled by user" }, { "settle": true }, { "await": "A" }, { "await": "B" }]
+    },
+    {
+      "name": "single_caller_cancels_default_abort_reason",
+      "callers": { "A": { "signal": true } },
+      "steps": [{ "start": "A" }, { "settle": true }, { "abort": "A" }, { "settle": true }, { "await": "A" }]
+    },
+    {
+      "name": "a_caller_without_a_signal_keeps_the_flight_alive",
+      "callers": { "A": { "signal": true }, "B": {} },
+      "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "abort": "A" }, { "settle": true }, { "await": "A" }, { "release": "ok" }, { "await": "B" }]
+    },
+    {
+      "name": "a_signal_aborted_before_the_call_counts",
+      "callers": { "A": { "signal": true, "abortedBefore": true } },
+      "steps": [{ "start": "A" }, { "settle": true }, { "await": "A" }]
+    },
+    {
+      "name": "shared_failure_reaches_every_caller_and_a_later_call_starts_fresh",
+      "callers": { "A": {}, "B": {}, "C": {} },
+      "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "release": "fail", "message": "The model call failed" }, { "await": "A" }, { "await": "B" }, { "start": "C" }, { "settle": true }, { "release": "ok" }, { "await": "C" }]
+    },
+    {
+      "name": "the_budget_ends_the_derivation_with_its_own_message_ec5005",
+      "callers": { "A": {} },
+      "steps": [{ "start": "A" }, { "settle": true }, { "fire": 120000 }, { "settle": true }, { "await": "A" }]
+    },
+    {
+      "name": "a_stuck_ticket_fetch_is_cut_by_the_budget",
+      "world": { "pull": { "body": "closes #1 and a body long enough to count as substantive text" }, "tickets": { "1": "hang" } },
+      "callers": { "A": {} },
+      "steps": [{ "start": "A" }, { "settle": true }, { "fire": 120000 }, { "settle": true }, { "await": "A" }]
+    },
+    {
+      "name": "a_stuck_doc_fetch_is_cut_by_the_budget_and_both_callers_see_it",
+      "world": { "pull": { "body": "docs/a.md and a body long enough to count as substantive text" }, "docs": { "docs/a.md": "hang" } },
+      "callers": { "A": {}, "B": {} },
+      "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "fire": 120000 }, { "settle": true }, { "await": "A" }, { "await": "B" }]
+    },
+    {
+      "name": "the_budget_timer_is_cleared_when_the_derivation_finishes",
+      "callers": { "A": {} },
+      "steps": [{ "start": "A" }, { "settle": true }, { "release": "ok" }, { "await": "A" }]
+    },
+    {
+      "name": "cancelling_while_a_ticket_is_in_flight_stops_the_derivation_before_the_llm_call",
+      "world": { "pull": { "body": "closes #1 and a body long enough to count as substantive text" }, "tickets": { "1": "hang" } },
+      "callers": { "A": { "signal": true } },
+      "steps": [{ "start": "A" }, { "settle": true }, { "abort": "A", "reason": "Cancelled by user" }, { "settle": true }, { "await": "A" }]
+    }
+  ]
+}

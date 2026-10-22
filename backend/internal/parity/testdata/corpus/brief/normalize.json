@@ -1,0 +1,199 @@
+{
+  "note": "normalizeBrief(raw, facts) and isStale (AC5044, EC5020). facts: {files [{path, ranges}], findings [{file,startLine,endLine}], blast (BlastRadius | null)}. raw is the model output (BriefLlmOutput). `base` facts are merged shallowly into every case's `facts`.",
+  "base": {
+    "files": [
+      { "path": "src/a.ts", "ranges": [{ "start": 10, "end": 20 }, { "start": 40, "end": 40 }] },
+      { "path": "src/b.ts", "ranges": [{ "start": 5, "end": 8 }] },
+      { "path": "src/nodiff.ts", "ranges": [] }
+    ],
+    "findings": [{ "file": "src/a.ts", "startLine": 30, "endLine": 32 }, { "file": "src/unknown.ts", "startLine": 1, "endLine": 3 }],
+    "blast": {
+      "changed_symbols": [{ "name": "foo", "file": "src/a.ts", "kind": "function" }, { "name": "decl", "file": "src/declonly.ts", "kind": "function" }],
+      "downstream": [{ "symbol": "foo", "callers": [{ "name": "h", "file": "src/caller.ts", "line": 77 }, { "name": "g", "file": "src/caller.ts", "line": 12 }, { "name": "k", "file": "src/b.ts", "line": 99 }], "endpoints_affected": [], "crons_affected": [] }],
+      "summary": "s",
+      "degraded": false
+    }
+  },
+  "cases": [
+    { "name": "empty_output", "raw": { "summary": "", "risks": [], "review_focus": [] } },
+    {
+      "name": "grounded_lines_are_kept",
+      "raw": {
+        "summary": "  A summary.  ",
+        "risks": [
+          { "kind": "security", "title": "Header trusted", "explanation": "Because.", "severity": "high", "file_refs": ["src/a.ts:12-15", "src/b.ts:6"] },
+          { "kind": "perf", "title": "Loop", "explanation": "N+1.", "severity": "medium", "file_refs": ["src/a.ts:31"] }
+        ],
+        "review_focus": [{ "file": "src/a.ts", "line": 12, "reason": "look" }, { "file": "src/b.ts", "line": 8, "reason": "also" }]
+      }
+    },
+    {
+      "name": "ungrounded_lines_fall_back_to_the_smallest_range_start",
+      "raw": {
+        "summary": "S",
+        "risks": [{ "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:500", "src/b.ts:1-9", "src/a.ts:25"] }],
+        "review_focus": [{ "file": "src/a.ts", "line": 500, "reason": "r" }, { "file": "src/b.ts", "line": 2, "reason": "r2" }]
+      }
+    },
+    {
+      "name": "range_end_rules",
+      "raw": {
+        "summary": "S",
+        "risks": [
+          { "kind": "k", "title": "kept span", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12-18"] },
+          { "kind": "k", "title": "end before start", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12-5"] },
+          { "kind": "k", "title": "end equals start", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12-12"] },
+          { "kind": "k", "title": "regrounded drops the end", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:100-120"] },
+          { "kind": "k", "title": "end beyond the changed range is kept as asked", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:19-99"] }
+        ],
+        "review_focus": []
+      }
+    },
+    {
+      "name": "ref_parsing_corner_cases",
+      "raw": {
+        "summary": "S",
+        "risks": [
+          { "kind": "k", "title": "no line", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts"] },
+          { "kind": "k", "title": "trailing colon", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:"] },
+          { "kind": "k", "title": "line zero", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:0"] },
+          { "kind": "k", "title": "dot slash and slash", "explanation": "E", "severity": "low", "file_refs": ["./src/b.ts:6", "/src/b.ts:7", "././src/b.ts:8"] },
+          { "kind": "k", "title": "padded", "explanation": "E", "severity": "low", "file_refs": ["  src/b.ts:5  "] },
+          { "kind": "k", "title": "open range", "explanation": "E", "severity": "low", "file_refs": ["src/b.ts:5-"] },
+          { "kind": "k", "title": "colon in name", "explanation": "E", "severity": "low", "file_refs": ["src/b.ts:5:6"] },
+          { "kind": "k", "title": "huge line", "explanation": "E", "severity": "low", "file_refs": ["src/b.ts:99999999999999999999"] },
+          { "kind": "k", "title": "empty ref", "explanation": "E", "severity": "low", "file_refs": ["", "   "] },
+          { "kind": "k", "title": "windows path", "explanation": "E", "severity": "low", "file_refs": ["src\\\\a.ts:12"] }
+        ],
+        "review_focus": []
+      }
+    },
+    {
+      "name": "unknown_paths_drop_refs_and_risks",
+      "raw": {
+        "summary": "S",
+        "risks": [
+          { "kind": "k", "title": "all unknown", "explanation": "E", "severity": "high", "file_refs": ["nope.ts:1", "src/unknown.ts:2"] },
+          { "kind": "k", "title": "one unknown one known", "explanation": "E", "severity": "high", "file_refs": ["nope.ts:1", "src/a.ts:12"] },
+          { "kind": "k", "title": "no refs at all", "explanation": "E", "severity": "high", "file_refs": [] }
+        ],
+        "review_focus": [{ "file": "nope.ts", "line": 1, "reason": "r" }]
+      }
+    },
+    {
+      "name": "invalid_items_do_not_use_up_the_limits",
+      "raw": {
+        "summary": "S",
+        "risks": [
+          { "kind": "k", "title": "bad 1", "explanation": "E", "severity": "low", "file_refs": ["nope.ts:1"] },
+          { "kind": "k", "title": "bad 2", "explanation": "E", "severity": "low", "file_refs": [] },
+          { "kind": "k", "title": "", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "   ", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "ok 1", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "ok 2", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "ok 3", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "ok 4", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "ok 5", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "ok 6", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": "ok 7 over the limit", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:12"] }
+        ],
+        "review_focus": []
+      }
+    },
+    {
+      "name": "text_clamps",
+      "raw": {
+        "summary": { "$repeat": ["s", 700] },
+        "risks": [
+          { "kind": "", "title": { "$repeat": ["t", 130] }, "explanation": { "$repeat": ["e", 700] }, "severity": "high", "file_refs": ["src/a.ts:12"] },
+          { "kind": { "$repeat": ["k", 70] }, "title": "kind cut", "explanation": "  padded  ", "severity": "low", "file_refs": ["src/a.ts:12"] },
+          { "kind": "  spaced  ", "title": "kind trimmed", "explanation": "", "severity": "medium", "file_refs": ["src/a.ts:12"] },
+          { "kind": "   ", "title": "blank kind", "explanation": "E", "severity": "medium", "file_refs": ["src/a.ts:12"] },
+          { "kind": "k", "title": { "$concat": [{ "$repeat": ["a", 118] }, "\\u{1F642}\\u{1F642}"] }, "explanation": { "$concat": [{ "$repeat": ["b", 598] }, "\\u{1F642}\\u{1F642}"] }, "severity": "low", "file_refs": ["src/a.ts:12"] }
+        ],
+        "review_focus": [
+          { "file": "src/a.ts", "line": 12, "reason": { "$repeat": ["r", 170] } },
+          { "file": "src/a.ts", "line": 13, "reason": "   " },
+          { "file": "src/a.ts", "line": 14, "reason": "" }
+        ]
+      }
+    },
+    {
+      "name": "summary_cut_at_600_with_ellipsis_and_trim",
+      "raw": { "summary": { "$concat": ["   ", { "$repeat": ["x", 599] }, "yy   "] }, "risks": [], "review_focus": [] }
+    },
+    {
+      "name": "focus_lines_dedupe_limits_and_numeric_forms",
+      "raw": {
+        "summary": "S",
+        "risks": [],
+        "review_focus": [
+          { "file": "src/a.ts", "line": 12, "reason": "one" },
+          { "file": "./src/a.ts", "line": 12.9, "reason": "dup after truncation" },
+          { "file": "src/a.ts", "line": 12, "reason": "dup" },
+          { "file": "src/a.ts", "line": -3, "reason": "negative regrounded" },
+          { "file": "src/a.ts", "line": 0, "reason": "zero regrounded" },
+          { "file": "src/a.ts", "line": 1e300, "reason": "huge regrounded" },
+          { "file": "/src/b.ts", "line": 5.5, "reason": "fraction" },
+          { "file": "src/nodiff.ts", "line": 3, "reason": "no ranges keeps the requested line" },
+          { "file": "src/nodiff.ts", "line": 0, "reason": "no ranges and no line gives one" },
+          { "file": "src/a.ts", "line": 31, "reason": "in a finding range" },
+          { "file": "src/caller.ts", "line": 77, "reason": "caller line kept" },
+          { "file": "src/caller.ts", "line": 1, "reason": "smallest caller line" },
+          { "file": "src/declonly.ts", "line": 5, "reason": "declaring file without callers keeps the line" },
+          { "file": "src/declonly.ts", "line": -5, "reason": "declaring file no line gives one" },
+          { "file": "src/b.ts", "line": 99, "reason": "pr file caller line counts as grounded" }
+        ]
+      }
+    },
+    {
+      "name": "blast_less_facts",
+      "facts": { "blast": null },
+      "raw": {
+        "summary": "S",
+        "risks": [{ "kind": "k", "title": "caller file unknown without blast", "explanation": "E", "severity": "low", "file_refs": ["src/caller.ts:77", "src/b.ts:99"] }],
+        "review_focus": [{ "file": "src/caller.ts", "line": 77, "reason": "r" }, { "file": "src/b.ts", "line": 99, "reason": "pr file" }]
+      }
+    },
+    {
+      "name": "findings_extend_the_ranges_of_known_files_only",
+      "facts": { "files": [{ "path": "src/a.ts", "ranges": [{ "start": 10, "end": 12 }] }], "findings": [{ "file": "src/a.ts", "startLine": 50, "endLine": 60 }, { "file": "src/ghost.ts", "startLine": 1, "endLine": 9 }, { "file": "./src/a.ts", "startLine": 70, "endLine": 70 }], "blast": null },
+      "raw": {
+        "summary": "S",
+        "risks": [{ "kind": "k", "title": "ghost", "explanation": "E", "severity": "low", "file_refs": ["src/ghost.ts:5", "src/a.ts:55", "src/a.ts:70", "src/a.ts:61"] }],
+        "review_focus": [{ "file": "src/ghost.ts", "line": 5, "reason": "r" }, { "file": "src/a.ts", "line": 61, "reason": "outside everything" }]
+      }
+    },
+    {
+      "name": "refs_dedupe_after_regrounding",
+      "raw": {
+        "summary": "S",
+        "risks": [{ "kind": "k", "title": "dups", "explanation": "E", "severity": "low", "file_refs": ["src/a.ts:500", "src/a.ts:501", "src/a.ts:10", "./src/a.ts:10", "src/a.ts:10-12", "src/a.ts:10-12"] }],
+        "review_focus": []
+      }
+    },
+    {
+      "name": "dropped_counts",
+      "raw": {
+        "summary": "S",
+        "risks": [
+          { "kind": "k", "title": "t", "explanation": "E", "severity": "low", "file_refs": ["nope.ts:1", "nope2.ts:1", "src/a.ts:12"] },
+          { "kind": "k", "title": "t2", "explanation": "E", "severity": "low", "file_refs": ["nope.ts:1"] }
+        ],
+        "review_focus": [{ "file": "nope.ts", "line": 1, "reason": "r" }, { "file": "src/a.ts", "line": 12, "reason": "ok" }, { "file": "src/a.ts", "line": 12, "reason": "dup" }]
+      }
+    },
+    {
+      "name": "path_with_unicode_and_spaces_must_match_exactly",
+      "facts": { "files": [{ "path": "src/\\u{e9}t\\u{e9} file.ts", "ranges": [{ "start": 3, "end": 4 }] }], "findings": [], "blast": null },
+      "raw": { "summary": "S", "risks": [{ "kind": "k", "title": "t", "explanation": "E", "severity": "low", "file_refs": ["src/\\u{e9}t\\u{e9} file.ts:3", "src/ete file.ts:3", "src/e\\u{301}t\\u{e9} file.ts:3"] }], "review_focus": [] }
+    }
+  ],
+  "stale": [
+    { "stored": { "head_sha": "abc", "prompt_version": "v1" }, "current": "abc", "currentPromptVersion": null },
+    { "stored": { "head_sha": "abc", "prompt_version": "v1" }, "current": "def", "currentPromptVersion": null },
+    { "stored": { "head_sha": "abc", "prompt_version": "v0" }, "current": "abc", "currentPromptVersion": null },
+    { "stored": { "head_sha": "abc", "prompt_version": "v1" }, "current": "abc", "currentPromptVersion": "v2" },
+    { "stored": { "head_sha": "ABC", "prompt_version": "v1" }, "current": "abc", "currentPromptVersion": null }
+  ]
+}

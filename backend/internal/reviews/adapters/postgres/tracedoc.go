@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
@@ -14,8 +15,8 @@ import (
 
 // The run trace document stored in run_traces.trace (spec 7.6, the RunTrace contract of
 // frontend/src/vendor/shared/contracts/trace.ts). The domain Trace carries no tags; this file
-// maps it to and from the document. memory_pulled ([]) and intent (null) are constants of the
-// phase. Strings are made storable (U+0000 dropped, invalid UTF-8 replaced) on the way in; the
+// maps it to and from the document. memory_pulled ([]) is a constant of the phase; intent is null
+// or the IntentTrace of the run (Phase 5 spec 7.5). Strings are made storable (U+0000 dropped, invalid UTF-8 replaced) on the way in; the
 // way out checks the contract field by field and fails with domain.ErrTraceInvalid, naming the
 // offending path and never quoting the document.
 
@@ -104,6 +105,34 @@ type contextTraceDoc struct {
 	Docs         []contextDocDoc `json:"docs"`
 }
 
+type intentSourceDoc struct {
+	Kind   string  `json:"kind"`
+	Ref    string  `json:"ref"`
+	Status string  `json:"status"`
+	Detail *string `json:"detail"`
+}
+
+// usedIntentDoc is the intent of a run that had one: every key but warning, null when unknown.
+type usedIntentDoc struct {
+	Status      string            `json:"status"`
+	CacheHit    bool              `json:"cache_hit"`
+	Confidence  *string           `json:"confidence"`
+	DerivedFrom *string           `json:"derived_from"`
+	ChangeType  *string           `json:"change_type"`
+	Provider    string            `json:"provider"`
+	Model       string            `json:"model"`
+	TokensIn    int               `json:"tokens_in"`
+	TokensOut   int               `json:"tokens_out"`
+	CostUSD     *float64          `json:"cost_usd"`
+	Sources     []intentSourceDoc `json:"sources"`
+}
+
+// unavailableIntentDoc is the intent of a run whose derivation failed: status and warning only.
+type unavailableIntentDoc struct {
+	Status  string `json:"status"`
+	Warning string `json:"warning"`
+}
+
 type traceDoc struct {
 	Config         configDoc        `json:"config"`
 	Stats          statsDoc         `json:"stats"`
@@ -114,7 +143,7 @@ type traceDoc struct {
 	SpecsRead      []string         `json:"specs_read"`
 	Log            []logDoc         `json:"log"`
 	SkillsUsed     []skillUsedDoc   `json:"skills_used"`
-	Intent         *struct{}        `json:"intent"`
+	Intent         any              `json:"intent"` // nil (null), usedIntentDoc or unavailableIntentDoc
 	ProjectContext *contextTraceDoc `json:"project_context,omitempty"`
 }
 
@@ -145,7 +174,7 @@ func EncodeTrace(t domain.Trace) ([]byte, error) {
 		doc.PromptAssembly = completedAssemblyDoc{
 			System: clean(a.System), Skills: cleanPtr(a.Skills), Specs: cleanPtr(a.Specs),
 			Callers: cleanPtr(a.Callers), RepoMap: cleanPtr(a.RepoMap), PRDescription: cleanPtr(a.PRDescription),
-			User: clean(a.User),
+			Intent: cleanPtr(a.Intent), User: clean(a.User),
 		}
 	}
 	for i, c := range t.ToolCalls {
@@ -163,6 +192,9 @@ func EncodeTrace(t domain.Trace) ([]byte, error) {
 	if pc := t.ProjectContext; pc != nil {
 		doc.ProjectContext = encodeContext(pc)
 	}
+	if it := t.Intent; it != nil {
+		doc.Intent = encodeIntent(it)
+	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
@@ -170,6 +202,26 @@ func EncodeTrace(t domain.Trace) ([]byte, error) {
 		return nil, err
 	}
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
+}
+
+// encodeIntent maps an IntentTrace by its status: a derivation that fed the run (any status other
+// than unavailable counts as used) or only the warning of the failure.
+func encodeIntent(it *domain.IntentTrace) any {
+	if it.Status == domain.IntentStatusUnavailable {
+		return unavailableIntentDoc{Status: domain.IntentStatusUnavailable, Warning: clean(it.Warning)}
+	}
+	doc := usedIntentDoc{
+		Status: domain.IntentStatusUsed, CacheHit: it.CacheHit, Confidence: cleanPtr(it.Confidence),
+		DerivedFrom: cleanPtr(it.DerivedFrom), ChangeType: cleanPtr(it.ChangeType), Provider: clean(it.Provider),
+		Model: clean(it.Model), TokensIn: it.TokensIn, TokensOut: it.TokensOut, CostUSD: it.CostUSD,
+	}
+	if it.Sources != nil {
+		doc.Sources = make([]intentSourceDoc, len(it.Sources))
+		for i, s := range it.Sources {
+			doc.Sources[i] = intentSourceDoc{Kind: clean(s.Kind), Ref: clean(s.Ref), Status: clean(s.Status), Detail: cleanPtr(s.Detail)}
+		}
+	}
+	return doc
 }
 
 func orLocal(source string) string {
@@ -285,8 +337,28 @@ type memoryIn struct {
 	Text *string `json:"text"`
 }
 
-type intentIn struct {
+type intentSourceIn struct {
+	Kind   *string `json:"kind"`
+	Ref    *string `json:"ref"`
 	Status *string `json:"status"`
+	Detail *string `json:"detail"`
+}
+
+// intentIn is the contract's IntentTrace: only status is required, every other key may be absent
+// or null.
+type intentIn struct {
+	Status      *string            `json:"status"`
+	CacheHit    *bool              `json:"cache_hit"`
+	Confidence  *string            `json:"confidence"`
+	DerivedFrom *string            `json:"derived_from"`
+	ChangeType  *string            `json:"change_type"`
+	Provider    *string            `json:"provider"`
+	Model       *string            `json:"model"`
+	TokensIn    *jint              `json:"tokens_in"`
+	TokensOut   *jint              `json:"tokens_out"`
+	CostUSD     *float64           `json:"cost_usd"`
+	Sources     *[]*intentSourceIn `json:"sources"`
+	Warning     *string            `json:"warning"`
 }
 
 type traceIn struct {
@@ -467,9 +539,7 @@ func DecodeTrace(raw []byte) (domain.Trace, error) {
 		}
 	}
 	if in.Intent != nil {
-		if in.Intent.Status == nil || (*in.Intent.Status != "used" && *in.Intent.Status != "unavailable") {
-			p.fail("intent.status")
-		}
+		t.Intent = decodeIntent(in.Intent, p)
 	}
 	if in.ProjectContext != nil {
 		t.ProjectContext = decodeContext(in.ProjectContext, p)
@@ -478,6 +548,72 @@ func DecodeTrace(raw []byte) (domain.Trace, error) {
 		return domain.Trace{}, p.err
 	}
 	return t, nil
+}
+
+// The closed enums of the IntentTrace contract (brief.ts).
+var (
+	intentConfidences = []string{"high", "medium", "low"}
+	intentDerivations = []string{"explicit", "inferred"}
+	intentChangeTypes = []string{"feature", "bugfix", "refactor", "docs", "test", "chore", "security", "perf", "mixed"}
+	intentSourceKinds = []string{"title", "body", "ticket", "doc", "commits", "branch", "diff"}
+	intentSourceState = []string{"used", "truncated", "skipped", "failed"}
+)
+
+// optEnum checks an optional enum value (absent or null passes) and returns it.
+func (p *pathCheck) optEnum(v *string, allowed []string, path string) *string {
+	if v == nil {
+		return nil
+	}
+	if !slices.Contains(allowed, *v) {
+		p.fail(path)
+	}
+	return v
+}
+
+// decodeIntent maps the stored intent object to an IntentTrace. A used intent keeps what the
+// document has; keys it lacks stay zero (tokens) or nil.
+func decodeIntent(in *intentIn, p *pathCheck) *domain.IntentTrace {
+	if in.Status == nil || (*in.Status != domain.IntentStatusUsed && *in.Status != domain.IntentStatusUnavailable) {
+		p.fail("intent.status")
+		return nil
+	}
+	if *in.Status == domain.IntentStatusUnavailable {
+		return &domain.IntentTrace{Status: domain.IntentStatusUnavailable, Warning: optString(in.Warning)}
+	}
+	out := &domain.IntentTrace{
+		Status:      domain.IntentStatusUsed,
+		Confidence:  p.optEnum(in.Confidence, intentConfidences, "intent.confidence"),
+		DerivedFrom: p.optEnum(in.DerivedFrom, intentDerivations, "intent.derived_from"),
+		ChangeType:  p.optEnum(in.ChangeType, intentChangeTypes, "intent.change_type"),
+		Provider:    optString(in.Provider), Model: optString(in.Model),
+		TokensIn: p.optInteger(in.TokensIn, "intent.tokens_in"), TokensOut: p.optInteger(in.TokensOut, "intent.tokens_out"),
+		CostUSD: in.CostUSD,
+	}
+	if in.CacheHit != nil {
+		out.CacheHit = *in.CacheHit
+	}
+	if in.Sources != nil {
+		out.Sources = make([]reviewer.IntentSource, len(*in.Sources))
+		for i, s := range *in.Sources {
+			if s == nil {
+				p.fail(fmt.Sprintf("intent.sources[%d]", i))
+				continue
+			}
+			src := reviewer.IntentSource{Ref: p.str(s.Ref, "intent.sources.ref"), Detail: s.Detail}
+			if k := p.str(s.Kind, "intent.sources.kind"); slices.Contains(intentSourceKinds, k) {
+				src.Kind = k
+			} else {
+				p.fail("intent.sources.kind")
+			}
+			if st := p.str(s.Status, "intent.sources.status"); slices.Contains(intentSourceState, st) {
+				src.Status = st
+			} else {
+				p.fail("intent.sources.status")
+			}
+			out.Sources[i] = src
+		}
+	}
+	return out
 }
 
 // decodeAssembly maps prompt_assembly and reports whether it has the shape of an ended run's.
@@ -511,12 +647,7 @@ func decodeAssembly(m map[string]json.RawMessage, p *pathCheck) (reviewer.Assemb
 	a.Skills, a.Specs = str("skills", false), str("specs", false)
 	a.Callers, a.RepoMap, a.PRDescription = str("callers", false), str("repo_map", false), str("pr_description", false)
 	str("memory", false)
-	if raw, ok := m["intent"]; ok && string(raw) != "null" {
-		var s string
-		if json.Unmarshal(raw, &s) != nil {
-			p.fail("prompt_assembly.intent")
-		}
-	}
+	a.Intent = str("intent", false)
 	_, hasCallers := m["callers"]
 	_, hasRepoMap := m["repo_map"]
 	_, hasPRDescription := m["pr_description"]

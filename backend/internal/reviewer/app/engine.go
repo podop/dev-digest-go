@@ -17,8 +17,9 @@ type chunkResult struct {
 // Run reviews a parsed diff (spec 7.5 step 7, 7.7). It picks single pass or map-reduce from the
 // agent's strategy, splits oversize chunks, calls the model once per chunk (at most
 // opts.MapConcurrency in flight, results kept in chunk order), reduces the partial reviews,
-// drops the findings that do not cite a changed line, and scores the rest from their severities.
-// The progress lines go to ev in the order of the spec.
+// drops the findings that do not cite a changed line, applies the scope policy (with an
+// in.Intent: the section in every prompt, the scope event, boolean out_of_scope flags) and scores
+// the rest from their severities. The progress lines go to ev in the order of the spec.
 //
 // On the first failed call no further chunk starts, calls in flight finish and the first error is
 // returned: ErrCancelled when opts.Cancelled stopped it, else the LLM port's error unchanged.
@@ -31,6 +32,9 @@ func Run(ctx context.Context, in Input, llm LLM, ev Events, opts Options) (domai
 	parts := domain.PromptParts{
 		System: in.SystemPrompt, Skills: in.Skills, Specs: in.Specs, RepoMap: in.RepoMap,
 		Callers: in.Callers, PRDescription: in.PRDescription, Task: in.Task,
+	}
+	if in.Intent != nil {
+		parts.Intent = domain.RenderIntent(*in.Intent)
 	}
 	// The whole-diff prompt is the trace's default; a single pass replaces it with its call's.
 	whole := parts
@@ -113,7 +117,12 @@ func Run(ctx context.Context, in Input, llm LLM, ev Events, opts Options) (domai
 	summary := ground.Summary()
 	emit(domain.EventResult, "Citation grounding: "+summary, nil)
 
-	scoped := domain.ApplyScopePolicy(ground.Kept, false)
+	// The scope policy follows the grounding gate; with an intent its counts get their own line.
+	scoped := domain.ApplyScopePolicy(ground.Kept, in.Intent != nil)
+	if in.Intent != nil {
+		emit(domain.EventInfo, "scope: "+strconv.Itoa(scoped.OutOfScope)+" out-of-scope finding(s) kept ("+
+			strconv.Itoa(scoped.OutOfScopeCritical)+" critical)", nil)
+	}
 	merged.Findings = scoped.Findings
 	merged.Score = domain.ScoreFromFindings(scoped.Findings)
 	return domain.Outcome{

@@ -1,0 +1,21 @@
+{
+  "handWritten": true,
+  "note": "Expectations of the SQL parts of the PR brief that Node cannot run without a database. Read from server/src/modules/brief/infrastructure/repository.ts (d1c9093); orderings marked D5009 are fixed by the spec because Node leaves them undefined. Consumer: Go brief repository tests (S27, pgtest).",
+  "spec": ["7.9.1", "7.9.6", "D5009"],
+  "files": {
+    "node": "SELECT path, additions, deletions, patch FROM pr_files WHERE pr_id = $1 ORDER BY path (repository.ts:42) — database default collation",
+    "go": "ORDER BY path, id (D5009: ties by id); the generator's flows feed files in the order the reader returns them, so the goldens do not depend on the collation",
+    "note": "listed files are re-sorted by changed lines (stable), so this order only decides ties between equally changed files"
+  },
+  "currentReviews": {
+    "node": "SELECT DISTINCT ON (agent_id) id, agent_id, created_at FROM reviews WHERE pr_id = $1 AND kind = 'review' ORDER BY agent_id, created_at DESC (repository.ts:46-51); findings WHERE review_id IN (...) ORDER BY file, start_line (repository.ts:64); reviews then sorted newest first in memory",
+    "go": "one review per agent (NULL agent_id one group), ties by id (D5009); findings ORDER BY file, start_line, id; dismissed findings included",
+    "cases": [
+      { "reviews": [{ "id": "r1", "agent_id": "a1", "created_at": "2026-01-01T10:00:00Z" }, { "id": "r2", "agent_id": "a1", "created_at": "2026-01-01T11:00:00Z" }, { "id": "r3", "agent_id": null, "created_at": "2026-01-01T12:00:00Z" }, { "id": "r4", "agent_id": null, "created_at": "2026-01-01T09:00:00Z" }, { "id": "r5", "agent_id": "a2", "kind": "chat", "created_at": "2026-01-02T00:00:00Z" }], "current": ["r3", "r2"], "note": "r5 is not kind=review; the deleted agents' reviews form one group (newest r3); newest first overall" }
+    ]
+  },
+  "enabledSkills": "SELECT skills.id, skills.name FROM agent_skills JOIN skills WHERE agent_id = $1 AND skills.enabled ORDER BY agent_skills.order (repository.ts:74-81): link order; a disabled skill stays linked but is skipped",
+  "upsert": { "table": "pr_brief", "conflictTarget": "pr_id", "set": "json", "note": "the whole PrBrief document; key order of the stored jsonb is not preserved, reads go through the contract (goldens/brief.json stored[])" },
+  "read": "pr_brief.json that fails PrBrief.safeParse reads as no brief: GET answers {brief:null, stale:false} (repository.ts:85-89); a read never errors on a stale shape",
+  "findPull": "pull_requests JOIN repos WHERE workspace_id = $1 AND id = $2 -> {id, repoId, owner, name, title, body, base, headSha}; another workspace's PR is absent (404)"
+}

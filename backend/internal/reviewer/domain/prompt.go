@@ -2,8 +2,8 @@ package domain
 
 import "strings"
 
-// Prompt assembly (spec 7.8), a port of reviewer-core's assemblePrompt for the sections Phase 4
-// has: no PR intent and no memory. All outside content (diff, PR text, repo files) is untrusted
+// Prompt assembly (spec 7.8, Phase 5 spec 7.5), a port of reviewer-core's assemblePrompt for the
+// sections the Go backend has: the PR intent is optional, there is no memory. All outside content (diff, PR text, repo files) is untrusted
 // data: it is delimiter-wrapped, and the trusted guard below tells the model so.
 
 // InjectionGuard is the trusted rule appended to every system prompt: everything inside <untrusted>
@@ -41,6 +41,9 @@ type PromptParts struct {
 	RepoMap, Callers string
 	// PRDescription is the PR body; blank = no section, longer than MaxPRDescriptionUnits = cut.
 	PRDescription string
+	// Intent is the rendered PR intent (RenderIntent); blank = no section. It is the same text in
+	// every call of a request, whatever the chunk.
+	Intent string
 	// Task is the task line; "" = none.
 	Task string
 	// Diff is the diff text of this call's chunk.
@@ -81,8 +84,8 @@ func blank(s string) bool { return JSTrim(s) == "" }
 
 // AssemblePrompt builds the two messages of a call. The system message is the agent's prompt
 // plus the injection guard. The user message joins, with a blank line and each only when it has
-// content: the task line; "## PR description" (wrapped, cut to MaxPRDescriptionUnits); "## Skills
-// / rules" (trusted, unwrapped); "## Repo skeleton"; "## Project context" (the rule, then one
+// content: the task line; "## PR description" (wrapped, cut to MaxPRDescriptionUnits); "## PR
+// intent" (the trusted IntentScopeRule, a blank line, the wrapped intent); "## Skills / rules" (trusted, unwrapped); "## Repo skeleton"; "## Project context" (the rule, then one
 // wrapped block per document labelled with its escaped path); "## Callers of changed symbols";
 // and always "## Diff to review". A cut that falls inside a surrogate pair drops the pair.
 func AssemblePrompt(p PromptParts) AssembledPrompt {
@@ -108,6 +111,14 @@ func AssemblePrompt(p PromptParts) AssembledPrompt {
 		m.Truncated = &truncated
 		sections = append(sections, m)
 		asm.PRDescription = strPtr(cut)
+	}
+	if !blank(p.Intent) {
+		wrapped := WrapUntrusted("pr-intent", p.Intent)
+		user = append(user, "## PR intent\n"+IntentScopeRule+"\n\n"+wrapped)
+		// Split for the prompt log: the trusted rule apart from the untrusted heading and block.
+		sections = append(sections, sectionMeta(SectionIntentRule, SourceEngine, RoleUser, Trusted, IntentScopeRule))
+		sections = append(sections, sectionMeta(SectionIntent, SourceModelDerived, RoleUser, Untrusted, "## PR intent\n"+wrapped))
+		asm.Intent = strPtr(p.Intent)
 	}
 	if len(p.Skills) > 0 {
 		joined := strings.Join(p.Skills, "\n\n")

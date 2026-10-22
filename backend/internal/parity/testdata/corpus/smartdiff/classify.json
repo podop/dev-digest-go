@@ -1,0 +1,31 @@
+{
+  "note": "Paths for classifyFile (AC5043). The first block is Node's own table (server/test/smart-diff-classify.test.ts) incl. the three contested cases; the rest covers separators, ./ prefixes, nested test dirs, .env.local, README.de.md and JS regex corner cases (a `.` never matches \\n, \\r, U+2028, U+2029, so `dist/**` and friends fail on such paths).",
+  "paths": [
+    "pnpm-lock.yaml", "client/pnpm-lock.yaml", "yarn.lock", "packages/app/package-lock.json", "server/foo.lock",
+    "dist/index.js", "build/main.js", "schema.generated.ts", "vendor/lib.min.js",
+    "src/foo.test.ts", "client/src/Foo.test.tsx", "server/test/smart-diff.it.test.ts", "server/test/helpers/pg.ts",
+    "client/src/__tests__/foo.ts", "e2e/flows/05-review.flow.json",
+    "src/api/index.ts", "client/vite.config.ts", "tsconfig.base.json", ".env.local", ".github/workflows/ci.yml",
+    "README.md", "docs/onion-migration.md", "CHANGELOG.md", "LICENSE",
+    "src/config.ts", "src/api/handlers.ts", "client/dist/x.js",
+    "__tests__/__snapshots__/x.snap", ".claude/skills/security/SKILL.md", "e2e/README.md",
+    "./src/foo.test.ts", "src\\foo.test.ts", ".\\src\\foo.test.ts", "././src/foo.test.ts", "src\\.\\x.ts", "docs\\guide.md", "dist\\a.js",
+    "a/b/test/c.ts", "test/a.ts", "a/test", "testing/a.ts", "a/tests/b.go", "tests/x", "pkg/__tests__/deep/er/x.ts", "pkg/__snapshots__/x.ts",
+    ".env", ".env.example", "apps/web/.env.production", "env.ts", ".github/CODEOWNERS", ".github/a/b.md", ".claude/settings.json", ".claude/README.md",
+    "README.de.md", "README", "README.txt", "docs/README.md", "readme.md", "Readme.md", "NOTES.md", "CHANGELOG", "CHANGELOG-2026.txt", "sub/LICENSE", "LICENSE.txt", "LICENSE-MIT",
+    "docs/x.ts", "docs/a/b/c/d.png", "doc/x.md", "Docs/x.md", "documentation/x.ts",
+    "tsconfig.json", "foo/tsconfig.build.json", "tsconfigX.json", "tsconfig.json5", ".eslintrc", ".eslintrc.cjs", "a/.eslintrc.json", "eslintrc",
+    "docker-compose.yml", "docker-compose.prod.yml", "docker-compose.yaml", "infra/docker-compose.override.yml", "Dockerfile",
+    "index.ts", "index.js", "src/index.js", "src/index.tsx", "src/index.mjs", "indexes.ts", "a/b/index.ts",
+    "jest.config.js", "a.config", "config.ts", "x.config.", ".config.x", "a/.config.json",
+    "x.lock", ".lock", "a/b/.lock", "lock", "package-lock.json.bak", "pnpm-lock.yml", "my-yarn.lock",
+    "dist/", "dist", "dist/a/b/c.js", "build", "build/", "pkg/build/x.js", "dist-old/a.js",
+    "x.snap", "a/b.snap.ts", "a.generated.ts", "a.generated", "gen/a.generated.go", "x.generated.", "jquery.min.js", ".min.js", "a.min.jsx", "a.min.js.map",
+    "a.test.js", "a.spec.ts", "a.spec.tsx", "a/b.it.test.ts", "a.test.ts.snap", "a.test.mts", "a.tests.ts", "atest.ts", ".test.ts", "test.ts", "src/test.ts",
+    "a+b.test.ts", "a(1).test.ts", "a[1].test.ts", "a$.test.ts", "a^b/x.test.ts", "a|b.test.ts", "a{1}.test.ts", "a?.test.ts", "a b/c d.test.ts",
+    "ÿ.test.ts", "日本語/テスト.test.ts", "docs/日本語.md", "docs/😀.png",
+    "docs/a\\u{2028}b", "docs/a\\u{2029}b", "docs/a\\u{d}b", "docs/a\\u{a}b", "docs/a\\u{85}b", "dist/a\\u{a}b.js", "build/x\\u{2028}y", "e2e/a\\u{a}b", ".github/a\\u{2028}b", ".claude/a\\u{d}b",
+    "a\\u{a}b.md", "a\\u{2028}b.md", "src/\\u{2028}/x.test.ts", "x/test/\\u{a}file", "x/test/file\\u{a}", "tests/\\u{2029}",
+    "", "/", "//", "/dist/a.js", "/docs/a.md", "/README.md", "x//y.md", "a/../README.md", "..", "../README.md"
+  ]
+}

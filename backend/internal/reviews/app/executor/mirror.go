@@ -56,6 +56,18 @@ func (l *runLog) event(kind reviewer.EventKind, msg string, data json.RawMessage
 	}
 }
 
+// intentEmit is the app.IntentEmit of the request's intent pre-work: it publishes the resolver's
+// events to every queued run like any shared event. An unknown kind counts as info.
+func (l *runLog) intentEmit(kind, msg string, data json.RawMessage) {
+	k := reviewer.EventKind(kind)
+	switch k {
+	case reviewer.EventInfo, reviewer.EventResult, reviewer.EventError, reviewer.EventTool:
+	default:
+		k = reviewer.EventInfo
+	}
+	l.event(k, msg, data)
+}
+
 func (l *runLog) info(msg string, data json.RawMessage) { l.event(reviewer.EventInfo, msg, data) }
 func (l *runLog) result(msg string)                     { l.event(reviewer.EventResult, msg, nil) }
 func (l *runLog) errorf(msg string)                     { l.event(reviewer.EventError, msg, nil) }

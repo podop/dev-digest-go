@@ -1,0 +1,70 @@
+{
+  "note": "GET /pulls/:id/smart-diff over fake tables. The Node repository is SQL (pr_files rows; DISTINCT ON (agent_id) ORDER BY agent_id, created_at DESC over kind='review' reviews, NULL agents one group); the generator emulates exactly that on the rows below (created_at values are distinct on purpose: Node leaves ties undefined, D5009 orders them by id). Findings of dismissed rows count.",
+  "workspace": "ws-1",
+  "cases": [
+    {
+      "name": "two_agents_one_rerun_and_a_dismissed_finding",
+      "pr": { "id": "pr-1" },
+      "files": [
+        { "path": "src/core.ts", "additions": 30, "deletions": 4 },
+        { "path": "src/core.test.ts", "additions": 12, "deletions": 0 },
+        { "path": "src/index.ts", "additions": 1, "deletions": 0 },
+        { "path": "README.md", "additions": 2, "deletions": 1 },
+        { "path": "pnpm-lock.yaml", "additions": 100, "deletions": 90 }
+      ],
+      "reviews": [
+        { "id": "r1", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T10:00:00.000Z" },
+        { "id": "r2", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T11:00:00.000Z" },
+        { "id": "r3", "agent_id": "a2", "kind": "review", "created_at": "2026-01-01T10:30:00.000Z" },
+        { "id": "r4", "agent_id": "a2", "kind": "chat", "created_at": "2026-01-01T12:00:00.000Z" }
+      ],
+      "findings": [
+        { "review_id": "r1", "file": "src/core.ts", "start_line": 1 },
+        { "review_id": "r2", "file": "src/core.ts", "start_line": 12 },
+        { "review_id": "r2", "file": "src/core.ts", "start_line": 4, "dismissed": true },
+        { "review_id": "r2", "file": "src/core.test.ts", "start_line": 3 },
+        { "review_id": "r3", "file": "src/core.ts", "start_line": 12 },
+        { "review_id": "r3", "file": "src/core.ts", "start_line": 20 },
+        { "review_id": "r3", "file": "src/other.ts", "start_line": 20 },
+        { "review_id": "r4", "file": "src/core.ts", "start_line": 99 }
+      ]
+    },
+    {
+      "name": "deleted_agents_reviews_form_one_group_newest_only",
+      "pr": { "id": "pr-1" },
+      "files": [{ "path": "src/a.ts", "additions": 1, "deletions": 1 }],
+      "reviews": [
+        { "id": "r1", "agent_id": null, "kind": "review", "created_at": "2026-01-01T10:00:00.000Z" },
+        { "id": "r2", "agent_id": null, "kind": "review", "created_at": "2026-01-01T09:00:00.000Z" },
+        { "id": "r3", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T08:00:00.000Z" }
+      ],
+      "findings": [
+        { "review_id": "r1", "file": "src/a.ts", "start_line": 1 },
+        { "review_id": "r2", "file": "src/a.ts", "start_line": 2 },
+        { "review_id": "r3", "file": "src/a.ts", "start_line": 3 }
+      ]
+    },
+    {
+      "name": "pr_without_files_gives_five_empty_groups",
+      "pr": { "id": "pr-1" },
+      "files": [],
+      "reviews": [{ "id": "r1", "agent_id": "a1", "kind": "review", "created_at": "2026-01-01T10:00:00.000Z" }],
+      "findings": [{ "review_id": "r1", "file": "src/a.ts", "start_line": 1 }]
+    },
+    {
+      "name": "no_review_at_all",
+      "pr": { "id": "pr-1" },
+      "files": [{ "path": "src/a.ts", "additions": 1, "deletions": 1 }],
+      "reviews": [],
+      "findings": []
+    },
+    {
+      "name": "unknown_pr_is_404",
+      "pr": null,
+      "askFor": "pr-404",
+      "files": [],
+      "reviews": [],
+      "findings": []
+    }
+  ]
+}

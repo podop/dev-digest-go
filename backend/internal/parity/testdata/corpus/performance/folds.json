@@ -1,0 +1,160 @@
+{
+  "note": "The pure folds of performance/domain/{metrics,trends}.ts (AC5055). Times are ISO strings (converted to Date). A run is {agentId,status,source,model,durationMs,costUsd,ranAt}. Windows are {key,from,to,toInclusive}.",
+  "run": { "agentId": "a1", "status": "done", "source": "local", "model": "m", "durationMs": 1000, "costUsd": null, "ranAt": "2026-03-10T10:00:00.000Z" },
+  "metrics": [
+    { "name": "no_runs_no_findings", "runs": [], "findings": null },
+    { "name": "no_runs_with_findings", "runs": [], "findings": { "total": 4, "accepted": 1, "dismissed": 1 } },
+    { "name": "one_done_local_priced", "runs": [{ "costUsd": 0.5, "durationMs": 1200 }], "findings": { "total": 3, "accepted": 1, "dismissed": 0 } },
+    { "name": "all_statuses_and_sources", "runs": [{ "status": "done", "source": "local" }, { "status": "done", "source": "ci", "durationMs": 3000 }, { "status": "failed", "source": "local", "durationMs": 99999 }, { "status": "cancelled", "source": "ci", "durationMs": 99999 }, { "status": "failed", "source": "ci" }], "findings": null },
+    { "name": "money_running_sum_rounds_after_each_addition", "runs": [{ "costUsd": 0.1 }, { "costUsd": 0.2 }, { "costUsd": 0.3 }], "findings": null },
+    { "name": "money_sub_micro_amounts", "runs": [{ "costUsd": 4e-7 }, { "costUsd": 4e-7 }, { "costUsd": 4e-7 }], "findings": null },
+    { "name": "money_half_micro_ties", "runs": [{ "costUsd": 5e-7 }], "findings": null },
+    { "name": "money_half_micro_ties_second_addition", "runs": [{ "costUsd": 0.000001 }, { "costUsd": 5e-7 }], "findings": null },
+    { "name": "money_large_and_fractional", "runs": [{ "costUsd": 123456.789012 }, { "costUsd": 0.0000015 }, { "costUsd": 2.5e-7 }], "findings": null },
+    { "name": "money_ten_micro_dollars", "runs": [{ "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }, { "costUsd": 0.000001 }], "findings": null },
+    { "name": "money_many_small_floats", "runs": { "$each": [37, { "costUsd": { "$lin": [0.0001, 0.000017] } }] }, "findings": null },
+    { "name": "average_cost_divides_the_rounded_total_by_priced_runs", "runs": [{ "costUsd": 0.000003 }, { "costUsd": 0.000004 }, { "costUsd": null }, { "costUsd": 0.000002 }], "findings": null },
+    { "name": "average_cost_rounds_half_micro", "runs": [{ "costUsd": 0.000001 }, { "costUsd": 0.000002 }], "findings": null },
+    { "name": "zero_cost_counts_as_priced", "runs": [{ "costUsd": 0 }, { "costUsd": null }], "findings": null },
+    { "name": "all_unpriced", "runs": [{ "costUsd": null }, { "costUsd": null }], "findings": null },
+    { "name": "duration_mean_half_rounds_up", "runs": [{ "durationMs": 1 }, { "durationMs": 2 }], "findings": null },
+    { "name": "duration_mean_two_point_five", "runs": [{ "durationMs": 2 }, { "durationMs": 3 }], "findings": null },
+    { "name": "duration_mean_point_five", "runs": [{ "durationMs": 0 }, { "durationMs": 1 }], "findings": null },
+    { "name": "duration_mean_third", "runs": [{ "durationMs": 1 }, { "durationMs": 1 }, { "durationMs": 2 }], "findings": null },
+    { "name": "duration_ignores_failed_cancelled_and_null", "runs": [{ "durationMs": 100 }, { "durationMs": null }, { "status": "failed", "durationMs": 5000 }, { "status": "cancelled", "durationMs": 7000 }], "findings": null },
+    { "name": "duration_only_from_failed_is_null", "runs": [{ "status": "failed", "durationMs": 5000 }], "findings": null },
+    { "name": "duration_zero_is_counted", "runs": [{ "durationMs": 0 }], "findings": null },
+    { "name": "duration_large_sum", "runs": [{ "durationMs": 2000000000 }, { "durationMs": 2000000001 }, { "durationMs": 2000000001 }], "findings": null },
+    { "name": "last_run_is_the_latest_with_ties", "runs": [{ "ranAt": "2026-03-10T10:00:00.000Z" }, { "ranAt": "2026-03-12T10:00:00.500Z" }, { "ranAt": "2026-03-12T10:00:00.500Z" }, { "ranAt": "2026-03-11T10:00:00.000Z" }], "findings": null },
+    { "name": "findings_accept_rate", "runs": [{}], "findings": { "total": 10, "accepted": 2, "dismissed": 1 } },
+    { "name": "findings_all_pending", "runs": [{}], "findings": { "total": 3, "accepted": 0, "dismissed": 0 } },
+    { "name": "findings_small_sample_boundaries_4", "runs": [{}], "findings": { "total": 4, "accepted": 3, "dismissed": 1 } },
+    { "name": "findings_small_sample_boundaries_5", "runs": [{}], "findings": { "total": 5, "accepted": 3, "dismissed": 2 } },
+    { "name": "findings_small_sample_boundaries_1", "runs": [{}], "findings": { "total": 1, "accepted": 0, "dismissed": 1 } },
+    { "name": "findings_rate_one_third", "runs": [{}], "findings": { "total": 30, "accepted": 1, "dismissed": 2 } },
+    { "name": "findings_rate_two_thirds", "runs": [{}], "findings": { "total": 30, "accepted": 2, "dismissed": 1 } },
+    { "name": "findings_rate_seventh", "runs": [{}], "findings": { "total": 30, "accepted": 1, "dismissed": 6 } },
+    { "name": "findings_custom_min_decisions", "runs": [{}], "findings": { "total": 30, "accepted": 3, "dismissed": 3 }, "minDecisions": 10 },
+    { "name": "findings_negative_pending_is_not_clamped", "runs": [{}], "findings": { "total": 1, "accepted": 1, "dismissed": 1 } },
+    { "name": "findings_without_runs_in_the_window", "runs": [], "findings": { "total": 0, "accepted": 0, "dismissed": 0 } }
+  ],
+  "summaries": [
+    { "name": "no_rows", "rows": [] },
+    {
+      "name": "most_active_by_runs_then_last_run_then_name",
+      "window": { "key": "30d", "from": "2026-03-01T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true },
+      "rows": [
+        { "agent": { "id": "a1", "name": "beta" }, "current": { "runs": [{ "ranAt": "2026-03-10T10:00:00.000Z" }, { "ranAt": "2026-03-11T10:00:00.000Z" }], "findings": { "total": 4, "accepted": 2, "dismissed": 1 } }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a2", "name": "Alpha" }, "current": { "runs": [{ "ranAt": "2026-03-09T10:00:00.000Z" }, { "ranAt": "2026-03-11T10:00:00.000Z" }], "findings": { "total": 2, "accepted": 0, "dismissed": 2 } }, "previous": { "runs": [{}], "findings": null } },
+        { "agent": { "id": "a3", "name": "alpha" }, "current": { "runs": [{ "ranAt": "2026-03-09T10:00:00.000Z" }, { "ranAt": "2026-03-11T10:00:00.000Z" }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a4", "name": "zero" }, "current": { "runs": [], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": null, "current": { "runs": [{}, {}, {}, {}, {}], "findings": { "total": 9, "accepted": 4, "dismissed": 4 } }, "previous": { "runs": [], "findings": null } }
+      ]
+    },
+    {
+      "name": "name_tie_uses_code_unit_order_not_collation",
+      "window": { "key": "30d", "from": "2026-03-01T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true },
+      "rows": [
+        { "agent": { "id": "a1", "name": "bug-hunter" }, "current": { "runs": [{ "ranAt": "2026-03-10T10:00:00.000Z" }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a2", "name": "Bug Hunter" }, "current": { "runs": [{ "ranAt": "2026-03-10T10:00:00.000Z" }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a3", "name": "bughunter" }, "current": { "runs": [{ "ranAt": "2026-03-10T10:00:00.000Z" }], "findings": null }, "previous": { "runs": [], "findings": null } }
+      ]
+    },
+    {
+      "name": "last_run_null_counts_as_zero_in_the_tie_break",
+      "window": { "key": "1d", "from": "2026-03-30T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true },
+      "rows": [
+        { "agent": { "id": "a1", "name": "a" }, "current": { "runs": [{ "ranAt": "2026-03-31T00:00:00.000Z" }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a2", "name": "b" }, "current": { "runs": [{ "ranAt": "2026-03-31T00:00:00.000Z" }], "findings": null }, "previous": { "runs": [], "findings": null } }
+      ]
+    },
+    {
+      "name": "summary_costs_and_unpriced",
+      "window": { "key": "30d", "from": "2026-03-01T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true },
+      "rows": [
+        { "agent": { "id": "a1", "name": "A" }, "current": { "runs": [{ "costUsd": 0.1 }, { "costUsd": 0.2 }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a2", "name": "B" }, "current": { "runs": [{ "costUsd": 0.3 }, { "costUsd": null }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a3", "name": "C" }, "current": { "runs": [{ "costUsd": null }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": null, "current": { "runs": [{ "costUsd": 0.000001 }], "findings": null }, "previous": { "runs": [], "findings": null } }
+      ]
+    },
+    {
+      "name": "all_unpriced_gives_null_totals_and_no_segments",
+      "window": { "key": "30d", "from": "2026-03-01T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true },
+      "rows": [{ "agent": { "id": "a1", "name": "A" }, "current": { "runs": [{ "costUsd": null }], "findings": { "total": 0, "accepted": 0, "dismissed": 0 } }, "previous": { "runs": [], "findings": null } }]
+    },
+    {
+      "name": "cost_segments_order_value_desc_key_asc_null_last_zero_dropped",
+      "window": { "key": "30d", "from": "2026-03-01T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true },
+      "rows": [
+        { "agent": { "id": "b", "name": "B" }, "current": { "runs": [{ "costUsd": 1 }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "a", "name": "A" }, "current": { "runs": [{ "costUsd": 1 }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "B2", "name": "B2" }, "current": { "runs": [{ "costUsd": 1 }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "z", "name": "Zero" }, "current": { "runs": [{ "costUsd": 0 }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": null, "current": { "runs": [{ "costUsd": 1 }, { "costUsd": 1 }], "findings": null }, "previous": { "runs": [], "findings": null } },
+        { "agent": { "id": "u", "name": "Unpriced" }, "current": { "runs": [{ "costUsd": null }], "findings": null }, "previous": { "runs": [], "findings": null } }
+      ]
+    }
+  ],
+  "costByModel": [
+    { "name": "empty", "runs": [] },
+    { "name": "groups_models_and_sums_with_rounding", "runs": [{ "model": "gpt-4.1", "costUsd": 0.1 }, { "model": "gpt-4.1", "costUsd": 0.2 }, { "model": "claude", "costUsd": 0.5 }, { "model": "gpt-4.1", "costUsd": 0.3 }] },
+    { "name": "null_model_has_null_key_and_label_and_sorts_last", "runs": [{ "model": null, "costUsd": 9 }, { "model": "a", "costUsd": 1 }, { "model": "b", "costUsd": 1 }, { "model": null, "costUsd": 1 }] },
+    { "name": "unpriced_runs_do_not_count_and_zero_is_dropped", "runs": [{ "model": "a", "costUsd": null }, { "model": "b", "costUsd": 0 }, { "model": "c", "costUsd": 0.000001 }] },
+    { "name": "value_ties_use_code_unit_order", "runs": [{ "model": "b", "costUsd": 1 }, { "model": "B", "costUsd": 1 }, { "model": "a", "costUsd": 1 }, { "model": "_", "costUsd": 1 }, { "model": "\\u{e9}", "costUsd": 1 }, { "model": "\\u{ff5e}", "costUsd": 1 }, { "model": "\\u{1F600}", "costUsd": 1 }, { "model": "", "costUsd": 1 }] },
+    { "name": "runs_counts_priced_runs_only", "runs": [{ "model": "a", "costUsd": 0.5 }, { "model": "a", "costUsd": null }, { "model": "a", "costUsd": 0.25 }] },
+    { "name": "order_of_runs_does_not_change_the_rounded_sum_here", "runs": [{ "model": "a", "costUsd": 0.3 }, { "model": "a", "costUsd": 0.2 }, { "model": "a", "costUsd": 0.1 }] }
+  ],
+  "groups": [
+    { "name": "runs_and_findings_fold_unknown_agents_into_null", "known": ["a1", "a2"], "runs": [{ "agentId": "a1" }, { "agentId": "a2" }, { "agentId": "gone" }, { "agentId": null }, { "agentId": "a1" }], "counts": [{ "agentId": "a1", "total": 3, "accepted": 1, "dismissed": 1 }, { "agentId": "gone", "total": 4, "accepted": 2, "dismissed": 0 }, { "agentId": null, "total": 1, "accepted": 0, "dismissed": 1 }, { "agentId": "a1", "total": 2, "accepted": 0, "dismissed": 0 }] }
+  ],
+  "trends": [
+    { "name": "preset_1d_hourly", "window": { "key": "1d", "from": "2026-03-30T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true }, "runs": [{ "ranAt": "2026-03-30T12:00:00.000Z" }, { "ranAt": "2026-03-30T12:59:59.999Z" }, { "ranAt": "2026-03-30T13:00:00.000Z" }, { "ranAt": "2026-03-31T11:59:59.999Z" }, { "ranAt": "2026-03-31T12:00:00.000Z" }, { "ranAt": "2026-03-31T12:00:00.001Z" }, { "ranAt": "2026-03-30T11:59:59.999Z" }] },
+    { "name": "preset_30d_daily", "window": { "key": "30d", "from": "2026-03-01T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true }, "runs": [{ "ranAt": "2026-03-01T12:00:00.000Z" }, { "ranAt": "2026-03-02T11:59:59.999Z" }, { "ranAt": "2026-03-02T12:00:00.000Z" }, { "ranAt": "2026-03-31T12:00:00.000Z" }, { "ranAt": "2026-03-15T00:00:00.000Z" }, { "ranAt": "2026-03-15T00:00:00.000Z" }] },
+    { "name": "custom_exactly_48h_is_hourly", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-03T00:00:00.000Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T00:00:00.000Z" }, { "ranAt": "2026-01-02T23:59:59.999Z" }, { "ranAt": "2026-01-03T00:00:00.000Z" }] },
+    { "name": "custom_48h_plus_one_ms_is_daily_with_three_slices", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-03T00:00:00.001Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T00:00:00.000Z" }, { "ranAt": "2026-01-02T00:00:00.000Z" }, { "ranAt": "2026-01-03T00:00:00.000Z" }] },
+    { "name": "custom_tiny_span_has_two_slices_with_fractional_width", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-01T00:00:10.001Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T00:00:00.000Z" }, { "ranAt": "2026-01-01T00:00:05.000Z" }, { "ranAt": "2026-01-01T00:00:05.001Z" }, { "ranAt": "2026-01-01T00:00:10.000Z" }] },
+    { "name": "custom_one_millisecond", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-01T00:00:00.001Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T00:00:00.000Z" }] },
+    { "name": "custom_hundred_hours_fifth_day_slices", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-05T04:00:00.000Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T19:59:59.999Z" }, { "ranAt": "2026-01-01T20:00:00.000Z" }, { "ranAt": "2026-01-02T16:00:00.000Z" }, { "ranAt": "2026-01-05T03:59:59.999Z" }] },
+    { "name": "custom_seven_hours_hourly_boundaries", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-01T07:00:00.000Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T01:00:00.000Z" }, { "ranAt": "2026-01-01T06:59:59.999Z" }] },
+    { "name": "custom_thousand_ms_one_sixth_widths", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-01T00:00:01.000Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T00:00:00.166Z" }, { "ranAt": "2026-01-01T00:00:00.167Z" }, { "ranAt": "2026-01-01T00:00:00.500Z" }, { "ranAt": "2026-01-01T00:00:00.833Z" }, { "ranAt": "2026-01-01T00:00:00.834Z" }] },
+    { "name": "custom_366_days_daily", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2027-01-02T00:00:00.000Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-06-15T13:00:00.000Z" }] },
+    { "name": "no_runs", "window": { "key": "1d", "from": "2026-03-30T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true }, "runs": [] },
+    { "name": "empty_window_zero_span", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-01T00:00:00.000Z", "toInclusive": false }, "runs": [{ "ranAt": "2026-01-01T00:00:00.000Z" }] },
+    { "name": "fractional_start_is_truncated_in_labels", "window": { "key": "custom", "from": "2026-01-01T00:00:00.123Z", "to": "2026-01-01T00:00:03.456Z", "toInclusive": false }, "runs": [] }
+  ],
+  "severity": [
+    { "name": "preset_1d_six_slices", "window": { "key": "1d", "from": "2026-03-30T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true }, "facts": [
+      { "ranAt": "2026-03-30T12:00:00.000Z", "severity": "CRITICAL", "category": "bug", "count": 2 },
+      { "ranAt": "2026-03-30T15:59:59.999Z", "severity": "WARNING", "category": "bug", "count": 3 },
+      { "ranAt": "2026-03-30T16:00:00.000Z", "severity": "SUGGESTION", "category": "style", "count": 1 },
+      { "ranAt": "2026-03-31T12:00:00.000Z", "severity": "CRITICAL", "category": "security", "count": 4 },
+      { "ranAt": "2026-03-31T00:00:00.000Z", "severity": "INFO", "category": "bug", "count": 9 },
+      { "ranAt": "2026-03-31T00:00:00.000Z", "severity": "critical", "category": "bug", "count": 9 },
+      { "ranAt": "2026-03-30T12:00:00.000Z", "severity": "WARNING", "category": "perf", "count": 0 }
+    ] },
+    { "name": "custom_fractional_widths", "window": { "key": "custom", "from": "2026-01-01T00:00:00.000Z", "to": "2026-01-01T00:00:01.000Z", "toInclusive": false }, "facts": [
+      { "ranAt": "2026-01-01T00:00:00.166Z", "severity": "CRITICAL", "category": "a", "count": 1 },
+      { "ranAt": "2026-01-01T00:00:00.167Z", "severity": "CRITICAL", "category": "a", "count": 1 },
+      { "ranAt": "2026-01-01T00:00:00.500Z", "severity": "WARNING", "category": "b", "count": 1 },
+      { "ranAt": "2026-01-01T00:00:00.833Z", "severity": "SUGGESTION", "category": "b", "count": 1 },
+      { "ranAt": "2026-01-01T00:00:00.834Z", "severity": "SUGGESTION", "category": "c", "count": 1 }
+    ] },
+    { "name": "empty", "window": { "key": "30d", "from": "2026-03-01T12:00:00.000Z", "to": "2026-03-31T12:00:00.000Z", "toInclusive": true }, "facts": [] }
+  ],
+  "usage": {
+    "skills": [
+      { "name": "top_five_runs_desc_then_label", "facts": [{ "skillId": "s1", "name": "zeta", "runs": 3 }, { "skillId": "s2", "name": "Alpha", "runs": 3 }, { "skillId": "s3", "name": "alpha", "runs": 3 }, { "skillId": "s4", "name": "beta", "runs": 7 }, { "skillId": "s5", "name": "gamma", "runs": 1 }, { "skillId": "s6", "name": "delta", "runs": 1 }, { "skillId": "s7", "name": "none", "runs": 0 }, { "skillId": "s8", "name": "\\u{e9}clair", "runs": 1 }, { "skillId": "s9", "name": "eclair", "runs": 1 }] },
+      { "name": "empty", "facts": [] }
+    ],
+    "memories": [
+      { "name": "counts_once_per_run_and_skips_malformed_entries", "pulledPerRun": [[{ "text": "Use pnpm" }, { "text": "Use pnpm" }, { "text": "  " }, { "text": 5 }, "str", {}, null, { "text": "Prefer tabs" }], [{ "text": "Use pnpm" }, { "text": "Prefer tabs" }, { "text": "Prefer tabs" }], null, "notanarray", { "text": "x" }, [], [{ "text": " padded " }, { "text": "padded" }]] },
+      { "name": "top_five_ties_by_code_unit_order", "pulledPerRun": [[{ "text": "b" }, { "text": "B" }, { "text": "a" }, { "text": "c" }, { "text": "d" }, { "text": "e" }, { "text": "f" }]] },
+      { "name": "none", "pulledPerRun": [] }
+    ],
+    "categories": [
+      { "name": "sums_sorts_and_drops_zero", "facts": [{ "ranAt": "2026-03-10T10:00:00.000Z", "severity": "CRITICAL", "category": "security", "count": 2 }, { "ranAt": "2026-03-10T10:00:00.000Z", "severity": "WARNING", "category": "bug", "count": 2 }, { "ranAt": "2026-03-11T10:00:00.000Z", "severity": "WARNING", "category": "security", "count": 1 }, { "ranAt": "2026-03-11T10:00:00.000Z", "severity": "WARNING", "category": "Bug", "count": 3 }, { "ranAt": "2026-03-11T10:00:00.000Z", "severity": "WARNING", "category": "perf", "count": 0 }] },
+      { "name": "empty", "facts": [] }
+    ]
+  }
+}

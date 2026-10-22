@@ -1,0 +1,140 @@
+{
+  "note": "Route-level exchanges of the real Fastify route plugins (fastify-type-provider-zod validators and serializers, the Node error handler) over real services with fake ports. Ids: {pr}, {otherPr}, {repo}, {otherRepo}, {agent}, {bug}. A step is {req: {method, url, headers?, payload?}} (payload: string = sent as is) or {world: patch} (changes what the fakes answer from then on). Responses are recorded raw.",
+  "ids": {
+    "pr": "11111111-1111-4111-8111-111111111111",
+    "otherPr": "22222222-2222-4222-8222-222222222222",
+    "repo": "33333333-3333-4333-8333-333333333333",
+    "otherRepo": "44444444-4444-4444-8444-444444444444",
+    "agent": "00000000-0000-4000-8000-0000000000a1",
+    "bug": "00000000-0000-4000-8000-0000000000a2",
+    "sec": "00000000-0000-4000-8000-0000000000a3",
+    "zed": "00000000-0000-4000-8000-0000000000a4",
+    "foreign": "00000000-0000-4000-8000-0000000000f0",
+    "unknownAgent": "00000000-0000-4000-8000-0000000000ff"
+  },
+  "groups": {
+    "intent": {
+      "steps": [
+        { "req": { "method": "GET", "url": "/pulls/{pr}/intent" } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/intent/refresh" } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/intent" } },
+        { "world": { "pull": { "title": "A new title" } } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/intent" } },
+        { "world": { "llm": { "error": "OPENROUTER_API_KEY is not configured" } } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/intent/refresh" } },
+        { "req": { "method": "GET", "url": "/pulls/{otherPr}/intent" } },
+        { "req": { "method": "POST", "url": "/pulls/{otherPr}/intent/refresh" } },
+        { "req": { "method": "GET", "url": "/pulls/not-a-uuid/intent" } },
+        { "req": { "method": "POST", "url": "/pulls/not-a-uuid/intent/refresh" } },
+        { "world": { "llm": { "data": { "intent": "Back", "in_scope": [], "out_of_scope": [], "change_type": "docs" }, "tokensIn": 1, "tokensOut": 2, "costUsd": null } } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/intent/refresh", "headers": { "content-type": "application/json" }, "payload": "{\"anything\":true}" } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/intent/refresh", "headers": { "content-type": "text/plain" }, "payload": "hello" } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/intent/refresh", "headers": { "content-type": "application/json" }, "payload": "{not json" } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/intent/refresh", "headers": { "content-type": "application/json" }, "payload": "" } },
+        { "world": { "repo": null } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/intent/refresh" } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/intent" } }
+      ]
+    },
+    "smartdiff": {
+      "steps": [
+        { "req": { "method": "GET", "url": "/pulls/{pr}/smart-diff" } },
+        { "req": { "method": "GET", "url": "/pulls/{otherPr}/smart-diff" } },
+        { "req": { "method": "GET", "url": "/pulls/nope/smart-diff" } },
+        { "world": { "files": [] } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/smart-diff" } }
+      ]
+    },
+    "blast": {
+      "steps": [
+        { "req": { "method": "GET", "url": "/pulls/{pr}/blast" } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/history" } },
+        { "world": { "index": { "changedSymbols": [], "callers": [], "degraded": true, "reason": "flag_off" } } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/blast" } },
+        { "world": { "index": { "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }], "callers": [], "degraded": false } } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/blast" } },
+        { "world": { "index": { "throws": "connection reset" } } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/blast" } },
+        { "world": { "merged": { "throws": "GitHub answered 500" } } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/history" } },
+        { "world": { "files": [] } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/history" } },
+        { "req": { "method": "GET", "url": "/pulls/{otherPr}/blast" } },
+        { "req": { "method": "GET", "url": "/pulls/{otherPr}/history" } },
+        { "req": { "method": "GET", "url": "/pulls/x/blast" } },
+        { "req": { "method": "GET", "url": "/pulls/x/history" } }
+      ]
+    },
+    "brief": {
+      "steps": [
+        { "req": { "method": "GET", "url": "/pulls/{pr}/brief" } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/brief" } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/brief" } },
+        { "world": { "pull": { "headSha": "ffffffffffffffffffffffffffffffffffffffff" } } },
+        { "req": { "method": "GET", "url": "/pulls/{pr}/brief" } },
+        { "world": { "llm": { "error": "config" } } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/brief" } },
+        { "world": { "llm": { "error": "other" } } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/brief" } },
+        { "world": { "files": [] } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/brief" } },
+        { "req": { "method": "GET", "url": "/pulls/{otherPr}/brief" } },
+        { "req": { "method": "POST", "url": "/pulls/{otherPr}/brief" } },
+        { "req": { "method": "GET", "url": "/pulls/nope/brief" } },
+        { "req": { "method": "POST", "url": "/pulls/nope/brief" } },
+        { "req": { "method": "POST", "url": "/pulls/{pr}/brief", "headers": { "content-type": "application/json" }, "payload": "{}" } }
+      ]
+    },
+    "onboarding": {
+      "steps": [
+        { "req": { "method": "GET", "url": "/repos/{repo}/onboarding" } },
+        { "req": { "method": "POST", "url": "/repos/{repo}/onboarding" } },
+        { "req": { "method": "GET", "url": "/repos/{repo}/onboarding" } },
+        { "world": { "index": { "filesIndexed": 50, "lastIndexedSha": "newsha" } } },
+        { "req": { "method": "GET", "url": "/repos/{repo}/onboarding" } },
+        { "world": { "llm": { "error": "config" } } },
+        { "req": { "method": "POST", "url": "/repos/{repo}/onboarding" } },
+        { "world": { "llm": { "mock": true } } },
+        { "req": { "method": "POST", "url": "/repos/{repo}/onboarding" } },
+        { "world": { "index": { "filesIndexed": 0, "lastIndexedSha": "" } } },
+        { "req": { "method": "POST", "url": "/repos/{repo}/onboarding" } },
+        { "req": { "method": "GET", "url": "/repos/{otherRepo}/onboarding" } },
+        { "req": { "method": "POST", "url": "/repos/{otherRepo}/onboarding" } },
+        { "req": { "method": "GET", "url": "/repos/nope/onboarding" } },
+        { "req": { "method": "POST", "url": "/repos/nope/onboarding" } }
+      ]
+    },
+    "performance": {
+      "steps": [
+        { "req": { "method": "GET", "url": "/agents/performance" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=30d" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=1d" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-03-20T00:00:00Z&to=2026-03-30T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=7d" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=1d&from=2026-01-01T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-01-02T00:00:00Z&to=2026-01-01T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-01-01T00:00:00Z&to=2027-01-03T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-01-01&to=2026-01-05T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=1d&period=30d" } },
+        { "req": { "method": "GET", "url": "/agents/performance?foo=bar&period=1d" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-03-20T00%3A00%3A00Z&to=2026-03-30T00%3A00%3A00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-03-20T00:00:00%2B05:30&to=2026-03-30T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-03-20T00:00:00+05:30&to=2026-03-30T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=custom&from=2026-03-20T00:00:00%2B24:00&to=2026-03-30T00:00:00Z" } },
+        { "req": { "method": "GET", "url": "/agents/performance?period=" } },
+        { "req": { "method": "GET", "url": "/agents/{agent}/stats" } },
+        { "req": { "method": "GET", "url": "/agents/{agent}/stats?period=1d" } },
+        { "req": { "method": "GET", "url": "/agents/{bug}/stats?period=30d" } },
+        { "req": { "method": "GET", "url": "/agents/{zed}/stats?period=30d" } },
+        { "req": { "method": "GET", "url": "/agents/{unknownAgent}/stats" } },
+        { "req": { "method": "GET", "url": "/agents/{foreign}/stats" } },
+        { "req": { "method": "GET", "url": "/agents/performance/stats" } },
+        { "req": { "method": "GET", "url": "/agents/not-a-uuid/stats" } },
+        { "req": { "method": "GET", "url": "/agents/not-a-uuid/stats?period=7d" } },
+        { "req": { "method": "GET", "url": "/agents/{agent}/stats?period=7d" } },
+        { "req": { "method": "GET", "url": "/agents/{agent}/stats?period=custom" } }
+      ]
+    }
+  }
+}

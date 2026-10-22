@@ -1,0 +1,1138 @@
+{
+  "note": "strict = toJsonSchema(schema, name) = {schema, name}: the schema sent as response_format.json_schema.schema (compare as JSON values, key order is not significant for objects). parse = parseWithRepair(schema, raw): ok + the Zod-parsed data (unknown keys stripped, absent optional keys stay absent) or the issue text and the reprompt message (V8 JSON error texts are not reproducible in Go: compare the \"Output was not valid JSON: \" prefix). mock = the real MockReviewLLMProvider.completeStructured per schema name (raw is the exact JSON text the mock returns). calls = request parameters the feature adapters hand to the provider. The brief and onboarding adapters are covered by the llmRequests of brief.json / onboarding.json.",
+  "constants": {
+    "mockUsage": {"tokensIn": 1200, "tokensOut": 180, "costUsd": 0.00042},
+    "mockIntentClassification": {
+      "intent": "[mock LLM] Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.",
+      "in_scope": ["Add a rate-limiting middleware", "Apply it to public, unauthenticated API endpoints"],
+      "out_of_scope": ["Authentication or session changes", "Internal or admin-only endpoints"],
+      "change_type": "feature"
+    },
+    "mockPrBrief": {
+      "summary": "[mock LLM] Adds a token-bucket rate limiter in front of the public webhook endpoints and moves its limits into the config.",
+      "risks": [
+        {
+          "kind": "security",
+          "title": "Rate-limit key trusts a client-controlled header",
+          "explanation": "The bucket key comes from `X-Forwarded-For`, so a client can dodge the limiter by sending a new value on every request.",
+          "severity": "high",
+          "file_refs": ["src/middleware/ratelimit.ts:6-9"]
+        },
+        {
+          "kind": "perf",
+          "title": "Per-user query inside a loop",
+          "explanation": "Each user triggers its own `orgs` query, so the list endpoint now issues one query per row.",
+          "severity": "medium",
+          "file_refs": ["src/api/users.ts:45-50"]
+        },
+        {
+          "kind": "data",
+          "title": "Live-looking key committed in the config",
+          "explanation": "A `stripeKey` literal is added to `config.ts`; check that it is a placeholder and not a real secret.",
+          "severity": "low",
+          "file_refs": ["src/config.ts:12"]
+        }
+      ],
+      "review_focus": [
+        {"file": "src/middleware/ratelimit.ts", "line": 7, "reason": "The bucket key is taken from a spoofable header."},
+        {"file": "src/api/public/webhooks.ts", "line": 4, "reason": "Where the limiter is attached to the public routes."},
+        {"file": "src/api/users.ts", "line": 46, "reason": "New per-user query in the loop."},
+        {"file": "src/config.ts", "line": 12, "reason": "A key-looking literal enters the config."}
+      ]
+    }
+  },
+  "schemas": {
+    "IntentClassification": {
+      "schemaName": "IntentClassification",
+      "strict": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "intent": {"type": "string", "description": "One or two plain English sentences: what this PR is trying to accomplish and why."},
+            "in_scope": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Short bullets of what this PR intentionally changes."
+            },
+            "out_of_scope": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Short bullets of what this PR explicitly does NOT intend to change (may be empty)."
+            },
+            "change_type": {
+              "type": "string",
+              "enum": ["feature", "bugfix", "refactor", "docs", "test", "chore", "security", "perf", "mixed"],
+              "description": "The single dominant kind of change in this PR."
+            }
+          },
+          "required": ["intent", "in_scope", "out_of_scope", "change_type"],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "name": "IntentClassification"
+      },
+      "parse": [
+        {
+          "name": "valid",
+          "raw": "{\"intent\":\"Add rate limiting.\",\"in_scope\":[\"a\",\"b\"],\"out_of_scope\":[\"c\"],\"change_type\":\"feature\"}",
+          "ok": true,
+          "data": {
+            "intent": "Add rate limiting.",
+            "in_scope": ["a", "b"],
+            "out_of_scope": ["c"],
+            "change_type": "feature"
+          }
+        },
+        {
+          "name": "every_change_type",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"mixed\"}",
+          "ok": true,
+          "data": {
+            "intent": "x",
+            "in_scope": [],
+            "out_of_scope": [],
+            "change_type": "mixed"
+          }
+        },
+        {
+          "name": "unknown_keys_are_stripped",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"docs\",\"confidence\":\"high\",\"sources\":[],\"extra\":1}",
+          "ok": true,
+          "data": {
+            "intent": "x",
+            "in_scope": [],
+            "out_of_scope": [],
+            "change_type": "docs"
+          }
+        },
+        {
+          "name": "empty_strings_are_valid",
+          "raw": "{\"intent\":\"\",\"in_scope\":[\"\"],\"out_of_scope\":[],\"change_type\":\"chore\"}",
+          "ok": true,
+          "data": {
+            "intent": "",
+            "in_scope": [""],
+            "out_of_scope": [],
+            "change_type": "chore"
+          }
+        },
+        {
+          "name": "unicode_text",
+          "raw": "{\"intent\":\"café 😀 中文 <b>&</b>\",\"in_scope\":[\"\u2028\"],\"out_of_scope\":[],\"change_type\":\"perf\"}",
+          "ok": true,
+          "data": {
+            "intent": "café 😀 中文 <b>&</b>",
+            "in_scope": ["\u2028"],
+            "out_of_scope": [],
+            "change_type": "perf"
+          }
+        },
+        {
+          "name": "bad_change_type",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"feat\"}",
+          "ok": false,
+          "error": "- change_type: Invalid enum value. Expected 'feature' | 'bugfix' | 'refactor' | 'docs' | 'test' | 'chore' | 'security' | 'perf' | 'mixed', received 'feat'",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- change_type: Invalid enum value. Expected 'feature' | 'bugfix' | 'refactor' | 'docs' | 'test' | 'chore' | 'security' | 'perf' | 'mixed', received 'feat'"
+        },
+        {
+          "name": "change_type_null",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":null}",
+          "ok": false,
+          "error": "- change_type: Expected 'feature' | 'bugfix' | 'refactor' | 'docs' | 'test' | 'chore' | 'security' | 'perf' | 'mixed', received null",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- change_type: Expected 'feature' | 'bugfix' | 'refactor' | 'docs' | 'test' | 'chore' | 'security' | 'perf' | 'mixed', received null"
+        },
+        {
+          "name": "change_type_missing",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[]}",
+          "ok": false,
+          "error": "- change_type: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- change_type: Required"
+        },
+        {
+          "name": "intent_missing",
+          "raw": "{\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"feature\"}",
+          "ok": false,
+          "error": "- intent: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- intent: Required"
+        },
+        {
+          "name": "intent_not_a_string",
+          "raw": "{\"intent\":5,\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"feature\"}",
+          "ok": false,
+          "error": "- intent: Expected string, received number",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- intent: Expected string, received number"
+        },
+        {
+          "name": "in_scope_not_an_array",
+          "raw": "{\"intent\":\"x\",\"in_scope\":\"a\",\"out_of_scope\":[],\"change_type\":\"feature\"}",
+          "ok": false,
+          "error": "- in_scope: Expected array, received string",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- in_scope: Expected array, received string"
+        },
+        {
+          "name": "in_scope_item_not_a_string",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[\"a\",2,null],\"out_of_scope\":[],\"change_type\":\"feature\"}",
+          "ok": false,
+          "error": "- in_scope.1: Expected string, received number\n- in_scope.2: Expected string, received null",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- in_scope.1: Expected string, received number\n- in_scope.2: Expected string, received null"
+        },
+        {
+          "name": "out_of_scope_missing",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[],\"change_type\":\"feature\"}",
+          "ok": false,
+          "error": "- out_of_scope: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- out_of_scope: Required"
+        },
+        {
+          "name": "several_issues_come_in_property_order",
+          "raw": "{\"intent\":1,\"in_scope\":\"x\",\"out_of_scope\":{},\"change_type\":\"nope\"}",
+          "ok": false,
+          "error": "- intent: Expected string, received number\n- in_scope: Expected array, received string\n- out_of_scope: Expected array, received object\n- change_type: Invalid enum value. Expected 'feature' | 'bugfix' | 'refactor' | 'docs' | 'test' | 'chore' | 'security' | 'perf' | 'mixed', received 'nope'",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- intent: Expected string, received number\n- in_scope: Expected array, received string\n- out_of_scope: Expected array, received object\n- change_type: Invalid enum value. Expected 'feature' | 'bugfix' | 'refactor' | 'docs' | 'test' | 'chore' | 'security' | 'perf' | 'mixed', received 'nope'"
+        },
+        {
+          "name": "all_keys_missing",
+          "raw": "{}",
+          "ok": false,
+          "error": "- intent: Required\n- in_scope: Required\n- out_of_scope: Required\n- change_type: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- intent: Required\n- in_scope: Required\n- out_of_scope: Required\n- change_type: Required"
+        },
+        {
+          "name": "top_level_array",
+          "raw": "[]",
+          "ok": false,
+          "error": "- (root): Expected object, received array",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received array"
+        },
+        {
+          "name": "top_level_null",
+          "raw": "null",
+          "ok": false,
+          "error": "- (root): Expected object, received null",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received null"
+        },
+        {
+          "name": "top_level_string",
+          "raw": "\"x\"",
+          "ok": false,
+          "error": "- (root): Expected object, received string",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received string"
+        },
+        {
+          "name": "fenced_json",
+          "raw": "```json\n{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"test\"}\n```",
+          "ok": true,
+          "data": {
+            "intent": "x",
+            "in_scope": [],
+            "out_of_scope": [],
+            "change_type": "test"
+          }
+        },
+        {
+          "name": "prose_around_json",
+          "raw": "Here is the classification:\n{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"test\"}\nHope it helps.",
+          "ok": true,
+          "data": {
+            "intent": "x",
+            "in_scope": [],
+            "out_of_scope": [],
+            "change_type": "test"
+          }
+        },
+        {
+          "name": "invalid_json",
+          "raw": "oops",
+          "ok": false,
+          "error": "Output was not valid JSON: Unexpected token 'o', \"oops\" is not valid JSON",
+          "repromptMessage": "Output was not valid JSON: Unexpected token 'o', \"oops\" is not valid JSON\nReturn ONLY a single valid JSON object matching the schema, no prose."
+        },
+        {
+          "name": "truncated_json",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[",
+          "ok": false,
+          "error": "Output was not valid JSON: Unexpected end of JSON input",
+          "repromptMessage": "Output was not valid JSON: Unexpected end of JSON input\nReturn ONLY a single valid JSON object matching the schema, no prose."
+        },
+        {
+          "name": "empty_output",
+          "raw": "",
+          "ok": false,
+          "error": "Output was not valid JSON: Unexpected end of JSON input",
+          "repromptMessage": "Output was not valid JSON: Unexpected end of JSON input\nReturn ONLY a single valid JSON object matching the schema, no prose."
+        },
+        {
+          "name": "whitespace_output",
+          "raw": "  \n ",
+          "ok": false,
+          "error": "Output was not valid JSON: Unexpected end of JSON input",
+          "repromptMessage": "Output was not valid JSON: Unexpected end of JSON input\nReturn ONLY a single valid JSON object matching the schema, no prose."
+        },
+        {
+          "name": "json_with_trailing_comma",
+          "raw": "{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"test\",}",
+          "ok": false,
+          "error": "Output was not valid JSON: Expected double-quoted property name in JSON at position 67 (line 1 column 68)",
+          "repromptMessage": "Output was not valid JSON: Expected double-quoted property name in JSON at position 67 (line 1 column 68)\nReturn ONLY a single valid JSON object matching the schema, no prose."
+        },
+        {
+          "name": "braces_inside_strings",
+          "raw": "{\"intent\":\"a } b { c\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"docs\"}",
+          "ok": true,
+          "data": {
+            "intent": "a } b { c",
+            "in_scope": [],
+            "out_of_scope": [],
+            "change_type": "docs"
+          }
+        }
+      ]
+    },
+    "PrBriefLlm": {
+      "schemaName": "PrBriefLlm",
+      "strict": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "summary": {"type": "string", "description": "What the PR does and why, at most 600 characters."},
+            "risks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {"type": "string", "description": "Short category such as security, data, compat, perf, concurrency, test-gap."},
+                  "title": {"type": "string", "description": "At most 120 characters."},
+                  "explanation": {"type": "string", "description": "What can go wrong and what to check, at most 600 characters."},
+                  "severity": {
+                    "type": "string",
+                    "enum": ["high", "medium", "low"]
+                  },
+                  "file_refs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "One or more `path:start` or `path:start-end`, path copied exactly from the file lists, lines from the changed ranges."
+                  }
+                },
+                "required": ["kind", "title", "explanation", "severity", "file_refs"],
+                "additionalProperties": false
+              },
+              "description": "At most 6 risks, most severe first."
+            },
+            "review_focus": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "file": {"type": "string", "description": "A path copied exactly from the file lists."},
+                  "line": {"type": "number", "description": "A 1-based line inside a changed range, a finding line or a caller line of that file."},
+                  "reason": {"type": "string", "description": "Why to look here, at most 160 characters."}
+                },
+                "required": ["file", "line", "reason"],
+                "additionalProperties": false
+              },
+              "description": "At most 8 places, in the order a reviewer should read them."
+            }
+          },
+          "required": ["summary", "risks", "review_focus"],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "name": "PrBriefLlm"
+      },
+      "parse": [
+        {
+          "name": "valid",
+          "raw": "{\"summary\":\"S\",\"risks\":[{\"kind\":\"security\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"high\",\"file_refs\":[\"a.ts:1\"]}],\"review_focus\":[{\"file\":\"a.ts\",\"line\":3,\"reason\":\"r\"}]}",
+          "ok": true,
+          "data": {
+            "summary": "S",
+            "risks": [
+              {
+                "kind": "security",
+                "title": "T",
+                "explanation": "E",
+                "severity": "high",
+                "file_refs": ["a.ts:1"]
+              }
+            ],
+            "review_focus": [
+              {"file": "a.ts", "line": 3, "reason": "r"}
+            ]
+          }
+        },
+        {
+          "name": "empty_arrays",
+          "raw": "{\"summary\":\"\",\"risks\":[],\"review_focus\":[]}",
+          "ok": true,
+          "data": {
+            "summary": "",
+            "risks": [],
+            "review_focus": []
+          }
+        },
+        {
+          "name": "line_is_any_number",
+          "raw": "{\"summary\":\"S\",\"risks\":[],\"review_focus\":[{\"file\":\"a.ts\",\"line\":7.5,\"reason\":\"r\"},{\"file\":\"a.ts\",\"line\":-3,\"reason\":\"r\"},{\"file\":\"a.ts\",\"line\":0,\"reason\":\"r\"},{\"file\":\"a.ts\",\"line\":1e+300,\"reason\":\"r\"}]}",
+          "ok": true,
+          "data": {
+            "summary": "S",
+            "risks": [],
+            "review_focus": [
+              {"file": "a.ts", "line": 7.5, "reason": "r"},
+              {"file": "a.ts", "line": -3, "reason": "r"},
+              {"file": "a.ts", "line": 0, "reason": "r"},
+              {"file": "a.ts", "line": 1e+300, "reason": "r"}
+            ]
+          }
+        },
+        {
+          "name": "unknown_keys_are_stripped",
+          "raw": "{\"summary\":\"S\",\"extra\":1,\"risks\":[{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[],\"id\":1}],\"review_focus\":[{\"file\":\"a.ts\",\"line\":1,\"reason\":\"r\",\"x\":1}]}",
+          "ok": true,
+          "data": {
+            "summary": "S",
+            "risks": [
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": []
+              }
+            ],
+            "review_focus": [
+              {"file": "a.ts", "line": 1, "reason": "r"}
+            ]
+          }
+        },
+        {
+          "name": "bad_severity",
+          "raw": "{\"summary\":\"S\",\"risks\":[{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"critical\",\"file_refs\":[]}],\"review_focus\":[]}",
+          "ok": false,
+          "error": "- risks.0.severity: Invalid enum value. Expected 'high' | 'medium' | 'low', received 'critical'",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- risks.0.severity: Invalid enum value. Expected 'high' | 'medium' | 'low', received 'critical'"
+        },
+        {
+          "name": "severity_uppercase",
+          "raw": "{\"summary\":\"S\",\"risks\":[{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"HIGH\",\"file_refs\":[]}],\"review_focus\":[]}",
+          "ok": false,
+          "error": "- risks.0.severity: Invalid enum value. Expected 'high' | 'medium' | 'low', received 'HIGH'",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- risks.0.severity: Invalid enum value. Expected 'high' | 'medium' | 'low', received 'HIGH'"
+        },
+        {
+          "name": "missing_risk_fields_in_property_order",
+          "raw": "{\"summary\":\"S\",\"risks\":[{}],\"review_focus\":[]}",
+          "ok": false,
+          "error": "- risks.0.kind: Required\n- risks.0.title: Required\n- risks.0.explanation: Required\n- risks.0.severity: Required\n- risks.0.file_refs: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- risks.0.kind: Required\n- risks.0.title: Required\n- risks.0.explanation: Required\n- risks.0.severity: Required\n- risks.0.file_refs: Required"
+        },
+        {
+          "name": "file_refs_not_an_array",
+          "raw": "{\"summary\":\"S\",\"risks\":[{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":\"a.ts:1\"}],\"review_focus\":[]}",
+          "ok": false,
+          "error": "- risks.0.file_refs: Expected array, received string",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- risks.0.file_refs: Expected array, received string"
+        },
+        {
+          "name": "file_refs_item_not_a_string",
+          "raw": "{\"summary\":\"S\",\"risks\":[{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[1]}],\"review_focus\":[]}",
+          "ok": false,
+          "error": "- risks.0.file_refs.0: Expected string, received number",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- risks.0.file_refs.0: Expected string, received number"
+        },
+        {
+          "name": "line_is_a_string",
+          "raw": "{\"summary\":\"S\",\"risks\":[],\"review_focus\":[{\"file\":\"a.ts\",\"line\":\"3\",\"reason\":\"r\"}]}",
+          "ok": false,
+          "error": "- review_focus.0.line: Expected number, received string",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- review_focus.0.line: Expected number, received string"
+        },
+        {
+          "name": "line_is_null",
+          "raw": "{\"summary\":\"S\",\"risks\":[],\"review_focus\":[{\"file\":\"a.ts\",\"line\":null,\"reason\":\"r\"}]}",
+          "ok": false,
+          "error": "- review_focus.0.line: Expected number, received null",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- review_focus.0.line: Expected number, received null"
+        },
+        {
+          "name": "line_missing_and_reason_missing",
+          "raw": "{\"summary\":\"S\",\"risks\":[],\"review_focus\":[{\"file\":\"a.ts\"}]}",
+          "ok": false,
+          "error": "- review_focus.0.line: Required\n- review_focus.0.reason: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- review_focus.0.line: Required\n- review_focus.0.reason: Required"
+        },
+        {
+          "name": "review_focus_missing",
+          "raw": "{\"summary\":\"S\",\"risks\":[]}",
+          "ok": false,
+          "error": "- review_focus: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- review_focus: Required"
+        },
+        {
+          "name": "risks_not_an_array",
+          "raw": "{\"summary\":\"S\",\"risks\":{},\"review_focus\":[]}",
+          "ok": false,
+          "error": "- risks: Expected array, received object",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- risks: Expected array, received object"
+        },
+        {
+          "name": "summary_missing",
+          "raw": "{\"risks\":[],\"review_focus\":[]}",
+          "ok": false,
+          "error": "- summary: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- summary: Required"
+        },
+        {
+          "name": "several_issues_in_order",
+          "raw": "{\"summary\":1,\"risks\":[{\"kind\":1,\"title\":2,\"explanation\":3,\"severity\":4,\"file_refs\":5}],\"review_focus\":[{\"file\":6,\"line\":\"x\",\"reason\":7},{\"file\":\"ok\",\"line\":1,\"reason\":\"ok\"},{\"file\":8}]}",
+          "ok": false,
+          "error": "- summary: Expected string, received number\n- risks.0.kind: Expected string, received number\n- risks.0.title: Expected string, received number\n- risks.0.explanation: Expected string, received number\n- risks.0.severity: Expected 'high' | 'medium' | 'low', received number\n- risks.0.file_refs: Expected array, received number\n- review_focus.0.file: Expected string, received number\n- review_focus.0.line: Expected number, received string\n- review_focus.0.reason: Expected string, received number\n- review_focus.2.file: Expected string, received number\n- review_focus.2.line: Required\n- review_focus.2.reason: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- summary: Expected string, received number\n- risks.0.kind: Expected string, received number\n- risks.0.title: Expected string, received number\n- risks.0.explanation: Expected string, received number\n- risks.0.severity: Expected 'high' | 'medium' | 'low', received number\n- risks.0.file_refs: Expected array, received number\n- review_focus.0.file: Expected string, received number\n- review_focus.0.line: Expected number, received string\n- review_focus.0.reason: Expected string, received number\n- review_focus.2.file: Expected string, received number\n- review_focus.2.line: Required\n- review_focus.2.reason: Required"
+        },
+        {
+          "name": "more_than_the_limits_is_still_valid_here",
+          "raw": "{\"summary\":\"S\",\"risks\":[{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[\"a:1\"]},{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[\"a:1\"]},{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[\"a:1\"]},{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[\"a:1\"]},{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[\"a:1\"]},{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[\"a:1\"]},{\"kind\":\"k\",\"title\":\"T\",\"explanation\":\"E\",\"severity\":\"low\",\"file_refs\":[\"a:1\"]}],\"review_focus\":[]}",
+          "ok": true,
+          "data": {
+            "summary": "S",
+            "risks": [
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": ["a:1"]
+              },
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": ["a:1"]
+              },
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": ["a:1"]
+              },
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": ["a:1"]
+              },
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": ["a:1"]
+              },
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": ["a:1"]
+              },
+              {
+                "kind": "k",
+                "title": "T",
+                "explanation": "E",
+                "severity": "low",
+                "file_refs": ["a:1"]
+              }
+            ],
+            "review_focus": []
+          }
+        },
+        {
+          "name": "fenced_json",
+          "raw": "```\n{\"summary\":\"S\",\"risks\":[],\"review_focus\":[]}\n```",
+          "ok": true,
+          "data": {
+            "summary": "S",
+            "risks": [],
+            "review_focus": []
+          }
+        },
+        {
+          "name": "invalid_json",
+          "raw": "{\"summary\": }",
+          "ok": false,
+          "error": "Output was not valid JSON: Unexpected token '}', \"{\"summary\": }\" is not valid JSON",
+          "repromptMessage": "Output was not valid JSON: Unexpected token '}', \"{\"summary\": }\" is not valid JSON\nReturn ONLY a single valid JSON object matching the schema, no prose."
+        },
+        {
+          "name": "top_level_array",
+          "raw": "[{\"summary\":\"S\"}]",
+          "ok": false,
+          "error": "- (root): Expected object, received array",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received array"
+        }
+      ]
+    },
+    "OnboardingTour": {
+      "schemaName": "OnboardingTour",
+      "strict": {
+        "schema": {
+          "type": "object",
+          "properties": {
+            "architecture": {
+              "type": "object",
+              "properties": {
+                "summary": {"type": "string", "description": "Two to five sentences, at most 800 characters. Wrap code identifiers in backticks."},
+                "nodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {"type": "string", "description": "Short unique id, at most 64 characters."},
+                      "label": {"type": "string", "description": "Box label, at most 60 characters."},
+                      "kind": {
+                        "type": "string",
+                        "enum": ["entry", "module", "store", "external"],
+                        "description": "entry = where execution starts; store = database/cache/queue; external = third-party service."
+                      }
+                    },
+                    "required": ["id", "label", "kind"],
+                    "additionalProperties": false
+                  },
+                  "description": "2 to 12 boxes of the architecture diagram."
+                },
+                "edges": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "from": {"type": "string", "description": "A node id."},
+                      "to": {"type": "string", "description": "A node id."}
+                    },
+                    "required": ["from", "to"],
+                    "additionalProperties": false
+                  },
+                  "description": "At most 20 directed edges between node ids above."
+                }
+              },
+              "required": ["summary", "nodes", "edges"],
+              "additionalProperties": false
+            },
+            "critical_paths": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {"type": "string", "description": "A file path copied exactly from the file list."},
+                  "reason": {"type": "string", "description": "Why it matters, at most 120 characters."}
+                },
+                "required": ["path", "reason"],
+                "additionalProperties": false
+              },
+              "description": "3 to 6 files on the main execution paths."
+            },
+            "run_steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "command": {"type": "string", "description": "One shell command, at most 200 characters."},
+                  "comment": {"type": "string", "description": "What it does, at most 120 characters."}
+                },
+                "required": ["command", "comment"],
+                "additionalProperties": false
+              },
+              "description": "1 to 8 steps to run the project locally; empty when the sources do not say."
+            },
+            "reading_path": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {"type": "string", "description": "A file path copied exactly from the file list."},
+                  "reason": {"type": "string", "description": "Why read it at this point, at most 120 characters."}
+                },
+                "required": ["path", "reason"],
+                "additionalProperties": false
+              },
+              "description": "3 to 7 files in the order a newcomer should read them."
+            },
+            "first_tasks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {"type": "string", "description": "Task title, at most 80 characters."},
+                  "path": {"type": "string", "description": "A file path from the file list, or a folder that contains listed files."},
+                  "complexity": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high"]
+                  }
+                },
+                "required": ["title", "path", "complexity"],
+                "additionalProperties": false
+              },
+              "description": "Up to 3 starter tasks, picked from the TODO and untested-file signals."
+            }
+          },
+          "required": ["architecture", "critical_paths", "run_steps", "reading_path", "first_tasks"],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "name": "OnboardingTour"
+      },
+      "parse": [
+        {
+          "name": "valid",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[{\"id\":\"a\",\"label\":\"A\",\"kind\":\"entry\"}],\"edges\":[{\"from\":\"a\",\"to\":\"a\"}]},\"critical_paths\":[{\"path\":\"a.ts\",\"reason\":\"r\"}],\"run_steps\":[{\"command\":\"pnpm dev\",\"comment\":\"start\"}],\"reading_path\":[{\"path\":\"a.ts\",\"reason\":\"r\"}],\"first_tasks\":[{\"title\":\"t\",\"path\":\"a.ts\",\"complexity\":\"low\"}]}",
+          "ok": true,
+          "data": {
+            "architecture": {
+              "summary": "S",
+              "nodes": [
+                {"id": "a", "label": "A", "kind": "entry"}
+              ],
+              "edges": [
+                {"from": "a", "to": "a"}
+              ]
+            },
+            "critical_paths": [
+              {"path": "a.ts", "reason": "r"}
+            ],
+            "run_steps": [
+              {"command": "pnpm dev", "comment": "start"}
+            ],
+            "reading_path": [
+              {"path": "a.ts", "reason": "r"}
+            ],
+            "first_tasks": [
+              {"title": "t", "path": "a.ts", "complexity": "low"}
+            ]
+          }
+        },
+        {
+          "name": "run_step_without_comment",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[{\"command\":\"x\"}],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": true,
+          "data": {
+            "architecture": {
+              "summary": "S",
+              "nodes": [],
+              "edges": []
+            },
+            "critical_paths": [],
+            "run_steps": [
+              {"command": "x"}
+            ],
+            "reading_path": [],
+            "first_tasks": []
+          }
+        },
+        {
+          "name": "run_step_comment_null",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[{\"command\":\"x\",\"comment\":null}],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- run_steps.0.comment: Expected string, received null",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- run_steps.0.comment: Expected string, received null"
+        },
+        {
+          "name": "run_step_comment_number",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[{\"command\":\"x\",\"comment\":5}],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- run_steps.0.comment: Expected string, received number",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- run_steps.0.comment: Expected string, received number"
+        },
+        {
+          "name": "all_empty",
+          "raw": "{\"architecture\":{\"summary\":\"\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": true,
+          "data": {
+            "architecture": {
+              "summary": "",
+              "nodes": [],
+              "edges": []
+            },
+            "critical_paths": [],
+            "run_steps": [],
+            "reading_path": [],
+            "first_tasks": []
+          }
+        },
+        {
+          "name": "unknown_keys_are_stripped",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[{\"id\":\"a\",\"label\":\"A\",\"kind\":\"module\",\"x\":1}],\"edges\":[],\"y\":2},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[],\"language\":\"en\"}",
+          "ok": true,
+          "data": {
+            "architecture": {
+              "summary": "S",
+              "nodes": [
+                {"id": "a", "label": "A", "kind": "module"}
+              ],
+              "edges": []
+            },
+            "critical_paths": [],
+            "run_steps": [],
+            "reading_path": [],
+            "first_tasks": []
+          }
+        },
+        {
+          "name": "bad_node_kind",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[{\"id\":\"a\",\"label\":\"A\",\"kind\":\"service\"}],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- architecture.nodes.0.kind: Invalid enum value. Expected 'entry' | 'module' | 'store' | 'external', received 'service'",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- architecture.nodes.0.kind: Invalid enum value. Expected 'entry' | 'module' | 'store' | 'external', received 'service'"
+        },
+        {
+          "name": "every_node_kind",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[{\"id\":\"a\",\"label\":\"A\",\"kind\":\"entry\"},{\"id\":\"b\",\"label\":\"B\",\"kind\":\"module\"},{\"id\":\"c\",\"label\":\"C\",\"kind\":\"store\"},{\"id\":\"d\",\"label\":\"D\",\"kind\":\"external\"}],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": true,
+          "data": {
+            "architecture": {
+              "summary": "S",
+              "nodes": [
+                {"id": "a", "label": "A", "kind": "entry"},
+                {"id": "b", "label": "B", "kind": "module"},
+                {"id": "c", "label": "C", "kind": "store"},
+                {"id": "d", "label": "D", "kind": "external"}
+              ],
+              "edges": []
+            },
+            "critical_paths": [],
+            "run_steps": [],
+            "reading_path": [],
+            "first_tasks": []
+          }
+        },
+        {
+          "name": "bad_complexity",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[{\"title\":\"t\",\"path\":\"a.ts\",\"complexity\":\"trivial\"}]}",
+          "ok": false,
+          "error": "- first_tasks.0.complexity: Invalid enum value. Expected 'low' | 'medium' | 'high', received 'trivial'",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- first_tasks.0.complexity: Invalid enum value. Expected 'low' | 'medium' | 'high', received 'trivial'"
+        },
+        {
+          "name": "complexity_case",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[{\"title\":\"t\",\"path\":\"a.ts\",\"complexity\":\"LOW\"}]}",
+          "ok": false,
+          "error": "- first_tasks.0.complexity: Invalid enum value. Expected 'low' | 'medium' | 'high', received 'LOW'",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- first_tasks.0.complexity: Invalid enum value. Expected 'low' | 'medium' | 'high', received 'LOW'"
+        },
+        {
+          "name": "architecture_missing",
+          "raw": "{\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- architecture: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- architecture: Required"
+        },
+        {
+          "name": "architecture_summary_missing",
+          "raw": "{\"architecture\":{\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- architecture.summary: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- architecture.summary: Required"
+        },
+        {
+          "name": "edges_missing",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- architecture.edges: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- architecture.edges: Required"
+        },
+        {
+          "name": "edge_fields_wrong",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[{\"from\":1},{\"to\":\"b\"},\"a->b\"]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- architecture.edges.0.from: Expected string, received number\n- architecture.edges.0.to: Required\n- architecture.edges.1.from: Required\n- architecture.edges.2: Expected object, received string",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- architecture.edges.0.from: Expected string, received number\n- architecture.edges.0.to: Required\n- architecture.edges.1.from: Required\n- architecture.edges.2: Expected object, received string"
+        },
+        {
+          "name": "path_items_wrong",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[{\"path\":\"a.ts\"},{\"reason\":\"r\"},\"a.ts\"],\"run_steps\":[],\"reading_path\":[{\"path\":1,\"reason\":2}],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- critical_paths.0.reason: Required\n- critical_paths.1.path: Required\n- critical_paths.2: Expected object, received string\n- reading_path.0.path: Expected string, received number\n- reading_path.0.reason: Expected string, received number",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- critical_paths.0.reason: Required\n- critical_paths.1.path: Required\n- critical_paths.2: Expected object, received string\n- reading_path.0.path: Expected string, received number\n- reading_path.0.reason: Expected string, received number"
+        },
+        {
+          "name": "run_steps_not_an_array",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":\"pnpm dev\",\"reading_path\":[],\"first_tasks\":[]}",
+          "ok": false,
+          "error": "- run_steps: Expected array, received string",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- run_steps: Expected array, received string"
+        },
+        {
+          "name": "several_issues_in_order",
+          "raw": "{\"architecture\":{\"summary\":1,\"nodes\":[{\"id\":1,\"label\":2,\"kind\":3}],\"edges\":\"x\"},\"critical_paths\":\"x\",\"run_steps\":[{\"command\":1}],\"reading_path\":1,\"first_tasks\":[{\"title\":1,\"path\":2,\"complexity\":3}]}",
+          "ok": false,
+          "error": "- architecture.summary: Expected string, received number\n- architecture.nodes.0.id: Expected string, received number\n- architecture.nodes.0.label: Expected string, received number\n- architecture.nodes.0.kind: Expected 'entry' | 'module' | 'store' | 'external', received number\n- architecture.edges: Expected array, received string\n- critical_paths: Expected array, received string\n- run_steps.0.command: Expected string, received number\n- reading_path: Expected array, received number\n- first_tasks.0.title: Expected string, received number\n- first_tasks.0.path: Expected string, received number\n- first_tasks.0.complexity: Expected 'low' | 'medium' | 'high', received number",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- architecture.summary: Expected string, received number\n- architecture.nodes.0.id: Expected string, received number\n- architecture.nodes.0.label: Expected string, received number\n- architecture.nodes.0.kind: Expected 'entry' | 'module' | 'store' | 'external', received number\n- architecture.edges: Expected array, received string\n- critical_paths: Expected array, received string\n- run_steps.0.command: Expected string, received number\n- reading_path: Expected array, received number\n- first_tasks.0.title: Expected string, received number\n- first_tasks.0.path: Expected string, received number\n- first_tasks.0.complexity: Expected 'low' | 'medium' | 'high', received number"
+        },
+        {
+          "name": "empty_object",
+          "raw": "{}",
+          "ok": false,
+          "error": "- architecture: Required\n- critical_paths: Required\n- run_steps: Required\n- reading_path: Required\n- first_tasks: Required",
+          "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- architecture: Required\n- critical_paths: Required\n- run_steps: Required\n- reading_path: Required\n- first_tasks: Required"
+        },
+        {
+          "name": "invalid_json",
+          "raw": "Not JSON at all",
+          "ok": false,
+          "error": "Output was not valid JSON: Unexpected token 'N', \"Not JSON at all\" is not valid JSON",
+          "repromptMessage": "Output was not valid JSON: Unexpected token 'N', \"Not JSON at all\" is not valid JSON\nReturn ONLY a single valid JSON object matching the schema, no prose."
+        },
+        {
+          "name": "fenced_json",
+          "raw": "```json\n{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}\n```",
+          "ok": true,
+          "data": {
+            "architecture": {
+              "summary": "S",
+              "nodes": [],
+              "edges": []
+            },
+            "critical_paths": [],
+            "run_steps": [],
+            "reading_path": [],
+            "first_tasks": []
+          }
+        },
+        {
+          "name": "no_length_limits_in_the_provider_schema",
+          "raw": "{\"architecture\":{\"summary\":\"S\",\"nodes\":[{\"id\":\"\",\"label\":\"\",\"kind\":\"entry\"}],\"edges\":[]},\"critical_paths\":[{\"path\":\"\",\"reason\":\"\"}],\"run_steps\":[{\"command\":\"\"}],\"reading_path\":[],\"first_tasks\":[{\"title\":\"\",\"path\":\"\",\"complexity\":\"low\"}]}",
+          "ok": true,
+          "data": {
+            "architecture": {
+              "summary": "S",
+              "nodes": [
+                {"id": "", "label": "", "kind": "entry"}
+              ],
+              "edges": []
+            },
+            "critical_paths": [
+              {"path": "", "reason": ""}
+            ],
+            "run_steps": [
+              {"command": ""}
+            ],
+            "reading_path": [],
+            "first_tasks": [
+              {"title": "", "path": "", "complexity": "low"}
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "mock": [
+    {
+      "schemaName": "IntentClassification",
+      "usageReports": [
+        {"tokensIn": 1200, "tokensOut": 180, "costUsd": 0.00042}
+      ],
+      "result": {
+        "data": {
+          "intent": "[mock LLM] Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.",
+          "in_scope": ["Add a rate-limiting middleware", "Apply it to public, unauthenticated API endpoints"],
+          "out_of_scope": ["Authentication or session changes", "Internal or admin-only endpoints"],
+          "change_type": "feature"
+        },
+        "model": "mock/reviewer",
+        "tokensIn": 1200,
+        "tokensOut": 180,
+        "costUsd": 0.00042,
+        "raw": "{\"intent\":\"[mock LLM] Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.\",\"in_scope\":[\"Add a rate-limiting middleware\",\"Apply it to public, unauthenticated API endpoints\"],\"out_of_scope\":[\"Authentication or session changes\",\"Internal or admin-only endpoints\"],\"change_type\":\"feature\"}",
+        "attempts": 1
+      }
+    },
+    {
+      "schemaName": "PrBriefLlm",
+      "usageReports": [
+        {"tokensIn": 1200, "tokensOut": 180, "costUsd": 0.00042}
+      ],
+      "result": {
+        "data": {
+          "summary": "[mock LLM] Adds a token-bucket rate limiter in front of the public webhook endpoints and moves its limits into the config.",
+          "risks": [
+            {
+              "kind": "security",
+              "title": "Rate-limit key trusts a client-controlled header",
+              "explanation": "The bucket key comes from `X-Forwarded-For`, so a client can dodge the limiter by sending a new value on every request.",
+              "severity": "high",
+              "file_refs": ["src/middleware/ratelimit.ts:6-9"]
+            },
+            {
+              "kind": "perf",
+              "title": "Per-user query inside a loop",
+              "explanation": "Each user triggers its own `orgs` query, so the list endpoint now issues one query per row.",
+              "severity": "medium",
+              "file_refs": ["src/api/users.ts:45-50"]
+            },
+            {
+              "kind": "data",
+              "title": "Live-looking key committed in the config",
+              "explanation": "A `stripeKey` literal is added to `config.ts`; check that it is a placeholder and not a real secret.",
+              "severity": "low",
+              "file_refs": ["src/config.ts:12"]
+            }
+          ],
+          "review_focus": [
+            {"file": "src/middleware/ratelimit.ts", "line": 7, "reason": "The bucket key is taken from a spoofable header."},
+            {"file": "src/api/public/webhooks.ts", "line": 4, "reason": "Where the limiter is attached to the public routes."},
+            {"file": "src/api/users.ts", "line": 46, "reason": "New per-user query in the loop."},
+            {"file": "src/config.ts", "line": 12, "reason": "A key-looking literal enters the config."}
+          ]
+        },
+        "model": "mock/reviewer",
+        "tokensIn": 1200,
+        "tokensOut": 180,
+        "costUsd": 0.00042,
+        "raw": "{\"summary\":\"[mock LLM] Adds a token-bucket rate limiter in front of the public webhook endpoints and moves its limits into the config.\",\"risks\":[{\"kind\":\"security\",\"title\":\"Rate-limit key trusts a client-controlled header\",\"explanation\":\"The bucket key comes from `X-Forwarded-For`, so a client can dodge the limiter by sending a new value on every request.\",\"severity\":\"high\",\"file_refs\":[\"src/middleware/ratelimit.ts:6-9\"]},{\"kind\":\"perf\",\"title\":\"Per-user query inside a loop\",\"explanation\":\"Each user triggers its own `orgs` query, so the list endpoint now issues one query per row.\",\"severity\":\"medium\",\"file_refs\":[\"src/api/users.ts:45-50\"]},{\"kind\":\"data\",\"title\":\"Live-looking key committed in the config\",\"explanation\":\"A `stripeKey` literal is added to `config.ts`; check that it is a placeholder and not a real secret.\",\"severity\":\"low\",\"file_refs\":[\"src/config.ts:12\"]}],\"review_focus\":[{\"file\":\"src/middleware/ratelimit.ts\",\"line\":7,\"reason\":\"The bucket key is taken from a spoofable header.\"},{\"file\":\"src/api/public/webhooks.ts\",\"line\":4,\"reason\":\"Where the limiter is attached to the public routes.\"},{\"file\":\"src/api/users.ts\",\"line\":46,\"reason\":\"New per-user query in the loop.\"},{\"file\":\"src/config.ts\",\"line\":12,\"reason\":\"A key-looking literal enters the config.\"}]}",
+        "attempts": 1
+      }
+    },
+    {
+      "schemaName": "OnboardingTour",
+      "usageReports": [],
+      "error": {
+        "name": "ExternalServiceError",
+        "kind": "external_service",
+        "code": "external_service_error",
+        "message": "Mock LLM provider has no fixture for structured output 'OnboardingTour'"
+      }
+    },
+    {
+      "schemaName": "Review",
+      "usageReports": [
+        {"tokensIn": 1200, "tokensOut": 180, "costUsd": 0.00042}
+      ],
+      "result": {
+        "data": {
+          "verdict": "comment",
+          "summary": "[mock LLM] The token-bucket limiter works, but its key trusts a client-controlled header and the bucket map never shrinks.",
+          "score": 70,
+          "findings": [
+            {
+              "id": "mock-1",
+              "severity": "WARNING",
+              "category": "security",
+              "title": "Rate-limit key trusts the spoofable X-Forwarded-For header",
+              "file": "src/middleware/ratelimit.ts",
+              "start_line": 7,
+              "end_line": 7,
+              "rationale": "Any client can send a fresh `X-Forwarded-For` value on every request and get a new bucket, which bypasses the limiter.",
+              "suggestion": "Key on `req.ip` with Fastify's `trustProxy` configured for your load balancer.",
+              "confidence": 0.9,
+              "kind": "finding"
+            },
+            {
+              "id": "mock-2",
+              "severity": "SUGGESTION",
+              "category": "perf",
+              "title": "Bucket map grows without eviction",
+              "file": "src/middleware/ratelimit.ts",
+              "start_line": 4,
+              "end_line": 4,
+              "rationale": "One entry is kept per distinct key forever, so memory grows with the number of clients.",
+              "suggestion": "Use an LRU / TTL map, or evict buckets that have refilled completely.",
+              "confidence": 0.72,
+              "kind": "finding"
+            }
+          ]
+        },
+        "model": "mock/reviewer",
+        "tokensIn": 1200,
+        "tokensOut": 180,
+        "costUsd": 0.00042,
+        "raw": "{\"verdict\":\"comment\",\"summary\":\"[mock LLM] The token-bucket limiter works, but its key trusts a client-controlled header and the bucket map never shrinks.\",\"score\":70,\"findings\":[{\"id\":\"mock-1\",\"severity\":\"WARNING\",\"category\":\"security\",\"title\":\"Rate-limit key trusts the spoofable X-Forwarded-For header\",\"file\":\"src/middleware/ratelimit.ts\",\"start_line\":7,\"end_line\":7,\"rationale\":\"Any client can send a fresh `X-Forwarded-For` value on every request and get a new bucket, which bypasses the limiter.\",\"suggestion\":\"Key on `req.ip` with Fastify's `trustProxy` configured for your load balancer.\",\"confidence\":0.9,\"kind\":\"finding\"},{\"id\":\"mock-2\",\"severity\":\"SUGGESTION\",\"category\":\"perf\",\"title\":\"Bucket map grows without eviction\",\"file\":\"src/middleware/ratelimit.ts\",\"start_line\":4,\"end_line\":4,\"rationale\":\"One entry is kept per distinct key forever, so memory grows with the number of clients.\",\"suggestion\":\"Use an LRU / TTL map, or evict buckets that have refilled completely.\",\"confidence\":0.72,\"kind\":\"finding\"}]}",
+        "attempts": 1
+      }
+    },
+    {
+      "schemaName": "ConventionExtraction",
+      "usageReports": [
+        {"tokensIn": 1200, "tokensOut": 180, "costUsd": 0.00042}
+      ],
+      "result": {
+        "data": {
+          "candidates": [
+            {
+              "category": "other",
+              "rule": "[mock LLM] A rule whose evidence does not exist (dropped by the evidence gate)",
+              "confidence": 0.5,
+              "evidence": [
+                {"path": "src/__mock__/does-not-exist.ts", "start_line": 1, "end_line": 1, "snippet": "export {}"}
+              ]
+            }
+          ]
+        },
+        "model": "mock/reviewer",
+        "tokensIn": 1200,
+        "tokensOut": 180,
+        "costUsd": 0.00042,
+        "raw": "{\"candidates\":[{\"category\":\"other\",\"rule\":\"[mock LLM] A rule whose evidence does not exist (dropped by the evidence gate)\",\"confidence\":0.5,\"evidence\":[{\"path\":\"src/__mock__/does-not-exist.ts\",\"start_line\":1,\"end_line\":1,\"snippet\":\"export {}\"}]}]}",
+        "attempts": 1
+      }
+    },
+    {
+      "schemaName": "Unknown",
+      "usageReports": [],
+      "error": {
+        "name": "ExternalServiceError",
+        "kind": "external_service",
+        "code": "external_service_error",
+        "message": "Mock LLM provider has no fixture for structured output 'Unknown'"
+      }
+    }
+  ],
+  "calls": [
+    {
+      "feature": "intent",
+      "resolved": {"provider": "openrouter", "model": "m"},
+      "requests": [
+        {
+          "model": "m",
+          "schemaName": "IntentClassification",
+          "temperature": 0,
+          "maxTokens": 5000,
+          "maxRetries": 1,
+          "hasSignal": true,
+          "hasUsageObserver": false,
+          "hasSessionId": false,
+          "roles": ["system", "user"]
+        }
+      ],
+      "result": {
+        "data": {
+          "intent": "[mock LLM] Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.",
+          "in_scope": ["Add a rate-limiting middleware", "Apply it to public, unauthenticated API endpoints"],
+          "out_of_scope": ["Authentication or session changes", "Internal or admin-only endpoints"],
+          "change_type": "feature"
+        },
+        "tokensIn": 7,
+        "tokensOut": 8,
+        "costUsd": 0.5
+      }
+    },
+    {
+      "feature": "intent",
+      "case": "provider error is passed through unmapped",
+      "requests": [
+        {
+          "model": "m",
+          "schemaName": "IntentClassification",
+          "temperature": 0,
+          "maxTokens": 5000,
+          "maxRetries": 1,
+          "hasSignal": true,
+          "hasUsageObserver": false,
+          "hasSessionId": false,
+          "roles": ["system", "user"]
+        }
+      ],
+      "error": {"name": "ConfigError", "kind": "config", "code": "config_error", "message": "OPENROUTER_API_KEY is not configured"}
+    }
+  ]
+}

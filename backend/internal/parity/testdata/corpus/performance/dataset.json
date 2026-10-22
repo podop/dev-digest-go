@@ -1,0 +1,110 @@
+{
+  "note": "PerformanceService over fake tables (AC5015, AC5016, EC5031, EC5032, EC5036). The Node repository is SQL; the generator emulates it on these rows: a counted run = workspace + status IN (done,failed,cancelled) + source IN (local,ci) + ran_at in the window (presets: from <= t <= to; custom and previous windows: from <= t < to) [+ agent]; findings of counted runs are joined through reviews.run_id; finding counts GROUP BY the run's agent_id (accepted_at not null = accepted, dismissed_at not null and accepted_at null = dismissed); skill usage = count(DISTINCT run_id) per skill; memory = run_traces.trace -> 'memory_pulled' of counted runs that have a trace row (NULL when the key is absent); run history ORDER BY ran_at DESC, id DESC LIMIT 20. Rows of unspecified order are fed to the service in (ran_at, id) order.",
+  "workspace": "ws-1",
+  "now": "2026-03-31T12:00:00.000Z",
+  "datasets": {
+    "main": {
+      "agents": [
+        { "id": "a-alpha", "name": "Alpha", "workspace_id": "ws-1" },
+        { "id": "a-bug", "name": "bug-hunter", "workspace_id": "ws-1" },
+        { "id": "a-sec", "name": "Security", "workspace_id": "ws-1" },
+        { "id": "a-zed", "name": "zed", "workspace_id": "ws-1" },
+        { "id": "a-foreign", "name": "Other workspace", "workspace_id": "ws-2" }
+      ],
+      "runs": [
+        { "id": "r01", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 1000, "cost_usd": 0.1, "ran_at": "2026-03-30T10:00:00.000Z", "pr_id": "p1", "tokens_in": 100, "tokens_out": 20, "findings_count": 3 },
+        { "id": "r02", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "done", "source": "ci", "model": "gpt-4.1", "duration_ms": 3000, "cost_usd": 0.2, "ran_at": "2026-03-29T09:00:00.000Z", "pr_id": "p1", "tokens_in": 200, "tokens_out": null, "findings_count": 1 },
+        { "id": "r03", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "failed", "source": "local", "model": "gpt-4.1", "duration_ms": 500, "cost_usd": 0.3, "ran_at": "2026-03-28T08:00:00.000Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r04", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "cancelled", "source": "ci", "model": null, "duration_ms": null, "cost_usd": null, "ran_at": "2026-03-27T07:00:00.000Z", "pr_id": "p-gone", "tokens_in": 5, "tokens_out": 6, "findings_count": 0 },
+        { "id": "r05", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "done", "source": "local", "model": null, "duration_ms": 2000, "cost_usd": 0.000001, "ran_at": "2026-03-26T07:00:00.000Z", "pr_id": "p2", "tokens_in": null, "tokens_out": 7, "findings_count": 0 },
+        { "id": "r06", "workspace_id": "ws-1", "agent_id": "a-bug", "status": "done", "source": "local", "model": "claude", "duration_ms": 4000, "cost_usd": 1.234568, "ran_at": "2026-03-30T10:00:00.000Z", "pr_id": "p2", "tokens_in": 1000, "tokens_out": 500, "findings_count": 2 },
+        { "id": "r07", "workspace_id": "ws-1", "agent_id": "a-bug", "status": "done", "source": "ci", "model": "claude", "duration_ms": 4500, "cost_usd": 0.55, "ran_at": "2026-03-25T07:00:00.000Z", "pr_id": "p1", "tokens_in": 10, "tokens_out": 10, "findings_count": 1 },
+        { "id": "r08", "workspace_id": "ws-1", "agent_id": "a-sec", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 100, "cost_usd": 0.000002, "ran_at": "2026-03-20T07:00:00.000Z", "pr_id": null, "tokens_in": 0, "tokens_out": 0, "findings_count": 0 },
+        { "id": "r09", "workspace_id": "ws-1", "agent_id": "a-sec", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 2501, "cost_usd": 0.7, "ran_at": "2026-03-31T12:00:00.000Z", "pr_id": "p1", "tokens_in": 1, "tokens_out": 2, "findings_count": 0 },
+        { "id": "r10", "workspace_id": "ws-1", "agent_id": "a-sec", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 2, "cost_usd": 0.1, "ran_at": "2026-03-01T12:00:00.000Z", "pr_id": "p1", "tokens_in": 1, "tokens_out": 2, "findings_count": 0 },
+        { "id": "r11", "workspace_id": "ws-1", "agent_id": "a-deleted", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 800, "cost_usd": 0.4, "ran_at": "2026-03-20T07:30:00.000Z", "pr_id": "p1", "tokens_in": 1, "tokens_out": 1, "findings_count": 2 },
+        { "id": "r12", "workspace_id": "ws-1", "agent_id": null, "status": "done", "source": "ci", "model": "gpt-4.1", "duration_ms": 900, "cost_usd": 0.2, "ran_at": "2026-03-21T07:00:00.000Z", "pr_id": null, "tokens_in": 1, "tokens_out": 1, "findings_count": 0 },
+        { "id": "r13", "workspace_id": "ws-1", "agent_id": "a-foreign", "status": "done", "source": "local", "model": "gpt-x", "duration_ms": 100, "cost_usd": 0.3, "ran_at": "2026-03-22T07:00:00.000Z", "pr_id": null, "tokens_in": 1, "tokens_out": 1, "findings_count": 0 },
+        { "id": "r14", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "running", "source": "local", "model": "gpt-4.1", "duration_ms": null, "cost_usd": null, "ran_at": "2026-03-30T11:00:00.000Z", "pr_id": "p1", "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r15", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "done", "source": "api", "model": "gpt-4.1", "duration_ms": 10, "cost_usd": 5, "ran_at": "2026-03-30T11:30:00.000Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r16", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 777, "cost_usd": 0.1, "ran_at": "2026-03-31T12:00:00.001Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r17", "workspace_id": "ws-2", "agent_id": "a-alpha", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 1, "cost_usd": 9, "ran_at": "2026-03-30T10:00:00.000Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r20", "workspace_id": "ws-1", "agent_id": "a-alpha", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 1500, "cost_usd": 0.05, "ran_at": "2026-02-20T10:00:00.000Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 1 },
+        { "id": "r21", "workspace_id": "ws-1", "agent_id": "a-bug", "status": "failed", "source": "ci", "model": "claude", "duration_ms": 100, "cost_usd": 0.01, "ran_at": "2026-02-10T10:00:00.000Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r22", "workspace_id": "ws-1", "agent_id": "a-bug", "status": "done", "source": "local", "model": "claude", "duration_ms": 3000, "cost_usd": 0.5, "ran_at": "2026-03-01T11:59:59.999Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r23", "workspace_id": "ws-1", "agent_id": "a-deleted", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 100, "cost_usd": 0.9, "ran_at": "2026-02-15T10:00:00.000Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 1 },
+        { "id": "r24", "workspace_id": "ws-1", "agent_id": "a-sec", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 100, "cost_usd": 0.1, "ran_at": "2026-01-30T12:00:00.000Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 },
+        { "id": "r25", "workspace_id": "ws-1", "agent_id": "a-sec", "status": "done", "source": "local", "model": "gpt-4.1", "duration_ms": 100, "cost_usd": 0.1, "ran_at": "2026-01-30T11:59:59.999Z", "pr_id": null, "tokens_in": null, "tokens_out": null, "findings_count": 0 }
+      ],
+      "findings": [
+        { "run_id": "r01", "severity": "CRITICAL", "category": "security", "accepted_at": "2026-03-30T11:00:00.000Z", "dismissed_at": null },
+        { "run_id": "r01", "severity": "WARNING", "category": "bug", "accepted_at": null, "dismissed_at": "2026-03-30T11:00:00.000Z" },
+        { "run_id": "r01", "severity": "SUGGESTION", "category": "style", "accepted_at": null, "dismissed_at": null },
+        { "run_id": "r02", "severity": "WARNING", "category": "bug", "accepted_at": "2026-03-29T10:00:00.000Z", "dismissed_at": null },
+        { "run_id": "r06", "severity": "SUGGESTION", "category": "style", "accepted_at": null, "dismissed_at": "2026-03-30T12:00:00.000Z" },
+        { "run_id": "r06", "severity": "WARNING", "category": "perf", "accepted_at": "2026-03-30T12:00:00.000Z", "dismissed_at": "2026-03-30T13:00:00.000Z" },
+        { "run_id": "r07", "severity": "CRITICAL", "category": "security", "accepted_at": null, "dismissed_at": null },
+        { "run_id": "r11", "severity": "CRITICAL", "category": "bug", "accepted_at": "2026-03-20T09:00:00.000Z", "dismissed_at": null },
+        { "run_id": "r11", "severity": "WARNING", "category": "bug", "accepted_at": null, "dismissed_at": "2026-03-20T09:00:00.000Z" },
+        { "run_id": "r14", "severity": "CRITICAL", "category": "bug", "accepted_at": "2026-03-30T11:00:00.000Z", "dismissed_at": null },
+        { "run_id": "r15", "severity": "CRITICAL", "category": "bug", "accepted_at": "2026-03-30T11:00:00.000Z", "dismissed_at": null },
+        { "run_id": "r20", "severity": "WARNING", "category": "bug", "accepted_at": "2026-02-20T11:00:00.000Z", "dismissed_at": null },
+        { "run_id": "r23", "severity": "CRITICAL", "category": "bug", "accepted_at": null, "dismissed_at": "2026-02-15T11:00:00.000Z" }
+      ],
+      "skills": [{ "id": "s1", "name": "api-rules" }, { "id": "s2", "name": "sec-rules" }, { "id": "s3", "name": "unused" }],
+      "run_skills": [{ "run_id": "r01", "skill_id": "s1" }, { "run_id": "r01", "skill_id": "s1" }, { "run_id": "r01", "skill_id": "s2" }, { "run_id": "r02", "skill_id": "s1" }, { "run_id": "r03", "skill_id": "s1" }, { "run_id": "r14", "skill_id": "s2" }, { "run_id": "r06", "skill_id": "s2" }],
+      "traces": [
+        { "run_id": "r01", "memory_pulled": [{ "text": "Use pnpm" }, { "text": "Use pnpm" }, { "text": "  " }, { "text": 5 }, "str", {}, null] },
+        { "run_id": "r02", "memory_pulled": [{ "text": "Use pnpm" }, { "text": "Prefer tabs" }] },
+        { "run_id": "r03" },
+        { "run_id": "r05", "memory_pulled": "not an array" },
+        { "run_id": "r14", "memory_pulled": [{ "text": "never counted" }] }
+      ],
+      "pulls": [{ "id": "p1", "repo_id": "repo-1", "number": 5 }, { "id": "p2", "repo_id": "repo-1", "number": 6 }]
+    },
+    "agents_without_runs": {
+      "agents": [{ "id": "a1", "name": "One", "workspace_id": "ws-1" }, { "id": "a2", "name": "Two", "workspace_id": "ws-1" }],
+      "runs": [], "findings": [], "skills": [], "run_skills": [], "traces": [], "pulls": []
+    },
+    "empty_workspace": { "agents": [], "runs": [], "findings": [], "skills": [], "run_skills": [], "traces": [], "pulls": [] },
+    "previous_only_deleted": {
+      "agents": [{ "id": "a1", "name": "One", "workspace_id": "ws-1" }],
+      "runs": [
+        { "id": "p1", "workspace_id": "ws-1", "agent_id": "gone", "status": "done", "source": "local", "model": "m", "duration_ms": 1, "cost_usd": 0.5, "ran_at": "2026-02-10T10:00:00.000Z", "pr_id": null, "tokens_in": 1, "tokens_out": 1, "findings_count": 1 },
+        { "id": "c1", "workspace_id": "ws-1", "agent_id": "a1", "status": "done", "source": "local", "model": "m", "duration_ms": 1, "cost_usd": 0.25, "ran_at": "2026-03-10T10:00:00.000Z", "pr_id": null, "tokens_in": 1, "tokens_out": 1, "findings_count": 0 }
+      ],
+      "findings": [{ "run_id": "p1", "severity": "CRITICAL", "category": "bug", "accepted_at": "2026-02-10T11:00:00.000Z", "dismissed_at": null }],
+      "skills": [], "run_skills": [], "traces": [], "pulls": []
+    },
+    "many_runs": {
+      "agents": [{ "id": "a1", "name": "One", "workspace_id": "ws-1" }],
+      "runs": { "$each": [30, { "id": "m{i3}", "workspace_id": "ws-1", "agent_id": "a1", "status": "done", "source": "local", "model": "m", "duration_ms": 10, "cost_usd": 0.01, "ran_at": "2026-03-20T10:00:00.000Z", "pr_id": null, "tokens_in": 1, "tokens_out": 1, "findings_count": 0 }] },
+      "findings": [], "skills": [], "run_skills": [], "traces": [], "pulls": []
+    }
+  },
+  "cases": [
+    { "name": "overview_30d", "dataset": "main", "call": "overview", "query": { "period": "30d" } },
+    { "name": "overview_default_period", "dataset": "main", "call": "overview", "query": {} },
+    { "name": "overview_1d", "dataset": "main", "call": "overview", "query": { "period": "1d" } },
+    { "name": "overview_custom_inclusive_start_exclusive_end", "dataset": "main", "call": "overview", "query": { "period": "custom", "from": "2026-03-01T12:00:00Z", "to": "2026-03-31T12:00:00Z" } },
+    { "name": "overview_custom_end_includes_the_run_at_to_minus_one_ms", "dataset": "main", "call": "overview", "query": { "period": "custom", "from": "2026-03-20T00:00:00Z", "to": "2026-03-30T10:00:00.001Z" } },
+    { "name": "overview_custom_end_excludes_the_run_at_to", "dataset": "main", "call": "overview", "query": { "period": "custom", "from": "2026-03-20T00:00:00Z", "to": "2026-03-30T10:00:00Z" } },
+    { "name": "overview_custom_with_offsets", "dataset": "main", "call": "overview", "query": { "period": "custom", "from": "2026-03-20T05:00:00+05:00", "to": "2026-03-25T09:00:00-03:00" } },
+    { "name": "overview_agents_without_runs", "dataset": "agents_without_runs", "call": "overview", "query": { "period": "30d" } },
+    { "name": "overview_empty_workspace", "dataset": "empty_workspace", "call": "overview", "query": { "period": "30d" } },
+    { "name": "overview_deleted_agents_only_in_the_previous_window", "dataset": "previous_only_deleted", "call": "overview", "query": { "period": "30d" } },
+    { "name": "overview_many_equal_timestamps", "dataset": "many_runs", "call": "overview", "query": { "period": "30d" } },
+    { "name": "overview_far_future_now", "dataset": "main", "call": "overview", "query": { "period": "30d" }, "now": "2027-03-31T12:00:00.000Z" },
+    { "name": "stats_alpha_30d", "dataset": "main", "call": "stats", "agent": "a-alpha", "query": { "period": "30d" } },
+    { "name": "stats_alpha_default", "dataset": "main", "call": "stats", "agent": "a-alpha", "query": {} },
+    { "name": "stats_alpha_1d", "dataset": "main", "call": "stats", "agent": "a-alpha", "query": { "period": "1d" } },
+    { "name": "stats_bug_hunter_30d", "dataset": "main", "call": "stats", "agent": "a-bug", "query": { "period": "30d" } },
+    { "name": "stats_security_30d", "dataset": "main", "call": "stats", "agent": "a-sec", "query": { "period": "30d" } },
+    { "name": "stats_agent_without_runs", "dataset": "main", "call": "stats", "agent": "a-zed", "query": { "period": "30d" } },
+    { "name": "stats_custom_range", "dataset": "main", "call": "stats", "agent": "a-alpha", "query": { "period": "custom", "from": "2026-03-25T00:00:00Z", "to": "2026-03-31T00:00:00Z" } },
+    { "name": "stats_unknown_agent_is_404", "dataset": "main", "call": "stats", "agent": "a-nope", "query": { "period": "30d" } },
+    { "name": "stats_other_workspaces_agent_is_404", "dataset": "main", "call": "stats", "agent": "a-foreign", "query": { "period": "30d" } },
+    { "name": "overview_unparseable_offset_fails_when_the_period_is_rendered", "dataset": "main", "call": "overview", "query": { "period": "custom", "from": "2026-01-01T00:00:00+24:00", "to": "2026-01-02T00:00:00Z" } },
+    { "name": "stats_more_than_twenty_runs_keep_the_newest_twenty", "dataset": "many_runs", "call": "stats", "agent": "a1", "query": { "period": "30d" } }
+  ]
+}

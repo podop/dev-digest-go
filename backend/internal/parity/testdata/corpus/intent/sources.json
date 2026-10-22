@@ -1,0 +1,42 @@
+{
+  "note": "GitDocSource.read and GitHubTicketSource.read over fakes of the git client and the GitHub client (AC5022, EC5011). `git`: {content,size} | {error:{message,code?}}; `github`: {file:{content}} | {file:null} | {error:message} | {factoryError:message}; the fakes record their calls. The git size message is produced by the Node git adapter (File '<rel>' at <sha> is too large (<size> bytes > <max>)); the Go port reproduces it (spec 7.4.3).",
+  "repo": { "owner": "acme", "name": "api" },
+  "headSha": "0123456789abcdef0123456789abcdef01234567",
+  "docs": [
+    { "name": "git_ok", "path": "docs/a.md", "git": { "content": "# A\ntext", "size": 8 }, "github": { "file": { "content": "from github" } } },
+    { "name": "extension_is_case_insensitive", "path": "docs/A.MARKDOWN", "git": { "content": "x", "size": 1 } },
+    { "name": "unsupported_extension", "path": "src/a.ts", "git": { "content": "x", "size": 1 } },
+    { "name": "no_extension", "path": "LICENSE", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_empty_path_has_no_extension", "path": "", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_absolute", "path": "/etc/hosts.md", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_leading_dash", "path": "-rf.md", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_dotdot", "path": "docs/../secret.md", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_dotdot_in_a_name", "path": "docs/a..b.md", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_backslash", "path": "docs\\a.md", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_nul", "path": "docs/a\\u{0}.md", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_git_segment", "path": "docs/.git/x.md", "git": { "content": "x", "size": 1 } },
+    { "name": "unsafe_git_segment_at_root", "path": ".git/x.md", "git": { "content": "x", "size": 1 } },
+    { "name": "git_segment_lookalikes_are_safe", "path": "a/.gitx/.github/GIT.md", "git": { "content": "x", "size": 1 } },
+    { "name": "dotfile_doc_is_safe", "path": ".github/PULL_REQUEST_TEMPLATE.md", "git": { "content": "x", "size": 1 } },
+    { "name": "dash_inside_a_name_is_safe", "path": "docs/-x.md", "git": { "content": "x", "size": 1 } },
+    { "name": "too_large_in_the_clone_is_final", "path": "docs/big.md", "git": { "error": { "message": "File 'docs/big.md' at 0123456789abcdef0123456789abcdef01234567 is too large (70000 bytes > 65536)", "code": "too_large" } }, "github": { "file": { "content": "never asked" } } },
+    { "name": "missing_in_the_clone_falls_back_to_github", "path": "docs/new.md", "git": { "error": { "message": "Object 'sha:docs/new.md' not found in acme/api" } }, "github": { "file": { "content": "from the contents api" } } },
+    { "name": "no_clone_falls_back_to_github", "path": "docs/new.md", "git": { "error": { "message": "spawn git ENOENT", "code": "ENOENT" } }, "github": { "file": { "content": "from the contents api" } } },
+    { "name": "git_error_and_github_fails_is_not_found", "path": "docs/new.md", "git": { "error": { "message": "boom" } }, "github": { "error": "Not Found" } },
+    { "name": "git_error_and_github_has_no_file_is_not_found", "path": "docs/new.md", "git": { "error": { "message": "boom" } }, "github": { "file": null } },
+    { "name": "git_error_and_no_github_token_is_not_found", "path": "docs/new.md", "git": { "error": { "message": "boom" } }, "github": { "factoryError": "GITHUB_TOKEN is not configured" } },
+    { "name": "github_content_over_65536_units_is_cut_and_flagged", "path": "docs/long.md", "git": { "error": { "message": "gone" } }, "github": { "file": { "content": { "$repeat": ["g", 70000] } } } },
+    { "name": "github_content_exactly_65536_units_is_not_flagged", "path": "docs/exact.md", "git": { "error": { "message": "gone" } }, "github": { "file": { "content": { "$repeat": ["g", 65536] } } } },
+    { "name": "github_content_65537_units_is_flagged", "path": "docs/one-over.md", "git": { "error": { "message": "gone" } }, "github": { "file": { "content": { "$repeat": ["g", 65537] } } } },
+    { "name": "clone_content_over_65536_units_is_cut_and_flagged", "path": "docs/long2.md", "git": { "content": { "$repeat": ["c", 65540] }, "size": 65540 } },
+    { "name": "cut_may_split_a_surrogate_pair", "path": "docs/emoji.md", "git": { "content": { "$concat": [{ "$repeat": ["a", 65535] }, "\\u{1F642}tail"] }, "size": 65545 } },
+    { "name": "empty_file", "path": "docs/empty.md", "git": { "content": "", "size": 0 } }
+  ],
+  "tickets": [
+    { "name": "ok", "number": 12, "github": { "issue": { "title": "Rate limit", "body": "Please." } } },
+    { "name": "null_body_becomes_empty", "number": 12, "github": { "issue": { "title": "Rate limit", "body": null } } },
+    { "name": "error_text_is_the_failure_reason", "number": 13, "github": { "error": "Not Found" } },
+    { "name": "no_token", "number": 14, "github": { "factoryError": "GITHUB_TOKEN is not configured" } },
+    { "name": "non_error_throw", "number": 15, "github": { "throwString": "plain string" } }
+  ]
+}

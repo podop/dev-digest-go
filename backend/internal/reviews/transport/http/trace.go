@@ -3,7 +3,8 @@ package reviewshttp
 import "dev-digest-go/backend/internal/reviews/domain"
 
 // The RunTrace wire shape (spec 7.6, contract trace.ts). The domain trace is tag-free; this file
-// is its only serialisation on the read path. memory_pulled ([]) and intent (null) are constants.
+// is its only serialisation on the read path. memory_pulled ([]) is a constant; intent is null or
+// the run's IntentTrace (Phase 5 spec 7.5), its keys in the order of the spec.
 
 type traceDTO struct {
 	Config         traceConfigDTO   `json:"config"`
@@ -15,7 +16,7 @@ type traceDTO struct {
 	SpecsRead      []string         `json:"specs_read"`
 	Log            []logLineDTO     `json:"log"`
 	SkillsUsed     []skillUsedDTO   `json:"skills_used"`
-	Intent         any              `json:"intent"` // always null
+	Intent         any              `json:"intent"` // nil (null), usedIntentDTO or unavailableIntentDTO
 	ProjectContext *contextTraceDTO `json:"project_context,omitempty"`
 }
 
@@ -46,7 +47,7 @@ type completedAssemblyDTO struct {
 	Callers       *string `json:"callers"`
 	RepoMap       *string `json:"repo_map"`
 	PRDescription *string `json:"pr_description"`
-	Intent        any     `json:"intent"` // always null
+	Intent        *string `json:"intent"` // the rendered PR intent; null without one
 	User          string  `json:"user"`
 }
 
@@ -58,6 +59,34 @@ type endedAssemblyDTO struct {
 	Memory any     `json:"memory"` // always null
 	Specs  *string `json:"specs"`
 	User   string  `json:"user"`
+}
+
+type intentSourceDTO struct {
+	Kind   string  `json:"kind"`
+	Ref    string  `json:"ref"`
+	Status string  `json:"status"`
+	Detail *string `json:"detail"`
+}
+
+// usedIntentDTO is the trace.intent of a run that had an intent: every key but warning.
+type usedIntentDTO struct {
+	Status      string            `json:"status"`
+	CacheHit    bool              `json:"cache_hit"`
+	Confidence  *string           `json:"confidence"`
+	DerivedFrom *string           `json:"derived_from"`
+	ChangeType  *string           `json:"change_type"`
+	Provider    string            `json:"provider"`
+	Model       string            `json:"model"`
+	TokensIn    int               `json:"tokens_in"`
+	TokensOut   int               `json:"tokens_out"`
+	CostUSD     *float64          `json:"cost_usd"`
+	Sources     []intentSourceDTO `json:"sources"`
+}
+
+// unavailableIntentDTO is the trace.intent of a run whose derivation failed.
+type unavailableIntentDTO struct {
+	Status  string `json:"status"`
+	Warning string `json:"warning"`
 }
 
 type toolCallDTO struct {
@@ -121,7 +150,7 @@ func toTrace(t domain.Trace) traceDTO {
 	pa := t.PromptAssembly
 	var assembly any = completedAssemblyDTO{
 		System: pa.System, Skills: pa.Skills, Specs: pa.Specs, Callers: pa.Callers, RepoMap: pa.RepoMap,
-		PRDescription: pa.PRDescription, User: pa.User,
+		PRDescription: pa.PRDescription, Intent: pa.Intent, User: pa.User,
 	}
 	if t.Ended {
 		assembly = endedAssemblyDTO{System: pa.System, Skills: pa.Skills, Specs: pa.Specs, User: pa.User}
@@ -142,8 +171,31 @@ func toTrace(t domain.Trace) traceDTO {
 		SpecsRead:      specs,
 		Log:            lines,
 		SkillsUsed:     skills,
+		Intent:         toIntentTrace(t.Intent),
 		ProjectContext: toContextTrace(t.ProjectContext),
 	}
+}
+
+// toIntentTrace maps the run's IntentTrace; nil is the null of a run without intent pre-work.
+func toIntentTrace(it *domain.IntentTrace) any {
+	if it == nil {
+		return nil
+	}
+	if it.Status == domain.IntentStatusUnavailable {
+		return unavailableIntentDTO{Status: domain.IntentStatusUnavailable, Warning: it.Warning}
+	}
+	out := usedIntentDTO{
+		Status: domain.IntentStatusUsed, CacheHit: it.CacheHit, Confidence: it.Confidence, DerivedFrom: it.DerivedFrom,
+		ChangeType: it.ChangeType, Provider: it.Provider, Model: it.Model, TokensIn: it.TokensIn, TokensOut: it.TokensOut,
+		CostUSD: it.CostUSD,
+	}
+	if it.Sources != nil {
+		out.Sources = make([]intentSourceDTO, len(it.Sources))
+		for i, s := range it.Sources {
+			out.Sources[i] = intentSourceDTO{Kind: s.Kind, Ref: s.Ref, Status: s.Status, Detail: s.Detail}
+		}
+	}
+	return out
 }
 
 func toContextTrace(c *domain.ContextTrace) *contextTraceDTO {

@@ -1,0 +1,43 @@
+{
+  "note": "BlastService.getBlast / getHistory over fakes (AC5007, AC5008, EC5014, EC5016, EC5018). `pull` is the workspace-scoped lookup result ({repoId, number, owner, name, files}) or null; `index` is the BlastResult the port returns or {throws}; `history` is the merged PRs the GitHub source returns or {throws: message}. Log lines are recorded as {level, msg, obj}; Error values are shown by message.",
+  "workspace": "ws-1",
+  "blast": [
+    {
+      "name": "full_answer_logs_the_read",
+      "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": ["src/a.ts", "src/b.ts"] },
+      "index": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [{ "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 4, "rank": 0.5 }, { "file": "src/y.ts", "symbol": "g", "viaSymbol": "foo", "line": 9, "rank": 0.4 }],
+        "factsByFile": { "src/x.ts": { "endpoints": ["GET /x"], "crons": [] } },
+        "degraded": false
+      }
+    },
+    {
+      "name": "degraded_answer_logs_the_reason",
+      "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": ["src/a.ts"] },
+      "index": { "changedSymbols": [], "callers": [], "degraded": true, "reason": "index_partial" }
+    },
+    {
+      "name": "flag_off_empty_files",
+      "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": [] },
+      "index": { "changedSymbols": [], "callers": [], "degraded": true, "reason": "no_data" }
+    },
+    { "name": "pull_not_found", "pull": null, "index": { "changedSymbols": [], "callers": [] } },
+    { "name": "index_read_error_propagates", "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": ["a.ts"] }, "index": { "throws": "connection reset" } }
+  ],
+  "history": [
+    {
+      "name": "one_overlapping_pr",
+      "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": ["src/a.ts", "src/b.ts"] },
+      "merged": [
+        { "number": 5, "title": "Self", "author": "me", "merged_at": "2026-01-02T00:00:00Z", "files": ["src/a.ts"] },
+        { "number": 4, "title": "Touches a", "author": "ann", "merged_at": "2026-01-01T00:00:00Z", "files": ["src/a.ts", "zzz.ts"] },
+        { "number": 3, "title": "Unrelated", "author": "bob", "merged_at": "2026-01-01T00:00:00Z", "files": ["other.ts"] }
+      ]
+    },
+    { "name": "no_files_means_no_github_call", "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": [] }, "merged": [] },
+    { "name": "github_failure_is_an_empty_list_and_a_warning", "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": ["a.ts"] }, "merged": { "throws": "GitHub answered 500" } },
+    { "name": "no_token_is_an_empty_list_and_a_warning", "pull": { "repoId": "repo-1", "number": 5, "owner": "acme", "name": "api", "files": ["a.ts"] }, "merged": { "throws": "GITHUB_TOKEN is not configured" } },
+    { "name": "pull_not_found", "pull": null, "merged": [] }
+  ]
+}

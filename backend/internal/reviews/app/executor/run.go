@@ -33,6 +33,9 @@ type runState struct {
 
 	skills []domain.ReviewSkill
 	pc     *domain.ContextTrace
+	// intent and intentTrace are the request's shared intent pre-work (spec 7.5), read-only.
+	intent      *reviewer.Intent
+	intentTrace *domain.IntentTrace
 }
 
 // runJob executes one queued agent run and logs how it went; it never panics.
@@ -64,7 +67,7 @@ func (e *Executor) runJob(ctx context.Context, br *batchRun, job domain.Job) {
 
 	st := &runState{
 		job: job, pull: br.b.Pull, repo: br.b.Repo, wsID: br.b.WorkspaceID, diff: br.diff, log: log,
-		start: start, meter: domain.NewUsageMeter(), runCtx: runCtx,
+		start: start, meter: domain.NewUsageMeter(), runCtx: runCtx, intent: br.intent, intentTrace: br.intentTrace,
 		isCancelled: func() bool { return runCtx.Err() != nil || e.bus.IsCancelled(job.RunID) },
 	}
 
@@ -78,7 +81,7 @@ func (e *Executor) runJob(ctx context.Context, br *batchRun, job domain.Job) {
 	ending.Note = e.redact(ending.Note)
 	e.endRun(ctx, endInput{
 		job: job, pull: st.pull, log: log, start: &start, ending: ending, announce: true,
-		usage: ptr(st.meter.Snapshot()), skills: st.skills, pc: st.pc,
+		usage: ptr(st.meter.Snapshot()), skills: st.skills, pc: st.pc, intent: st.intentTrace,
 	})
 	if ending.Status == domain.StatusCancelled {
 		e.log.Info(fmt.Sprintf("review: agent %q cancelled", agent.Name),
@@ -114,7 +117,7 @@ func (e *Executor) endedWhileQueued(ctx context.Context, br *batchRun, job domai
 		e.log.Info("review: run skipped, it was cancelled while queued", "runId", job.RunID, "agent", job.Agent.Name)
 		e.endRun(ctx, endInput{
 			job: job, pull: br.b.Pull, log: log,
-			ending: domain.EndingFor(domain.ErrRunCancelled, true), announce: true,
+			ending: domain.EndingFor(domain.ErrRunCancelled, true), announce: true, intent: br.intentTrace,
 		})
 		return true
 	}
@@ -169,6 +172,7 @@ func (e *Executor) execute(ctx context.Context, st *runState) (findings int, err
 		Log:            domain.LogFromEvents(e.bus.Buffer(st.job.RunID)),
 		SkillsUsed:     domain.SkillsUsed(st.skills),
 		ProjectContext: st.pc,
+		Intent:         st.intentTrace,
 	})
 	st.log.info(domain.RunCompleteMsg, nil)
 	if err := e.store.SaveTrace(ctx, st.job.RunID, trace); err != nil {
@@ -270,6 +274,7 @@ func (e *Executor) review(st *runState, specs []reviewer.ProjectDoc) (reviewer.O
 		Callers:      rc.callers,
 		RepoMap:      rc.repoMap,
 		Task:         domain.TaskLine(st.pull.Number, st.pull.Title, st.pull.Author) + rc.rankNote,
+		Intent:       st.intent,
 	}
 	if st.pull.Body != nil {
 		in.PRDescription = *st.pull.Body

@@ -1,0 +1,18 @@
+{
+  "note": "buildCacheKeyInput → canonicalJson → sha256 hex (AC5021, D5019). Strings may carry \\u{HEX} escapes (expanded by the generator).",
+  "cases": [
+    { "name": "basic", "provider": "openrouter", "model": "deepseek/deepseek-v4-flash", "title": "Add rate limiting", "body": "Adds a limiter.\n\nFixes #12", "branch": "feat/rate-limit", "headSha": "0123456789abcdef0123456789abcdef01234567", "ticketRefs": [12], "docPaths": ["docs/plans/rl.md"] },
+    { "name": "null_body_is_empty_string", "provider": "openai", "model": "gpt-4.1", "title": "T", "body": null, "branch": "b", "headSha": "abc1234", "ticketRefs": [], "docPaths": [] },
+    { "name": "empty_everything", "provider": "", "model": "", "title": "", "body": "", "branch": "", "headSha": "", "ticketRefs": [], "docPaths": [] },
+    { "name": "unsorted_refs_sort_numerically", "provider": "openai", "model": "m", "title": "T", "body": "B", "branch": "b", "headSha": "abc1234", "ticketRefs": [100, 9, 10, 2, 33, 1], "docPaths": [] },
+    { "name": "unsorted_paths_sort_by_utf16_code_units", "provider": "openai", "model": "m", "title": "T", "body": "B", "branch": "b", "headSha": "abc1234", "ticketRefs": [], "docPaths": ["docs/b.md", "Docs/z.md", "docs/B.md", "docs/\\u{ff5e}.md", "docs/\\u{1F600}.md", "docs/\\u{e9}.md", "docs/\\u{4e2d}.md", "docs/a.md", "README.md", "_x.md", "10.md", "9.md"] },
+    { "name": "large_ticket_numbers_print_like_javascript", "provider": "openai", "model": "m", "title": "T", "body": "B", "branch": "b", "headSha": "abc1234", "ticketRefs": [9007199254740992, 12345678901234567000, 1e21, 123456789012345680000, 0, 7], "docPaths": [] },
+    { "name": "non_ascii_text", "provider": "openai", "model": "m", "title": "\\u{41f}\\u{440}\\u{438}\\u{432}\\u{435}\\u{442} \\u{2014} \\u{201c}quotes\\u{201d} \\u{65e5}\\u{672c}\\u{8a9e} \\u{1F600} caf\\u{e9}", "body": "na\\u{ef}ve \\u{2713} \\u{1F468}\\u{200d}\\u{1F469}\\u{200d}\\u{1F467}", "branch": "feat/\\u{e9}", "headSha": "abc1234", "ticketRefs": [1], "docPaths": [] },
+    { "name": "html_special_characters_are_not_escaped", "provider": "openai", "model": "m", "title": "<script>alert('x')</script> & \"quoted\" \\\\ backslash", "body": "a < b > c && d | e ' f ` g", "branch": "b", "headSha": "abc1234", "ticketRefs": [], "docPaths": ["docs/<a>&b.md"] },
+    { "name": "line_and_paragraph_separators_are_not_escaped", "provider": "openai", "model": "m", "title": "a\\u{2028}b\\u{2029}c", "body": "x\\u{2028}y\\u{2029}z\\u{85}w\\u{7f}v\\u{a0}u\\u{feff}t", "branch": "b", "headSha": "abc1234", "ticketRefs": [], "docPaths": [] },
+    { "name": "control_characters_use_short_and_lowercase_u_escapes", "provider": "openai", "model": "m", "title": "t\\u{8}\\u{9}\\u{a}\\u{c}\\u{d}\\u{0}\\u{1}\\u{1f}", "body": "\\u{b}\\u{e}\\u{1b}\"\\/", "branch": "b", "headSha": "abc1234", "ticketRefs": [], "docPaths": [] },
+    { "name": "crlf_body", "provider": "openai", "model": "m", "title": "T", "body": "# Heading\r\n\r\nText\r\n- item\r\n", "branch": "b", "headSha": "abc1234", "ticketRefs": [], "docPaths": [] },
+    { "name": "long_body_is_hashed_whole", "provider": "openai", "model": "m", "title": "T", "body": { "$repeat": ["0123456789abcdef", 6000] }, "branch": "b", "headSha": "abc1234", "ticketRefs": [], "docPaths": [] },
+    { "name": "provider_and_model_with_slashes_and_colons", "provider": "openrouter", "model": "anthropic/claude-sonnet-4.5:thinking", "title": "T", "body": "B", "branch": "release/1.2.3", "headSha": "ABCDEF1", "ticketRefs": [3, 1, 2], "docPaths": ["a.md", "b.md"] }
+  ]
+}

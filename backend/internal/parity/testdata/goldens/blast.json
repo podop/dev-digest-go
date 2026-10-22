@@ -1,0 +1,4546 @@
+{
+  "note": "Node blast: mapping = buildBlastRadius(port result); history = selectPriorPrs; service = BlastService.getBlast / getHistory with recorded log lines (Error values shown by message); persistent = repo-intel getBlastRadius over fake index tables (the reader SQL is emulated: see corpus/blast/radius.json); clone = the clone-scan path over corpus/blast/clones/shop plus `extraFiles` written into a temp copy (a padTo file is `content` followed by `//` and p-padding up to that many bytes; `link` is a symbolic link to that target). `port` is the Node BlastResult without impactedEndpoints (never part of the response); the clone-scan walk is taken in full-path byte order (the Go scan order) instead of readdir order; Node symbols of the clone scan keep qualified Class.method names, the persistent path skips them.",
+  "mapping": [
+    {
+      "name": "empty_non_degraded",
+      "result": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "empty_degraded_flag_off",
+      "result": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "degraded_flag_absent_and_reason_absent",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": []
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "1 changed symbol · 0 callers · 0 endpoints · 0 crons"
+      }
+    },
+    {
+      "name": "reason_without_degraded_is_copied",
+      "result": {
+        "changedSymbols": [],
+        "callers": [],
+        "reason": "no_data"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "reason": "no_data"
+      }
+    },
+    {
+      "name": "changed_symbols_without_callers",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/a.ts", "name": "Bar", "kind": "class"}
+        ],
+        "callers": [],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "Bar", "file": "src/a.ts", "kind": "class"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "basic_groups_and_ordering",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/b.ts", "name": "bar", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "handleX", "viaSymbol": "foo", "line": 10, "rank": 0.5},
+          {"file": "src/y.ts", "symbol": "handleY", "viaSymbol": "bar", "line": 3, "rank": 0.9},
+          {"file": "src/z.ts", "symbol": "handleZ", "viaSymbol": "foo", "line": 7, "rank": 0.7}
+        ],
+        "factsByFile": {
+          "src/x.ts": {
+            "endpoints": ["GET /x"],
+            "crons": []
+          },
+          "src/y.ts": {
+            "endpoints": ["POST /y"],
+            "crons": ["nightly"]
+          },
+          "src/z.ts": {
+            "endpoints": ["GET /z", "GET /x"],
+            "crons": []
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "bar", "file": "src/b.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "bar",
+            "callers": [
+              {"name": "handleY", "file": "src/y.ts", "line": 3}
+            ],
+            "endpoints_affected": ["POST /y"],
+            "crons_affected": ["nightly"]
+          },
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "handleZ", "file": "src/z.ts", "line": 7},
+              {"name": "handleX", "file": "src/x.ts", "line": 10}
+            ],
+            "endpoints_affected": ["GET /z", "GET /x"],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 3 callers · 3 endpoints · 1 cron",
+        "degraded": false
+      }
+    },
+    {
+      "name": "callers_in_the_declaring_file_of_their_symbol_are_dropped",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/a.ts", "name": "bar", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/a.ts", "symbol": "bar", "viaSymbol": "foo", "line": 20, "rank": 0.9},
+          {"file": "src/a.ts", "symbol": "foo", "viaSymbol": "bar", "line": 30, "rank": 0.9},
+          {"file": "src/b.ts", "symbol": "useFoo", "viaSymbol": "foo", "line": 2, "rank": 0.1}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "bar", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "useFoo", "file": "src/b.ts", "line": 2}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 1 caller · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "same_symbol_name_declared_in_two_files_drops_only_the_matching_file",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "init", "kind": "function"},
+          {"file": "src/b.ts", "name": "init", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/a.ts", "symbol": "go", "viaSymbol": "init", "line": 1, "rank": 0},
+          {"file": "src/b.ts", "symbol": "go", "viaSymbol": "init", "line": 1, "rank": 0},
+          {"file": "src/c.ts", "symbol": "go", "viaSymbol": "init", "line": 1, "rank": 0}
+        ]
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "init", "file": "src/a.ts", "kind": "function"},
+          {"name": "init", "file": "src/b.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "init",
+            "callers": [
+              {"name": "go", "file": "src/c.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 1 caller · 0 endpoints · 0 crons"
+      }
+    },
+    {
+      "name": "all_callers_dropped_leaves_no_group",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/a.ts", "symbol": "inner", "viaSymbol": "foo", "line": 5, "rank": 0.3}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "1 changed symbol · 0 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "duplicate_callers_in_a_group_are_dropped_by_name_file_line",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 4, "rank": 0.5},
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 4, "rank": 0.9},
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 5, "rank": 0.5},
+          {"file": "src/x.ts", "symbol": "g", "viaSymbol": "foo", "line": 4, "rank": 0.5}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "g", "file": "src/x.ts", "line": 4},
+              {"name": "h", "file": "src/x.ts", "line": 4},
+              {"name": "h", "file": "src/x.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 3 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "callers_sorted_rank_desc_then_name_file_english_collation_then_line",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/m.ts", "symbol": "beta", "viaSymbol": "foo", "line": 9, "rank": 1},
+          {"file": "src/m.ts", "symbol": "Beta", "viaSymbol": "foo", "line": 8, "rank": 1},
+          {"file": "src/m.ts", "symbol": "alpha", "viaSymbol": "foo", "line": 20, "rank": 1},
+          {"file": "src/m.ts", "symbol": "alpha", "viaSymbol": "foo", "line": 10, "rank": 1},
+          {"file": "src/B.ts", "symbol": "alpha", "viaSymbol": "foo", "line": 10, "rank": 1},
+          {"file": "src/a.ts2", "symbol": "alpha", "viaSymbol": "foo", "line": 10, "rank": 1},
+          {"file": "src/_u.ts", "symbol": "_under", "viaSymbol": "foo", "line": 1, "rank": 1},
+          {"file": "src/n.ts", "symbol": "éclair", "viaSymbol": "foo", "line": 1, "rank": 1},
+          {"file": "src/n.ts", "symbol": "eclair", "viaSymbol": "foo", "line": 1, "rank": 1},
+          {"file": "src/n.ts", "symbol": "z10", "viaSymbol": "foo", "line": 1, "rank": 1},
+          {"file": "src/n.ts", "symbol": "z9", "viaSymbol": "foo", "line": 1, "rank": 1},
+          {"file": "src/hi.ts", "symbol": "low", "viaSymbol": "foo", "line": 1, "rank": 2},
+          {"file": "src/lo.ts", "symbol": "high", "viaSymbol": "foo", "line": 1, "rank": 0}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "low", "file": "src/hi.ts", "line": 1},
+              {"name": "_under", "file": "src/_u.ts", "line": 1},
+              {"name": "alpha", "file": "src/a.ts2", "line": 10},
+              {"name": "alpha", "file": "src/B.ts", "line": 10},
+              {"name": "alpha", "file": "src/m.ts", "line": 10},
+              {"name": "alpha", "file": "src/m.ts", "line": 20},
+              {"name": "beta", "file": "src/m.ts", "line": 9},
+              {"name": "Beta", "file": "src/m.ts", "line": 8},
+              {"name": "eclair", "file": "src/n.ts", "line": 1},
+              {"name": "éclair", "file": "src/n.ts", "line": 1},
+              {"name": "z10", "file": "src/n.ts", "line": 1},
+              {"name": "z9", "file": "src/n.ts", "line": 1},
+              {"name": "high", "file": "src/lo.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 13 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "groups_sorted_by_max_rank_then_symbol_english_collation",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "zeta", "kind": "function"},
+          {"file": "src/a.ts", "name": "Alpha", "kind": "function"},
+          {"file": "src/a.ts", "name": "alpha", "kind": "function"},
+          {"file": "src/a.ts", "name": "mid", "kind": "function"},
+          {"file": "src/a.ts", "name": "_u", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "c1", "viaSymbol": "zeta", "line": 1, "rank": 0.5},
+          {"file": "src/x.ts", "symbol": "c2", "viaSymbol": "Alpha", "line": 2, "rank": 0.5},
+          {"file": "src/x.ts", "symbol": "c3", "viaSymbol": "alpha", "line": 3, "rank": 0.5},
+          {"file": "src/x.ts", "symbol": "c4", "viaSymbol": "mid", "line": 4, "rank": 0.9},
+          {"file": "src/x.ts", "symbol": "c5", "viaSymbol": "mid", "line": 5, "rank": 0.1},
+          {"file": "src/x.ts", "symbol": "c6", "viaSymbol": "_u", "line": 6, "rank": 0.5}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "zeta", "file": "src/a.ts", "kind": "function"},
+          {"name": "Alpha", "file": "src/a.ts", "kind": "function"},
+          {"name": "alpha", "file": "src/a.ts", "kind": "function"},
+          {"name": "mid", "file": "src/a.ts", "kind": "function"},
+          {"name": "_u", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "mid",
+            "callers": [
+              {"name": "c4", "file": "src/x.ts", "line": 4},
+              {"name": "c5", "file": "src/x.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "_u",
+            "callers": [
+              {"name": "c6", "file": "src/x.ts", "line": 6}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "alpha",
+            "callers": [
+              {"name": "c3", "file": "src/x.ts", "line": 3}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "Alpha",
+            "callers": [
+              {"name": "c2", "file": "src/x.ts", "line": 2}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "zeta",
+            "callers": [
+              {"name": "c1", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "5 changed symbols · 6 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "group_order_is_first_seen_before_sorting_ties_fall_back_to_collation",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "b", "kind": "function"},
+          {"file": "src/a.ts", "name": "a", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "b", "line": 1, "rank": 0},
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "a", "line": 1, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "b", "file": "src/a.ts", "kind": "function"},
+          {"name": "a", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "a",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "b",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 1 caller · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "facts_union_over_distinct_caller_files_in_sorted_caller_order",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/b.ts", "symbol": "b2", "viaSymbol": "foo", "line": 2, "rank": 0.2},
+          {"file": "src/c.ts", "symbol": "c1", "viaSymbol": "foo", "line": 1, "rank": 0.9},
+          {"file": "src/b.ts", "symbol": "b1", "viaSymbol": "foo", "line": 1, "rank": 0.2},
+          {"file": "src/d.ts", "symbol": "d1", "viaSymbol": "foo", "line": 1, "rank": 0.5}
+        ],
+        "factsByFile": {
+          "src/b.ts": {
+            "endpoints": ["GET /b", "GET /shared"],
+            "crons": ["every-b"]
+          },
+          "src/c.ts": {
+            "endpoints": ["GET /shared", "GET /c"],
+            "crons": ["every-b", "every-c"]
+          },
+          "src/d.ts": {
+            "endpoints": [],
+            "crons": []
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "c1", "file": "src/c.ts", "line": 1},
+              {"name": "d1", "file": "src/d.ts", "line": 1},
+              {"name": "b1", "file": "src/b.ts", "line": 1},
+              {"name": "b2", "file": "src/b.ts", "line": 2}
+            ],
+            "endpoints_affected": ["GET /shared", "GET /c", "GET /b"],
+            "crons_affected": ["every-b", "every-c"]
+          }
+        ],
+        "summary": "1 changed symbol · 4 callers · 3 endpoints · 2 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "facts_for_files_not_in_the_map_are_empty",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/b.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1}
+        ],
+        "factsByFile": {
+          "src/other.ts": {
+            "endpoints": ["GET /o"],
+            "crons": []
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "h", "file": "src/b.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 1 caller · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "summary_pluralisation_and_distinct_counts",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/a.ts", "name": "bar", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1},
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "bar", "line": 1, "rank": 1},
+          {"file": "src/y.ts", "symbol": "g", "viaSymbol": "bar", "line": 2, "rank": 0.5}
+        ],
+        "factsByFile": {
+          "src/x.ts": {
+            "endpoints": ["GET /x"],
+            "crons": ["c1"]
+          },
+          "src/y.ts": {
+            "endpoints": ["GET /x"],
+            "crons": ["c1"]
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "bar", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "bar",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1},
+              {"name": "g", "file": "src/y.ts", "line": 2}
+            ],
+            "endpoints_affected": ["GET /x"],
+            "crons_affected": ["c1"]
+          },
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": ["GET /x"],
+            "crons_affected": ["c1"]
+          }
+        ],
+        "summary": "2 changed symbols · 2 callers · 1 endpoint · 1 cron",
+        "degraded": false
+      }
+    },
+    {
+      "name": "one_of_each_is_singular",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1}
+        ],
+        "factsByFile": {
+          "src/x.ts": {
+            "endpoints": ["GET /x"],
+            "crons": ["c1"]
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": ["GET /x"],
+            "crons_affected": ["c1"]
+          }
+        ],
+        "summary": "1 changed symbol · 1 caller · 1 endpoint · 1 cron",
+        "degraded": false
+      }
+    },
+    {
+      "name": "same_caller_reaching_two_symbols_counts_once_in_the_summary",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/a.ts", "name": "bar", "kind": "function"},
+          {"file": "src/a.ts", "name": "baz", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1},
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "bar", "line": 1, "rank": 1},
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "baz", "line": 1, "rank": 1}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "bar", "file": "src/a.ts", "kind": "function"},
+          {"name": "baz", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "bar",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "baz",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "3 changed symbols · 1 caller · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "changed_symbol_order_and_kinds_are_kept_as_given",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/z.ts", "name": "Zed", "kind": "class"},
+          {"file": "src/a.ts", "name": "zed", "kind": "interface"},
+          {"file": "src/a.ts", "name": "Zed", "kind": "type"},
+          {"file": "src/a.ts", "name": "Zed", "kind": "enum"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "index_partial"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Zed", "file": "src/z.ts", "kind": "class"},
+          {"name": "zed", "file": "src/a.ts", "kind": "interface"},
+          {"name": "Zed", "file": "src/a.ts", "kind": "type"},
+          {"name": "Zed", "file": "src/a.ts", "kind": "enum"}
+        ],
+        "downstream": [],
+        "summary": "4 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "index_partial"
+      }
+    },
+    {
+      "name": "negative_and_zero_ranks",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/a.ts", "name": "bar", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": -1},
+          {"file": "src/y.ts", "symbol": "h", "viaSymbol": "bar", "line": 1, "rank": 0}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "bar", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "bar",
+            "callers": [
+              {"name": "h", "file": "src/y.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 2 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "fractional_ranks_compare_exactly",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 0.30000000000000004},
+          {"file": "src/y.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 0.3},
+          {"file": "src/z.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 0.1234567890123456}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "h", "file": "src/x.ts", "line": 1},
+              {"name": "h", "file": "src/y.ts", "line": 1},
+              {"name": "h", "file": "src/z.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 3 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "caller_names_with_dots_and_unicode",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "Svc.run", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/中.ts", "symbol": "中文", "viaSymbol": "Svc.run", "line": 1, "rank": 1},
+          {"file": "src/😀.ts", "symbol": "😀", "viaSymbol": "Svc.run", "line": 1, "rank": 1}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Svc.run", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "Svc.run",
+            "callers": [
+              {"name": "😀", "file": "src/😀.ts", "line": 1},
+              {"name": "中文", "file": "src/中.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 2 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "many_callers_keep_everything_the_cap_is_applied_by_the_port",
+      "result": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/c001.ts", "symbol": "h1", "viaSymbol": "foo", "line": 2, "rank": 0.99},
+          {"file": "src/c002.ts", "symbol": "h2", "viaSymbol": "foo", "line": 3, "rank": 0.98},
+          {"file": "src/c003.ts", "symbol": "h3", "viaSymbol": "foo", "line": 4, "rank": 0.97},
+          {"file": "src/c004.ts", "symbol": "h4", "viaSymbol": "foo", "line": 5, "rank": 0.96},
+          {"file": "src/c005.ts", "symbol": "h5", "viaSymbol": "foo", "line": 6, "rank": 0.95},
+          {"file": "src/c006.ts", "symbol": "h6", "viaSymbol": "foo", "line": 7, "rank": 0.94},
+          {"file": "src/c007.ts", "symbol": "h7", "viaSymbol": "foo", "line": 8, "rank": 0.9299999999999999},
+          {"file": "src/c008.ts", "symbol": "h8", "viaSymbol": "foo", "line": 9, "rank": 0.92},
+          {"file": "src/c009.ts", "symbol": "h9", "viaSymbol": "foo", "line": 10, "rank": 0.91},
+          {"file": "src/c010.ts", "symbol": "h10", "viaSymbol": "foo", "line": 11, "rank": 0.9},
+          {"file": "src/c011.ts", "symbol": "h11", "viaSymbol": "foo", "line": 12, "rank": 0.89},
+          {"file": "src/c012.ts", "symbol": "h12", "viaSymbol": "foo", "line": 13, "rank": 0.88},
+          {"file": "src/c013.ts", "symbol": "h13", "viaSymbol": "foo", "line": 14, "rank": 0.87},
+          {"file": "src/c014.ts", "symbol": "h14", "viaSymbol": "foo", "line": 15, "rank": 0.86},
+          {"file": "src/c015.ts", "symbol": "h15", "viaSymbol": "foo", "line": 16, "rank": 0.85},
+          {"file": "src/c016.ts", "symbol": "h16", "viaSymbol": "foo", "line": 17, "rank": 0.84},
+          {"file": "src/c017.ts", "symbol": "h17", "viaSymbol": "foo", "line": 18, "rank": 0.83},
+          {"file": "src/c018.ts", "symbol": "h18", "viaSymbol": "foo", "line": 19, "rank": 0.8200000000000001},
+          {"file": "src/c019.ts", "symbol": "h19", "viaSymbol": "foo", "line": 20, "rank": 0.81},
+          {"file": "src/c020.ts", "symbol": "h20", "viaSymbol": "foo", "line": 21, "rank": 0.8},
+          {"file": "src/c021.ts", "symbol": "h21", "viaSymbol": "foo", "line": 22, "rank": 0.79},
+          {"file": "src/c022.ts", "symbol": "h22", "viaSymbol": "foo", "line": 23, "rank": 0.78},
+          {"file": "src/c023.ts", "symbol": "h23", "viaSymbol": "foo", "line": 24, "rank": 0.77},
+          {"file": "src/c024.ts", "symbol": "h24", "viaSymbol": "foo", "line": 25, "rank": 0.76},
+          {"file": "src/c025.ts", "symbol": "h25", "viaSymbol": "foo", "line": 26, "rank": 0.75}
+        ],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "h1", "file": "src/c001.ts", "line": 2},
+              {"name": "h2", "file": "src/c002.ts", "line": 3},
+              {"name": "h3", "file": "src/c003.ts", "line": 4},
+              {"name": "h4", "file": "src/c004.ts", "line": 5},
+              {"name": "h5", "file": "src/c005.ts", "line": 6},
+              {"name": "h6", "file": "src/c006.ts", "line": 7},
+              {"name": "h7", "file": "src/c007.ts", "line": 8},
+              {"name": "h8", "file": "src/c008.ts", "line": 9},
+              {"name": "h9", "file": "src/c009.ts", "line": 10},
+              {"name": "h10", "file": "src/c010.ts", "line": 11},
+              {"name": "h11", "file": "src/c011.ts", "line": 12},
+              {"name": "h12", "file": "src/c012.ts", "line": 13},
+              {"name": "h13", "file": "src/c013.ts", "line": 14},
+              {"name": "h14", "file": "src/c014.ts", "line": 15},
+              {"name": "h15", "file": "src/c015.ts", "line": 16},
+              {"name": "h16", "file": "src/c016.ts", "line": 17},
+              {"name": "h17", "file": "src/c017.ts", "line": 18},
+              {"name": "h18", "file": "src/c018.ts", "line": 19},
+              {"name": "h19", "file": "src/c019.ts", "line": 20},
+              {"name": "h20", "file": "src/c020.ts", "line": 21},
+              {"name": "h21", "file": "src/c021.ts", "line": 22},
+              {"name": "h22", "file": "src/c022.ts", "line": 23},
+              {"name": "h23", "file": "src/c023.ts", "line": 24},
+              {"name": "h24", "file": "src/c024.ts", "line": 25},
+              {"name": "h25", "file": "src/c025.ts", "line": 26}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 25 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    }
+  ],
+  "history": [
+    {
+      "name": "no_candidates",
+      "current": {
+        "number": 10,
+        "files": ["a.ts"]
+      },
+      "candidates": [],
+      "max": 10,
+      "result": []
+    },
+    {
+      "name": "basic_overlap_sorted_by_code_units_and_newest_first",
+      "current": {
+        "number": 10,
+        "files": ["src/b.ts", "src/a.ts", "README.md", "src/C.ts"]
+      },
+      "candidates": [
+        {
+          "number": 3,
+          "title": "Old",
+          "author": "ann",
+          "merged_at": "2026-01-01T10:00:00Z",
+          "files": ["src/b.ts", "other.ts"]
+        },
+        {
+          "number": 5,
+          "title": "New",
+          "author": "bob",
+          "merged_at": "2026-03-01T10:00:00Z",
+          "files": ["src/C.ts", "src/a.ts", "src/b.ts", "x.ts"]
+        },
+        {
+          "number": 4,
+          "title": "Mid",
+          "author": "cy",
+          "merged_at": "2026-02-01T10:00:00Z",
+          "files": ["README.md"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 5,
+          "title": "New",
+          "merged_at": "2026-03-01T10:00:00Z",
+          "author": "bob",
+          "files_overlap": ["src/C.ts", "src/a.ts", "src/b.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 4,
+          "title": "Mid",
+          "merged_at": "2026-02-01T10:00:00Z",
+          "author": "cy",
+          "files_overlap": ["README.md"],
+          "notes": ""
+        },
+        {
+          "pr_number": 3,
+          "title": "Old",
+          "merged_at": "2026-01-01T10:00:00Z",
+          "author": "ann",
+          "files_overlap": ["src/b.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "the_current_pr_is_excluded",
+      "current": {
+        "number": 10,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 10,
+          "title": "Self",
+          "author": "me",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 9,
+          "title": "Other",
+          "author": "me",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 9,
+          "title": "Other",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "me",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "no_overlap_is_skipped",
+      "current": {
+        "number": 10,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 9,
+          "title": "Other",
+          "author": "me",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["b.ts"]
+        },
+        {
+          "number": 8,
+          "title": "Empty",
+          "author": "me",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": []
+        }
+      ],
+      "max": 10,
+      "result": []
+    },
+    {
+      "name": "duplicate_files_count_once",
+      "current": {
+        "number": 10,
+        "files": ["a.ts", "b.ts"]
+      },
+      "candidates": [
+        {
+          "number": 9,
+          "title": "Dup",
+          "author": "me",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "a.ts", "b.ts", "a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 9,
+          "title": "Dup",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "me",
+          "files_overlap": ["a.ts", "b.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "same_time_orders_by_number_descending",
+      "current": {
+        "number": 100,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 5,
+          "title": "five",
+          "author": "a",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 7,
+          "title": "seven",
+          "author": "a",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 6,
+          "title": "six",
+          "author": "a",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 7,
+          "title": "seven",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 6,
+          "title": "six",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 5,
+          "title": "five",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "same_instant_in_different_offsets_ties",
+      "current": {
+        "number": 100,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 5,
+          "title": "five",
+          "author": "a",
+          "merged_at": "2026-01-01T12:00:00+02:00",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 7,
+          "title": "seven",
+          "author": "a",
+          "merged_at": "2026-01-01T10:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 6,
+          "title": "six",
+          "author": "a",
+          "merged_at": "2026-01-01T10:00:00.000Z",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 7,
+          "title": "seven",
+          "merged_at": "2026-01-01T10:00:00Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 6,
+          "title": "six",
+          "merged_at": "2026-01-01T10:00:00.000Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 5,
+          "title": "five",
+          "merged_at": "2026-01-01T12:00:00+02:00",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "offsets_change_the_order",
+      "current": {
+        "number": 100,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 1,
+          "title": "plus5",
+          "author": "a",
+          "merged_at": "2026-01-01T12:00:00+05:00",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 2,
+          "title": "utc",
+          "author": "a",
+          "merged_at": "2026-01-01T09:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 3,
+          "title": "minus3",
+          "author": "a",
+          "merged_at": "2026-01-01T05:00:00-03:00",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 2,
+          "title": "utc",
+          "merged_at": "2026-01-01T09:00:00Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 3,
+          "title": "minus3",
+          "merged_at": "2026-01-01T05:00:00-03:00",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 1,
+          "title": "plus5",
+          "merged_at": "2026-01-01T12:00:00+05:00",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "unparseable_merged_at_counts_as_zero",
+      "current": {
+        "number": 100,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 1,
+          "title": "garbage",
+          "author": "a",
+          "merged_at": "garbage",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 2,
+          "title": "empty",
+          "author": "a",
+          "merged_at": "",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 3,
+          "title": "epoch",
+          "author": "a",
+          "merged_at": "1970-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 4,
+          "title": "valid",
+          "author": "a",
+          "merged_at": "2020-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 4,
+          "title": "valid",
+          "merged_at": "2020-01-01T00:00:00Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 3,
+          "title": "epoch",
+          "merged_at": "1970-01-01T00:00:00Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 2,
+          "title": "empty",
+          "merged_at": "",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 1,
+          "title": "garbage",
+          "merged_at": "garbage",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "before_the_epoch_sorts_below_zero",
+      "current": {
+        "number": 100,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 1,
+          "title": "old",
+          "author": "a",
+          "merged_at": "1969-12-31T23:59:59Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 2,
+          "title": "garbage",
+          "author": "a",
+          "merged_at": "nope",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 2,
+          "title": "garbage",
+          "merged_at": "nope",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 1,
+          "title": "old",
+          "merged_at": "1969-12-31T23:59:59Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "fractional_seconds_and_precision",
+      "current": {
+        "number": 100,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 1,
+          "title": "a",
+          "author": "a",
+          "merged_at": "2026-01-01T00:00:00.001Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 2,
+          "title": "b",
+          "author": "a",
+          "merged_at": "2026-01-01T00:00:00.000Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 3,
+          "title": "c",
+          "author": "a",
+          "merged_at": "2026-01-01T00:00:00.0009Z",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 1,
+          "title": "a",
+          "merged_at": "2026-01-01T00:00:00.001Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 3,
+          "title": "c",
+          "merged_at": "2026-01-01T00:00:00.0009Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 2,
+          "title": "b",
+          "merged_at": "2026-01-01T00:00:00.000Z",
+          "author": "a",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "capped_at_ten_newest_first",
+      "current": {
+        "number": 1000,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 2,
+          "title": "PR 1",
+          "author": "u1",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z1.ts"]
+        },
+        {
+          "number": 3,
+          "title": "PR 2",
+          "author": "u2",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z2.ts"]
+        },
+        {
+          "number": 4,
+          "title": "PR 3",
+          "author": "u3",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z3.ts"]
+        },
+        {
+          "number": 5,
+          "title": "PR 4",
+          "author": "u4",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z4.ts"]
+        },
+        {
+          "number": 6,
+          "title": "PR 5",
+          "author": "u5",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z5.ts"]
+        },
+        {
+          "number": 7,
+          "title": "PR 6",
+          "author": "u6",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z6.ts"]
+        },
+        {
+          "number": 8,
+          "title": "PR 7",
+          "author": "u7",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z7.ts"]
+        },
+        {
+          "number": 9,
+          "title": "PR 8",
+          "author": "u8",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z8.ts"]
+        },
+        {
+          "number": 10,
+          "title": "PR 9",
+          "author": "u9",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z9.ts"]
+        },
+        {
+          "number": 11,
+          "title": "PR 10",
+          "author": "u10",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z10.ts"]
+        },
+        {
+          "number": 12,
+          "title": "PR 11",
+          "author": "u11",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z11.ts"]
+        },
+        {
+          "number": 13,
+          "title": "PR 12",
+          "author": "u12",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z12.ts"]
+        },
+        {
+          "number": 14,
+          "title": "PR 13",
+          "author": "u13",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z13.ts"]
+        },
+        {
+          "number": 15,
+          "title": "PR 14",
+          "author": "u14",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts", "z14.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 15,
+          "title": "PR 14",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u14",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 14,
+          "title": "PR 13",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u13",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 13,
+          "title": "PR 12",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u12",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 12,
+          "title": "PR 11",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u11",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 11,
+          "title": "PR 10",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u10",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 10,
+          "title": "PR 9",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u9",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 9,
+          "title": "PR 8",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u8",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 8,
+          "title": "PR 7",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u7",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 7,
+          "title": "PR 6",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u6",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 6,
+          "title": "PR 5",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u5",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "author_and_title_are_passed_through",
+      "current": {
+        "number": 1,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 2,
+          "title": "T😀 </b> \"q\"",
+          "author": "unknown",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 2,
+          "title": "T😀 </b> \"q\"",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "unknown",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "file_order_is_utf16_code_unit_order",
+      "current": {
+        "number": 1,
+        "files": ["～.ts", "😀.ts", "b.ts", "B.ts", "é.ts"]
+      },
+      "candidates": [
+        {
+          "number": 2,
+          "title": "t",
+          "author": "a",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["é.ts", "B.ts", "b.ts", "😀.ts", "～.ts"]
+        }
+      ],
+      "max": 10,
+      "result": [
+        {
+          "pr_number": 2,
+          "title": "t",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "a",
+          "files_overlap": ["B.ts", "b.ts", "é.ts", "😀.ts", "～.ts"],
+          "notes": ""
+        }
+      ]
+    },
+    {
+      "name": "max_of_three",
+      "current": {
+        "number": 1000,
+        "files": ["a.ts"]
+      },
+      "candidates": [
+        {
+          "number": 2,
+          "title": "PR 1",
+          "author": "u",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 3,
+          "title": "PR 2",
+          "author": "u",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 4,
+          "title": "PR 3",
+          "author": "u",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 5,
+          "title": "PR 4",
+          "author": "u",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 6,
+          "title": "PR 5",
+          "author": "u",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        },
+        {
+          "number": 7,
+          "title": "PR 6",
+          "author": "u",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "files": ["a.ts"]
+        }
+      ],
+      "max": 3,
+      "result": [
+        {
+          "pr_number": 7,
+          "title": "PR 6",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 6,
+          "title": "PR 5",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        },
+        {
+          "pr_number": 5,
+          "title": "PR 4",
+          "merged_at": "2026-01-01T00:00:00Z",
+          "author": "u",
+          "files_overlap": ["a.ts"],
+          "notes": ""
+        }
+      ]
+    }
+  ],
+  "service": {
+    "blast": [
+      {
+        "name": "full_answer_logs_the_read",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": ["src/a.ts", "src/b.ts"]
+        },
+        "index": {
+          "changedSymbols": [
+            {"file": "src/a.ts", "name": "foo", "kind": "function"}
+          ],
+          "callers": [
+            {"file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 4, "rank": 0.5},
+            {"file": "src/y.ts", "symbol": "g", "viaSymbol": "foo", "line": 9, "rank": 0.4}
+          ],
+          "factsByFile": {
+            "src/x.ts": {
+              "endpoints": ["GET /x"],
+              "crons": []
+            }
+          },
+          "degraded": false
+        },
+        "body": {
+          "changed_symbols": [
+            {"name": "foo", "file": "src/a.ts", "kind": "function"}
+          ],
+          "downstream": [
+            {
+              "symbol": "foo",
+              "callers": [
+                {"name": "h", "file": "src/x.ts", "line": 4},
+                {"name": "g", "file": "src/y.ts", "line": 9}
+              ],
+              "endpoints_affected": ["GET /x"],
+              "crons_affected": []
+            }
+          ],
+          "summary": "1 changed symbol · 2 callers · 1 endpoint · 0 crons",
+          "degraded": false
+        },
+        "calls": {
+          "index": [
+            {
+              "repoId": "repo-1",
+              "files": ["src/a.ts", "src/b.ts"]
+            }
+          ]
+        },
+        "logs": [
+          {
+            "level": "info",
+            "msg": "blast radius read from index",
+            "obj": {"repoId": "repo-1", "changedFiles": 2, "degraded": false, "callers": 2}
+          }
+        ]
+      },
+      {
+        "name": "degraded_answer_logs_the_reason",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": ["src/a.ts"]
+        },
+        "index": {
+          "changedSymbols": [],
+          "callers": [],
+          "degraded": true,
+          "reason": "index_partial"
+        },
+        "body": {
+          "changed_symbols": [],
+          "downstream": [],
+          "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+          "degraded": true,
+          "reason": "index_partial"
+        },
+        "calls": {
+          "index": [
+            {
+              "repoId": "repo-1",
+              "files": ["src/a.ts"]
+            }
+          ]
+        },
+        "logs": [
+          {
+            "level": "info",
+            "msg": "blast radius read from index",
+            "obj": {"repoId": "repo-1", "changedFiles": 1, "degraded": true, "reason": "index_partial", "callers": 0}
+          }
+        ]
+      },
+      {
+        "name": "flag_off_empty_files",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": []
+        },
+        "index": {
+          "changedSymbols": [],
+          "callers": [],
+          "degraded": true,
+          "reason": "no_data"
+        },
+        "body": {
+          "changed_symbols": [],
+          "downstream": [],
+          "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+          "degraded": true,
+          "reason": "no_data"
+        },
+        "calls": {
+          "index": [
+            {
+              "repoId": "repo-1",
+              "files": []
+            }
+          ]
+        },
+        "logs": [
+          {
+            "level": "info",
+            "msg": "blast radius read from index",
+            "obj": {"repoId": "repo-1", "changedFiles": 0, "degraded": true, "reason": "no_data", "callers": 0}
+          }
+        ]
+      },
+      {
+        "name": "pull_not_found",
+        "pull": null,
+        "index": {
+          "changedSymbols": [],
+          "callers": []
+        },
+        "error": {"name": "NotFoundError", "kind": "not_found", "code": "not_found", "message": "Pull request not found"},
+        "calls": {
+          "index": []
+        },
+        "logs": []
+      },
+      {
+        "name": "index_read_error_propagates",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": ["a.ts"]
+        },
+        "index": {"throws": "connection reset"},
+        "error": {"name": "Error", "message": "connection reset"},
+        "calls": {
+          "index": [
+            {
+              "repoId": "repo-1",
+              "files": ["a.ts"]
+            }
+          ]
+        },
+        "logs": []
+      }
+    ],
+    "history": [
+      {
+        "name": "one_overlapping_pr",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": ["src/a.ts", "src/b.ts"]
+        },
+        "merged": [
+          {
+            "number": 5,
+            "title": "Self",
+            "author": "me",
+            "merged_at": "2026-01-02T00:00:00Z",
+            "files": ["src/a.ts"]
+          },
+          {
+            "number": 4,
+            "title": "Touches a",
+            "author": "ann",
+            "merged_at": "2026-01-01T00:00:00Z",
+            "files": ["src/a.ts", "zzz.ts"]
+          },
+          {
+            "number": 3,
+            "title": "Unrelated",
+            "author": "bob",
+            "merged_at": "2026-01-01T00:00:00Z",
+            "files": ["other.ts"]
+          }
+        ],
+        "body": {
+          "history": [
+            {
+              "pr_number": 4,
+              "title": "Touches a",
+              "merged_at": "2026-01-01T00:00:00Z",
+              "author": "ann",
+              "files_overlap": ["src/a.ts"],
+              "notes": ""
+            }
+          ]
+        },
+        "calls": {
+          "github": [
+            {
+              "repo": {"owner": "acme", "name": "api"},
+              "opts": {"limit": 30}
+            }
+          ]
+        },
+        "logs": []
+      },
+      {
+        "name": "no_files_means_no_github_call",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": []
+        },
+        "merged": [],
+        "body": {
+          "history": []
+        },
+        "calls": {
+          "github": []
+        },
+        "logs": []
+      },
+      {
+        "name": "github_failure_is_an_empty_list_and_a_warning",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": ["a.ts"]
+        },
+        "merged": {"throws": "GitHub answered 500"},
+        "body": {
+          "history": []
+        },
+        "calls": {
+          "github": [
+            {
+              "repo": {"owner": "acme", "name": "api"},
+              "opts": {"limit": 30}
+            }
+          ]
+        },
+        "logs": [
+          {
+            "level": "warn",
+            "msg": "prior PR history unavailable; returning an empty list",
+            "obj": {"err": "GitHub answered 500", "repoId": "repo-1"}
+          }
+        ]
+      },
+      {
+        "name": "no_token_is_an_empty_list_and_a_warning",
+        "pull": {
+          "repoId": "repo-1",
+          "number": 5,
+          "owner": "acme",
+          "name": "api",
+          "files": ["a.ts"]
+        },
+        "merged": {"throws": "GITHUB_TOKEN is not configured"},
+        "body": {
+          "history": []
+        },
+        "calls": {
+          "github": [
+            {
+              "repo": {"owner": "acme", "name": "api"},
+              "opts": {"limit": 30}
+            }
+          ]
+        },
+        "logs": [
+          {
+            "level": "warn",
+            "msg": "prior PR history unavailable; returning an empty list",
+            "obj": {"err": "GITHUB_TOKEN is not configured", "repoId": "repo-1"}
+          }
+        ]
+      },
+      {
+        "name": "pull_not_found",
+        "pull": null,
+        "merged": [],
+        "error": {"name": "NotFoundError", "kind": "not_found", "code": "not_found", "message": "Pull request not found"},
+        "calls": {
+          "github": []
+        },
+        "logs": []
+      }
+    ]
+  },
+  "persistent": [
+    {
+      "name": "full_index_basic",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts", "src/b.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 40,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "baz", "kind": "function", "line": 30, "end_line": 40},
+          {"path": "src/a.ts", "name": "foo", "kind": "function", "line": 3, "end_line": 8},
+          {"path": "src/a.ts", "name": "Bar", "kind": "class", "line": 10, "end_line": 28},
+          {"path": "src/a.ts", "name": "Bar.method", "kind": "function", "line": 12, "end_line": 20},
+          {"path": "src/b.ts", "name": "qux", "kind": "function", "line": 1, "end_line": 5},
+          {"path": "src/x.ts", "name": "handleB", "kind": "function", "line": 30, "end_line": 60},
+          {"path": "src/x.ts", "name": "X.run", "kind": "function", "line": 35, "end_line": 50},
+          {"path": "src/x.ts", "name": "handleA", "kind": "function", "line": 1, "end_line": 20},
+          {"path": "src/other.ts", "name": "baz", "kind": "function", "line": 1, "end_line": 3}
+        ],
+        "references": [
+          {"from_path": "src/x.ts", "to_symbol": "foo", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "src/x.ts", "to_symbol": "foo", "line": 8, "decl_file": "src/a.ts"},
+          {"from_path": "src/x.ts", "to_symbol": "foo", "line": 40, "decl_file": "src/a.ts"},
+          {"from_path": "src/y.ts", "to_symbol": "Bar", "line": 2, "decl_file": "src/a.ts"},
+          {"from_path": "src/z.ts", "to_symbol": "baz", "line": 7, "decl_file": "src/other.ts"},
+          {"from_path": "src/amb.ts", "to_symbol": "foo", "line": 3, "decl_file": null},
+          {"from_path": "src/norank.ts", "to_symbol": "foo", "line": 3, "decl_file": "src/a.ts"},
+          {"from_path": "src/x.ts", "to_symbol": "qux", "line": 12, "decl_file": "src/b.ts"},
+          {"from_path": "src/y.ts", "to_symbol": "Bar.method", "line": 9, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/x.ts", "rank": 0.8},
+          {"path": "src/y.ts", "rank": 0.4},
+          {"path": "src/z.ts", "rank": 0.9},
+          {"path": "src/amb.ts", "rank": 0.7}
+        ],
+        "file_facts": [
+          {
+            "path": "src/x.ts",
+            "endpoints": ["GET /x", "POST /x"],
+            "crons": ["nightly"]
+          },
+          {
+            "path": "src/y.ts",
+            "endpoints": [],
+            "crons": []
+          },
+          {
+            "path": "src/z.ts",
+            "endpoints": ["GET /z"],
+            "crons": []
+          }
+        ]
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/a.ts", "name": "Bar", "kind": "class"},
+          {"file": "src/a.ts", "name": "baz", "kind": "function"},
+          {"file": "src/b.ts", "name": "qux", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/x.ts", "symbol": "handleA", "viaSymbol": "foo", "line": 5, "rank": 0.8},
+          {"file": "src/x.ts", "symbol": "handleA", "viaSymbol": "qux", "line": 12, "rank": 0.8},
+          {"file": "src/x.ts", "symbol": "handleB", "viaSymbol": "foo", "line": 40, "rank": 0.8},
+          {"file": "src/y.ts", "symbol": "y.ts", "viaSymbol": "Bar", "line": 2, "rank": 0.4}
+        ],
+        "factsByFile": {
+          "src/x.ts": {
+            "endpoints": ["GET /x", "POST /x"],
+            "crons": ["nightly"]
+          },
+          "src/y.ts": {
+            "endpoints": [],
+            "crons": []
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "Bar", "file": "src/a.ts", "kind": "class"},
+          {"name": "baz", "file": "src/a.ts", "kind": "function"},
+          {"name": "qux", "file": "src/b.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "handleA", "file": "src/x.ts", "line": 5},
+              {"name": "handleB", "file": "src/x.ts", "line": 40}
+            ],
+            "endpoints_affected": ["GET /x", "POST /x"],
+            "crons_affected": ["nightly"]
+          },
+          {
+            "symbol": "qux",
+            "callers": [
+              {"name": "handleA", "file": "src/x.ts", "line": 12}
+            ],
+            "endpoints_affected": ["GET /x", "POST /x"],
+            "crons_affected": ["nightly"]
+          },
+          {
+            "symbol": "Bar",
+            "callers": [
+              {"name": "y.ts", "file": "src/y.ts", "line": 2}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "4 changed symbols · 4 callers · 2 endpoints · 1 cron",
+        "degraded": false
+      }
+    },
+    {
+      "name": "enclosing_symbol_rules",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 5,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "target", "kind": "function", "line": 1, "end_line": 3},
+          {"path": "src/c1.ts", "name": "second", "kind": "function", "line": 10, "end_line": 20},
+          {"path": "src/c1.ts", "name": "first", "kind": "function", "line": 10, "end_line": 20},
+          {"path": "src/c1.ts", "name": "later", "kind": "function", "line": 50, "end_line": 60},
+          {"path": "src/c1.ts", "name": "nolines", "kind": "function", "line": null, "end_line": null},
+          {"path": "src/c1.ts", "name": "Cls.m", "kind": "function", "line": 45, "end_line": 48},
+          {"path": "src/c2.ts", "name": "only.dotted", "kind": "function", "line": 1, "end_line": 9},
+          {"path": "src/c3.ts", "name": "afterRef", "kind": "function", "line": 100, "end_line": 120}
+        ],
+        "references": [
+          {"from_path": "src/c1.ts", "to_symbol": "target", "line": 15, "decl_file": "src/a.ts"},
+          {"from_path": "src/c1.ts", "to_symbol": "target", "line": 49, "decl_file": "src/a.ts"},
+          {"from_path": "src/c1.ts", "to_symbol": "target", "line": 70, "decl_file": "src/a.ts"},
+          {"from_path": "src/c2.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "src/c3.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "src/no_symbols.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "lib/deep/dir/file.name.ts", "to_symbol": "target", "line": 5, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c1.ts", "rank": 0.9},
+          {"path": "src/c2.ts", "rank": 0.8},
+          {"path": "src/c3.ts", "rank": 0.7},
+          {"path": "src/no_symbols.ts", "rank": 0.6},
+          {"path": "lib/deep/dir/file.name.ts", "rank": 0.5}
+        ],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "target", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/c1.ts", "symbol": "first", "viaSymbol": "target", "line": 15, "rank": 0.9},
+          {"file": "src/c1.ts", "symbol": "later", "viaSymbol": "target", "line": 70, "rank": 0.9},
+          {"file": "src/c2.ts", "symbol": "c2.ts", "viaSymbol": "target", "line": 5, "rank": 0.8},
+          {"file": "src/c3.ts", "symbol": "c3.ts", "viaSymbol": "target", "line": 5, "rank": 0.7},
+          {"file": "src/no_symbols.ts", "symbol": "no_symbols.ts", "viaSymbol": "target", "line": 5, "rank": 0.6},
+          {"file": "lib/deep/dir/file.name.ts", "symbol": "file.name.ts", "viaSymbol": "target", "line": 5, "rank": 0.5}
+        ],
+        "factsByFile": {},
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "target", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "target",
+            "callers": [
+              {"name": "first", "file": "src/c1.ts", "line": 15},
+              {"name": "later", "file": "src/c1.ts", "line": 70},
+              {"name": "c2.ts", "file": "src/c2.ts", "line": 5},
+              {"name": "c3.ts", "file": "src/c3.ts", "line": 5},
+              {"name": "no_symbols.ts", "file": "src/no_symbols.ts", "line": 5},
+              {"name": "file.name.ts", "file": "lib/deep/dir/file.name.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 6 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "dedupe_by_file_enclosing_and_symbol_first_kept",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 5,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "one", "kind": "function", "line": 1, "end_line": 3},
+          {"path": "src/a.ts", "name": "two", "kind": "function", "line": 5, "end_line": 8},
+          {"path": "src/c.ts", "name": "run", "kind": "function", "line": 1, "end_line": 99}
+        ],
+        "references": [
+          {"from_path": "src/c.ts", "to_symbol": "one", "line": 30, "decl_file": "src/a.ts"},
+          {"from_path": "src/c.ts", "to_symbol": "one", "line": 10, "decl_file": "src/a.ts"},
+          {"from_path": "src/c.ts", "to_symbol": "one", "line": 20, "decl_file": "src/a.ts"},
+          {"from_path": "src/c.ts", "to_symbol": "two", "line": 10, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c.ts", "rank": 0.5}
+        ],
+        "file_facts": [
+          {
+            "path": "src/c.ts",
+            "endpoints": ["GET /c"],
+            "crons": []
+          }
+        ]
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "one", "kind": "function"},
+          {"file": "src/a.ts", "name": "two", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/c.ts", "symbol": "run", "viaSymbol": "one", "line": 10, "rank": 0.5},
+          {"file": "src/c.ts", "symbol": "run", "viaSymbol": "two", "line": 10, "rank": 0.5}
+        ],
+        "factsByFile": {
+          "src/c.ts": {
+            "endpoints": ["GET /c"],
+            "crons": []
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "one", "file": "src/a.ts", "kind": "function"},
+          {"name": "two", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "one",
+            "callers": [
+              {"name": "run", "file": "src/c.ts", "line": 10}
+            ],
+            "endpoints_affected": ["GET /c"],
+            "crons_affected": []
+          },
+          {
+            "symbol": "two",
+            "callers": [
+              {"name": "run", "file": "src/c.ts", "line": 10}
+            ],
+            "endpoints_affected": ["GET /c"],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 1 caller · 1 endpoint · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "more_than_twenty_callers_of_one_symbol_keep_the_top_twenty",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 40,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "hot", "kind": "function", "line": 1, "end_line": 3},
+          {"path": "src/a.ts", "name": "cold", "kind": "function", "line": 5, "end_line": 8}
+        ],
+        "references": [
+          {"from_path": "src/c001.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c002.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c003.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c004.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c005.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c006.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c007.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c008.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c009.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c010.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c011.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c012.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c013.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c014.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c015.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c016.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c017.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c018.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c019.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c020.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c021.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c022.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c023.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c024.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/c025.ts", "to_symbol": "hot", "line": 4, "decl_file": "src/a.ts"},
+          {"from_path": "src/k1.ts", "to_symbol": "cold", "line": 2, "decl_file": "src/a.ts"},
+          {"from_path": "src/k2.ts", "to_symbol": "cold", "line": 2, "decl_file": "src/a.ts"},
+          {"from_path": "src/k3.ts", "to_symbol": "cold", "line": 2, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c001.ts", "rank": 0.99},
+          {"path": "src/c002.ts", "rank": 0.98},
+          {"path": "src/c003.ts", "rank": 0.97},
+          {"path": "src/c004.ts", "rank": 0.96},
+          {"path": "src/c005.ts", "rank": 0.95},
+          {"path": "src/c006.ts", "rank": 0.94},
+          {"path": "src/c007.ts", "rank": 0.9299999999999999},
+          {"path": "src/c008.ts", "rank": 0.92},
+          {"path": "src/c009.ts", "rank": 0.91},
+          {"path": "src/c010.ts", "rank": 0.9},
+          {"path": "src/c011.ts", "rank": 0.89},
+          {"path": "src/c012.ts", "rank": 0.88},
+          {"path": "src/c013.ts", "rank": 0.87},
+          {"path": "src/c014.ts", "rank": 0.86},
+          {"path": "src/c015.ts", "rank": 0.85},
+          {"path": "src/c016.ts", "rank": 0.84},
+          {"path": "src/c017.ts", "rank": 0.83},
+          {"path": "src/c018.ts", "rank": 0.8200000000000001},
+          {"path": "src/c019.ts", "rank": 0.81},
+          {"path": "src/c020.ts", "rank": 0.8},
+          {"path": "src/c021.ts", "rank": 0.79},
+          {"path": "src/c022.ts", "rank": 0.78},
+          {"path": "src/c023.ts", "rank": 0.77},
+          {"path": "src/c024.ts", "rank": 0.76},
+          {"path": "src/c025.ts", "rank": 0.75},
+          {"path": "src/k1.ts", "rank": 0.001},
+          {"path": "src/k2.ts", "rank": 0.002},
+          {"path": "src/k3.ts", "rank": 0.003}
+        ],
+        "file_facts": [
+          {
+            "path": "src/c001.ts",
+            "endpoints": ["GET /c001"],
+            "crons": []
+          },
+          {
+            "path": "src/c002.ts",
+            "endpoints": ["GET /c002"],
+            "crons": []
+          },
+          {
+            "path": "src/c003.ts",
+            "endpoints": ["GET /c003"],
+            "crons": []
+          },
+          {
+            "path": "src/c004.ts",
+            "endpoints": ["GET /c004"],
+            "crons": []
+          },
+          {
+            "path": "src/c005.ts",
+            "endpoints": ["GET /c005"],
+            "crons": []
+          },
+          {
+            "path": "src/c006.ts",
+            "endpoints": ["GET /c006"],
+            "crons": []
+          },
+          {
+            "path": "src/c007.ts",
+            "endpoints": ["GET /c007"],
+            "crons": []
+          },
+          {
+            "path": "src/c008.ts",
+            "endpoints": ["GET /c008"],
+            "crons": []
+          },
+          {
+            "path": "src/c009.ts",
+            "endpoints": ["GET /c009"],
+            "crons": []
+          },
+          {
+            "path": "src/c010.ts",
+            "endpoints": ["GET /c010"],
+            "crons": []
+          },
+          {
+            "path": "src/c011.ts",
+            "endpoints": ["GET /c011"],
+            "crons": []
+          },
+          {
+            "path": "src/c012.ts",
+            "endpoints": ["GET /c012"],
+            "crons": []
+          },
+          {
+            "path": "src/c013.ts",
+            "endpoints": ["GET /c013"],
+            "crons": []
+          },
+          {
+            "path": "src/c014.ts",
+            "endpoints": ["GET /c014"],
+            "crons": []
+          },
+          {
+            "path": "src/c015.ts",
+            "endpoints": ["GET /c015"],
+            "crons": []
+          },
+          {
+            "path": "src/c016.ts",
+            "endpoints": ["GET /c016"],
+            "crons": []
+          },
+          {
+            "path": "src/c017.ts",
+            "endpoints": ["GET /c017"],
+            "crons": []
+          },
+          {
+            "path": "src/c018.ts",
+            "endpoints": ["GET /c018"],
+            "crons": []
+          },
+          {
+            "path": "src/c019.ts",
+            "endpoints": ["GET /c019"],
+            "crons": []
+          },
+          {
+            "path": "src/c020.ts",
+            "endpoints": ["GET /c020"],
+            "crons": []
+          },
+          {
+            "path": "src/c021.ts",
+            "endpoints": ["GET /c021"],
+            "crons": []
+          },
+          {
+            "path": "src/c022.ts",
+            "endpoints": ["GET /c022"],
+            "crons": []
+          },
+          {
+            "path": "src/c023.ts",
+            "endpoints": ["GET /c023"],
+            "crons": []
+          },
+          {
+            "path": "src/c024.ts",
+            "endpoints": ["GET /c024"],
+            "crons": []
+          },
+          {
+            "path": "src/c025.ts",
+            "endpoints": ["GET /c025"],
+            "crons": []
+          }
+        ]
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "hot", "kind": "function"},
+          {"file": "src/a.ts", "name": "cold", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/c001.ts", "symbol": "c001.ts", "viaSymbol": "hot", "line": 4, "rank": 0.99},
+          {"file": "src/c002.ts", "symbol": "c002.ts", "viaSymbol": "hot", "line": 4, "rank": 0.98},
+          {"file": "src/c003.ts", "symbol": "c003.ts", "viaSymbol": "hot", "line": 4, "rank": 0.97},
+          {"file": "src/c004.ts", "symbol": "c004.ts", "viaSymbol": "hot", "line": 4, "rank": 0.96},
+          {"file": "src/c005.ts", "symbol": "c005.ts", "viaSymbol": "hot", "line": 4, "rank": 0.95},
+          {"file": "src/c006.ts", "symbol": "c006.ts", "viaSymbol": "hot", "line": 4, "rank": 0.94},
+          {"file": "src/c007.ts", "symbol": "c007.ts", "viaSymbol": "hot", "line": 4, "rank": 0.9299999999999999},
+          {"file": "src/c008.ts", "symbol": "c008.ts", "viaSymbol": "hot", "line": 4, "rank": 0.92},
+          {"file": "src/c009.ts", "symbol": "c009.ts", "viaSymbol": "hot", "line": 4, "rank": 0.91},
+          {"file": "src/c010.ts", "symbol": "c010.ts", "viaSymbol": "hot", "line": 4, "rank": 0.9},
+          {"file": "src/c011.ts", "symbol": "c011.ts", "viaSymbol": "hot", "line": 4, "rank": 0.89},
+          {"file": "src/c012.ts", "symbol": "c012.ts", "viaSymbol": "hot", "line": 4, "rank": 0.88},
+          {"file": "src/c013.ts", "symbol": "c013.ts", "viaSymbol": "hot", "line": 4, "rank": 0.87},
+          {"file": "src/c014.ts", "symbol": "c014.ts", "viaSymbol": "hot", "line": 4, "rank": 0.86},
+          {"file": "src/c015.ts", "symbol": "c015.ts", "viaSymbol": "hot", "line": 4, "rank": 0.85},
+          {"file": "src/c016.ts", "symbol": "c016.ts", "viaSymbol": "hot", "line": 4, "rank": 0.84},
+          {"file": "src/c017.ts", "symbol": "c017.ts", "viaSymbol": "hot", "line": 4, "rank": 0.83},
+          {"file": "src/c018.ts", "symbol": "c018.ts", "viaSymbol": "hot", "line": 4, "rank": 0.8200000000000001},
+          {"file": "src/c019.ts", "symbol": "c019.ts", "viaSymbol": "hot", "line": 4, "rank": 0.81},
+          {"file": "src/c020.ts", "symbol": "c020.ts", "viaSymbol": "hot", "line": 4, "rank": 0.8},
+          {"file": "src/k3.ts", "symbol": "k3.ts", "viaSymbol": "cold", "line": 2, "rank": 0.003},
+          {"file": "src/k2.ts", "symbol": "k2.ts", "viaSymbol": "cold", "line": 2, "rank": 0.002},
+          {"file": "src/k1.ts", "symbol": "k1.ts", "viaSymbol": "cold", "line": 2, "rank": 0.001}
+        ],
+        "factsByFile": {
+          "src/c001.ts": {
+            "endpoints": ["GET /c001"],
+            "crons": []
+          },
+          "src/c002.ts": {
+            "endpoints": ["GET /c002"],
+            "crons": []
+          },
+          "src/c003.ts": {
+            "endpoints": ["GET /c003"],
+            "crons": []
+          },
+          "src/c004.ts": {
+            "endpoints": ["GET /c004"],
+            "crons": []
+          },
+          "src/c005.ts": {
+            "endpoints": ["GET /c005"],
+            "crons": []
+          },
+          "src/c006.ts": {
+            "endpoints": ["GET /c006"],
+            "crons": []
+          },
+          "src/c007.ts": {
+            "endpoints": ["GET /c007"],
+            "crons": []
+          },
+          "src/c008.ts": {
+            "endpoints": ["GET /c008"],
+            "crons": []
+          },
+          "src/c009.ts": {
+            "endpoints": ["GET /c009"],
+            "crons": []
+          },
+          "src/c010.ts": {
+            "endpoints": ["GET /c010"],
+            "crons": []
+          },
+          "src/c011.ts": {
+            "endpoints": ["GET /c011"],
+            "crons": []
+          },
+          "src/c012.ts": {
+            "endpoints": ["GET /c012"],
+            "crons": []
+          },
+          "src/c013.ts": {
+            "endpoints": ["GET /c013"],
+            "crons": []
+          },
+          "src/c014.ts": {
+            "endpoints": ["GET /c014"],
+            "crons": []
+          },
+          "src/c015.ts": {
+            "endpoints": ["GET /c015"],
+            "crons": []
+          },
+          "src/c016.ts": {
+            "endpoints": ["GET /c016"],
+            "crons": []
+          },
+          "src/c017.ts": {
+            "endpoints": ["GET /c017"],
+            "crons": []
+          },
+          "src/c018.ts": {
+            "endpoints": ["GET /c018"],
+            "crons": []
+          },
+          "src/c019.ts": {
+            "endpoints": ["GET /c019"],
+            "crons": []
+          },
+          "src/c020.ts": {
+            "endpoints": ["GET /c020"],
+            "crons": []
+          }
+        },
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "hot", "file": "src/a.ts", "kind": "function"},
+          {"name": "cold", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "hot",
+            "callers": [
+              {"name": "c001.ts", "file": "src/c001.ts", "line": 4},
+              {"name": "c002.ts", "file": "src/c002.ts", "line": 4},
+              {"name": "c003.ts", "file": "src/c003.ts", "line": 4},
+              {"name": "c004.ts", "file": "src/c004.ts", "line": 4},
+              {"name": "c005.ts", "file": "src/c005.ts", "line": 4},
+              {"name": "c006.ts", "file": "src/c006.ts", "line": 4},
+              {"name": "c007.ts", "file": "src/c007.ts", "line": 4},
+              {"name": "c008.ts", "file": "src/c008.ts", "line": 4},
+              {"name": "c009.ts", "file": "src/c009.ts", "line": 4},
+              {"name": "c010.ts", "file": "src/c010.ts", "line": 4},
+              {"name": "c011.ts", "file": "src/c011.ts", "line": 4},
+              {"name": "c012.ts", "file": "src/c012.ts", "line": 4},
+              {"name": "c013.ts", "file": "src/c013.ts", "line": 4},
+              {"name": "c014.ts", "file": "src/c014.ts", "line": 4},
+              {"name": "c015.ts", "file": "src/c015.ts", "line": 4},
+              {"name": "c016.ts", "file": "src/c016.ts", "line": 4},
+              {"name": "c017.ts", "file": "src/c017.ts", "line": 4},
+              {"name": "c018.ts", "file": "src/c018.ts", "line": 4},
+              {"name": "c019.ts", "file": "src/c019.ts", "line": 4},
+              {"name": "c020.ts", "file": "src/c020.ts", "line": 4}
+            ],
+            "endpoints_affected": [
+              "GET /c001",
+              "GET /c002",
+              "GET /c003",
+              "GET /c004",
+              "GET /c005",
+              "GET /c006",
+              "GET /c007",
+              "GET /c008",
+              "GET /c009",
+              "GET /c010",
+              "GET /c011",
+              "GET /c012",
+              "GET /c013",
+              "GET /c014",
+              "GET /c015",
+              "GET /c016",
+              "GET /c017",
+              "GET /c018",
+              "GET /c019",
+              "GET /c020"
+            ],
+            "crons_affected": []
+          },
+          {
+            "symbol": "cold",
+            "callers": [
+              {"name": "k3.ts", "file": "src/k3.ts", "line": 2},
+              {"name": "k2.ts", "file": "src/k2.ts", "line": 2},
+              {"name": "k1.ts", "file": "src/k1.ts", "line": 2}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 23 callers · 20 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "rank_ties_order_by_path_line_symbol_in_byte_order",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 10,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "b", "kind": "function", "line": 1, "end_line": 3},
+          {"path": "src/a.ts", "name": "a", "kind": "function", "line": 5, "end_line": 8},
+          {"path": "src/a.ts", "name": "B", "kind": "function", "line": 9, "end_line": 12}
+        ],
+        "references": [
+          {"from_path": "src/z.ts", "to_symbol": "a", "line": 1, "decl_file": "src/a.ts"},
+          {"from_path": "src/m.ts", "to_symbol": "b", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "src/m.ts", "to_symbol": "a", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "src/m.ts", "to_symbol": "B", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "src/m.ts", "to_symbol": "a", "line": 2, "decl_file": "src/a.ts"},
+          {"from_path": "src/M.ts", "to_symbol": "a", "line": 9, "decl_file": "src/a.ts"},
+          {"from_path": "src/é.ts", "to_symbol": "a", "line": 1, "decl_file": "src/a.ts"},
+          {"from_path": "src/_u.ts", "to_symbol": "a", "line": 1, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/z.ts", "rank": 0.5},
+          {"path": "src/m.ts", "rank": 0.5},
+          {"path": "src/M.ts", "rank": 0.5},
+          {"path": "src/é.ts", "rank": 0.5},
+          {"path": "src/_u.ts", "rank": 0.5}
+        ],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "b", "kind": "function"},
+          {"file": "src/a.ts", "name": "a", "kind": "function"},
+          {"file": "src/a.ts", "name": "B", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/M.ts", "symbol": "M.ts", "viaSymbol": "a", "line": 9, "rank": 0.5},
+          {"file": "src/_u.ts", "symbol": "_u.ts", "viaSymbol": "a", "line": 1, "rank": 0.5},
+          {"file": "src/m.ts", "symbol": "m.ts", "viaSymbol": "a", "line": 2, "rank": 0.5},
+          {"file": "src/m.ts", "symbol": "m.ts", "viaSymbol": "B", "line": 5, "rank": 0.5},
+          {"file": "src/m.ts", "symbol": "m.ts", "viaSymbol": "b", "line": 5, "rank": 0.5},
+          {"file": "src/z.ts", "symbol": "z.ts", "viaSymbol": "a", "line": 1, "rank": 0.5},
+          {"file": "src/é.ts", "symbol": "é.ts", "viaSymbol": "a", "line": 1, "rank": 0.5}
+        ],
+        "factsByFile": {},
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "b", "file": "src/a.ts", "kind": "function"},
+          {"name": "a", "file": "src/a.ts", "kind": "function"},
+          {"name": "B", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "a",
+            "callers": [
+              {"name": "_u.ts", "file": "src/_u.ts", "line": 1},
+              {"name": "é.ts", "file": "src/é.ts", "line": 1},
+              {"name": "m.ts", "file": "src/m.ts", "line": 2},
+              {"name": "M.ts", "file": "src/M.ts", "line": 9},
+              {"name": "z.ts", "file": "src/z.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "b",
+            "callers": [
+              {"name": "m.ts", "file": "src/m.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "B",
+            "callers": [
+              {"name": "m.ts", "file": "src/m.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "3 changed symbols · 6 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "missing_file_rank_rows_exclude_the_caller",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3}
+        ],
+        "references": [
+          {"from_path": "src/ranked.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts"},
+          {"from_path": "src/unranked.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/ranked.ts", "rank": 0}
+        ],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/ranked.ts", "symbol": "ranked.ts", "viaSymbol": "foo", "line": 1, "rank": 0}
+        ],
+        "factsByFile": {},
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "ranked.ts", "file": "src/ranked.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 1 caller · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "same_name_declared_in_two_changed_files_merges_callers",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts", "src/b.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/b.ts", "name": "init", "kind": "function", "line": 4, "end_line": 6},
+          {"path": "src/a.ts", "name": "init", "kind": "function", "line": 2, "end_line": 3},
+          {"path": "src/a.ts", "name": "init", "kind": "function", "line": 20, "end_line": 22},
+          {"path": "src/c.ts", "name": "go", "kind": "function", "line": 1, "end_line": 30}
+        ],
+        "references": [
+          {"from_path": "src/c.ts", "to_symbol": "init", "line": 5, "decl_file": "src/a.ts"},
+          {"from_path": "src/c.ts", "to_symbol": "init", "line": 6, "decl_file": "src/b.ts"},
+          {"from_path": "src/a.ts", "to_symbol": "init", "line": 25, "decl_file": "src/b.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c.ts", "rank": 0.4},
+          {"path": "src/a.ts", "rank": 0.3}
+        ],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "init", "kind": "function"},
+          {"file": "src/b.ts", "name": "init", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/c.ts", "symbol": "go", "viaSymbol": "init", "line": 5, "rank": 0.4},
+          {"file": "src/a.ts", "symbol": "init", "viaSymbol": "init", "line": 25, "rank": 0.3}
+        ],
+        "factsByFile": {},
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "init", "file": "src/a.ts", "kind": "function"},
+          {"name": "init", "file": "src/b.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "init",
+            "callers": [
+              {"name": "go", "file": "src/c.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 1 caller · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "qualified_names_only_give_no_callers",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "Cls.method", "kind": "function", "line": 3, "end_line": 6}
+        ],
+        "references": [
+          {"from_path": "src/c.ts", "to_symbol": "Cls.method", "line": 1, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c.ts", "rank": 0.4}
+        ],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "no_symbols_in_the_changed_files",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["README.md", "src/data.json"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/other.ts", "name": "x", "kind": "function", "line": 1, "end_line": 2}
+        ],
+        "references": [],
+        "file_rank": [],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "case_sensitive_names_and_kinds",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "Foo", "kind": "class", "line": 1, "end_line": 3},
+          {"path": "src/a.ts", "name": "foo", "kind": "function", "line": 5, "end_line": 6},
+          {"path": "src/a.ts", "name": "FOO", "kind": "enum", "line": 7, "end_line": 9},
+          {"path": "src/a.ts", "name": "I", "kind": "interface", "line": 10, "end_line": 11},
+          {"path": "src/a.ts", "name": "T", "kind": "type", "line": 12, "end_line": 12}
+        ],
+        "references": [
+          {"from_path": "src/c.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts"},
+          {"from_path": "src/c.ts", "to_symbol": "FOO", "line": 2, "decl_file": "src/a.ts"},
+          {"from_path": "src/c.ts", "to_symbol": "Foo", "line": 3, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c.ts", "rank": 0.4}
+        ],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "Foo", "kind": "class"},
+          {"file": "src/a.ts", "name": "foo", "kind": "function"},
+          {"file": "src/a.ts", "name": "FOO", "kind": "enum"},
+          {"file": "src/a.ts", "name": "I", "kind": "interface"},
+          {"file": "src/a.ts", "name": "T", "kind": "type"}
+        ],
+        "callers": [
+          {"file": "src/c.ts", "symbol": "c.ts", "viaSymbol": "foo", "line": 1, "rank": 0.4},
+          {"file": "src/c.ts", "symbol": "c.ts", "viaSymbol": "FOO", "line": 2, "rank": 0.4},
+          {"file": "src/c.ts", "symbol": "c.ts", "viaSymbol": "Foo", "line": 3, "rank": 0.4}
+        ],
+        "factsByFile": {},
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Foo", "file": "src/a.ts", "kind": "class"},
+          {"name": "foo", "file": "src/a.ts", "kind": "function"},
+          {"name": "FOO", "file": "src/a.ts", "kind": "enum"},
+          {"name": "I", "file": "src/a.ts", "kind": "interface"},
+          {"name": "T", "file": "src/a.ts", "kind": "type"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "c.ts", "file": "src/c.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "Foo",
+            "callers": [
+              {"name": "c.ts", "file": "src/c.ts", "line": 3}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "FOO",
+            "callers": [
+              {"name": "c.ts", "file": "src/c.ts", "line": 2}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "5 changed symbols · 3 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "partial_index_keeps_the_data_and_is_flagged",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "partial",
+        "files_indexed": 3,
+        "files_skipped": 2,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {"reason": "parse timed out"}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3}
+        ],
+        "references": [
+          {"from_path": "src/c.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c.ts", "rank": 0.4}
+        ],
+        "file_facts": [
+          {
+            "path": "src/c.ts",
+            "endpoints": ["GET /c"],
+            "crons": []
+          }
+        ]
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/c.ts", "symbol": "c.ts", "viaSymbol": "foo", "line": 1, "rank": 0.4}
+        ],
+        "factsByFile": {
+          "src/c.ts": {
+            "endpoints": ["GET /c"],
+            "crons": []
+          }
+        },
+        "degraded": true,
+        "reason": "index_partial"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "c.ts", "file": "src/c.ts", "line": 1}
+            ],
+            "endpoints_affected": ["GET /c"],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 1 caller · 1 endpoint · 0 crons",
+        "degraded": true,
+        "reason": "index_partial"
+      }
+    },
+    {
+      "name": "bounded_walk_is_repo_too_large",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {"bounded": 3}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3}
+        ],
+        "references": [
+          {"from_path": "src/c.ts", "to_symbol": "foo", "line": 1, "decl_file": "src/a.ts"}
+        ],
+        "file_rank": [
+          {"path": "src/c.ts", "rank": 0.4}
+        ],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/c.ts", "symbol": "c.ts", "viaSymbol": "foo", "line": 1, "rank": 0.4}
+        ],
+        "factsByFile": {},
+        "degraded": true,
+        "reason": "repo_too_large"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "foo",
+            "callers": [
+              {"name": "c.ts", "file": "src/c.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 1 caller · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "repo_too_large"
+      }
+    },
+    {
+      "name": "bounded_beats_partial",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "partial",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {"bounded": 1}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3}
+        ],
+        "references": [],
+        "file_rank": [],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [],
+        "factsByFile": {},
+        "degraded": true,
+        "reason": "repo_too_large"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "1 changed symbol · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "repo_too_large"
+      }
+    },
+    {
+      "name": "bounded_zero_is_complete",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {"bounded": 0}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/a.ts", "name": "foo", "kind": "function", "line": 1, "end_line": 3}
+        ],
+        "references": [],
+        "file_rank": [],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/a.ts", "name": "foo", "kind": "function"}
+        ],
+        "callers": [],
+        "factsByFile": {},
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "foo", "file": "src/a.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "1 changed symbol · 0 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "symbol_rows_are_ordered_by_path_line_name_in_byte_order",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/b.ts", "src/a.ts", "src/B.ts"],
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc123",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "tables": {
+        "symbols": [
+          {"path": "src/b.ts", "name": "z", "kind": "function", "line": 1, "end_line": 3},
+          {"path": "src/a.ts", "name": "b", "kind": "function", "line": 5, "end_line": 6},
+          {"path": "src/a.ts", "name": "B", "kind": "function", "line": 5, "end_line": 6},
+          {"path": "src/a.ts", "name": "_a", "kind": "function", "line": 5, "end_line": 6},
+          {"path": "src/a.ts", "name": "a", "kind": "function", "line": 2, "end_line": 6},
+          {"path": "src/B.ts", "name": "m", "kind": "function", "line": 1, "end_line": 6},
+          {"path": "src/a.ts", "name": "é", "kind": "function", "line": 5, "end_line": 6}
+        ],
+        "references": [],
+        "file_rank": [],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [
+          {"file": "src/B.ts", "name": "m", "kind": "function"},
+          {"file": "src/a.ts", "name": "a", "kind": "function"},
+          {"file": "src/a.ts", "name": "B", "kind": "function"},
+          {"file": "src/a.ts", "name": "_a", "kind": "function"},
+          {"file": "src/a.ts", "name": "b", "kind": "function"},
+          {"file": "src/a.ts", "name": "é", "kind": "function"},
+          {"file": "src/b.ts", "name": "z", "kind": "function"}
+        ],
+        "callers": [],
+        "factsByFile": {},
+        "degraded": false
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "m", "file": "src/B.ts", "kind": "function"},
+          {"name": "a", "file": "src/a.ts", "kind": "function"},
+          {"name": "B", "file": "src/a.ts", "kind": "function"},
+          {"name": "_a", "file": "src/a.ts", "kind": "function"},
+          {"name": "b", "file": "src/a.ts", "kind": "function"},
+          {"name": "é", "file": "src/a.ts", "kind": "function"},
+          {"name": "z", "file": "src/b.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "7 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": false
+      }
+    },
+    {
+      "name": "failed_index_without_a_clone_gives_an_empty_degraded_result",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "enabled": true,
+      "changedFiles": ["src/a.ts"],
+      "index_state": {
+        "status": "failed",
+        "files_indexed": 0,
+        "files_skipped": 0,
+        "last_indexed_sha": "",
+        "indexer_version": 1,
+        "stats": {"reason": "boom"}
+      },
+      "tables": {
+        "symbols": [],
+        "references": [],
+        "file_rank": [],
+        "file_facts": []
+      },
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "index_failed"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "index_failed"
+      }
+    }
+  ],
+  "clone": [
+    {
+      "name": "flag_off_invoice_symbols_and_callers",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/billing/invoice.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/invoice.ts", "name": "createInvoice", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "computeTotal", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "InvoiceService", "kind": "class"},
+          {"file": "src/billing/invoice.ts", "name": "InvoiceService.total", "kind": "method"},
+          {"file": "src/billing/invoice.ts", "name": "total", "kind": "method"},
+          {"file": "src/billing/invoice.ts", "name": "formatInvoice", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "Invoice", "kind": "interface"},
+          {"file": "src/billing/invoice.ts", "name": "Item", "kind": "type"},
+          {"file": "src/billing/invoice.ts", "name": "Status", "kind": "enum"}
+        ],
+        "callers": [
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "listOrders", "viaSymbol": "createInvoice", "line": 10, "rank": 0},
+          {"file": "src/lib/util.js", "symbol": "helper", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/é.ts", "symbol": "accent", "viaSymbol": "createInvoice", "line": 1, "rank": 0},
+          {"file": "test/invoice.test.ts", "symbol": "invoice.test.ts", "viaSymbol": "createInvoice", "line": 5, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "nightly", "viaSymbol": "computeTotal", "line": 4, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "weekly", "viaSymbol": "computeTotal", "line": 9, "rank": 0},
+          {"file": "src/legacy.mjs", "symbol": "legacy", "viaSymbol": "computeTotal", "line": 4, "rank": 0},
+          {"file": "src/weird name.ts", "symbol": "spaced", "viaSymbol": "computeTotal", "line": 1, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "InvoiceService", "line": 5, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "InvoiceService.total", "line": 6, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "total", "line": 6, "rank": 0},
+          {"file": "src/api/orders.tsx", "symbol": "OrderView", "viaSymbol": "formatInvoice", "line": 4, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "nightly", "viaSymbol": "formatInvoice", "line": 6, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "createInvoice", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "computeTotal", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "InvoiceService", "file": "src/billing/invoice.ts", "kind": "class"},
+          {"name": "InvoiceService.total", "file": "src/billing/invoice.ts", "kind": "method"},
+          {"name": "total", "file": "src/billing/invoice.ts", "kind": "method"},
+          {"name": "formatInvoice", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "Invoice", "file": "src/billing/invoice.ts", "kind": "interface"},
+          {"name": "Item", "file": "src/billing/invoice.ts", "kind": "type"},
+          {"name": "Status", "file": "src/billing/invoice.ts", "kind": "enum"}
+        ],
+        "downstream": [
+          {
+            "symbol": "computeTotal",
+            "callers": [
+              {"name": "legacy", "file": "src/legacy.mjs", "line": 4},
+              {"name": "nightly", "file": "src/jobs/nightly.ts", "line": 4},
+              {"name": "spaced", "file": "src/weird name.ts", "line": 1},
+              {"name": "weekly", "file": "src/jobs/nightly.ts", "line": 9}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "createInvoice",
+            "callers": [
+              {"name": "accent", "file": "src/é.ts", "line": 1},
+              {"name": "helper", "file": "src/lib/util.js", "line": 4},
+              {"name": "invoice.test.ts", "file": "test/invoice.test.ts", "line": 5},
+              {"name": "listOrders", "file": "src/api/orders.ts", "line": 10},
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 4}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "formatInvoice",
+            "callers": [
+              {"name": "nightly", "file": "src/jobs/nightly.ts", "line": 6},
+              {"name": "OrderView", "file": "src/api/orders.tsx", "line": 4}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "InvoiceService",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "InvoiceService.total",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 6}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "total",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 6}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "9 changed symbols · 13 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "flag_off_money",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/billing/money.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/money.ts", "name": "Money", "kind": "type"},
+          {"file": "src/billing/money.ts", "name": "round", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Money", "file": "src/billing/money.ts", "kind": "type"},
+          {"name": "round", "file": "src/billing/money.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "no_index_row_is_no_data",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": true,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/billing/invoice.ts", "src/billing/money.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/invoice.ts", "name": "createInvoice", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "computeTotal", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "InvoiceService", "kind": "class"},
+          {"file": "src/billing/invoice.ts", "name": "InvoiceService.total", "kind": "method"},
+          {"file": "src/billing/invoice.ts", "name": "total", "kind": "method"},
+          {"file": "src/billing/invoice.ts", "name": "formatInvoice", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "Invoice", "kind": "interface"},
+          {"file": "src/billing/invoice.ts", "name": "Item", "kind": "type"},
+          {"file": "src/billing/invoice.ts", "name": "Status", "kind": "enum"},
+          {"file": "src/billing/money.ts", "name": "Money", "kind": "type"},
+          {"file": "src/billing/money.ts", "name": "round", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "listOrders", "viaSymbol": "createInvoice", "line": 10, "rank": 0},
+          {"file": "src/lib/util.js", "symbol": "helper", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/é.ts", "symbol": "accent", "viaSymbol": "createInvoice", "line": 1, "rank": 0},
+          {"file": "test/invoice.test.ts", "symbol": "invoice.test.ts", "viaSymbol": "createInvoice", "line": 5, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "nightly", "viaSymbol": "computeTotal", "line": 4, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "weekly", "viaSymbol": "computeTotal", "line": 9, "rank": 0},
+          {"file": "src/legacy.mjs", "symbol": "legacy", "viaSymbol": "computeTotal", "line": 4, "rank": 0},
+          {"file": "src/weird name.ts", "symbol": "spaced", "viaSymbol": "computeTotal", "line": 1, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "InvoiceService", "line": 5, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "InvoiceService.total", "line": 6, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "total", "line": 6, "rank": 0},
+          {"file": "src/api/orders.tsx", "symbol": "OrderView", "viaSymbol": "formatInvoice", "line": 4, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "nightly", "viaSymbol": "formatInvoice", "line": 6, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "no_data"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "createInvoice", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "computeTotal", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "InvoiceService", "file": "src/billing/invoice.ts", "kind": "class"},
+          {"name": "InvoiceService.total", "file": "src/billing/invoice.ts", "kind": "method"},
+          {"name": "total", "file": "src/billing/invoice.ts", "kind": "method"},
+          {"name": "formatInvoice", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "Invoice", "file": "src/billing/invoice.ts", "kind": "interface"},
+          {"name": "Item", "file": "src/billing/invoice.ts", "kind": "type"},
+          {"name": "Status", "file": "src/billing/invoice.ts", "kind": "enum"},
+          {"name": "Money", "file": "src/billing/money.ts", "kind": "type"},
+          {"name": "round", "file": "src/billing/money.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "computeTotal",
+            "callers": [
+              {"name": "legacy", "file": "src/legacy.mjs", "line": 4},
+              {"name": "nightly", "file": "src/jobs/nightly.ts", "line": 4},
+              {"name": "spaced", "file": "src/weird name.ts", "line": 1},
+              {"name": "weekly", "file": "src/jobs/nightly.ts", "line": 9}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "createInvoice",
+            "callers": [
+              {"name": "accent", "file": "src/é.ts", "line": 1},
+              {"name": "helper", "file": "src/lib/util.js", "line": 4},
+              {"name": "invoice.test.ts", "file": "test/invoice.test.ts", "line": 5},
+              {"name": "listOrders", "file": "src/api/orders.ts", "line": 10},
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 4}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "formatInvoice",
+            "callers": [
+              {"name": "nightly", "file": "src/jobs/nightly.ts", "line": 6},
+              {"name": "OrderView", "file": "src/api/orders.tsx", "line": 4}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "InvoiceService",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "InvoiceService.total",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 6}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "total",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 6}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "11 changed symbols · 13 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "no_data"
+      }
+    },
+    {
+      "name": "index_state_read_error_counts_as_none",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": true,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": "error",
+      "changedFiles": ["src/billing/money.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/money.ts", "name": "Money", "kind": "type"},
+          {"file": "src/billing/money.ts", "name": "round", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "no_data"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Money", "file": "src/billing/money.ts", "kind": "type"},
+          {"name": "round", "file": "src/billing/money.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "no_data"
+      }
+    },
+    {
+      "name": "failed_index_is_index_failed",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": true,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": {
+        "status": "failed",
+        "files_indexed": 0,
+        "files_skipped": 0,
+        "last_indexed_sha": "",
+        "indexer_version": 1,
+        "stats": {"reason": "clone missing"}
+      },
+      "changedFiles": ["src/api/orders.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/api/orders.ts", "name": "placeOrder", "kind": "function"},
+          {"file": "src/api/orders.ts", "name": "listOrders", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "index_failed"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "placeOrder", "file": "src/api/orders.ts", "kind": "function"},
+          {"name": "listOrders", "file": "src/api/orders.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "index_failed"
+      }
+    },
+    {
+      "name": "degraded_index_with_its_own_reason",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": true,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": {
+        "status": "degraded",
+        "files_indexed": 0,
+        "files_skipped": 0,
+        "last_indexed_sha": "",
+        "indexer_version": 1,
+        "stats": {"degradedReason": "flag_off"}
+      },
+      "changedFiles": ["src/billing/money.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/money.ts", "name": "Money", "kind": "type"},
+          {"file": "src/billing/money.ts", "name": "round", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Money", "file": "src/billing/money.ts", "kind": "type"},
+          {"name": "round", "file": "src/billing/money.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "degraded_index_without_a_reason_is_index_failed",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": true,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": {
+        "status": "degraded",
+        "files_indexed": 0,
+        "files_skipped": 0,
+        "last_indexed_sha": "",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "changedFiles": ["src/billing/money.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/money.ts", "name": "Money", "kind": "type"},
+          {"file": "src/billing/money.ts", "name": "round", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "index_failed"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Money", "file": "src/billing/money.ts", "kind": "type"},
+          {"name": "round", "file": "src/billing/money.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "index_failed"
+      }
+    },
+    {
+      "name": "degraded_index_with_no_data_reason",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": true,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": {
+        "status": "degraded",
+        "files_indexed": 0,
+        "files_skipped": 0,
+        "last_indexed_sha": "",
+        "indexer_version": 1,
+        "stats": {"degradedReason": "no_data"}
+      },
+      "changedFiles": ["src/billing/money.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/money.ts", "name": "Money", "kind": "type"},
+          {"file": "src/billing/money.ts", "name": "round", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "no_data"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Money", "file": "src/billing/money.ts", "kind": "type"},
+          {"name": "round", "file": "src/billing/money.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "no_data"
+      }
+    },
+    {
+      "name": "empty_changed_files_is_no_data_and_empty",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": true,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": {
+        "status": "full",
+        "files_indexed": 3,
+        "files_skipped": 0,
+        "last_indexed_sha": "abc",
+        "indexer_version": 1,
+        "stats": {}
+      },
+      "changedFiles": [],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "no_data"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "no_data"
+      }
+    },
+    {
+      "name": "flag_off_beats_empty_changed_files",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": [],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "changed_file_without_symbols",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["notes.md", "src/empty.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "changed_file_not_in_the_clone",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/missing.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "no_clone_path",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": true,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/billing/invoice.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "no_repo_row",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": true,
+      "index_state": null,
+      "changedFiles": ["src/billing/invoice.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "orders_ts_symbols",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/api/orders.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/api/orders.ts", "name": "placeOrder", "kind": "function"},
+          {"file": "src/api/orders.ts", "name": "listOrders", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "placeOrder", "file": "src/api/orders.ts", "kind": "function"},
+          {"name": "listOrders", "file": "src/api/orders.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "types_d_ts_declare_function",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/types.d.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/types.d.ts", "name": "createInvoice", "kind": "function"},
+          {"file": "src/types.d.ts", "name": "Invoice", "kind": "interface"}
+        ],
+        "callers": [
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "listOrders", "viaSymbol": "createInvoice", "line": 10, "rank": 0},
+          {"file": "src/lib/util.js", "symbol": "helper", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/é.ts", "symbol": "accent", "viaSymbol": "createInvoice", "line": 1, "rank": 0},
+          {"file": "test/invoice.test.ts", "symbol": "invoice.test.ts", "viaSymbol": "createInvoice", "line": 5, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "createInvoice", "file": "src/types.d.ts", "kind": "function"},
+          {"name": "Invoice", "file": "src/types.d.ts", "kind": "interface"}
+        ],
+        "downstream": [
+          {
+            "symbol": "createInvoice",
+            "callers": [
+              {"name": "accent", "file": "src/é.ts", "line": 1},
+              {"name": "helper", "file": "src/lib/util.js", "line": 4},
+              {"name": "invoice.test.ts", "file": "test/invoice.test.ts", "line": 5},
+              {"name": "listOrders", "file": "src/api/orders.ts", "line": 10},
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 4}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 5 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "dotfile_named_like_an_extension_is_not_walked",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "uppercase_extension_is_not_walked",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/UPPER.TS"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "mjs_and_mts",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/legacy.mjs", "src/module.mts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/legacy.mjs", "name": "legacy", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "legacy", "file": "src/legacy.mjs", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "1 changed symbol · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "unicode_and_spaced_names",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/é.ts", "src/weird name.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/weird name.ts", "name": "spaced", "kind": "function"},
+          {"file": "src/é.ts", "name": "accent", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "spaced", "file": "src/weird name.ts", "kind": "function"},
+          {"name": "accent", "file": "src/é.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "ignored_directories_are_not_walked",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["dist/gen.ts", "build/b.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "caller_files_in_ignored_directories_do_not_count",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/billing/invoice.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/invoice.ts", "name": "createInvoice", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "computeTotal", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "InvoiceService", "kind": "class"},
+          {"file": "src/billing/invoice.ts", "name": "InvoiceService.total", "kind": "method"},
+          {"file": "src/billing/invoice.ts", "name": "total", "kind": "method"},
+          {"file": "src/billing/invoice.ts", "name": "formatInvoice", "kind": "function"},
+          {"file": "src/billing/invoice.ts", "name": "Invoice", "kind": "interface"},
+          {"file": "src/billing/invoice.ts", "name": "Item", "kind": "type"},
+          {"file": "src/billing/invoice.ts", "name": "Status", "kind": "enum"}
+        ],
+        "callers": [
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "listOrders", "viaSymbol": "createInvoice", "line": 10, "rank": 0},
+          {"file": "src/lib/util.js", "symbol": "helper", "viaSymbol": "createInvoice", "line": 4, "rank": 0},
+          {"file": "src/é.ts", "symbol": "accent", "viaSymbol": "createInvoice", "line": 1, "rank": 0},
+          {"file": "test/invoice.test.ts", "symbol": "invoice.test.ts", "viaSymbol": "createInvoice", "line": 5, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "nightly", "viaSymbol": "computeTotal", "line": 4, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "weekly", "viaSymbol": "computeTotal", "line": 9, "rank": 0},
+          {"file": "src/legacy.mjs", "symbol": "legacy", "viaSymbol": "computeTotal", "line": 4, "rank": 0},
+          {"file": "src/weird name.ts", "symbol": "spaced", "viaSymbol": "computeTotal", "line": 1, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "InvoiceService", "line": 5, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "InvoiceService.total", "line": 6, "rank": 0},
+          {"file": "src/api/orders.ts", "symbol": "placeOrder", "viaSymbol": "total", "line": 6, "rank": 0},
+          {"file": "src/api/orders.tsx", "symbol": "OrderView", "viaSymbol": "formatInvoice", "line": 4, "rank": 0},
+          {"file": "src/jobs/nightly.ts", "symbol": "nightly", "viaSymbol": "formatInvoice", "line": 6, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "createInvoice", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "computeTotal", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "InvoiceService", "file": "src/billing/invoice.ts", "kind": "class"},
+          {"name": "InvoiceService.total", "file": "src/billing/invoice.ts", "kind": "method"},
+          {"name": "total", "file": "src/billing/invoice.ts", "kind": "method"},
+          {"name": "formatInvoice", "file": "src/billing/invoice.ts", "kind": "function"},
+          {"name": "Invoice", "file": "src/billing/invoice.ts", "kind": "interface"},
+          {"name": "Item", "file": "src/billing/invoice.ts", "kind": "type"},
+          {"name": "Status", "file": "src/billing/invoice.ts", "kind": "enum"}
+        ],
+        "downstream": [
+          {
+            "symbol": "computeTotal",
+            "callers": [
+              {"name": "legacy", "file": "src/legacy.mjs", "line": 4},
+              {"name": "nightly", "file": "src/jobs/nightly.ts", "line": 4},
+              {"name": "spaced", "file": "src/weird name.ts", "line": 1},
+              {"name": "weekly", "file": "src/jobs/nightly.ts", "line": 9}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "createInvoice",
+            "callers": [
+              {"name": "accent", "file": "src/é.ts", "line": 1},
+              {"name": "helper", "file": "src/lib/util.js", "line": 4},
+              {"name": "invoice.test.ts", "file": "test/invoice.test.ts", "line": 5},
+              {"name": "listOrders", "file": "src/api/orders.ts", "line": 10},
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 4}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "formatInvoice",
+            "callers": [
+              {"name": "nightly", "file": "src/jobs/nightly.ts", "line": 6},
+              {"name": "OrderView", "file": "src/api/orders.tsx", "line": 4}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "InvoiceService",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 5}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "InvoiceService.total",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 6}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          },
+          {
+            "symbol": "total",
+            "callers": [
+              {"name": "placeOrder", "file": "src/api/orders.ts", "line": 6}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "9 changed symbols · 13 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "test_file_changed",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["test/invoice.test.ts"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [],
+        "downstream": [],
+        "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "jsx_and_js_callers",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/jobs/nightly.ts", "src/lib/util.js"],
+      "extraFiles": [],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/jobs/nightly.ts", "name": "nightly", "kind": "function"},
+          {"file": "src/jobs/nightly.ts", "name": "weekly", "kind": "function"},
+          {"file": "src/lib/util.js", "name": "helper", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "nightly", "file": "src/jobs/nightly.ts", "kind": "function"},
+          {"name": "weekly", "file": "src/jobs/nightly.ts", "kind": "function"},
+          {"name": "helper", "file": "src/lib/util.js", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "3 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "size_boundary_below_two_million_bytes",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/big_ok.ts", "src/big_no.ts"],
+      "extraFiles": [
+        {"path": "src/big_ok.ts", "content": "export function bigOk() {}\n", "padTo": 1999999},
+        {"path": "src/big_no.ts", "content": "export function bigNo() {}\n", "padTo": 2000000}
+      ],
+      "extraFileSizes": {"src/big_ok.ts": 1999999, "src/big_no.ts": 2000000},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/big_ok.ts", "name": "bigOk", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "bigOk", "file": "src/big_ok.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "1 changed symbol · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "symbolic_links_are_not_followed",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/link.ts", "linkdir/money.ts", "src/billing/money.ts"],
+      "extraFiles": [
+        {"path": "src/link.ts", "link": "billing/money.ts"},
+        {"path": "linkdir", "link": "src/billing"}
+      ],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/billing/money.ts", "name": "Money", "kind": "type"},
+          {"file": "src/billing/money.ts", "name": "round", "kind": "function"}
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "Money", "file": "src/billing/money.ts", "kind": "type"},
+          {"name": "round", "file": "src/billing/money.ts", "kind": "function"}
+        ],
+        "downstream": [],
+        "summary": "2 changed symbols · 0 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "a_symbol_with_many_callers_is_not_capped_on_the_scan",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/hot.ts"],
+      "extraFiles": [
+        {"path": "src/hot.ts", "content": "export function hot() {}\n"},
+        {"path": "src/callers/c01.ts", "content": "import { hot } from '../hot';\nexport function c01() { hot(); }\n"},
+        {"path": "src/callers/c02.ts", "content": "import { hot } from '../hot';\nexport function c02() { hot(); }\n"},
+        {
+          "path": "src/callers/c03.ts",
+          "content": "import { hot } from '../hot';\nexport function c03() { hot(); hot(); }\nexport function c03b() { hot(); }\n"
+        }
+      ],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/hot.ts", "name": "hot", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/callers/c01.ts", "symbol": "c01", "viaSymbol": "hot", "line": 2, "rank": 0},
+          {"file": "src/callers/c02.ts", "symbol": "c02", "viaSymbol": "hot", "line": 2, "rank": 0},
+          {"file": "src/callers/c03.ts", "symbol": "c03", "viaSymbol": "hot", "line": 2, "rank": 0},
+          {"file": "src/callers/c03.ts", "symbol": "c03b", "viaSymbol": "hot", "line": 3, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "hot", "file": "src/hot.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "hot",
+            "callers": [
+              {"name": "c01", "file": "src/callers/c01.ts", "line": 2},
+              {"name": "c02", "file": "src/callers/c02.ts", "line": 2},
+              {"name": "c03", "file": "src/callers/c03.ts", "line": 2},
+              {"name": "c03b", "file": "src/callers/c03.ts", "line": 3}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 4 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "same_name_in_changed_and_other_files",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/one/dup.ts"],
+      "extraFiles": [
+        {"path": "src/one/dup.ts", "content": "export function shared() { return 1; }\nexport function onlyHere() { return shared(); }\n"},
+        {"path": "src/two/dup.ts", "content": "export function shared() { return 2; }\nexport function twoCaller() { return shared(); }\n"},
+        {"path": "src/three/use.ts", "content": "import { shared } from '../one/dup';\nfunction useIt() {\n  return shared();\n}\n"}
+      ],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/one/dup.ts", "name": "shared", "kind": "function"},
+          {"file": "src/one/dup.ts", "name": "onlyHere", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/three/use.ts", "symbol": "useIt", "viaSymbol": "shared", "line": 3, "rank": 0},
+          {"file": "src/two/dup.ts", "symbol": "twoCaller", "viaSymbol": "shared", "line": 2, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "shared", "file": "src/one/dup.ts", "kind": "function"},
+          {"name": "onlyHere", "file": "src/one/dup.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "shared",
+            "callers": [
+              {"name": "twoCaller", "file": "src/two/dup.ts", "line": 2},
+              {"name": "useIt", "file": "src/three/use.ts", "line": 3}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "2 changed symbols · 2 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "enclosing_symbol_rules_on_the_scan",
+      "repo": {"id": "repo-1", "owner": "acme", "name": "shop"},
+      "fixture": "shop",
+      "enabled": false,
+      "noClone": false,
+      "noRepo": false,
+      "index_state": null,
+      "changedFiles": ["src/lib2/target.ts"],
+      "extraFiles": [
+        {"path": "src/lib2/target.ts", "content": "export function target() {}\n"},
+        {
+          "path": "src/lib2/user.ts",
+          "content": "target();\nfunction first() {\n  target();\n}\nclass Box {\n  run() {\n    target();\n  }\n}\nconst later = () => target();\n"
+        },
+        {"path": "src/lib2/plain.ts", "content": "// no declarations here\ntarget();\n"}
+      ],
+      "extraFileSizes": {},
+      "port": {
+        "changedSymbols": [
+          {"file": "src/lib2/target.ts", "name": "target", "kind": "function"}
+        ],
+        "callers": [
+          {"file": "src/lib2/plain.ts", "symbol": "plain.ts", "viaSymbol": "target", "line": 2, "rank": 0},
+          {"file": "src/lib2/user.ts", "symbol": "user.ts", "viaSymbol": "target", "line": 1, "rank": 0},
+          {"file": "src/lib2/user.ts", "symbol": "first", "viaSymbol": "target", "line": 3, "rank": 0},
+          {"file": "src/lib2/user.ts", "symbol": "run", "viaSymbol": "target", "line": 7, "rank": 0},
+          {"file": "src/lib2/user.ts", "symbol": "later", "viaSymbol": "target", "line": 10, "rank": 0}
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      },
+      "blast": {
+        "changed_symbols": [
+          {"name": "target", "file": "src/lib2/target.ts", "kind": "function"}
+        ],
+        "downstream": [
+          {
+            "symbol": "target",
+            "callers": [
+              {"name": "first", "file": "src/lib2/user.ts", "line": 3},
+              {"name": "later", "file": "src/lib2/user.ts", "line": 10},
+              {"name": "plain.ts", "file": "src/lib2/plain.ts", "line": 2},
+              {"name": "run", "file": "src/lib2/user.ts", "line": 7},
+              {"name": "user.ts", "file": "src/lib2/user.ts", "line": 1}
+            ],
+            "endpoints_affected": [],
+            "crons_affected": []
+          }
+        ],
+        "summary": "1 changed symbol · 5 callers · 0 endpoints · 0 crons",
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    }
+  ]
+}

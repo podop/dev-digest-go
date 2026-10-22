@@ -1,0 +1,1573 @@
+{
+ "note": "BriefService.get / generate over fake ports with the real LlmBriefModel on top of a fake LLM provider (AC5009–AC5011, AC5044–AC5049, EC5019–EC5024). Each case patches `defaults` by `world` and makes one call (`before` = a first successful generation whose stored brief is the baseline; `storedPatch` edits that stored brief). World: pull (shallow), files [{path,additions,deletions,patch}] in the order the reader returns (ORDER BY path), reviews [{agentId, createdAt, findings}] newest first (one per agent), skills {agentId: [{id,name}]}, specs {agentId: [{path,status,text?}]}, intent (Intent | null | {throws}), blast (BlastRadius | {throws}), issue ({number,title,body[,delayMs]} | null), llm ({data, tokensIn, tokensOut, costUsd, attempts, usages} | {error: 'config' | 'other' | 'invalid'}), timeoutMs, resolveError. `usages` = the per-response usage reports (default one entry from tokensIn/tokensOut/costUsd).",
+ "defaults": {
+  "workspace": "ws-1",
+  "now": "2026-01-01T12:00:00.000Z",
+  "model": {
+   "provider": "openai",
+   "model": "gpt-4.1"
+  },
+  "timeoutMs": 120000,
+  "pull": {
+   "id": "pr-1",
+   "repoId": "repo-1",
+   "repo": {
+    "owner": "acme",
+    "name": "api"
+   },
+   "title": "Add rate limiting",
+   "body": "Adds a limiter in front of the public webhooks. Fixes #12.",
+   "base": "main",
+   "headSha": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "files": [
+   {
+    "path": "src/config.ts",
+    "additions": 3,
+    "deletions": 0,
+    "patch": "@@ -10,0 +12,3 @@\n+a\n+b\n+c"
+   },
+   {
+    "path": "src/middleware/ratelimit.ts",
+    "additions": 40,
+    "deletions": 2,
+    "patch": "@@ -1,3 +1,30 @@\n a\n@@ -50 +44 @@\n-x\n+y"
+   },
+   {
+    "path": "test/ratelimit.test.ts",
+    "additions": 20,
+    "deletions": 0,
+    "patch": null
+   }
+  ],
+  "reviews": [],
+  "skills": {},
+  "specs": {},
+  "intent": null,
+  "blast": {
+   "changed_symbols": [
+    {
+     "name": "limit",
+     "file": "src/middleware/ratelimit.ts",
+     "kind": "function"
+    }
+   ],
+   "downstream": [
+    {
+     "symbol": "limit",
+     "callers": [
+      {
+       "name": "register",
+       "file": "src/server.ts",
+       "line": 22
+      }
+     ],
+     "endpoints_affected": [
+      "GET /health"
+     ],
+     "crons_affected": []
+    }
+   ],
+   "summary": "1 changed symbol · 1 caller · 1 endpoint · 0 crons",
+   "degraded": false
+  },
+  "issue": {
+   "number": 12,
+   "title": "Rate limit webhooks",
+   "body": "Users hammer the endpoint."
+  },
+  "llm": {
+   "data": {
+    "summary": "[test] Adds a token-bucket limiter.",
+    "risks": [
+     {
+      "kind": "security",
+      "title": "Header trusted",
+      "explanation": "Spoofable key.",
+      "severity": "high",
+      "file_refs": [
+       "src/middleware/ratelimit.ts:6-9"
+      ]
+     },
+     {
+      "kind": "data",
+      "title": "Key in config",
+      "explanation": "Check it.",
+      "severity": "low",
+      "file_refs": [
+       "src/config.ts:12"
+      ]
+     }
+    ],
+    "review_focus": [
+     {
+      "file": "src/middleware/ratelimit.ts",
+      "line": 7,
+      "reason": "Key from a header."
+     },
+     {
+      "file": "src/server.ts",
+      "line": 22,
+      "reason": "Where it is registered."
+     }
+    ]
+   },
+   "tokensIn": 1200,
+   "tokensOut": 180,
+   "costUsd": 0.00042,
+   "attempts": 1
+  },
+  "findings": []
+ },
+ "cases": [
+  {
+   "name": "generate_ok_minimal_inputs",
+   "call": "generate"
+  },
+  {
+   "name": "generate_ok_all_inputs",
+   "call": "generate",
+   "world": {
+    "intent": {
+     "intent": "Add rate limiting.",
+     "in_scope": [
+      "limiter"
+     ],
+     "out_of_scope": [
+      "auth"
+     ],
+     "change_type": "feature",
+     "confidence": "high",
+     "derived_from": "explicit",
+     "sources": [
+      {
+       "kind": "title",
+       "ref": "title",
+       "status": "used",
+       "detail": null
+      }
+     ]
+    },
+    "reviews": [
+     {
+      "agentId": "a1",
+      "createdAt": "2026-01-01T11:00:00.000Z",
+      "findings": [
+       {
+        "severity": "CRITICAL",
+        "file": "src/middleware/ratelimit.ts",
+        "startLine": 7,
+        "endLine": 7,
+        "title": "Key trusts a spoofable header"
+       },
+       {
+        "severity": "SUGGESTION",
+        "file": "src/config.ts",
+        "startLine": 12,
+        "endLine": 12,
+        "title": "Name the constant"
+       }
+      ]
+     },
+     {
+      "agentId": "a2",
+      "createdAt": "2026-01-01T10:00:00.000Z",
+      "findings": [
+       {
+        "severity": "WARNING",
+        "file": "src/middleware/ratelimit.ts",
+        "startLine": 30,
+        "endLine": 31,
+        "title": "Unbounded map"
+       }
+      ]
+     }
+    ],
+    "skills": {
+     "a1": [
+      {
+       "id": "s1",
+       "name": "api-rules"
+      }
+     ],
+     "a2": [
+      {
+       "id": "s2",
+       "name": "other"
+      }
+     ]
+    },
+    "specs": {
+     "a1": [
+      {
+       "path": "docs/plans/rl.md",
+       "status": "included",
+       "text": "# Rate limiting plan\nstep 1"
+      },
+      {
+       "path": "docs/gone.md",
+       "status": "missing"
+      }
+     ],
+     "a2": [
+      {
+       "path": "docs/plans/rl.md",
+       "status": "included",
+       "text": "# Rate limiting plan\nstep 1"
+      },
+      {
+       "path": "docs/big.md",
+       "status": "too_large"
+      },
+      {
+       "path": "docs/budget.md",
+       "status": "over_budget"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "generate_pr_without_body",
+   "call": "generate",
+   "world": {
+    "pull": {
+     "body": null
+    },
+    "issue": null
+   }
+  },
+  {
+   "name": "generate_blank_body_is_empty_description",
+   "call": "generate",
+   "world": {
+    "pull": {
+     "body": "  \n "
+    }
+   }
+  },
+  {
+   "name": "generate_issue_fetch_failed",
+   "call": "generate",
+   "world": {
+    "issue": null
+   }
+  },
+  {
+   "name": "generate_issue_linked_but_body_null",
+   "call": "generate",
+   "world": {
+    "issue": {
+     "number": 12,
+     "title": "T",
+     "body": null
+    }
+   }
+  },
+  {
+   "name": "generate_issue_body_cut_to_3000_description_to_4000",
+   "call": "generate",
+   "world": {
+    "pull": {
+     "body": {
+      "$concat": [
+       "#12 ",
+       {
+        "$repeat": [
+         "d",
+         4100
+        ]
+       }
+      ]
+     }
+    },
+    "issue": {
+     "number": 12,
+     "title": "T",
+     "body": {
+      "$repeat": [
+       "i",
+       3100
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "generate_first_hash_number_is_the_issue",
+   "call": "generate",
+   "world": {
+    "pull": {
+     "body": "see #7 and #12"
+    },
+    "issue": {
+     "number": 7,
+     "title": "Seven",
+     "body": "b"
+    }
+   }
+  },
+  {
+   "name": "generate_huge_issue_number_is_not_linked",
+   "call": "generate",
+   "world": {
+    "pull": {
+     "body": "see #99999999999999999999"
+    }
+   }
+  },
+  {
+   "name": "generate_blast_degraded_is_missing_with_detail",
+   "call": "generate",
+   "world": {
+    "blast": {
+     "changed_symbols": [],
+     "downstream": [],
+     "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+     "degraded": true,
+     "reason": "index_partial"
+    }
+   }
+  },
+  {
+   "name": "generate_blast_degraded_without_reason",
+   "call": "generate",
+   "world": {
+    "blast": {
+     "changed_symbols": [],
+     "downstream": [],
+     "summary": "s",
+     "degraded": true
+    }
+   }
+  },
+  {
+   "name": "generate_blast_read_failure_is_degraded_and_logged",
+   "call": "generate",
+   "world": {
+    "blast": {
+     "throws": "connection reset"
+    }
+   }
+  },
+  {
+   "name": "generate_intent_read_failure_is_not_derived_and_logged",
+   "call": "generate",
+   "world": {
+    "intent": {
+     "throws": "boom"
+    }
+   }
+  },
+  {
+   "name": "generate_spec_documents_first_path_wins_and_unreadable_counts",
+   "call": "generate",
+   "world": {
+    "reviews": [
+     {
+      "agentId": "a1",
+      "createdAt": "2026-01-01T11:00:00.000Z",
+      "findings": []
+     },
+     {
+      "agentId": null,
+      "createdAt": "2026-01-01T10:30:00.000Z",
+      "findings": [
+       {
+        "severity": "WARNING",
+        "file": "src/config.ts",
+        "startLine": 12,
+        "endLine": 12,
+        "title": "from a deleted agent"
+       }
+      ]
+     },
+     {
+      "agentId": "a2",
+      "createdAt": "2026-01-01T10:00:00.000Z",
+      "findings": []
+     }
+    ],
+    "skills": {
+     "a1": [
+      {
+       "id": "s1",
+       "name": "x"
+      }
+     ],
+     "a2": []
+    },
+    "specs": {
+     "a1": [
+      {
+       "path": "docs/a.md",
+       "status": "included",
+       "text": "A from a1"
+      },
+      {
+       "path": "docs/u.md",
+       "status": "unreadable"
+      }
+     ],
+     "a2": [
+      {
+       "path": "docs/a.md",
+       "status": "included",
+       "text": "A from a2"
+      },
+      {
+       "path": "docs/b.md",
+       "status": "included",
+       "text": "B"
+      },
+      {
+       "path": "docs/c.md",
+       "status": "included"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "generate_reviews_of_deleted_agents_only_means_no_attached_documents",
+   "call": "generate",
+   "world": {
+    "reviews": [
+     {
+      "agentId": null,
+      "createdAt": "2026-01-01T10:00:00.000Z",
+      "findings": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "generate_over_budget_documents_are_dropped_from_the_end",
+   "call": "generate",
+   "world": {
+    "reviews": [
+     {
+      "agentId": "a1",
+      "createdAt": "2026-01-01T11:00:00.000Z",
+      "findings": []
+     }
+    ],
+    "specs": {
+     "a1": [
+      {
+       "path": "docs/one.md",
+       "status": "included",
+       "text": {
+        "$repeat": [
+         "one ",
+         8000
+        ]
+       }
+      },
+      {
+       "path": "docs/two.md",
+       "status": "included",
+       "text": {
+        "$repeat": [
+         "two ",
+         8000
+        ]
+       }
+      },
+      {
+       "path": "docs/three.md",
+       "status": "included",
+       "text": "three"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "generate_many_files_drop_the_least_changed",
+   "call": "generate",
+   "world": {
+    "files": {
+     "$each": [
+      150,
+      {
+       "path": "src/pkg/file_{i3}.ts",
+       "additions": {
+        "$lin": [
+         0,
+         1
+        ]
+       },
+       "deletions": 1,
+       "patch": "@@ -1 +1,3 @@\n+a"
+      }
+     ]
+    },
+    "pull": {
+     "body": {
+      "$repeat": [
+       "x",
+       3900
+      ]
+     }
+    }
+   }
+  },
+  {
+   "name": "generate_changed_symbols_keep_the_prompt_over_budget",
+   "call": "generate",
+   "world": {
+    "blast": {
+     "changed_symbols": {
+      "$each": [
+       400,
+       {
+        "name": "someFairlyLongSymbolName{i3}",
+        "file": "src/some/long/path/to/a/module_{i3}.ts",
+        "kind": "function"
+       }
+      ]
+     },
+     "downstream": [],
+     "summary": "s",
+     "degraded": false
+    }
+   }
+  },
+  {
+   "name": "generate_model_cites_unknown_paths_and_lines",
+   "call": "generate",
+   "world": {
+    "llm": {
+     "data": {
+      "summary": "S",
+      "risks": [
+       {
+        "kind": "x",
+        "title": "Ghost",
+        "explanation": "E",
+        "severity": "medium",
+        "file_refs": [
+         "ghost.ts:5"
+        ]
+       },
+       {
+        "kind": "",
+        "title": "Regrounded",
+        "explanation": "E",
+        "severity": "low",
+        "file_refs": [
+         "src/config.ts:999",
+         "src/server.ts:22"
+        ]
+       }
+      ],
+      "review_focus": [
+       {
+        "file": "ghost.ts",
+        "line": 1,
+        "reason": "r"
+       }
+      ]
+     },
+     "tokensIn": 5,
+     "tokensOut": 6,
+     "costUsd": null,
+     "attempts": 1
+    }
+   }
+  },
+  {
+   "name": "generate_zero_risks_and_zero_focus_is_valid_ec5020",
+   "call": "generate",
+   "world": {
+    "llm": {
+     "data": {
+      "summary": "Nothing to see.",
+      "risks": [],
+      "review_focus": []
+     },
+     "tokensIn": 5,
+     "tokensOut": 6,
+     "costUsd": 0,
+     "attempts": 1
+    }
+   }
+  },
+  {
+   "name": "generate_two_attempts_logs_the_invalid_first_response",
+   "call": "generate",
+   "world": {
+    "llm": {
+     "attempts": 2,
+     "tokensIn": 2400,
+     "tokensOut": 400,
+     "costUsd": 0.001,
+     "usages": [
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      },
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      }
+     ],
+     "data": {
+      "summary": "S",
+      "risks": [],
+      "review_focus": []
+     }
+    }
+   }
+  },
+  {
+   "name": "generate_three_attempts_count_as_two_requests",
+   "call": "generate",
+   "world": {
+    "llm": {
+     "attempts": 3,
+     "tokensIn": 3600,
+     "tokensOut": 600,
+     "costUsd": 0.0015,
+     "usages": [
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      },
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      },
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      }
+     ],
+     "data": {
+      "summary": "S",
+      "risks": [],
+      "review_focus": []
+     }
+    }
+   }
+  },
+  {
+   "name": "generate_model_without_a_key_is_422_provider_not_configured",
+   "call": "generate",
+   "world": {
+    "llm": {
+     "error": "config"
+    }
+   }
+  },
+  {
+   "name": "generate_model_with_another_provider_names_it",
+   "call": "generate",
+   "world": {
+    "model": {
+     "provider": "anthropic",
+     "model": "claude-sonnet-4-5"
+    },
+    "llm": {
+     "error": "config"
+    }
+   }
+  },
+  {
+   "name": "generate_model_failure_is_502_and_logged_as_failed",
+   "call": "generate",
+   "world": {
+    "llm": {
+     "error": "other",
+     "usages": [
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "generate_invalid_output_after_the_reask_is_502",
+   "call": "generate",
+   "world": {
+    "llm": {
+     "error": "invalid",
+     "usages": [
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      },
+      {
+       "tokensIn": 1200,
+       "tokensOut": 200,
+       "costUsd": 0.0005
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "generate_model_resolution_error_is_internal",
+   "call": "generate",
+   "world": {
+    "resolveError": "settings unavailable"
+   }
+  },
+  {
+   "name": "generate_no_changed_files_is_422",
+   "call": "generate",
+   "world": {
+    "files": []
+   }
+  },
+  {
+   "name": "generate_pull_not_found",
+   "call": "generate",
+   "world": {
+    "pullMissing": true
+   }
+  },
+  {
+   "name": "generate_budget_expiry_during_the_call_is_502_timed_out_ec5024",
+   "call": "generate",
+   "world": {
+    "timeoutMs": 40,
+    "llm": {
+     "hang": true
+    }
+   }
+  },
+  {
+   "name": "generate_budget_expiry_while_gathering_is_502_timed_out",
+   "call": "generate",
+   "world": {
+    "timeoutMs": 40,
+    "issue": {
+     "delayMs": 120,
+     "number": 12,
+     "title": "T",
+     "body": "B"
+    }
+   }
+  },
+  {
+   "name": "generate_keeps_the_previous_brief_on_failure",
+   "call": "generate",
+   "before": {},
+   "world": {
+    "llm": {
+     "error": "other"
+    }
+   }
+  },
+  {
+   "name": "generate_replaces_the_previous_brief",
+   "call": "generate",
+   "before": {
+    "pull": {
+     "headSha": "ffffffffffffffffffffffffffffffffffffffff"
+    }
+   }
+  },
+  {
+   "name": "generate_seeded_pr_482_with_the_mock_fixture_and_a_degraded_blast",
+   "call": "generate",
+   "world": {
+    "pull": {
+     "title": "Add rate limiting to public API endpoints",
+     "body": "Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.",
+     "base": "main",
+     "headSha": "a1b2c3d4e5f6",
+     "repo": {
+      "owner": "acme",
+      "name": "payments-api"
+     }
+    },
+    "files": [
+     {
+      "path": "src/api/public/webhooks.ts",
+      "additions": 31,
+      "deletions": 6,
+      "patch": {
+       "$seed": "src/api/public/webhooks.ts"
+      }
+     },
+     {
+      "path": "src/api/users.ts",
+      "additions": 7,
+      "deletions": 2,
+      "patch": {
+       "$seed": "src/api/users.ts"
+      }
+     },
+     {
+      "path": "src/config.ts",
+      "additions": 4,
+      "deletions": 0,
+      "patch": {
+       "$seed": "src/config.ts"
+      }
+     },
+     {
+      "path": "src/middleware/ratelimit.ts",
+      "additions": 84,
+      "deletions": 0,
+      "patch": {
+       "$seed": "src/middleware/ratelimit.ts"
+      }
+     }
+    ],
+    "reviews": [
+     {
+      "agentId": "general",
+      "createdAt": "2026-01-01T11:00:00.000Z",
+      "findings": [
+       {
+        "severity": "WARNING",
+        "file": "src/api/users.ts",
+        "startLine": 45,
+        "endLine": 52,
+        "title": "N+1 query in user list endpoint"
+       },
+       {
+        "severity": "CRITICAL",
+        "file": "src/config.ts",
+        "startLine": 12,
+        "endLine": 12,
+        "title": "Hardcoded Stripe secret key in commit"
+       }
+      ]
+     }
+    ],
+    "skills": {
+     "general": []
+    },
+    "specs": {
+     "general": []
+    },
+    "issue": null,
+    "llm": {
+     "data": {
+      "$mock": "MOCK_PR_BRIEF"
+     },
+     "tokensIn": 1200,
+     "tokensOut": 180,
+     "costUsd": 0.00042,
+     "attempts": 1
+    },
+    "blast": {
+     "changed_symbols": [],
+     "downstream": [],
+     "summary": "0 changed symbols · 0 callers · 0 endpoints · 0 crons",
+     "degraded": true,
+     "reason": "flag_off"
+    }
+   }
+  },
+  {
+   "name": "generate_seeded_pr_482_with_the_mock_fixture_and_a_usable_blast",
+   "call": "generate",
+   "world": {
+    "pull": {
+     "title": "Add rate limiting to public API endpoints",
+     "body": "Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients.",
+     "base": "main",
+     "headSha": "a1b2c3d4e5f6",
+     "repo": {
+      "owner": "acme",
+      "name": "payments-api"
+     }
+    },
+    "files": [
+     {
+      "path": "src/api/public/webhooks.ts",
+      "additions": 31,
+      "deletions": 6,
+      "patch": {
+       "$seed": "src/api/public/webhooks.ts"
+      }
+     },
+     {
+      "path": "src/api/users.ts",
+      "additions": 7,
+      "deletions": 2,
+      "patch": {
+       "$seed": "src/api/users.ts"
+      }
+     },
+     {
+      "path": "src/config.ts",
+      "additions": 4,
+      "deletions": 0,
+      "patch": {
+       "$seed": "src/config.ts"
+      }
+     },
+     {
+      "path": "src/middleware/ratelimit.ts",
+      "additions": 84,
+      "deletions": 0,
+      "patch": {
+       "$seed": "src/middleware/ratelimit.ts"
+      }
+     }
+    ],
+    "reviews": [
+     {
+      "agentId": "general",
+      "createdAt": "2026-01-01T11:00:00.000Z",
+      "findings": [
+       {
+        "severity": "WARNING",
+        "file": "src/api/users.ts",
+        "startLine": 45,
+        "endLine": 52,
+        "title": "N+1 query in user list endpoint"
+       },
+       {
+        "severity": "CRITICAL",
+        "file": "src/config.ts",
+        "startLine": 12,
+        "endLine": 12,
+        "title": "Hardcoded Stripe secret key in commit"
+       }
+      ]
+     }
+    ],
+    "skills": {
+     "general": []
+    },
+    "specs": {
+     "general": []
+    },
+    "issue": null,
+    "llm": {
+     "data": {
+      "$mock": "MOCK_PR_BRIEF"
+     },
+     "tokensIn": 1200,
+     "tokensOut": 180,
+     "costUsd": 0.00042,
+     "attempts": 1
+    },
+    "blast": {
+     "changed_symbols": [
+      {
+       "name": "rateLimit",
+       "file": "src/middleware/ratelimit.ts",
+       "kind": "function"
+      },
+      {
+       "name": "webhooksRoutes",
+       "file": "src/api/public/webhooks.ts",
+       "kind": "function"
+      }
+     ],
+     "downstream": [
+      {
+       "symbol": "rateLimit",
+       "callers": [
+        {
+         "name": "webhooksRoutes",
+         "file": "src/api/public/webhooks.ts",
+         "line": 4
+        },
+        {
+         "name": "registerRoutes",
+         "file": "src/server.ts",
+         "line": 31
+        }
+       ],
+       "endpoints_affected": [
+        "POST /webhooks/stripe"
+       ],
+       "crons_affected": []
+      }
+     ],
+     "summary": "2 changed symbols · 2 callers · 1 endpoint · 0 crons",
+     "degraded": false
+    }
+   }
+  },
+  {
+   "name": "get_no_brief",
+   "call": "get"
+  },
+  {
+   "name": "get_fresh_brief",
+   "call": "get",
+   "before": {}
+  },
+  {
+   "name": "get_stale_head_moved",
+   "call": "get",
+   "before": {},
+   "world": {
+    "pull": {
+     "headSha": "ffffffffffffffffffffffffffffffffffffffff"
+    }
+   }
+  },
+  {
+   "name": "get_stale_prompt_version",
+   "call": "get",
+   "before": {},
+   "storedPatch": {
+    "prompt_version": "v0"
+   }
+  },
+  {
+   "name": "get_pull_not_found",
+   "call": "get",
+   "world": {
+    "pullMissing": true
+   }
+  }
+ ],
+ "scenarios": [
+  {
+   "name": "second_post_for_the_same_pr_is_409_and_another_pr_proceeds_ec5019",
+   "steps": [
+    {
+     "start": "A",
+     "pr": "pr-1"
+    },
+    {
+     "settle": true
+    },
+    {
+     "start": "B",
+     "pr": "pr-1"
+    },
+    {
+     "start": "C",
+     "pr": "pr-2"
+    },
+    {
+     "settle": true
+    },
+    {
+     "release": 2
+    },
+    {
+     "await": "A"
+    },
+    {
+     "await": "B"
+    },
+    {
+     "await": "C"
+    },
+    {
+     "start": "D",
+     "pr": "pr-1"
+    },
+    {
+     "settle": true
+    },
+    {
+     "release": 1
+    },
+    {
+     "await": "D"
+    }
+   ]
+  },
+  {
+   "name": "marker_is_released_after_a_failure",
+   "steps": [
+    {
+     "start": "A",
+     "pr": "pr-1"
+    },
+    {
+     "settle": true
+    },
+    {
+     "fail": "boom"
+    },
+    {
+     "await": "A"
+    },
+    {
+     "start": "B",
+     "pr": "pr-1"
+    },
+    {
+     "settle": true
+    },
+    {
+     "release": 1
+    },
+    {
+     "await": "B"
+    }
+   ]
+  }
+ ],
+ "issueSource": [
+  {
+   "name": "ok",
+   "github": {
+    "issue": {
+     "number": 12,
+     "title": "T",
+     "body": "B"
+    }
+   }
+  },
+  {
+   "name": "null_body",
+   "github": {
+    "issue": {
+     "number": 12,
+     "title": "T",
+     "body": null
+    }
+   }
+  },
+  {
+   "name": "github_error",
+   "github": {
+    "error": "Not Found"
+   }
+  },
+  {
+   "name": "no_token",
+   "github": {
+    "factoryError": "GITHUB_TOKEN is not configured"
+   }
+  },
+  {
+   "name": "slower_than_the_deadline_ec5022",
+   "github": {
+    "hang": true
+   },
+   "fireTimer": true
+  }
+ ],
+ "stored": [
+  {
+   "name": "valid_minimal",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "2026-01-01T00:00:00.000Z",
+    "prompt_version": "v1",
+    "provider": "openai",
+    "model": "gpt-4.1",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "key_order_and_unknown_keys_are_normalised",
+   "doc": {
+    "model_requests": 2,
+    "extra": 1,
+    "cost_usd": 0.5,
+    "model": "m",
+    "provider": "p",
+    "prompt_version": "v1",
+    "generated_at": "t",
+    "head_sha": "h",
+    "specs_used": [
+     "a"
+    ],
+    "missing_inputs": [
+     {
+      "detail": "1 of 2",
+      "reason": "unreadable",
+      "input": "specs",
+      "zzz": 1
+     }
+    ],
+    "blast": {
+     "summary": "s",
+     "downstream": [],
+     "changed_symbols": [],
+     "degraded": true,
+     "reason": "no_data"
+    },
+    "intent": {
+     "sources": [
+      {
+       "detail": null,
+       "status": "used",
+       "ref": "title",
+       "kind": "title"
+      }
+     ],
+     "derived_from": "explicit",
+     "confidence": "high",
+     "change_type": "feature",
+     "out_of_scope": [],
+     "in_scope": [
+      "a"
+     ],
+     "intent": "I"
+    },
+    "review_focus": [
+     {
+      "reason": "r",
+      "line": 3,
+      "file": "a.ts"
+     }
+    ],
+    "risks": {
+     "risks": [
+      {
+       "file_refs": [
+        "a.ts:1"
+       ],
+       "severity": "high",
+       "explanation": "e",
+       "title": "t",
+       "kind": "k"
+      }
+     ]
+    },
+    "summary": "S",
+    "tokens_in": 1,
+    "tokens_out": 2
+   }
+  },
+  {
+   "name": "history_is_kept_when_present",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "history": {
+     "history": [
+      {
+       "pr_number": 1,
+       "title": "t",
+       "merged_at": "m",
+       "author": "a",
+       "files_overlap": [],
+       "notes": ""
+      }
+     ]
+    },
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "summary_over_600_fails",
+   "doc": {
+    "summary": {
+     "$repeat": [
+      "s",
+      601
+     ]
+    },
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "more_than_eight_focus_items_fails",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": {
+     "$each": [
+      9,
+      {
+       "file": "a.ts",
+       "line": 1,
+       "reason": "r"
+      }
+     ]
+    },
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "focus_reason_over_160_fails",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [
+     {
+      "file": "a.ts",
+      "line": 1,
+      "reason": {
+       "$repeat": [
+        "r",
+        161
+       ]
+      }
+     }
+    ],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "focus_line_zero_fails",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [
+     {
+      "file": "a.ts",
+      "line": 0,
+      "reason": "r"
+     }
+    ],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "model_requests_three_fails",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 3
+   }
+  },
+  {
+   "name": "missing_key_fails",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "intent_absent_instead_of_null_fails",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [],
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "fractional_token_count_fails",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": []
+    },
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1.5,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "bad_risk_severity_and_missing_input_enum_fail",
+   "doc": {
+    "summary": "S",
+    "risks": {
+     "risks": [
+      {
+       "kind": "k",
+       "title": "t",
+       "explanation": "e",
+       "severity": "critical",
+       "file_refs": []
+      }
+     ]
+    },
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [
+     {
+      "input": "nothing",
+      "reason": "empty"
+     }
+    ],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  },
+  {
+   "name": "not_an_object",
+   "doc": "just a string"
+  },
+  {
+   "name": "null_doc",
+   "doc": null
+  },
+  {
+   "name": "empty_object",
+   "doc": {}
+  },
+  {
+   "name": "old_shape_without_risks_wrapper",
+   "doc": {
+    "summary": "S",
+    "risks": [],
+    "review_focus": [],
+    "intent": null,
+    "blast": null,
+    "missing_inputs": [],
+    "specs_used": [],
+    "head_sha": "abc",
+    "generated_at": "g",
+    "prompt_version": "v1",
+    "provider": "p",
+    "model": "m",
+    "tokens_in": 1,
+    "tokens_out": 2,
+    "cost_usd": null,
+    "model_requests": 1
+   }
+  }
+ ]
+}

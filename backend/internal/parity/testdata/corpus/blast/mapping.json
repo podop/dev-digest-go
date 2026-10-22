@@ -1,0 +1,239 @@
+{
+  "note": "buildBlastRadius(BlastResult) — the mapping of the port result to the BlastRadius contract (AC5042, spec 7.7.3). BlastResult: {changedSymbols [{file,name,kind}], callers [{file,symbol,viaSymbol,line,rank}], factsByFile?, degraded?, reason?}.",
+  "cases": [
+    { "name": "empty_non_degraded", "result": { "changedSymbols": [], "callers": [], "degraded": false } },
+    { "name": "empty_degraded_flag_off", "result": { "changedSymbols": [], "callers": [], "degraded": true, "reason": "flag_off" } },
+    { "name": "degraded_flag_absent_and_reason_absent", "result": { "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }], "callers": [] } },
+    { "name": "reason_without_degraded_is_copied", "result": { "changedSymbols": [], "callers": [], "reason": "no_data" } },
+    { "name": "changed_symbols_without_callers", "result": { "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }, { "file": "src/a.ts", "name": "Bar", "kind": "class" }], "callers": [], "degraded": false } },
+    {
+      "name": "basic_groups_and_ordering",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }, { "file": "src/b.ts", "name": "bar", "kind": "function" }],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "handleX", "viaSymbol": "foo", "line": 10, "rank": 0.5 },
+          { "file": "src/y.ts", "symbol": "handleY", "viaSymbol": "bar", "line": 3, "rank": 0.9 },
+          { "file": "src/z.ts", "symbol": "handleZ", "viaSymbol": "foo", "line": 7, "rank": 0.7 }
+        ],
+        "factsByFile": { "src/x.ts": { "endpoints": ["GET /x"], "crons": [] }, "src/y.ts": { "endpoints": ["POST /y"], "crons": ["nightly"] }, "src/z.ts": { "endpoints": ["GET /z", "GET /x"], "crons": [] } },
+        "degraded": false
+      }
+    },
+    {
+      "name": "callers_in_the_declaring_file_of_their_symbol_are_dropped",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }, { "file": "src/a.ts", "name": "bar", "kind": "function" }],
+        "callers": [
+          { "file": "src/a.ts", "symbol": "bar", "viaSymbol": "foo", "line": 20, "rank": 0.9 },
+          { "file": "src/a.ts", "symbol": "foo", "viaSymbol": "bar", "line": 30, "rank": 0.9 },
+          { "file": "src/b.ts", "symbol": "useFoo", "viaSymbol": "foo", "line": 2, "rank": 0.1 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "same_symbol_name_declared_in_two_files_drops_only_the_matching_file",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "init", "kind": "function" }, { "file": "src/b.ts", "name": "init", "kind": "function" }],
+        "callers": [
+          { "file": "src/a.ts", "symbol": "go", "viaSymbol": "init", "line": 1, "rank": 0 },
+          { "file": "src/b.ts", "symbol": "go", "viaSymbol": "init", "line": 1, "rank": 0 },
+          { "file": "src/c.ts", "symbol": "go", "viaSymbol": "init", "line": 1, "rank": 0 }
+        ]
+      }
+    },
+    {
+      "name": "all_callers_dropped_leaves_no_group",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [{ "file": "src/a.ts", "symbol": "inner", "viaSymbol": "foo", "line": 5, "rank": 0.3 }],
+        "degraded": false
+      }
+    },
+    {
+      "name": "duplicate_callers_in_a_group_are_dropped_by_name_file_line",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 4, "rank": 0.5 },
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 4, "rank": 0.9 },
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 5, "rank": 0.5 },
+          { "file": "src/x.ts", "symbol": "g", "viaSymbol": "foo", "line": 4, "rank": 0.5 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "callers_sorted_rank_desc_then_name_file_english_collation_then_line",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [
+          { "file": "src/m.ts", "symbol": "beta", "viaSymbol": "foo", "line": 9, "rank": 1 },
+          { "file": "src/m.ts", "symbol": "Beta", "viaSymbol": "foo", "line": 8, "rank": 1 },
+          { "file": "src/m.ts", "symbol": "alpha", "viaSymbol": "foo", "line": 20, "rank": 1 },
+          { "file": "src/m.ts", "symbol": "alpha", "viaSymbol": "foo", "line": 10, "rank": 1 },
+          { "file": "src/B.ts", "symbol": "alpha", "viaSymbol": "foo", "line": 10, "rank": 1 },
+          { "file": "src/a.ts2", "symbol": "alpha", "viaSymbol": "foo", "line": 10, "rank": 1 },
+          { "file": "src/_u.ts", "symbol": "_under", "viaSymbol": "foo", "line": 1, "rank": 1 },
+          { "file": "src/n.ts", "symbol": "\\u{e9}clair", "viaSymbol": "foo", "line": 1, "rank": 1 },
+          { "file": "src/n.ts", "symbol": "eclair", "viaSymbol": "foo", "line": 1, "rank": 1 },
+          { "file": "src/n.ts", "symbol": "z10", "viaSymbol": "foo", "line": 1, "rank": 1 },
+          { "file": "src/n.ts", "symbol": "z9", "viaSymbol": "foo", "line": 1, "rank": 1 },
+          { "file": "src/hi.ts", "symbol": "low", "viaSymbol": "foo", "line": 1, "rank": 2 },
+          { "file": "src/lo.ts", "symbol": "high", "viaSymbol": "foo", "line": 1, "rank": 0 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "groups_sorted_by_max_rank_then_symbol_english_collation",
+      "result": {
+        "changedSymbols": [
+          { "file": "src/a.ts", "name": "zeta", "kind": "function" },
+          { "file": "src/a.ts", "name": "Alpha", "kind": "function" },
+          { "file": "src/a.ts", "name": "alpha", "kind": "function" },
+          { "file": "src/a.ts", "name": "mid", "kind": "function" },
+          { "file": "src/a.ts", "name": "_u", "kind": "function" }
+        ],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "c1", "viaSymbol": "zeta", "line": 1, "rank": 0.5 },
+          { "file": "src/x.ts", "symbol": "c2", "viaSymbol": "Alpha", "line": 2, "rank": 0.5 },
+          { "file": "src/x.ts", "symbol": "c3", "viaSymbol": "alpha", "line": 3, "rank": 0.5 },
+          { "file": "src/x.ts", "symbol": "c4", "viaSymbol": "mid", "line": 4, "rank": 0.9 },
+          { "file": "src/x.ts", "symbol": "c5", "viaSymbol": "mid", "line": 5, "rank": 0.1 },
+          { "file": "src/x.ts", "symbol": "c6", "viaSymbol": "_u", "line": 6, "rank": 0.5 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "group_order_is_first_seen_before_sorting_ties_fall_back_to_collation",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "b", "kind": "function" }, { "file": "src/a.ts", "name": "a", "kind": "function" }],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "b", "line": 1, "rank": 0 },
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "a", "line": 1, "rank": 0 }
+        ],
+        "degraded": true,
+        "reason": "flag_off"
+      }
+    },
+    {
+      "name": "facts_union_over_distinct_caller_files_in_sorted_caller_order",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [
+          { "file": "src/b.ts", "symbol": "b2", "viaSymbol": "foo", "line": 2, "rank": 0.2 },
+          { "file": "src/c.ts", "symbol": "c1", "viaSymbol": "foo", "line": 1, "rank": 0.9 },
+          { "file": "src/b.ts", "symbol": "b1", "viaSymbol": "foo", "line": 1, "rank": 0.2 },
+          { "file": "src/d.ts", "symbol": "d1", "viaSymbol": "foo", "line": 1, "rank": 0.5 }
+        ],
+        "factsByFile": {
+          "src/b.ts": { "endpoints": ["GET /b", "GET /shared"], "crons": ["every-b"] },
+          "src/c.ts": { "endpoints": ["GET /shared", "GET /c"], "crons": ["every-b", "every-c"] },
+          "src/d.ts": { "endpoints": [], "crons": [] }
+        },
+        "degraded": false
+      }
+    },
+    {
+      "name": "facts_for_files_not_in_the_map_are_empty",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [{ "file": "src/b.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1 }],
+        "factsByFile": { "src/other.ts": { "endpoints": ["GET /o"], "crons": [] } },
+        "degraded": false
+      }
+    },
+    {
+      "name": "summary_pluralisation_and_distinct_counts",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }, { "file": "src/a.ts", "name": "bar", "kind": "function" }],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1 },
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "bar", "line": 1, "rank": 1 },
+          { "file": "src/y.ts", "symbol": "g", "viaSymbol": "bar", "line": 2, "rank": 0.5 }
+        ],
+        "factsByFile": { "src/x.ts": { "endpoints": ["GET /x"], "crons": ["c1"] }, "src/y.ts": { "endpoints": ["GET /x"], "crons": ["c1"] } },
+        "degraded": false
+      }
+    },
+    {
+      "name": "one_of_each_is_singular",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [{ "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1 }],
+        "factsByFile": { "src/x.ts": { "endpoints": ["GET /x"], "crons": ["c1"] } },
+        "degraded": false
+      }
+    },
+    {
+      "name": "same_caller_reaching_two_symbols_counts_once_in_the_summary",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }, { "file": "src/a.ts", "name": "bar", "kind": "function" }, { "file": "src/a.ts", "name": "baz", "kind": "function" }],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 1 },
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "bar", "line": 1, "rank": 1 },
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "baz", "line": 1, "rank": 1 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "changed_symbol_order_and_kinds_are_kept_as_given",
+      "result": {
+        "changedSymbols": [
+          { "file": "src/z.ts", "name": "Zed", "kind": "class" },
+          { "file": "src/a.ts", "name": "zed", "kind": "interface" },
+          { "file": "src/a.ts", "name": "Zed", "kind": "type" },
+          { "file": "src/a.ts", "name": "Zed", "kind": "enum" }
+        ],
+        "callers": [],
+        "degraded": true,
+        "reason": "index_partial"
+      }
+    },
+    {
+      "name": "negative_and_zero_ranks",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }, { "file": "src/a.ts", "name": "bar", "kind": "function" }],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": -1 },
+          { "file": "src/y.ts", "symbol": "h", "viaSymbol": "bar", "line": 1, "rank": 0 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "fractional_ranks_compare_exactly",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": [
+          { "file": "src/x.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 0.30000000000000004 },
+          { "file": "src/y.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 0.3 },
+          { "file": "src/z.ts", "symbol": "h", "viaSymbol": "foo", "line": 1, "rank": 0.1234567890123456 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "caller_names_with_dots_and_unicode",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "Svc.run", "kind": "function" }],
+        "callers": [
+          { "file": "src/\\u{4e2d}.ts", "symbol": "\\u{4e2d}\\u{6587}", "viaSymbol": "Svc.run", "line": 1, "rank": 1 },
+          { "file": "src/\\u{1F600}.ts", "symbol": "\\u{1F600}", "viaSymbol": "Svc.run", "line": 1, "rank": 1 }
+        ],
+        "degraded": false
+      }
+    },
+    {
+      "name": "many_callers_keep_everything_the_cap_is_applied_by_the_port",
+      "result": {
+        "changedSymbols": [{ "file": "src/a.ts", "name": "foo", "kind": "function" }],
+        "callers": { "$each": [25, { "file": "src/c{i3}.ts", "symbol": "h{i}", "viaSymbol": "foo", "line": { "$lin": [1, 1] }, "rank": { "$lin": [1, -0.01] } }] },
+        "degraded": false
+      }
+    }
+  ]
+}

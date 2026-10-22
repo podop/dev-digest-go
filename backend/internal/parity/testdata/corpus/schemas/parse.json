@@ -1,0 +1,90 @@
+{
+  "note": "parseWithRepair(schema, raw) for the three structured-output schemas (AC5057): `value` is JSON-stringified into the raw model text, `raw` is the text as is. Per schema: valid answers, wrong enums, wrong types, missing keys, unknown keys (stripped), nested issues in property order, fences and prose around the JSON.",
+  "IntentClassification": {
+    "schemaName": "IntentClassification",
+    "valid": { "intent": "Add rate limiting.", "in_scope": ["a"], "out_of_scope": [], "change_type": "feature" },
+    "cases": [
+      { "name": "valid", "value": { "intent": "Add rate limiting.", "in_scope": ["a", "b"], "out_of_scope": ["c"], "change_type": "feature" } },
+      { "name": "every_change_type", "value": { "intent": "x", "in_scope": [], "out_of_scope": [], "change_type": "mixed" } },
+      { "name": "unknown_keys_are_stripped", "value": { "intent": "x", "in_scope": [], "out_of_scope": [], "change_type": "docs", "confidence": "high", "sources": [], "extra": 1 } },
+      { "name": "empty_strings_are_valid", "value": { "intent": "", "in_scope": [""], "out_of_scope": [], "change_type": "chore" } },
+      { "name": "unicode_text", "value": { "intent": "café 😀 中文 <b>&</b>", "in_scope": [" "], "out_of_scope": [], "change_type": "perf" } },
+      { "name": "bad_change_type", "value": { "intent": "x", "in_scope": [], "out_of_scope": [], "change_type": "feat" } },
+      { "name": "change_type_null", "value": { "intent": "x", "in_scope": [], "out_of_scope": [], "change_type": null } },
+      { "name": "change_type_missing", "value": { "intent": "x", "in_scope": [], "out_of_scope": [] } },
+      { "name": "intent_missing", "value": { "in_scope": [], "out_of_scope": [], "change_type": "feature" } },
+      { "name": "intent_not_a_string", "value": { "intent": 5, "in_scope": [], "out_of_scope": [], "change_type": "feature" } },
+      { "name": "in_scope_not_an_array", "value": { "intent": "x", "in_scope": "a", "out_of_scope": [], "change_type": "feature" } },
+      { "name": "in_scope_item_not_a_string", "value": { "intent": "x", "in_scope": ["a", 2, null], "out_of_scope": [], "change_type": "feature" } },
+      { "name": "out_of_scope_missing", "value": { "intent": "x", "in_scope": [], "change_type": "feature" } },
+      { "name": "several_issues_come_in_property_order", "value": { "intent": 1, "in_scope": "x", "out_of_scope": {}, "change_type": "nope" } },
+      { "name": "all_keys_missing", "value": {} },
+      { "name": "top_level_array", "value": [] },
+      { "name": "top_level_null", "value": null },
+      { "name": "top_level_string", "value": "x" },
+      { "name": "fenced_json", "raw": "```json\n{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"test\"}\n```" },
+      { "name": "prose_around_json", "raw": "Here is the classification:\n{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"test\"}\nHope it helps." },
+      { "name": "invalid_json", "raw": "oops" },
+      { "name": "truncated_json", "raw": "{\"intent\":\"x\",\"in_scope\":[" },
+      { "name": "empty_output", "raw": "" },
+      { "name": "whitespace_output", "raw": "  \n " },
+      { "name": "json_with_trailing_comma", "raw": "{\"intent\":\"x\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"test\",}" },
+      { "name": "braces_inside_strings", "raw": "{\"intent\":\"a } b { c\",\"in_scope\":[],\"out_of_scope\":[],\"change_type\":\"docs\"}" }
+    ]
+  },
+  "PrBriefLlm": {
+    "schemaName": "PrBriefLlm",
+    "cases": [
+      { "name": "valid", "value": { "summary": "S", "risks": [{ "kind": "security", "title": "T", "explanation": "E", "severity": "high", "file_refs": ["a.ts:1"] }], "review_focus": [{ "file": "a.ts", "line": 3, "reason": "r" }] } },
+      { "name": "empty_arrays", "value": { "summary": "", "risks": [], "review_focus": [] } },
+      { "name": "line_is_any_number", "value": { "summary": "S", "risks": [], "review_focus": [{ "file": "a.ts", "line": 7.5, "reason": "r" }, { "file": "a.ts", "line": -3, "reason": "r" }, { "file": "a.ts", "line": 0, "reason": "r" }, { "file": "a.ts", "line": 1e300, "reason": "r" }] } },
+      { "name": "unknown_keys_are_stripped", "value": { "summary": "S", "extra": 1, "risks": [{ "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": [], "id": 1 }], "review_focus": [{ "file": "a.ts", "line": 1, "reason": "r", "x": 1 }] } },
+      { "name": "bad_severity", "value": { "summary": "S", "risks": [{ "kind": "k", "title": "T", "explanation": "E", "severity": "critical", "file_refs": [] }], "review_focus": [] } },
+      { "name": "severity_uppercase", "value": { "summary": "S", "risks": [{ "kind": "k", "title": "T", "explanation": "E", "severity": "HIGH", "file_refs": [] }], "review_focus": [] } },
+      { "name": "missing_risk_fields_in_property_order", "value": { "summary": "S", "risks": [{}], "review_focus": [] } },
+      { "name": "file_refs_not_an_array", "value": { "summary": "S", "risks": [{ "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": "a.ts:1" }], "review_focus": [] } },
+      { "name": "file_refs_item_not_a_string", "value": { "summary": "S", "risks": [{ "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": [1] }], "review_focus": [] } },
+      { "name": "line_is_a_string", "value": { "summary": "S", "risks": [], "review_focus": [{ "file": "a.ts", "line": "3", "reason": "r" }] } },
+      { "name": "line_is_null", "value": { "summary": "S", "risks": [], "review_focus": [{ "file": "a.ts", "line": null, "reason": "r" }] } },
+      { "name": "line_missing_and_reason_missing", "value": { "summary": "S", "risks": [], "review_focus": [{ "file": "a.ts" }] } },
+      { "name": "review_focus_missing", "value": { "summary": "S", "risks": [] } },
+      { "name": "risks_not_an_array", "value": { "summary": "S", "risks": {}, "review_focus": [] } },
+      { "name": "summary_missing", "value": { "risks": [], "review_focus": [] } },
+      { "name": "several_issues_in_order", "value": { "summary": 1, "risks": [{ "kind": 1, "title": 2, "explanation": 3, "severity": 4, "file_refs": 5 }], "review_focus": [{ "file": 6, "line": "x", "reason": 7 }, { "file": "ok", "line": 1, "reason": "ok" }, { "file": 8 }] } },
+      { "name": "more_than_the_limits_is_still_valid_here", "value": { "summary": "S", "risks": [{ "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["a:1"] }, { "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["a:1"] }, { "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["a:1"] }, { "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["a:1"] }, { "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["a:1"] }, { "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["a:1"] }, { "kind": "k", "title": "T", "explanation": "E", "severity": "low", "file_refs": ["a:1"] }], "review_focus": [] } },
+      { "name": "fenced_json", "raw": "```\n{\"summary\":\"S\",\"risks\":[],\"review_focus\":[]}\n```" },
+      { "name": "invalid_json", "raw": "{\"summary\": }" },
+      { "name": "top_level_array", "value": [{ "summary": "S" }] }
+    ]
+  },
+  "OnboardingTour": {
+    "schemaName": "OnboardingTour",
+    "cases": [
+      { "name": "valid", "value": { "architecture": { "summary": "S", "nodes": [{ "id": "a", "label": "A", "kind": "entry" }], "edges": [{ "from": "a", "to": "a" }] }, "critical_paths": [{ "path": "a.ts", "reason": "r" }], "run_steps": [{ "command": "pnpm dev", "comment": "start" }], "reading_path": [{ "path": "a.ts", "reason": "r" }], "first_tasks": [{ "title": "t", "path": "a.ts", "complexity": "low" }] } },
+      { "name": "run_step_without_comment", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [{ "command": "x" }], "reading_path": [], "first_tasks": [] } },
+      { "name": "run_step_comment_null", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [{ "command": "x", "comment": null }], "reading_path": [], "first_tasks": [] } },
+      { "name": "run_step_comment_number", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [{ "command": "x", "comment": 5 }], "reading_path": [], "first_tasks": [] } },
+      { "name": "all_empty", "value": { "architecture": { "summary": "", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+      { "name": "unknown_keys_are_stripped", "value": { "architecture": { "summary": "S", "nodes": [{ "id": "a", "label": "A", "kind": "module", "x": 1 }], "edges": [], "y": 2 }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [], "language": "en" } },
+      { "name": "bad_node_kind", "value": { "architecture": { "summary": "S", "nodes": [{ "id": "a", "label": "A", "kind": "service" }], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+      { "name": "every_node_kind", "value": { "architecture": { "summary": "S", "nodes": [{ "id": "a", "label": "A", "kind": "entry" }, { "id": "b", "label": "B", "kind": "module" }, { "id": "c", "label": "C", "kind": "store" }, { "id": "d", "label": "D", "kind": "external" }], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+      { "name": "bad_complexity", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [{ "title": "t", "path": "a.ts", "complexity": "trivial" }] } },
+      { "name": "complexity_case", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [{ "title": "t", "path": "a.ts", "complexity": "LOW" }] } },
+      { "name": "architecture_missing", "value": { "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+      { "name": "architecture_summary_missing", "value": { "architecture": { "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+      { "name": "edges_missing", "value": { "architecture": { "summary": "S", "nodes": [] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+      { "name": "edge_fields_wrong", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [{ "from": 1 }, { "to": "b" }, "a->b"] }, "critical_paths": [], "run_steps": [], "reading_path": [], "first_tasks": [] } },
+      { "name": "path_items_wrong", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [] }, "critical_paths": [{ "path": "a.ts" }, { "reason": "r" }, "a.ts"], "run_steps": [], "reading_path": [{ "path": 1, "reason": 2 }], "first_tasks": [] } },
+      { "name": "run_steps_not_an_array", "value": { "architecture": { "summary": "S", "nodes": [], "edges": [] }, "critical_paths": [], "run_steps": "pnpm dev", "reading_path": [], "first_tasks": [] } },
+      { "name": "several_issues_in_order", "value": { "architecture": { "summary": 1, "nodes": [{ "id": 1, "label": 2, "kind": 3 }], "edges": "x" }, "critical_paths": "x", "run_steps": [{ "command": 1 }], "reading_path": 1, "first_tasks": [{ "title": 1, "path": 2, "complexity": 3 }] } },
+      { "name": "empty_object", "value": {} },
+      { "name": "invalid_json", "raw": "Not JSON at all" },
+      { "name": "fenced_json", "raw": "```json\n{\"architecture\":{\"summary\":\"S\",\"nodes\":[],\"edges\":[]},\"critical_paths\":[],\"run_steps\":[],\"reading_path\":[],\"first_tasks\":[]}\n```" },
+      { "name": "no_length_limits_in_the_provider_schema", "value": { "architecture": { "summary": "S", "nodes": [{ "id": "", "label": "", "kind": "entry" }], "edges": [] }, "critical_paths": [{ "path": "", "reason": "" }], "run_steps": [{ "command": "" }], "reading_path": [], "first_tasks": [{ "title": "", "path": "", "complexity": "low" }] } }
+    ]
+  },
+  "mock": {
+    "schemas": ["IntentClassification", "PrBriefLlm", "OnboardingTour", "Review", "ConventionExtraction", "Unknown"],
+    "messages": [{ "role": "system", "content": "SYSTEM" }, { "role": "user", "content": "USER" }]
+  }
+}

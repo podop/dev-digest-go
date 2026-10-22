@@ -36,6 +36,9 @@ type Deps struct {
 	ProjectContext app.ProjectContext
 	// Engine is reviewer/app.Run in production.
 	Engine app.Engine
+	// Intent resolves the PR intent once per review request (Phase 5 spec 7.5). Nil = the switch
+	// REVIEW_INTENT_ENABLED is off: no pre-work, no event, no prompt section, Phase 4 behaviour.
+	Intent app.IntentResolver
 	// Clock times the runs; nil = time.Now.
 	Clock app.Clock
 	// Log receives the mirrored run events and the executor's own lines; nil = discard.
@@ -61,6 +64,7 @@ type Executor struct {
 	repoIntel app.RepoIntel
 	projCtx   app.ProjectContext
 	engine    app.Engine
+	intent    app.IntentResolver // nil = off
 	clock     app.Clock
 	log       *slog.Logger
 	opts      Options
@@ -92,7 +96,7 @@ func New(d Deps, opts Options) *Executor {
 	}
 	return &Executor{
 		store: d.Store, tx: d.Tx, bus: d.Bus, providers: d.Providers, repoIntel: d.RepoIntel,
-		projCtx: d.ProjectContext, engine: d.Engine, clock: d.Clock, log: d.Log, opts: opts,
+		projCtx: d.ProjectContext, engine: d.Engine, intent: d.Intent, clock: d.Clock, log: d.Log, opts: opts,
 	}
 }
 

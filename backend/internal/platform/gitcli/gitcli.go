@@ -125,6 +125,22 @@ func (e *Error) Error() string {
 
 func (e *Error) Unwrap() error { return e.Err }
 
+// BlobSizeError is the ErrBlobTooLarge failure of BlobAt with the numbers behind it: the blob's
+// size in bytes and the limit it exceeded (the caller's max, or git's 1 MiB output cap when that
+// is what stopped the read). It matches ErrBlobTooLarge with errors.Is and is found with
+// errors.As through the *Error that wraps it.
+type BlobSizeError struct {
+	Size int64
+	Max  int64
+}
+
+func (e *BlobSizeError) Error() string {
+	return fmt.Sprintf("%s (%d bytes > %d)", ErrBlobTooLarge.Error(), e.Size, e.Max)
+}
+
+// Is reports ErrBlobTooLarge, so existing errors.Is checks keep working.
+func (e *BlobSizeError) Is(target error) bool { return target == ErrBlobTooLarge }
+
 // Clone makes sure the clone of owner/name exists and is current. If
 // <root>/<owner>/<name>/.git exists it fetches; otherwise it removes any partial
 // directory and clones rawURL. It returns the absolute clone directory.
@@ -350,14 +366,14 @@ func (c *Client) BlobAt(ctx context.Context, owner, name, commit, path string, m
 		return nil, &Error{Op: "cat-file", Err: errors.New("unexpected object size")}
 	}
 	if size > max {
-		return nil, &Error{Op: "cat-file", Err: ErrBlobTooLarge}
+		return nil, &Error{Op: "cat-file", Err: &BlobSizeError{Size: size, Max: max}}
 	}
 	body, truncated, err := c.runCapped(ctx, dest, "cat-file", "blob", fields[0])
 	if err != nil {
 		return nil, err
 	}
 	if truncated {
-		return nil, &Error{Op: "cat-file", Err: ErrBlobTooLarge}
+		return nil, &Error{Op: "cat-file", Err: &BlobSizeError{Size: size, Max: stdoutLimit}}
 	}
 	return []byte(body), nil
 }

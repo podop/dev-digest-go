@@ -29,6 +29,11 @@ type fakeStore struct {
 	// hooks run before the named method; a non-nil error is returned instead of the effect.
 	hooks map[string]func(ctx context.Context) error
 	inTx  bool
+
+	// callers and factRows are what ResolvedCallers and FileFacts answer (blast radius tests);
+	// the fake filters them by the names and files asked for.
+	callers  []domain.ResolvedCaller
+	factRows []domain.FileFacts
 }
 
 type storeData struct {
@@ -401,6 +406,36 @@ func (s *fakeStore) SymbolsInFiles(ctx context.Context, repoID string, paths []s
 			sig := r.Signature
 			out = append(out, domain.SymbolInfo{File: r.Path, Name: r.Name, Kind: r.Kind, Exported: r.Exported,
 				StartLine: r.Line, EndLine: r.EndLine, Signature: &sig})
+		}
+	}
+	return out, nil
+}
+
+func (s *fakeStore) ResolvedCallers(ctx context.Context, repoID string, declFiles, names []string) ([]domain.ResolvedCaller, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.hook(ctx, "ResolvedCallers"); err != nil {
+		return nil, err
+	}
+	var out []domain.ResolvedCaller
+	for _, c := range s.callers {
+		if slices.Contains(names, c.ToSymbol) {
+			out = append(out, c)
+		}
+	}
+	return out, nil
+}
+
+func (s *fakeStore) FileFacts(ctx context.Context, repoID string, files []string) ([]domain.FileFacts, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.hook(ctx, "FileFacts"); err != nil {
+		return nil, err
+	}
+	var out []domain.FileFacts
+	for _, f := range s.factRows {
+		if slices.Contains(files, f.Path) {
+			out = append(out, f)
 		}
 	}
 	return out, nil

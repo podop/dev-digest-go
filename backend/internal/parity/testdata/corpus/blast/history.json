@@ -1,0 +1,28 @@
+{
+  "note": "selectPriorPrs(candidates, {number, files}, max=10) — the history selection (AC5042 neighbours, FR5033, spec 7.8). candidates are MergedPrSummary {number,title,author,merged_at,files}; merged_at is ISO as GitHub sends it. Unparseable merged_at orders as 0.",
+  "cases": [
+    { "name": "no_candidates", "current": { "number": 10, "files": ["a.ts"] }, "candidates": [] },
+    {
+      "name": "basic_overlap_sorted_by_code_units_and_newest_first",
+      "current": { "number": 10, "files": ["src/b.ts", "src/a.ts", "README.md", "src/C.ts"] },
+      "candidates": [
+        { "number": 3, "title": "Old", "author": "ann", "merged_at": "2026-01-01T10:00:00Z", "files": ["src/b.ts", "other.ts"] },
+        { "number": 5, "title": "New", "author": "bob", "merged_at": "2026-03-01T10:00:00Z", "files": ["src/C.ts", "src/a.ts", "src/b.ts", "x.ts"] },
+        { "number": 4, "title": "Mid", "author": "cy", "merged_at": "2026-02-01T10:00:00Z", "files": ["README.md"] }
+      ]
+    },
+    { "name": "the_current_pr_is_excluded", "current": { "number": 10, "files": ["a.ts"] }, "candidates": [{ "number": 10, "title": "Self", "author": "me", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts"] }, { "number": 9, "title": "Other", "author": "me", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts"] }] },
+    { "name": "no_overlap_is_skipped", "current": { "number": 10, "files": ["a.ts"] }, "candidates": [{ "number": 9, "title": "Other", "author": "me", "merged_at": "2026-01-01T00:00:00Z", "files": ["b.ts"] }, { "number": 8, "title": "Empty", "author": "me", "merged_at": "2026-01-01T00:00:00Z", "files": [] }] },
+    { "name": "duplicate_files_count_once", "current": { "number": 10, "files": ["a.ts", "b.ts"] }, "candidates": [{ "number": 9, "title": "Dup", "author": "me", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts", "a.ts", "b.ts", "a.ts"] }] },
+    { "name": "same_time_orders_by_number_descending", "current": { "number": 100, "files": ["a.ts"] }, "candidates": [{ "number": 5, "title": "five", "author": "a", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts"] }, { "number": 7, "title": "seven", "author": "a", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts"] }, { "number": 6, "title": "six", "author": "a", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts"] }] },
+    { "name": "same_instant_in_different_offsets_ties", "current": { "number": 100, "files": ["a.ts"] }, "candidates": [{ "number": 5, "title": "five", "author": "a", "merged_at": "2026-01-01T12:00:00+02:00", "files": ["a.ts"] }, { "number": 7, "title": "seven", "author": "a", "merged_at": "2026-01-01T10:00:00Z", "files": ["a.ts"] }, { "number": 6, "title": "six", "author": "a", "merged_at": "2026-01-01T10:00:00.000Z", "files": ["a.ts"] }] },
+    { "name": "offsets_change_the_order", "current": { "number": 100, "files": ["a.ts"] }, "candidates": [{ "number": 1, "title": "plus5", "author": "a", "merged_at": "2026-01-01T12:00:00+05:00", "files": ["a.ts"] }, { "number": 2, "title": "utc", "author": "a", "merged_at": "2026-01-01T09:00:00Z", "files": ["a.ts"] }, { "number": 3, "title": "minus3", "author": "a", "merged_at": "2026-01-01T05:00:00-03:00", "files": ["a.ts"] }] },
+    { "name": "unparseable_merged_at_counts_as_zero", "current": { "number": 100, "files": ["a.ts"] }, "candidates": [{ "number": 1, "title": "garbage", "author": "a", "merged_at": "garbage", "files": ["a.ts"] }, { "number": 2, "title": "empty", "author": "a", "merged_at": "", "files": ["a.ts"] }, { "number": 3, "title": "epoch", "author": "a", "merged_at": "1970-01-01T00:00:00Z", "files": ["a.ts"] }, { "number": 4, "title": "valid", "author": "a", "merged_at": "2020-01-01T00:00:00Z", "files": ["a.ts"] }] },
+    { "name": "before_the_epoch_sorts_below_zero", "current": { "number": 100, "files": ["a.ts"] }, "candidates": [{ "number": 1, "title": "old", "author": "a", "merged_at": "1969-12-31T23:59:59Z", "files": ["a.ts"] }, { "number": 2, "title": "garbage", "author": "a", "merged_at": "nope", "files": ["a.ts"] }] },
+    { "name": "fractional_seconds_and_precision", "current": { "number": 100, "files": ["a.ts"] }, "candidates": [{ "number": 1, "title": "a", "author": "a", "merged_at": "2026-01-01T00:00:00.001Z", "files": ["a.ts"] }, { "number": 2, "title": "b", "author": "a", "merged_at": "2026-01-01T00:00:00.000Z", "files": ["a.ts"] }, { "number": 3, "title": "c", "author": "a", "merged_at": "2026-01-01T00:00:00.0009Z", "files": ["a.ts"] }] },
+    { "name": "capped_at_ten_newest_first", "current": { "number": 1000, "files": ["a.ts"] }, "candidates": { "$each": [14, { "number": { "$lin": [1, 1] }, "title": "PR {i}", "author": "u{i}", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts", "z{i}.ts"] }] } },
+    { "name": "author_and_title_are_passed_through", "current": { "number": 1, "files": ["a.ts"] }, "candidates": [{ "number": 2, "title": "T\\u{1F600} </b> \"q\"", "author": "unknown", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts"] }] },
+    { "name": "file_order_is_utf16_code_unit_order", "current": { "number": 1, "files": ["\\u{ff5e}.ts", "\\u{1F600}.ts", "b.ts", "B.ts", "\\u{e9}.ts"] }, "candidates": [{ "number": 2, "title": "t", "author": "a", "merged_at": "2026-01-01T00:00:00Z", "files": ["\\u{e9}.ts", "B.ts", "b.ts", "\\u{1F600}.ts", "\\u{ff5e}.ts"] }] },
+    { "name": "max_of_three", "max": 3, "current": { "number": 1000, "files": ["a.ts"] }, "candidates": { "$each": [6, { "number": { "$lin": [1, 1] }, "title": "PR {i}", "author": "u", "merged_at": "2026-01-01T00:00:00Z", "files": ["a.ts"] }] } }
+  ]
+}

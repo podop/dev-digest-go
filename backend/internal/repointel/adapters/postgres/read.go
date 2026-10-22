@@ -251,3 +251,106 @@ func deref(p *int) int {
 	}
 	return *p
 }
+
+// callerRow is a scan target of ResolvedCallers.
+type callerRow struct {
+	FromPath string  `gorm:"column:from_path"`
+	ToSymbol string  `gorm:"column:to_symbol"`
+	Line     int     `gorm:"column:line"`
+	Rank     float64 `gorm:"column:rank"`
+}
+
+// ResolvedCallers returns the references whose decl_file is one of declFiles and whose to_symbol
+// is one of names, joined with the file_rank of the referencing file (a file without a rank row
+// is left out), ordered by rank descending, then from_path, line and to_symbol (byte order). A
+// reference with no decl_file (ambiguous or external) is never returned.
+func (s *Store) ResolvedCallers(ctx context.Context, repoID string, declFiles, names []string) ([]domain.ResolvedCaller, error) {
+	declFiles = storablePaths(declFiles)
+	if len(declFiles) == 0 || len(names) == 0 {
+		return nil, nil
+	}
+	var rows []callerRow
+	chunks := 0
+	for files := range slices.Chunk(declFiles, deleteChunk) {
+		for part := range slices.Chunk(names, deleteChunk) {
+			chunks++
+			var chunk []callerRow
+			// The collation is set on the underlying columns (an alias is invalid in ORDER BY).
+			err := s.conn(ctx).Table(`"references" AS r`).
+				Select("r.from_path, r.to_symbol, r.line, f.rank").
+				Joins("JOIN file_rank f ON f.repo_id = r.repo_id AND f.file_path = r.from_path").
+				Where("r.repo_id = ? AND r.decl_file IN ? AND r.to_symbol IN ?", repoID, files, part).
+				Order(`f.rank DESC, r.from_path COLLATE "C" ASC, r.line ASC, r.to_symbol COLLATE "C" ASC`).
+				Scan(&chunk).Error
+			if err != nil {
+				return nil, fmt.Errorf("select resolved callers: %w", err)
+			}
+			rows = append(rows, chunk...)
+		}
+	}
+	if chunks > 1 { // chunks arrive one after the other: restore the global order
+		slices.SortStableFunc(rows, compareCaller)
+	}
+	out := make([]domain.ResolvedCaller, len(rows))
+	for i, r := range rows {
+		out[i] = domain.ResolvedCaller{File: r.FromPath, ToSymbol: r.ToSymbol, Line: r.Line, Rank: r.Rank}
+	}
+	return out, nil
+}
+
+// compareCaller is the Go form of the ORDER BY of ResolvedCallers.
+func compareCaller(a, b callerRow) int {
+	switch {
+	case a.Rank > b.Rank:
+		return -1
+	case a.Rank < b.Rank:
+		return 1
+	}
+	if c := strings.Compare(a.FromPath, b.FromPath); c != 0 {
+		return c
+	}
+	if a.Line != b.Line {
+		return a.Line - b.Line
+	}
+	return strings.Compare(a.ToSymbol, b.ToSymbol)
+}
+
+// FileFacts returns the file_facts rows of files (a file without facts has no row), ordered by
+// path (byte order). Endpoints and crons keep their stored order and are never nil.
+func (s *Store) FileFacts(ctx context.Context, repoID string, files []string) ([]domain.FileFacts, error) {
+	var out []domain.FileFacts
+	for part := range slices.Chunk(storablePaths(files), deleteChunk) {
+		var rows []factsRow
+		err := s.conn(ctx).Where("repo_id = ? AND file_path IN ?", repoID, part).
+			Order(`file_path COLLATE "C" ASC`).Find(&rows).Error
+		if err != nil {
+			return nil, fmt.Errorf("select file_facts: %w", err)
+		}
+		for _, r := range rows {
+			f := domain.FileFacts{Path: r.FilePath, Endpoints: []string{}, Crons: []string{}}
+			if err := decodeStrings(r.Endpoints, &f.Endpoints); err != nil {
+				return nil, fmt.Errorf("decode endpoints of %s: %w", r.FilePath, err)
+			}
+			if err := decodeStrings(r.Crons, &f.Crons); err != nil {
+				return nil, fmt.Errorf("decode crons of %s: %w", r.FilePath, err)
+			}
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+// decodeStrings reads a JSON array of strings; an empty value or a JSON null leaves dst alone.
+func decodeStrings(raw jsonb, dst *[]string) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	var v []string
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return err
+	}
+	if v != nil {
+		*dst = v
+	}
+	return nil
+}

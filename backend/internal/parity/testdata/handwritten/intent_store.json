@@ -1,0 +1,116 @@
+{
+  "handWritten": true,
+  "note": "Expectations of the SQL parts of the intent layer that Node cannot run without a database. Read from server/src/modules/intent/infrastructure/repository.ts and server/src/db/schema/reviews.ts (pr_intent) at d1c9093; the Postgres behaviours (numeric(12,6) rounding, NULL ordering) are stated from the PostgreSQL documentation, not generated. Consumer: the Go intent repository tests (S24, pgtest) and the S30 parity test.",
+  "spec": [
+    "7.3",
+    "7.4.1",
+    "7.4.5",
+    "D5009"
+  ],
+  "get": [
+    {
+      "name": "no_row",
+      "row": null,
+      "expect": "no record (GET answers {intent:null, stale:false})"
+    },
+    {
+      "name": "row_with_null_derived_at",
+      "row": {
+        "derived_at": null
+      },
+      "expect": "no record: repository.get returns undefined when the row has no derived_at (repository.ts:21)"
+    },
+    {
+      "name": "row_with_derived_at",
+      "row": {
+        "derived_at": "2026-01-01T00:00:00.000Z"
+      },
+      "expect": "a record mapped by the intent mapper (goldens/intent.json mapper[])"
+    }
+  ],
+  "upsert": {
+    "conflictTarget": "pr_id",
+    "updatedColumns": "every column: intent, in_scope, out_of_scope, change_type, confidence, derived_from, sources, head_sha, input_hash, prompt_version, provider, model, tokens_in, tokens_out, cost_usd, derived_at (repository.ts:44-49)",
+    "returning": "the stored row, mapped (cost as stored)",
+    "nullables": "change_type/confidence/derived_from default (null, null, 'inferred'); sources detail is stored as null when absent"
+  },
+  "costColumn": [
+    {
+      "callCost": 0.00042,
+      "stored": 0.00042
+    },
+    {
+      "callCost": 0.0004236789,
+      "stored": 0.000424
+    },
+    {
+      "callCost": 0.1,
+      "stored": 0.1
+    },
+    {
+      "callCost": 0,
+      "stored": 0
+    },
+    {
+      "callCost": null,
+      "stored": null
+    },
+    {
+      "callCost": 4e-07,
+      "stored": 0
+    },
+    {
+      "callCost": 5e-07,
+      "stored": 1e-06
+    }
+  ],
+  "commits": {
+    "node": "SELECT sha, message FROM pr_commits WHERE pr_id = $1 ORDER BY committed_at ASC (repository.ts:85)",
+    "go": "ORDER BY committed_at ASC NULLS LAST, id ASC (D5009: NULL last is Postgres' default for ASC; id breaks ties)",
+    "cases": [
+      {
+        "rows": [
+          {
+            "id": "c2",
+            "committed_at": "2026-01-02T00:00:00Z",
+            "message": "second"
+          },
+          {
+            "id": "c1",
+            "committed_at": "2026-01-01T00:00:00Z",
+            "message": "first"
+          },
+          {
+            "id": "c3",
+            "committed_at": null,
+            "message": "undated"
+          }
+        ],
+        "order": [
+          "first",
+          "second",
+          "undated"
+        ]
+      },
+      {
+        "rows": [
+          {
+            "id": "b",
+            "committed_at": "2026-01-01T00:00:00Z",
+            "message": "tie b"
+          },
+          {
+            "id": "a",
+            "committed_at": "2026-01-01T00:00:00Z",
+            "message": "tie a"
+          }
+        ],
+        "order": [
+          "tie a",
+          "tie b"
+        ]
+      }
+    ]
+  },
+  "changedFiles": "Node: SELECT path FROM pr_files WHERE pr_id = $1 with no ORDER BY (repository.ts:90), so the order is unspecified. It only matters for refresh: the first 100 paths become the 'Changed files:' lines of the inferred diff source (spec 7.4.3); the review path uses the parsed stored diff in diff order (spec 7.5)."
+}

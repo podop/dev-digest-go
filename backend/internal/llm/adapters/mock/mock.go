@@ -3,6 +3,7 @@
 package mock
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -21,8 +22,9 @@ const (
 	CostUSD   = 0.00042
 )
 
-// ConventionExtraction is the schema name of the conventions extractor; with Review (review.go)
-// it is one of the two the mock has a fixture for.
+// ConventionExtraction is the schema name of the conventions extractor; with Review (review.go),
+// IntentClassification (intent.go) and PrBriefLlm (brief.go) it is one of the four the mock has a
+// fixture for. Any other schema (OnboardingTour included) fails with the no-fixture error.
 const ConventionExtraction = "ConventionExtraction"
 
 // ModelLabel is the label of the single model the mock lists.
@@ -79,6 +81,10 @@ func (a *Adapter) Complete(ctx context.Context, _ string, at llm.Attempt) (llm.A
 		raw, err = json.Marshal(conventions(at.Messages))
 	case Review:
 		raw, err = reviewJSON(at.Messages)
+	case IntentClassification:
+		raw, err = stringify(intent())
+	case PrBriefLlm:
+		raw, err = stringify(brief())
 	default:
 		return llm.AttemptResult{}, fmt.Errorf("Mock LLM provider has no fixture for structured output '%s'", at.SchemaName)
 	}
@@ -87,6 +93,17 @@ func (a *Adapter) Complete(ctx context.Context, _ string, at llm.Attempt) (llm.A
 	}
 	cost := CostUSD
 	return llm.AttemptResult{Raw: string(raw), Usage: &llm.Usage{TokensIn: TokensIn, TokensOut: TokensOut}, CostUSD: &cost}, nil
+}
+
+// stringify serializes a fixture like JSON.stringify: compact, no HTML escaping.
+func stringify(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 type evidence struct {

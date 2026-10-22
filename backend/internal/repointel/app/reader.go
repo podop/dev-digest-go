@@ -11,6 +11,7 @@ import (
 // readerSource is what the read port needs from persistence.
 type readerSource interface {
 	stateReader
+	blastSource
 	CachedMap(ctx context.Context, repoID, sha string, budget int) (m domain.RepoMap, ok bool, err error)
 	FileRanks(ctx context.Context, repoID string, paths []string) ([]domain.PathPercentile, error)
 	SymbolsInFiles(ctx context.Context, repoID string, paths []string) ([]domain.SymbolInfo, error)

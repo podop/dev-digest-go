@@ -35,6 +35,10 @@ type Input struct {
 	Callers, RepoMap string
 	// PRDescription is the PR body; the engine cuts it and omits it when blank.
 	PRDescription string
+	// Intent is the PR intent of the request, shared read-only by every run and call of it; nil =
+	// none (the switch is off or the intent is unavailable): no "## PR intent" section, and the
+	// scope policy resets every out_of_scope flag. The engine renders it and never modifies it.
+	Intent *domain.Intent
 	// Task is the task line, including the hot-file note when there is one.
 	Task string
 }

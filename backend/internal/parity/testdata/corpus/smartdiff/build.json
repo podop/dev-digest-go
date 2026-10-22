@@ -1,0 +1,76 @@
+{
+  "note": "buildSmartDiff over file rows and the findings of each agent's newest review (AC5043, EC5013).",
+  "cases": [
+    { "name": "no_files", "files": [], "findings": [] },
+    { "name": "no_files_with_a_finding_on_another_file", "files": [], "findings": [{ "file": "a.ts", "start_line": 3 }] },
+    {
+      "name": "all_five_roles_sorted_in_english_collation",
+      "files": [
+        { "path": "src/b.ts", "additions": 3, "deletions": 1 },
+        { "path": "src/B.ts", "additions": 1, "deletions": 0 },
+        { "path": "src/a.ts", "additions": 10, "deletions": 2 },
+        { "path": "src/_x.ts", "additions": 0, "deletions": 4 },
+        { "path": "src/10.ts", "additions": 1, "deletions": 1 },
+        { "path": "src/9.ts", "additions": 2, "deletions": 2 },
+        { "path": "src/é.ts", "additions": 1, "deletions": 1 },
+        { "path": "src/e.ts", "additions": 1, "deletions": 1 },
+        { "path": "src/a-b.ts", "additions": 5, "deletions": 5 },
+        { "path": "src/ab.ts", "additions": 5, "deletions": 5 },
+        { "path": "src/foo.test.ts", "additions": 20, "deletions": 0 },
+        { "path": "test/helpers/pg.ts", "additions": 7, "deletions": 3 },
+        { "path": "src/index.ts", "additions": 1, "deletions": 1 },
+        { "path": "vite.config.ts", "additions": 2, "deletions": 0 },
+        { "path": "README.md", "additions": 4, "deletions": 4 },
+        { "path": "docs/guide.md", "additions": 40, "deletions": 0 },
+        { "path": "pnpm-lock.yaml", "additions": 1200, "deletions": 900 },
+        { "path": "dist/bundle.js", "additions": 99999, "deletions": 0 }
+      ],
+      "findings": []
+    },
+    {
+      "name": "finding_lines_distinct_ascending_other_files_ignored",
+      "files": [
+        { "path": "src/a.ts", "additions": 5, "deletions": 1 },
+        { "path": "src/b.ts", "additions": 1, "deletions": 1 },
+        { "path": "src/c.test.ts", "additions": 2, "deletions": 0 }
+      ],
+      "findings": [
+        { "file": "src/a.ts", "start_line": 40 },
+        { "file": "src/a.ts", "start_line": 7 },
+        { "file": "src/a.ts", "start_line": 40 },
+        { "file": "src/a.ts", "start_line": 7 },
+        { "file": "src/a.ts", "start_line": 100 },
+        { "file": "src/a.ts", "start_line": 9 },
+        { "file": "src/c.test.ts", "start_line": 1 },
+        { "file": "src/gone.ts", "start_line": 3 },
+        { "file": "SRC/A.ts", "start_line": 3 },
+        { "file": "./src/b.ts", "start_line": 3 }
+      ]
+    },
+    {
+      "name": "total_lines_counts_every_file_even_boilerplate",
+      "files": [
+        { "path": "yarn.lock", "additions": 1000, "deletions": 1000 },
+        { "path": "src/a.ts", "additions": 1, "deletions": 2 }
+      ],
+      "findings": []
+    },
+    {
+      "name": "duplicate_paths_are_kept_as_given",
+      "files": [
+        { "path": "src/a.ts", "additions": 1, "deletions": 0 },
+        { "path": "src/a.ts", "additions": 2, "deletions": 0 }
+      ],
+      "findings": [{ "file": "src/a.ts", "start_line": 2 }]
+    },
+    {
+      "name": "windows_separators_and_dot_slash_classify_but_keep_their_paths",
+      "files": [
+        { "path": "./src/foo.test.ts", "additions": 1, "deletions": 0 },
+        { "path": "src\\bar.test.ts", "additions": 1, "deletions": 0 },
+        { "path": "docs\\x.md", "additions": 1, "deletions": 0 }
+      ],
+      "findings": [{ "file": "./src/foo.test.ts", "start_line": 5 }]
+    }
+  ]
+}

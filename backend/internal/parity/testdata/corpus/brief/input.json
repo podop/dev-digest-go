@@ -1,0 +1,101 @@
+{
+  "note": "Pure input builders of the PR brief (brief/domain/input.ts) — AC5044. Strings use \\u{HEX} escapes and the $repeat/$each helpers (expanded by the generator).",
+  "ranges": [
+    { "name": "null_patch", "patch": null },
+    { "name": "empty_patch", "patch": "" },
+    { "name": "single_hunk", "patch": "@@ -1,3 +1,4 @@\n a\n+b\n c\n d" },
+    { "name": "count_omitted_means_one", "patch": "@@ -5 +5 @@\n-a\n+b" },
+    { "name": "count_one_is_a_single_line", "patch": "@@ -5,1 +9,1 @@\n+x" },
+    { "name": "count_two_ends_one_later", "patch": "@@ -5,1 +9,2 @@\n+x\n+y" },
+    { "name": "pure_deletion_c_comma_zero", "patch": "@@ -10,3 +9,0 @@\n-a\n-b\n-c" },
+    { "name": "pure_deletion_at_line_zero_clamps_to_one", "patch": "@@ -1,3 +0,0 @@\n-a\n-b\n-c" },
+    { "name": "new_file", "patch": "@@ -0,0 +1,5 @@\n+a\n+b\n+c\n+d\n+e" },
+    { "name": "several_hunks", "patch": "@@ -1,2 +1,3 @@\n a\n+b\n c\n@@ -20,2 +21,2 @@\n x\n-y\n+z\n@@ -40 +41,5 @@ function trailing() {\n+1\n+2\n+3\n+4\n+5" },
+    { "name": "hunk_text_after_the_header_is_ignored", "patch": "@@ -3,4 +3,4 @@ class Foo {\n a" },
+    { "name": "at_at_inside_a_line_does_not_count", "patch": "+ see @@ -1,2 +3,4 @@ here\n@@ -7 +8 @@\n x" },
+    { "name": "indented_header_does_not_count", "patch": " @@ -1,2 +3,4 @@\n@@ -9 +9 @@" },
+    { "name": "combined_diff_headers_do_not_match", "patch": "@@@ -1,2 -1,2 +1,3 @@@\n a" },
+    { "name": "crlf_patch", "patch": "@@ -1,2 +3,4 @@\r\n a\r\n+b\r\n@@ -9 +9 @@\r\n x" },
+    { "name": "leading_zeros_and_big_numbers", "patch": "@@ -1,1 +007,003 @@\n a\n@@ -1 +12345678901234567890,2 @@\n b" },
+    { "name": "missing_plus_part_does_not_match", "patch": "@@ -1,2 @@\n a\n@@ -1,2 +x,3 @@\n b\n@@ - +1 @@\n c" },
+    { "name": "header_without_trailing_at_signs_does_not_match", "patch": "@@ -1,2 +3,4\n a" },
+    { "name": "count_zero_for_new_side_with_nonzero_start", "patch": "@@ -4,2 +3,0 @@\n-a\n-b" },
+    { "name": "no_newline_marker_and_binary_text", "patch": "@@ -1 +1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file" },
+    { "name": "only_non_header_lines", "patch": "just text\nno header" }
+  ],
+  "selectFiles": [
+    { "name": "empty", "files": [] },
+    { "name": "ordering_by_changed_lines_stable", "files": [
+      { "path": "a.ts", "additions": 1, "deletions": 1, "ranges": [{ "start": 1, "end": 2 }] },
+      { "path": "b.ts", "additions": 10, "deletions": 0, "ranges": [] },
+      { "path": "c.ts", "additions": 1, "deletions": 1, "ranges": [{ "start": 5, "end": 5 }, { "start": 9, "end": 12 }] },
+      { "path": "d.ts", "additions": 0, "deletions": 5, "ranges": [] },
+      { "path": "e.test.ts", "additions": 2, "deletions": 0, "ranges": [{ "start": 1, "end": 2 }] },
+      { "path": "README.md", "additions": 0, "deletions": 0, "ranges": [] }
+    ] },
+    { "name": "more_than_100_files_keeps_the_biggest_and_counts_the_rest", "files": { "$each": [130, { "path": "src/f{i3}.ts", "additions": { "$lin": [0, 1] }, "deletions": 0, "ranges": [{ "start": 1, "end": 1 }] }] } },
+    { "name": "ties_keep_input_order_across_the_cut", "files": { "$each": [105, { "path": "src/f{i3}.ts", "additions": 3, "deletions": 3, "ranges": [] }] } },
+    { "name": "ranges_capped_at_20_per_file", "files": [{ "path": "src/big.ts", "additions": 50, "deletions": 0, "ranges": { "$each": [25, { "start": { "$lin": [0, 10] }, "end": { "$lin": [2, 10] } }] } }] },
+    { "name": "roles_for_every_kind_of_path", "files": [
+      { "path": "src/a.ts", "additions": 9, "deletions": 0, "ranges": [] },
+      { "path": "src/a.test.ts", "additions": 8, "deletions": 0, "ranges": [] },
+      { "path": "package-lock.json", "additions": 7, "deletions": 0, "ranges": [] },
+      { "path": "docs/guide.md", "additions": 6, "deletions": 0, "ranges": [] },
+      { "path": "tsconfig.json", "additions": 5, "deletions": 0, "ranges": [] },
+      { "path": "dist\\\\x.js", "additions": 4, "deletions": 0, "ranges": [] }
+    ] }
+  ],
+  "selectFindings": [
+    { "name": "empty", "findings": [] },
+    { "name": "severity_order_is_stable", "findings": [
+      { "severity": "SUGGESTION", "file": "a.ts", "startLine": 1, "endLine": 1, "title": "s1" },
+      { "severity": "WARNING", "file": "a.ts", "startLine": 2, "endLine": 2, "title": "w1" },
+      { "severity": "CRITICAL", "file": "a.ts", "startLine": 3, "endLine": 3, "title": "c1" },
+      { "severity": "WARNING", "file": "a.ts", "startLine": 4, "endLine": 4, "title": "w2" },
+      { "severity": "CRITICAL", "file": "b.ts", "startLine": 5, "endLine": 6, "title": "c2" },
+      { "severity": "SUGGESTION", "file": "b.ts", "startLine": 7, "endLine": 7, "title": "s2" }
+    ] },
+    { "name": "more_than_30_keeps_critical_first", "findings": { "$each": [40, { "severity": "WARNING", "file": "src/w.ts", "startLine": { "$lin": [0, 1] }, "endLine": { "$lin": [0, 1] }, "title": "warning {i}" }] }, "plusCritical": 3 },
+    { "name": "titles_are_cut_to_120_units_after_trim", "findings": [
+      { "severity": "CRITICAL", "file": "a.ts", "startLine": 1, "endLine": 1, "title": { "$repeat": ["t", 130] } },
+      { "severity": "CRITICAL", "file": "a.ts", "startLine": 2, "endLine": 2, "title": { "$concat": ["  ", { "$repeat": ["u", 120] }, "  "] } },
+      { "severity": "CRITICAL", "file": "a.ts", "startLine": 3, "endLine": 3, "title": { "$concat": [{ "$repeat": ["v", 118] }, "\\u{1F642}\\u{1F642}"] } },
+      { "severity": "CRITICAL", "file": "a.ts", "startLine": 4, "endLine": 4, "title": "\\u{feff} bom title \\u{a0}" }
+    ] }
+  ],
+  "blast": [
+    { "name": "null", "blast": null },
+    { "name": "degraded_is_not_usable", "blast": { "changed_symbols": [], "downstream": [], "summary": "0 changed symbols \\u{b7} 0 callers \\u{b7} 0 endpoints \\u{b7} 0 crons", "degraded": true, "reason": "flag_off" } },
+    { "name": "degraded_false_is_usable", "blast": { "changed_symbols": [{ "name": "foo", "file": "src/a.ts", "kind": "function" }], "downstream": [{ "symbol": "foo", "callers": [{ "name": "h", "file": "src/x.ts", "line": 4 }], "endpoints_affected": ["GET /x"], "crons_affected": [] }], "summary": "1 changed symbol \\u{b7} 1 caller \\u{b7} 1 endpoint \\u{b7} 0 crons", "degraded": false } },
+    { "name": "degraded_absent_is_usable", "blast": { "changed_symbols": [], "downstream": [], "summary": "s" } },
+    { "name": "prompt_callers_distinct_by_file_line_name_across_groups", "blast": { "changed_symbols": [{ "name": "foo", "file": "src/a.ts", "kind": "function" }, { "name": "bar", "file": "src/a.ts", "kind": "function" }], "downstream": [
+      { "symbol": "foo", "callers": [{ "name": "h", "file": "src/x.ts", "line": 4 }, { "name": "g", "file": "src/x.ts", "line": 9 }], "endpoints_affected": [], "crons_affected": [] },
+      { "symbol": "bar", "callers": [{ "name": "h", "file": "src/x.ts", "line": 4 }, { "name": "h", "file": "src/x.ts", "line": 5 }, { "name": "h", "file": "src/y.ts", "line": 4 }], "endpoints_affected": [], "crons_affected": [] }
+    ], "summary": "s", "degraded": false } },
+    { "name": "prompt_callers_capped_at_30", "blast": { "changed_symbols": [{ "name": "foo", "file": "src/a.ts", "kind": "function" }], "downstream": [{ "symbol": "foo", "callers": { "$each": [45, { "name": "h{i}", "file": "src/c{i3}.ts", "line": { "$lin": [0, 1] } }] }, "endpoints_affected": [], "crons_affected": [] }], "summary": "s", "degraded": false } }
+  ],
+  "linkedIssue": [
+    { "body": null }, { "body": "" }, { "body": "no number here" }, { "body": "Fixes #12 and #13" }, { "body": "#0" }, { "body": "#007" },
+    { "body": "#99999999999999999999" }, { "body": "#9007199254740991" }, { "body": "#9007199254740992" }, { "body": "abc#5" }, { "body": "##5" },
+    { "body": "# 5 then #6" }, { "body": "#\\u{ff15}" }, { "body": "see #5abc" }, { "body": "x\r\n#8\r\n" }, { "body": "#1e3" }, { "body": "(#42)" }
+  ],
+  "missing": [
+    { "name": "everything_present", "facts": { "description": "A real description", "hasIntent": true, "blast": { "changed_symbols": [], "downstream": [], "summary": "s", "degraded": false }, "specs": { "reviewedAgents": 1, "attachedDocs": 2, "unreadable": 0, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "everything_absent", "facts": { "description": null, "hasIntent": false, "blast": null, "specs": { "reviewedAgents": 0, "attachedDocs": 0, "unreadable": 0, "overBudget": 0 }, "issue": "not_linked" } },
+    { "name": "blank_description_variants", "facts": { "description": " \\u{a0}\n\t", "hasIntent": true, "blast": { "changed_symbols": [], "downstream": [], "summary": "s", "degraded": false }, "specs": { "reviewedAgents": 1, "attachedDocs": 1, "unreadable": 0, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "empty_string_description", "facts": { "description": "", "hasIntent": true, "blast": { "changed_symbols": [], "downstream": [], "summary": "s", "degraded": false }, "specs": { "reviewedAgents": 1, "attachedDocs": 1, "unreadable": 0, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "undefined_description", "facts": { "hasIntent": true, "blast": { "changed_symbols": [], "downstream": [], "summary": "s", "degraded": false }, "specs": { "reviewedAgents": 1, "attachedDocs": 1, "unreadable": 0, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "blast_read_failed", "facts": { "description": "d", "hasIntent": true, "blast": null, "specs": { "reviewedAgents": 1, "attachedDocs": 1, "unreadable": 0, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "blast_degraded_with_reason", "facts": { "description": "d", "hasIntent": true, "blast": { "changed_symbols": [], "downstream": [], "summary": "s", "degraded": true, "reason": "index_partial" }, "specs": { "reviewedAgents": 1, "attachedDocs": 1, "unreadable": 0, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "blast_degraded_without_reason", "facts": { "description": "d", "hasIntent": true, "blast": { "changed_symbols": [], "downstream": [], "summary": "s", "degraded": true }, "specs": { "reviewedAgents": 1, "attachedDocs": 1, "unreadable": 0, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "no_review_run", "facts": { "description": "d", "hasIntent": true, "blast": null, "specs": { "reviewedAgents": 0, "attachedDocs": 5, "unreadable": 5, "overBudget": 5 }, "issue": "fetched" } },
+    { "name": "none_attached", "facts": { "description": "d", "hasIntent": true, "blast": null, "specs": { "reviewedAgents": 2, "attachedDocs": 0, "unreadable": 3, "overBudget": 3 }, "issue": "fetched" } },
+    { "name": "over_budget_and_unreadable", "facts": { "description": "d", "hasIntent": true, "blast": null, "specs": { "reviewedAgents": 2, "attachedDocs": 7, "unreadable": 2, "overBudget": 3 }, "issue": "fetched" } },
+    { "name": "only_unreadable", "facts": { "description": "d", "hasIntent": true, "blast": null, "specs": { "reviewedAgents": 1, "attachedDocs": 3, "unreadable": 1, "overBudget": 0 }, "issue": "fetched" } },
+    { "name": "issue_fetch_failed", "facts": { "description": "d", "hasIntent": false, "blast": null, "specs": { "reviewedAgents": 1, "attachedDocs": 1, "unreadable": 0, "overBudget": 0 }, "issue": "fetch_failed" } }
+  ],
+  "truncate": [
+    { "text": "  hello  ", "max": 10 }, { "text": "abcdef", "max": 5 }, { "text": "abcde", "max": 5 }, { "text": "abc\\u{1F642}def", "max": 5 },
+    { "text": "\\u{feff}\\u{a0}x\\u{2028}", "max": 3 }, { "text": "", "max": 5 }, { "text": "abc", "max": 0 }, { "text": "abc", "max": 1 }, { "text": "   ", "max": 1 }
+  ]
+}

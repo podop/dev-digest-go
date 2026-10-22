@@ -8,9 +8,10 @@ type ScopeResult struct {
 }
 
 // ApplyScopePolicy normalises the model's own out-of-scope judgment; it never drops a finding and
-// never changes a severity. Without a PR intent (always so in Phase 4, spec D4001) the model had
-// nothing to judge against, so every flag is reset to nil. With an intent every flag becomes a
-// plain boolean. The input slice is not modified.
+// never changes a severity. Without a PR intent (the switch is off or the intent is unavailable)
+// the model had nothing to judge against, so every flag is reset to nil. With an intent every
+// flag becomes a plain boolean and the counts say how many findings are out of scope (spec 7.5).
+// The input slice is not modified.
 func ApplyScopePolicy(findings []Finding, hasIntent bool) ScopeResult {
 	out := make([]Finding, len(findings))
 	res := ScopeResult{}

@@ -1,0 +1,19 @@
+{
+  "handWritten": true,
+  "note": "Expectations of the SQL parts of the onboarding tour that Node cannot run without a database. Read from server/src/modules/onboarding/infrastructure/repository.ts and server/src/db/schema/context.ts (onboarding) at d1c9093. Consumer: Go onboarding repository tests (S29, pgtest).",
+  "spec": ["7.10.6", "AC5013"],
+  "upsert": {
+    "table": "onboarding",
+    "conflictTarget": "repo_id",
+    "set": "json = the whole OnboardingTour document, generated_at = new Date(tour.generated_at) (repository.ts:40-46)",
+    "invariant": "onboarding.generated_at equals the tour's generated_at (AC5013)"
+  },
+  "read": "onboarding.json that fails OnboardingTour.safeParse reads as no tour: GET answers {status:'none'} (repository.ts:31-38); contract limits are part of the check (goldens/onboarding.json stored[])",
+  "findRepo": "repos WHERE workspace_id = $1 AND id = $2 -> {id, owner, name, fullName, defaultBranch}; absent -> 404 repo_not_found 'Repo not found'",
+  "indexedFileReads": {
+    "rootList": ["README.md", "README", "readme.md", "package.json", "docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml", ".env.example"],
+    "readme": "first existing of the first three",
+    "compose": "first existing of docker-compose.yml, docker-compose.yaml, compose.yml, compose.yaml",
+    "cap": 524288
+  }
+}

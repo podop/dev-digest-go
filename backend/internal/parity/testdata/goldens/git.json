@@ -1,0 +1,449 @@
+{
+  "note": "SimpleGitClient.readFileAt over a repository built from corpus/git/cases.json (fixed identity and dates: `commit` is reproducible). `sha` HEAD = commit; HEAD:short7 / HEAD:colon / HEAD:plus1 derive from it. Error messages contain the sha (replace `commit` by a placeholder in Go tests). content is what `git show` returned through simple-git (decoded as UTF-8 by Node).",
+  "commit": "dded41fadb96938777596377078781306b1a3897",
+  "repo": {"owner": "acme", "name": "shop"},
+  "files": [
+    {"path": "docs/a.md", "text": "# A\ntext\n"},
+    {"path": "docs/no_newline.md", "text": "last line without newline"},
+    {"path": "docs/crlf.md", "text": "a\r\nb\r\n\r\n"},
+    {"path": "docs/bom.md", "hex": "efbbbf68656c6c6f"},
+    {"path": "docs/invalid_utf8.md", "hex": "6f6b20e282206261642066666620656e64"},
+    {"path": "docs/lone_surrogate_bytes.md", "hex": "eda080"},
+    {"path": "docs/emoji.md", "text": "face 😀 é 中"},
+    {"path": "docs/nul.md", "hex": "6100620000"},
+    {"path": "docs/empty.md", "text": ""},
+    {"path": "docs/whitespace.md", "text": "  \n\n  "},
+    {"path": "docs/line_sep.md", "text": "a\u2028b\u2029c\u0085d"},
+    {"path": "docs/exact.md", "fill": "a", "bytes": 65536},
+    {"path": "docs/over.md", "fill": "a", "bytes": 65537},
+    {"path": "docs/multibyte_exact.md", "fill": "é", "bytes": 65536},
+    {"path": "docs/multibyte_over.md", "fill": "é", "bytes": 65538},
+    {"path": "docs/link.md", "link": "a.md"},
+    {"path": "root/big_ok.md", "fill": "b", "bytes": 524288},
+    {"path": "root/big_over.md", "fill": "b", "bytes": 524289},
+    {"path": "-dash.md", "text": "dash file"},
+    {"path": "docs/with space.md", "text": "spaced"},
+    {"path": "docs/été.md", "text": "unicode name"},
+    {"path": "docs/sub/deep/f.md", "text": "deep"}
+  ],
+  "results": [
+    {
+      "name": "plain",
+      "path": "docs/a.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 9,
+      "content": "# A\ntext\n"
+    },
+    {
+      "name": "no_trailing_newline",
+      "path": "docs/no_newline.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 25,
+      "content": "last line without newline"
+    },
+    {
+      "name": "crlf_is_kept",
+      "path": "docs/crlf.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 8,
+      "content": "a\r\nb\r\n\r\n"
+    },
+    {
+      "name": "bom_is_kept",
+      "path": "docs/bom.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 8,
+      "content": "\ufeffhello"
+    },
+    {
+      "name": "invalid_utf8_is_replaced",
+      "path": "docs/invalid_utf8.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 17,
+      "content": "ok \ufffd bad fff end"
+    },
+    {
+      "name": "surrogate_bytes_are_invalid_utf8",
+      "path": "docs/lone_surrogate_bytes.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 3,
+      "content": "\ufffd\ufffd\ufffd"
+    },
+    {
+      "name": "emoji_and_accents",
+      "path": "docs/emoji.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 16,
+      "content": "face 😀 é 中"
+    },
+    {
+      "name": "nul_bytes",
+      "path": "docs/nul.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 5,
+      "content": "a\u0000b\u0000\u0000"
+    },
+    {
+      "name": "empty_file",
+      "path": "docs/empty.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 0,
+      "content": ""
+    },
+    {
+      "name": "whitespace_only",
+      "path": "docs/whitespace.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 6,
+      "content": "  \n\n  "
+    },
+    {
+      "name": "unicode_line_separators",
+      "path": "docs/line_sep.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 12,
+      "content": "a\u2028b\u2029c\u0085d"
+    },
+    {
+      "name": "exactly_the_cap_is_allowed",
+      "path": "docs/exact.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 65536,
+      "content": {
+        "$blob": true,
+        "len": 65536,
+        "sha256": "bf718b6f653bebc184e1479f1935b8da974d701b893afcf49e701f3e2f9f9c5a",
+        "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tail": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "one_byte_over_the_cap",
+      "path": "docs/over.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {
+        "name": "Error",
+        "code": "too_large",
+        "message": "File 'docs/over.md' at dded41fadb96938777596377078781306b1a3897 is too large (65537 bytes > 65536)"
+      }
+    },
+    {
+      "name": "cap_counts_bytes_not_units_exact",
+      "path": "docs/multibyte_exact.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 65536,
+      "content": {
+        "$blob": true,
+        "len": 32768,
+        "sha256": "80ad92d4f363d1af78eed07669eecdbb4410e28d38875188de8feeb30b98d6d9",
+        "head": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+        "tail": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+      }
+    },
+    {
+      "name": "cap_counts_bytes_not_units_over",
+      "path": "docs/multibyte_over.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {
+        "name": "Error",
+        "code": "too_large",
+        "message": "File 'docs/multibyte_over.md' at dded41fadb96938777596377078781306b1a3897 is too large (65538 bytes > 65536)"
+      }
+    },
+    {
+      "name": "symlink_reads_the_link_text",
+      "path": "docs/link.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 4,
+      "content": "a.md"
+    },
+    {
+      "name": "explicit_cap_exact",
+      "path": "root/big_ok.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": 524288,
+      "ok": true,
+      "size": 524288,
+      "content": {
+        "$blob": true,
+        "len": 524288,
+        "sha256": "8a36bc0c3c9a19688169093a56df45e535bc09016161a330498f9a596ef41719",
+        "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "tail": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "explicit_cap_over",
+      "path": "root/big_over.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": 524288,
+      "ok": false,
+      "error": {
+        "name": "Error",
+        "code": "too_large",
+        "message": "File 'root/big_over.md' at dded41fadb96938777596377078781306b1a3897 is too large (524289 bytes > 524288)"
+      }
+    },
+    {
+      "name": "default_cap_on_a_bigger_file",
+      "path": "root/big_ok.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {
+        "name": "Error",
+        "code": "too_large",
+        "message": "File 'root/big_ok.md' at dded41fadb96938777596377078781306b1a3897 is too large (524288 bytes > 65536)"
+      }
+    },
+    {
+      "name": "leading_dash_name",
+      "path": "-dash.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 9,
+      "content": "dash file"
+    },
+    {
+      "name": "name_with_space",
+      "path": "docs/with space.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 6,
+      "content": "spaced"
+    },
+    {
+      "name": "unicode_name",
+      "path": "docs/été.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 12,
+      "content": "unicode name"
+    },
+    {
+      "name": "deep_path",
+      "path": "docs/sub/deep/f.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 4,
+      "content": "deep"
+    },
+    {
+      "name": "path_is_normalised_dot_slash",
+      "path": "docs/a.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 9,
+      "content": "# A\ntext\n"
+    },
+    {
+      "name": "path_is_normalised_double_slash",
+      "path": "docs/a.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 9,
+      "content": "# A\ntext\n"
+    },
+    {
+      "name": "path_is_normalised_dotdot_inside",
+      "path": "docs/a.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 9,
+      "content": "# A\ntext\n"
+    },
+    {
+      "name": "missing_object",
+      "path": "docs/missing.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Object 'dded41fadb96938777596377078781306b1a3897:docs/missing.md' not found in acme/shop"}
+    },
+    {
+      "name": "directory_is_a_tree_object",
+      "path": "docs/sub",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": true,
+      "size": 31,
+      "content": "tree dded41fadb96938777596377078781306b1a3897:docs/sub\n\ndeep/\n"
+    },
+    {
+      "name": "path_outside_the_clone",
+      "path": "../x.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Path '../x.md' is outside the clone of acme/shop"}
+    },
+    {
+      "name": "absolute_path",
+      "path": "/etc/passwd",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Path '/etc/passwd' is outside the clone of acme/shop"}
+    },
+    {
+      "name": "empty_path",
+      "path": "",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Path '' is outside the clone of acme/shop"}
+    },
+    {
+      "name": "dot_path",
+      "path": ".",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Path '.' is outside the clone of acme/shop"}
+    },
+    {
+      "name": "backslash_path",
+      "path": "docs\\a.md",
+      "sha": "HEAD",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Object 'dded41fadb96938777596377078781306b1a3897:docs\\a.md' not found in acme/shop"}
+    },
+    {
+      "name": "sha_branch_name_is_refused",
+      "path": "docs/a.md",
+      "sha": "main",
+      "effectiveSha": "main",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Invalid commit sha 'main'"}
+    },
+    {
+      "name": "sha_too_short",
+      "path": "docs/a.md",
+      "sha": "abc12",
+      "effectiveSha": "abc12",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Invalid commit sha 'abc12'"}
+    },
+    {
+      "name": "sha_seven_chars_unknown",
+      "path": "docs/a.md",
+      "sha": "abcdef1",
+      "effectiveSha": "abcdef1",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Object 'abcdef1:docs/a.md' not found in acme/shop"}
+    },
+    {
+      "name": "sha_uppercase_unknown",
+      "path": "docs/a.md",
+      "sha": "ABCDEF1234",
+      "effectiveSha": "ABCDEF1234",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Object 'ABCDEF1234:docs/a.md' not found in acme/shop"}
+    },
+    {
+      "name": "sha_short_prefix_of_the_commit",
+      "path": "docs/a.md",
+      "sha": "HEAD:short7",
+      "effectiveSha": "dded41f",
+      "maxBytes": null,
+      "ok": true,
+      "size": 9,
+      "content": "# A\ntext\n"
+    },
+    {
+      "name": "sha_with_a_colon_is_refused",
+      "path": "docs/a.md",
+      "sha": "HEAD:colon",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a3897:x",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Invalid commit sha 'dded41fadb96938777596377078781306b1a3897:x'"}
+    },
+    {
+      "name": "sha_forty_one_chars",
+      "path": "docs/a.md",
+      "sha": "HEAD:plus1",
+      "effectiveSha": "dded41fadb96938777596377078781306b1a38970",
+      "maxBytes": null,
+      "ok": false,
+      "error": {"name": "Error", "message": "Invalid commit sha 'dded41fadb96938777596377078781306b1a38970'"}
+    }
+  ]
+}

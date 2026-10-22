@@ -1,0 +1,8 @@
+{
+  "note": "Provenance of the goldens. Regenerate with the command in gen/README.md.",
+  "devDigestCommit": "d1c9093c19bafea4365f1d6bae435f5f8ae2ed6b",
+  "collationLocale": "en-US",
+  "icu": "78.2",
+  "node": "v22.22.2",
+  "tools": {"fastify": "5.12.5", "fastify-type-provider-zod": "4.0.2", "zod": "3.25.76", "zod (reviewer-core)": "3.25.76", "openai": "4.104.0"}
+}

@@ -408,8 +408,11 @@ func TestInsertFindings_Mapping(t *testing.T) {
 	if one.Title != "tone" || one.Kind != reviewer.KindLethalTrifecta || !cmp.Equal(one.TrifectaComponents, []string{"a", "b"}) {
 		t.Errorf("first finding = %+v", one)
 	}
-	if one.Skill == nil || *one.Skill != cited || one.OutOfScope || one.Suggestion == nil || *one.Suggestion != "fix" {
+	if one.Skill == nil || *one.Skill != cited || !one.OutOfScope || one.Suggestion == nil || *one.Suggestion != "fix" {
 		t.Errorf("first finding skill/scope/suggestion = %v/%v/%v", one.Skill, one.OutOfScope, one.Suggestion)
+	}
+	if two.OutOfScope {
+		t.Errorf("second finding OutOfScope = true, want false for a nil flag")
 	}
 	if two.Kind != reviewer.KindFinding || two.TrifectaComponents != nil || two.Suggestion != nil {
 		t.Errorf("second finding = %+v, want kind finding, no components, no suggestion", two)

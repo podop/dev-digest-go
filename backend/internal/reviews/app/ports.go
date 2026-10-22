@@ -263,8 +263,8 @@ type ReviewStore interface {
 	// or agent was deleted meanwhile.
 	InsertReview(ctx context.Context, r domain.NewReview) (string, error)
 	// InsertFindings inserts the kept findings (spec 7.3 mapping: kind defaults to finding,
-	// out_of_scope false, skill_id from skillIDs[skill name]; the model's id and evidence are
-	// not stored).
+	// out_of_scope = the finding's flag, false when nil, skill_id from skillIDs[skill name]; the
+	// model's id and evidence are not stored).
 	InsertFindings(ctx context.Context, reviewID string, findings []reviewer.Finding, skillIDs map[string]string) error
 	// ReviewsForPull returns the pull request's reviews newest created_at first, each with its
 	// findings in insertion order, the agent's name and, with a run, the run's usage.
