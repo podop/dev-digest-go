@@ -87,9 +87,14 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 			removed++
 		}
 	}
-	out, _, err := ix.parseFiles(ctx, root, live, nil, 0)
+	out, _, err := ix.parseFiles(ctx, root, live, nil, ix.maxRows)
 	if err != nil {
 		return Result{}, err
+	}
+	if out.rowBudget {
+		// The changed slice alone holds more rows than the budget (security r2 N1): the full
+		// index applies the same budget and ends partial with reason row_budget.
+		return ix.full(ctx, repoID)
 	}
 	skipped := out.skipped + removed
 

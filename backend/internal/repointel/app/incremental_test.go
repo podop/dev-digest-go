@@ -14,9 +14,9 @@ import (
 
 // incrementalEnv is an env with a previous index at "old-sha" of the given status, a clone of
 // src/a.ts and src/c.ts, and HEAD "head-sha".
-func incrementalEnv(t *testing.T, status domain.Status) *env {
+func incrementalEnv(t *testing.T, status domain.Status, opts ...envOption) *env {
 	t.Helper()
-	e := newEnv(t)
+	e := newEnv(t, opts...)
 	e.addFile("src/a.ts", "new a", fn("a", 1))
 	e.addFile("src/c.ts", "c", fn("c", 1))
 	e.seedIndex(status)
@@ -146,6 +146,28 @@ func TestIncremental_OnlyUnsupportedChangesAdvanceTheSha(t *testing.T) {
 	now.states, rows.states = nil, nil
 	if diff := cmp.Diff(rows, now, cmp.AllowUnexported(storeData{})); diff != "" {
 		t.Errorf("tables changed (-before +after):\n%s", diff)
+	}
+}
+
+func TestIncremental_RowBudgetFallsBackToAFullIndex(t *testing.T) {
+	// Each changed file holds 1 symbol; with a budget of 1 row the second file is never started
+	// by the incremental parse, and the full index it falls back to stops the same way.
+	e := incrementalEnv(t, domain.StatusFull, withMaxRows(1))
+	e.git.diff = []string{"src/a.ts", "src/c.ts"}
+
+	res, err := e.ix.Incremental(t.Context(), repoID)
+	if err != nil {
+		t.Fatalf("Incremental() error = %v", err)
+	}
+	st := e.state(t)
+	if _, ok := st.Stats["incremental"]; ok {
+		t.Errorf("stats = %v, want a full index (no incremental key)", st.Stats)
+	}
+	if res.Status != domain.StatusPartial || res.Reason != "row_budget" || st.Stats["rowBudgetReached"] != true {
+		t.Errorf("Incremental() = %+v, stats %v, want partial / row_budget with rowBudgetReached", res, st.Stats)
+	}
+	if st.LastIndexedSHA != "head-sha" {
+		t.Errorf("state.LastIndexedSHA = %q, want head-sha", st.LastIndexedSHA)
 	}
 }
 
