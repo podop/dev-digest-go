@@ -19,6 +19,13 @@ const (
 	DefaultProjectContextGlobs = "**/{specs,docs,insights}/**/*.md"
 	// maxMockDelayMS is the upper bound of LLM_MOCK_DELAY_MS.
 	maxMockDelayMS = 60_000
+
+	// DefaultReviewAgentConcurrency and MaxReviewAgentConcurrency bound REVIEW_AGENT_CONCURRENCY.
+	DefaultReviewAgentConcurrency = 4
+	MaxReviewAgentConcurrency     = 20
+	// DefaultReviewMapConcurrency and MaxReviewMapConcurrency bound REVIEW_MAP_CONCURRENCY.
+	DefaultReviewMapConcurrency = 3
+	MaxReviewMapConcurrency     = 16
 )
 
 // Config is the typed configuration passed from main to the rest of the backend.
@@ -43,6 +50,13 @@ type Config struct {
 	LLMProviderOverride string        // LLM_PROVIDER_OVERRIDE: "" or LLMProviderMock
 	LLMMockDelay        time.Duration // LLM_MOCK_DELAY_MS, 0 to 60 s
 	ProjectContextGlobs []string      // PROJECT_CONTEXT_GLOBS, never empty
+
+	// ReviewAgentConcurrency is REVIEW_AGENT_CONCURRENCY: how many agents of one review request
+	// run at once (1-MaxReviewAgentConcurrency, default DefaultReviewAgentConcurrency).
+	ReviewAgentConcurrency int
+	// ReviewMapConcurrency is REVIEW_MAP_CONCURRENCY: how many map-reduce chunks of one agent run
+	// are in flight at once (1-MaxReviewMapConcurrency, default DefaultReviewMapConcurrency).
+	ReviewMapConcurrency int
 }
 
 // Load reads the configuration through getenv (os.Getenv in production).
@@ -64,7 +78,9 @@ type Config struct {
 // deterministic mock; any other value is an error. LLM_MOCK_DELAY_MS (integer 0-60000, default
 // 0) delays each mock call. PROJECT_CONTEXT_GLOBS is a comma-separated glob list (commas inside
 // {...} belong to the glob; blank entries are dropped); unset or empty gives
-// DefaultProjectContextGlobs.
+// DefaultProjectContextGlobs. REVIEW_AGENT_CONCURRENCY (integer 1-20, default 4) and
+// REVIEW_MAP_CONCURRENCY (integer 1-16, default 3) bound the parallelism of a review request; an
+// empty value counts as unset and any other value is an error naming the variable.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Addr:             valueOr(getenv("API_ADDR"), ":3001"),
@@ -109,6 +125,16 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	cfg.LLMMockDelay = delay
+	if cfg.ReviewAgentConcurrency, err = parseBoundedInt(
+		"REVIEW_AGENT_CONCURRENCY", getenv("REVIEW_AGENT_CONCURRENCY"), DefaultReviewAgentConcurrency, MaxReviewAgentConcurrency,
+	); err != nil {
+		return Config{}, err
+	}
+	if cfg.ReviewMapConcurrency, err = parseBoundedInt(
+		"REVIEW_MAP_CONCURRENCY", getenv("REVIEW_MAP_CONCURRENCY"), DefaultReviewMapConcurrency, MaxReviewMapConcurrency,
+	); err != nil {
+		return Config{}, err
+	}
 	cfg.ProjectContextGlobs = splitGlobs(valueOr(getenv("PROJECT_CONTEXT_GLOBS"), DefaultProjectContextGlobs))
 	if len(cfg.ProjectContextGlobs) == 0 {
 		// Only reachable through a value like "," — fall back rather than list nothing.
@@ -162,6 +188,20 @@ func parseMockDelay(v string) (time.Duration, error) {
 		return 0, fmt.Errorf("LLM_MOCK_DELAY_MS: %q is not an integer from 0 to %d", v, maxMockDelayMS)
 	}
 	return time.Duration(ms) * time.Millisecond, nil
+}
+
+// parseBoundedInt reads the integer variable name from v: empty (after trimming) = fallback,
+// otherwise an integer from 1 to max.
+func parseBoundedInt(name, v string, fallback, max int) (int, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return fallback, nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 || n > max {
+		return 0, fmt.Errorf("%s: %q is not an integer from 1 to %d", name, v, max)
+	}
+	return n, nil
 }
 
 // splitGlobs splits a glob list at the commas outside braces, trims every entry and drops

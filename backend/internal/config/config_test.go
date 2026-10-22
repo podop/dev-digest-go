@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,18 +24,20 @@ func TestLoad(t *testing.T) {
 			name: "defaults",
 			env:  map[string]string{"DATABASE_URL": "postgres://db", "HOME": "/home/u"},
 			want: config.Config{
-				Addr:                ":3001",
-				DatabaseURL:         "postgres://db",
-				CORSOrigins:         []string{"http://localhost:3000"},
-				AllowedHosts:        []string{"localhost", "127.0.0.1", "[::1]", "backend"},
-				LogLevel:            slog.LevelInfo,
-				DataDir:             "/home/u/.devdigest",
-				CloneDir:            "/home/u/.devdigest/workspace",
-				RateLimitEnabled:    true,
-				AutoMigrate:         true,
-				AutoSeed:            true,
-				RepoIntelEnabled:    true,
-				ProjectContextGlobs: defaultGlobs,
+				Addr:                   ":3001",
+				DatabaseURL:            "postgres://db",
+				CORSOrigins:            []string{"http://localhost:3000"},
+				AllowedHosts:           []string{"localhost", "127.0.0.1", "[::1]", "backend"},
+				LogLevel:               slog.LevelInfo,
+				DataDir:                "/home/u/.devdigest",
+				CloneDir:               "/home/u/.devdigest/workspace",
+				RateLimitEnabled:       true,
+				AutoMigrate:            true,
+				AutoSeed:               true,
+				RepoIntelEnabled:       true,
+				ProjectContextGlobs:    defaultGlobs,
+				ReviewAgentConcurrency: 4,
+				ReviewMapConcurrency:   3,
 			},
 		},
 		{
@@ -51,18 +54,20 @@ func TestLoad(t *testing.T) {
 				"DB_AUTO_SEED":       "false",
 			},
 			want: config.Config{
-				Addr:                ":9000",
-				DatabaseURL:         "postgres://db",
-				CORSOrigins:         []string{"http://a:1", "http://b:2"},
-				AllowedHosts:        []string{"api.local", "Localhost"},
-				LogLevel:            slog.LevelDebug,
-				DataDir:             "/data",
-				CloneDir:            "/data/workspace",
-				RateLimitEnabled:    false,
-				AutoMigrate:         false,
-				AutoSeed:            false,
-				RepoIntelEnabled:    true,
-				ProjectContextGlobs: defaultGlobs,
+				Addr:                   ":9000",
+				DatabaseURL:            "postgres://db",
+				CORSOrigins:            []string{"http://a:1", "http://b:2"},
+				AllowedHosts:           []string{"api.local", "Localhost"},
+				LogLevel:               slog.LevelDebug,
+				DataDir:                "/data",
+				CloneDir:               "/data/workspace",
+				RateLimitEnabled:       false,
+				AutoMigrate:            false,
+				AutoSeed:               false,
+				RepoIntelEnabled:       true,
+				ProjectContextGlobs:    defaultGlobs,
+				ReviewAgentConcurrency: 4,
+				ReviewMapConcurrency:   3,
 			},
 		},
 		{
@@ -73,18 +78,20 @@ func TestLoad(t *testing.T) {
 				"DEVDIGEST_CLONE_DIR": "/clones",
 			},
 			want: config.Config{
-				Addr:                ":3001",
-				DatabaseURL:         "postgres://db",
-				CORSOrigins:         []string{"http://localhost:3000"},
-				AllowedHosts:        []string{"localhost", "127.0.0.1", "[::1]", "backend"},
-				LogLevel:            slog.LevelInfo,
-				DataDir:             "/data/x",
-				CloneDir:            "/clones",
-				RateLimitEnabled:    true,
-				AutoMigrate:         true,
-				AutoSeed:            true,
-				RepoIntelEnabled:    true,
-				ProjectContextGlobs: defaultGlobs,
+				Addr:                   ":3001",
+				DatabaseURL:            "postgres://db",
+				CORSOrigins:            []string{"http://localhost:3000"},
+				AllowedHosts:           []string{"localhost", "127.0.0.1", "[::1]", "backend"},
+				LogLevel:               slog.LevelInfo,
+				DataDir:                "/data/x",
+				CloneDir:               "/clones",
+				RateLimitEnabled:       true,
+				AutoMigrate:            true,
+				AutoSeed:               true,
+				RepoIntelEnabled:       true,
+				ProjectContextGlobs:    defaultGlobs,
+				ReviewAgentConcurrency: 4,
+				ReviewMapConcurrency:   3,
 			},
 		},
 		{
@@ -97,18 +104,20 @@ func TestLoad(t *testing.T) {
 				"DB_AUTO_SEED":       "",
 			},
 			want: config.Config{
-				Addr:                ":3001",
-				DatabaseURL:         "postgres://db",
-				CORSOrigins:         []string{"http://localhost:3000"},
-				AllowedHosts:        []string{"localhost", "127.0.0.1", "[::1]", "backend"},
-				LogLevel:            slog.LevelInfo,
-				DataDir:             "/data",
-				CloneDir:            "/data/workspace",
-				RateLimitEnabled:    true,
-				AutoMigrate:         true,
-				AutoSeed:            true,
-				RepoIntelEnabled:    true,
-				ProjectContextGlobs: defaultGlobs,
+				Addr:                   ":3001",
+				DatabaseURL:            "postgres://db",
+				CORSOrigins:            []string{"http://localhost:3000"},
+				AllowedHosts:           []string{"localhost", "127.0.0.1", "[::1]", "backend"},
+				LogLevel:               slog.LevelInfo,
+				DataDir:                "/data",
+				CloneDir:               "/data/workspace",
+				RateLimitEnabled:       true,
+				AutoMigrate:            true,
+				AutoSeed:               true,
+				RepoIntelEnabled:       true,
+				ProjectContextGlobs:    defaultGlobs,
+				ReviewAgentConcurrency: 4,
+				ReviewMapConcurrency:   3,
 			},
 		},
 		{
@@ -121,20 +130,22 @@ func TestLoad(t *testing.T) {
 				"PROJECT_CONTEXT_GLOBS": "docs/*.md, {a,b}/**/*.md ,, ",
 			},
 			want: config.Config{
-				Addr:                ":3001",
-				DatabaseURL:         "postgres://db",
-				CORSOrigins:         []string{"http://localhost:3000"},
-				AllowedHosts:        []string{"localhost", "127.0.0.1", "[::1]", "backend"},
-				LogLevel:            slog.LevelInfo,
-				DataDir:             "/data",
-				CloneDir:            "/data/workspace",
-				RateLimitEnabled:    true,
-				AutoMigrate:         true,
-				AutoSeed:            true,
-				LLMProviderOverride: "mock",
-				LLMMockDelay:        1500 * time.Millisecond,
-				RepoIntelEnabled:    true,
-				ProjectContextGlobs: []string{"docs/*.md", "{a,b}/**/*.md"},
+				Addr:                   ":3001",
+				DatabaseURL:            "postgres://db",
+				CORSOrigins:            []string{"http://localhost:3000"},
+				AllowedHosts:           []string{"localhost", "127.0.0.1", "[::1]", "backend"},
+				LogLevel:               slog.LevelInfo,
+				DataDir:                "/data",
+				CloneDir:               "/data/workspace",
+				RateLimitEnabled:       true,
+				AutoMigrate:            true,
+				AutoSeed:               true,
+				LLMProviderOverride:    "mock",
+				LLMMockDelay:           1500 * time.Millisecond,
+				RepoIntelEnabled:       true,
+				ProjectContextGlobs:    []string{"docs/*.md", "{a,b}/**/*.md"},
+				ReviewAgentConcurrency: 4,
+				ReviewMapConcurrency:   3,
 			},
 		},
 		{
@@ -143,19 +154,21 @@ func TestLoad(t *testing.T) {
 				"DATABASE_URL": "postgres://db", "DEVDIGEST_DATA_DIR": "/data", "LLM_MOCK_DELAY_MS": "60000",
 			},
 			want: config.Config{
-				Addr:                ":3001",
-				DatabaseURL:         "postgres://db",
-				CORSOrigins:         []string{"http://localhost:3000"},
-				AllowedHosts:        []string{"localhost", "127.0.0.1", "[::1]", "backend"},
-				LogLevel:            slog.LevelInfo,
-				DataDir:             "/data",
-				CloneDir:            "/data/workspace",
-				RateLimitEnabled:    true,
-				AutoMigrate:         true,
-				AutoSeed:            true,
-				LLMMockDelay:        60 * time.Second,
-				RepoIntelEnabled:    true,
-				ProjectContextGlobs: defaultGlobs,
+				Addr:                   ":3001",
+				DatabaseURL:            "postgres://db",
+				CORSOrigins:            []string{"http://localhost:3000"},
+				AllowedHosts:           []string{"localhost", "127.0.0.1", "[::1]", "backend"},
+				LogLevel:               slog.LevelInfo,
+				DataDir:                "/data",
+				CloneDir:               "/data/workspace",
+				RateLimitEnabled:       true,
+				AutoMigrate:            true,
+				AutoSeed:               true,
+				LLMMockDelay:           60 * time.Second,
+				RepoIntelEnabled:       true,
+				ProjectContextGlobs:    defaultGlobs,
+				ReviewAgentConcurrency: 4,
+				ReviewMapConcurrency:   3,
 			},
 		},
 		{name: "provider override other", env: map[string]string{"DATABASE_URL": "x", "LLM_PROVIDER_OVERRIDE": "other"}, wantErr: true},
@@ -241,6 +254,55 @@ func TestLoadRepoIntelEnabled(t *testing.T) {
 			}
 			if got.RepoIntelEnabled != tc.want {
 				t.Errorf("Load(REPO_INTEL_ENABLED=%q).RepoIntelEnabled = %t, want %t", tc.value, got.RepoIntelEnabled, tc.want)
+			}
+		})
+	}
+}
+
+// FR4043, EC4038: REVIEW_AGENT_CONCURRENCY (1-20, default 4) and REVIEW_MAP_CONCURRENCY (1-16,
+// default 3); an empty value is unset, anything else outside the range is an error naming the
+// variable.
+func TestLoadReviewConcurrency(t *testing.T) {
+	tests := []struct {
+		name      string
+		env       map[string]string
+		wantAgent int
+		wantMap   int
+		wantErr   string // variable named in the error; "" = no error
+	}{
+		{name: "defaults", wantAgent: 4, wantMap: 3},
+		{name: "empty counts as unset", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": "", "REVIEW_MAP_CONCURRENCY": "  "}, wantAgent: 4, wantMap: 3},
+		{name: "lower bounds", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": "1", "REVIEW_MAP_CONCURRENCY": "1"}, wantAgent: 1, wantMap: 1},
+		{name: "upper bounds", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": "20", "REVIEW_MAP_CONCURRENCY": "16"}, wantAgent: 20, wantMap: 16},
+		{name: "trimmed values", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": " 7 ", "REVIEW_MAP_CONCURRENCY": " 5 "}, wantAgent: 7, wantMap: 5},
+		{name: "agent zero", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": "0"}, wantErr: "REVIEW_AGENT_CONCURRENCY"},
+		{name: "agent text", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": "abc"}, wantErr: "REVIEW_AGENT_CONCURRENCY"},
+		{name: "agent above range", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": "21"}, wantErr: "REVIEW_AGENT_CONCURRENCY"},
+		{name: "agent fraction", env: map[string]string{"REVIEW_AGENT_CONCURRENCY": "2.5"}, wantErr: "REVIEW_AGENT_CONCURRENCY"},
+		{name: "map negative", env: map[string]string{"REVIEW_MAP_CONCURRENCY": "-1"}, wantErr: "REVIEW_MAP_CONCURRENCY"},
+		{name: "map above range", env: map[string]string{"REVIEW_MAP_CONCURRENCY": "17"}, wantErr: "REVIEW_MAP_CONCURRENCY"},
+		{name: "map text", env: map[string]string{"REVIEW_MAP_CONCURRENCY": "many"}, wantErr: "REVIEW_MAP_CONCURRENCY"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			env := map[string]string{"DATABASE_URL": "x"}
+			for k, v := range tc.env {
+				env[k] = v
+			}
+			got, err := config.Load(func(k string) string { return env[k] })
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("Load(%v) error = %v, want one naming %s", tc.env, err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load(%v) error: %v", tc.env, err)
+			}
+			if got.ReviewAgentConcurrency != tc.wantAgent || got.ReviewMapConcurrency != tc.wantMap {
+				t.Errorf("Load(%v) concurrency = agent %d, map %d; want agent %d, map %d",
+					tc.env, got.ReviewAgentConcurrency, got.ReviewMapConcurrency, tc.wantAgent, tc.wantMap)
 			}
 		})
 	}
