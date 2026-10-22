@@ -57,11 +57,15 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 		}, nil
 	}
 
-	// Parse phase: once the soft budget is spent no new file is started.
-	out, softBudget, err := ix.parseFiles(ctx, root, walk.Files, func() bool { return ix.since(start) >= domain.SoftBudget })
+	// Parse phase: once the soft budget is spent, or the rows held in memory reach the row
+	// budget, no new file is started. Both end the run as partial without the graph, rank, map
+	// and facts, like the soft budget always did; the row budget has its own stat and reason.
+	out, softBudget, err := ix.parseFiles(ctx, root, walk.Files, func() bool { return ix.since(start) >= domain.SoftBudget }, ix.maxRows)
 	if err != nil {
 		return Result{}, err
 	}
+	rowBudget := out.rowBudget
+	stopped := softBudget || rowBudget
 	filesSkipped := walk.Stats.SkippedTooLarge + out.skipped
 
 	// Import graph, outside the transaction; skipped when the budget is spent.
@@ -69,15 +73,15 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 		edges       []domain.Edge
 		graphFailed string
 	)
-	if !softBudget {
+	if !stopped {
 		if edges, graphFailed, err = ix.buildGraph(ctx, root, walk.Files); err != nil {
 			return Result{}, err
 		}
 	}
-	status := domain.FullStatus(softBudget, graphFailed != "", len(out.degraded))
+	status := domain.FullStatus(stopped, graphFailed != "", len(out.degraded))
 
 	var ranks []domain.FileRankRow
-	if !softBudget {
+	if !stopped {
 		ranks = rank.FileRank(walk.Files, edges)
 	}
 	rankCount := len(ranks)
@@ -96,7 +100,7 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 		if err := w.InsertReferences(ctx, repoID, out.refs); err != nil {
 			return fmt.Errorf("insert references: %w", err)
 		}
-		if !softBudget {
+		if !stopped {
 			if err := w.ReplaceEdges(ctx, repoID, edges); err != nil {
 				return fmt.Errorf("replace edges: %w", err)
 			}
@@ -124,7 +128,12 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 		if graphFailed != "" {
 			stats["graphFailed"] = graphFailed
 		}
-		stats["softBudgetReached"] = softBudget
+		// A row-budget stop is recorded as a budget stop (softBudgetReached) plus its own key,
+		// present only then like graphFailed, so the stats of an ordinary run keep Node's keys.
+		stats["softBudgetReached"] = stopped
+		if rowBudget {
+			stats["rowBudgetReached"] = true
+		}
 		stats["parseDegraded"] = out.degraded
 		stats[domain.StatDurationMs] = int(ix.since(start).Milliseconds())
 		return w.UpsertState(ctx, domain.IndexState{
@@ -139,6 +148,8 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 	switch {
 	case softBudget:
 		res.Reason = "soft_budget"
+	case rowBudget:
+		res.Reason = "row_budget"
 	case graphFailed != "":
 		res.Reason = "graph_failed"
 	}

@@ -87,7 +87,7 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 			removed++
 		}
 	}
-	out, _, err := ix.parseFiles(ctx, root, live, nil)
+	out, _, err := ix.parseFiles(ctx, root, live, nil, 0)
 	if err != nil {
 		return Result{}, err
 	}

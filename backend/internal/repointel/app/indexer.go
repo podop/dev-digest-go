@@ -41,6 +41,9 @@ type IndexerOptions struct {
 	Now func() time.Time
 	// Workers bounds the parallel file parses; zero or less means max(1, CPU count - 1).
 	Workers int
+	// MaxRows is the row budget of a full index: the symbols and references held in memory
+	// before it stops starting files and ends partial; zero or less means 500,000.
+	MaxRows int
 	// Log receives warnings; nil discards them. Nothing logged carries source text.
 	Log *slog.Logger
 }
@@ -64,12 +67,13 @@ type Indexer struct {
 	d       IndexerDeps
 	now     func() time.Time
 	workers int
+	maxRows int
 	log     *slog.Logger
 }
 
 // NewIndexer builds an Indexer.
 func NewIndexer(d IndexerDeps, opts IndexerOptions) *Indexer {
-	ix := &Indexer{d: d, now: opts.Now, workers: opts.Workers, log: opts.Log}
+	ix := &Indexer{d: d, now: opts.Now, workers: opts.Workers, maxRows: opts.MaxRows, log: opts.Log}
 	if ix.d.Redact == nil {
 		ix.d.Redact = noRedact{}
 	}
@@ -78,6 +82,9 @@ func NewIndexer(d IndexerDeps, opts IndexerOptions) *Indexer {
 	}
 	if ix.workers <= 0 {
 		ix.workers = max(1, runtime.NumCPU()-1)
+	}
+	if ix.maxRows <= 0 {
+		ix.maxRows = defaultMaxHeldRows
 	}
 	if ix.log == nil {
 		ix.log = slog.New(slog.DiscardHandler)

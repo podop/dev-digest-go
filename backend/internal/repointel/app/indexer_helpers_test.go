@@ -33,9 +33,12 @@ type envOption func(*envConfig)
 type envConfig struct {
 	log     *slog.Logger
 	workers int
+	maxRows int
 }
 
 func withLog(l *slog.Logger) envOption { return func(c *envConfig) { c.log = l } }
+
+func withMaxRows(n int) envOption { return func(c *envConfig) { c.maxRows = n } }
 
 func withWorkers(n int) envOption { return func(c *envConfig) { c.workers = n } }
 
@@ -57,7 +60,7 @@ func newEnv(t *testing.T, opts ...envOption) *env {
 	e.ix = app.NewIndexer(app.IndexerDeps{
 		Reader: e.store, Writer: e.store, Tx: e.store, Git: e.git, Files: e.clone,
 		Analyzer: e.an, Graph: e.graph, Tokens: lenTokens{}, Redact: maskKey{},
-	}, app.IndexerOptions{Now: e.clock.Now, Workers: cfg.workers, Log: cfg.log})
+	}, app.IndexerOptions{Now: e.clock.Now, Workers: cfg.workers, MaxRows: cfg.maxRows, Log: cfg.log})
 	return e
 }
 

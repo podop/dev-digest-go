@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -69,6 +71,7 @@ func (s *Store) DeleteRepoRows(ctx context.Context, repoID string) error {
 // paths.
 func (s *Store) DeleteFileRows(ctx context.Context, repoID string, paths []string) error {
 	conn := s.conn(ctx)
+	paths = storablePaths(paths)
 	for part := range slices.Chunk(paths, deleteChunk) {
 		if err := conn.Where("repo_id = ? AND path IN ?", repoID, part).Delete(&symbolRow{}).Error; err != nil {
 			return fmt.Errorf("delete symbols of files: %w", err)
@@ -80,9 +83,9 @@ func (s *Store) DeleteFileRows(ctx context.Context, repoID string, paths []strin
 	return nil
 }
 
-// InsertSymbols clamps names to MaxNameUnits UTF-16 units, drops rows that repeat
-// (path, name, kind, line) after the cut (the first one wins; the unique key would reject the
-// second) and inserts the rest in chunks.
+// InsertSymbols makes the text storable (domain.SanitizeText), clamps names to MaxNameUnits UTF-16
+// units, drops rows that repeat (path, name, kind, line) after both (the first one wins; the
+// unique key would reject the second) and inserts the rest in chunks.
 func (s *Store) InsertSymbols(ctx context.Context, repoID string, rows []domain.SymbolRow) error {
 	type key struct {
 		path, name, kind string
@@ -91,28 +94,30 @@ func (s *Store) InsertSymbols(ctx context.Context, repoID string, rows []domain.
 	seen := make(map[key]struct{}, len(rows))
 	out := make([]symbolRow, 0, len(rows))
 	for _, r := range rows {
-		name := domain.ClampName(r.Name)
-		k := key{r.Path, name, r.Kind, r.Line}
+		path := domain.SanitizeText(r.Path)
+		name := domain.ClampName(domain.SanitizeText(r.Name))
+		k := key{path, name, r.Kind, r.Line}
 		if _, dup := seen[k]; dup {
 			continue
 		}
 		seen[k] = struct{}{}
-		line, endLine, signature, hash := r.Line, r.EndLine, r.Signature, r.ContentHash
+		line, endLine, signature, hash := r.Line, r.EndLine, domain.SanitizeText(r.Signature), r.ContentHash
 		out = append(out, symbolRow{
-			RepoID: repoID, Path: r.Path, Name: name, Kind: r.Kind, Line: &line, EndLine: &endLine,
+			RepoID: repoID, Path: path, Name: name, Kind: r.Kind, Line: &line, EndLine: &endLine,
 			Exported: r.Exported, Signature: &signature, ContentHash: &hash,
 		})
 	}
 	return insertChunks(s.conn(ctx), "symbols", out)
 }
 
-// InsertReferences clamps to_symbol like InsertSymbols and inserts in chunks.
+// InsertReferences sanitizes and clamps to_symbol like InsertSymbols and inserts in chunks.
 func (s *Store) InsertReferences(ctx context.Context, repoID string, rows []domain.ReferenceRow) error {
 	out := make([]referenceRow, len(rows))
 	for i, r := range rows {
 		hash := r.ContentHash
 		out[i] = referenceRow{
-			RepoID: repoID, FromPath: r.FromPath, ToSymbol: domain.ClampName(r.ToSymbol), Line: r.Line,
+			RepoID: repoID, FromPath: domain.SanitizeText(r.FromPath),
+			ToSymbol: domain.ClampName(domain.SanitizeText(r.ToSymbol)), Line: r.Line,
 			ContentHash: &hash,
 		}
 	}
@@ -127,7 +132,7 @@ func (s *Store) ReplaceEdges(ctx context.Context, repoID string, edges []domain.
 	}
 	out := make([]edgeRow, len(edges))
 	for i, e := range edges {
-		out[i] = edgeRow{RepoID: repoID, FromFile: e.From, ToFile: e.To}
+		out[i] = edgeRow{RepoID: repoID, FromFile: domain.SanitizeText(e.From), ToFile: domain.SanitizeText(e.To)}
 	}
 	return insertChunks(conn, "file_edges", out)
 }
@@ -139,12 +144,13 @@ func (s *Store) ReplaceEdges(ctx context.Context, repoID string, edges []domain.
 func (s *Store) ResolveReferences(ctx context.Context, repoID string, reset bool) error {
 	conn := s.conn(ctx)
 	if reset {
-		// UPDATE with a column set to NULL and a CTE below: neither has a builder worth the name.
-		err := conn.Exec(`UPDATE "references" SET decl_file = NULL WHERE repo_id = ? AND decl_file IS NOT NULL`, repoID).Error
+		err := conn.Model(&referenceRow{}).Where("repo_id = ? AND decl_file IS NOT NULL", repoID).
+			Update("decl_file", nil).Error
 		if err != nil {
 			return fmt.Errorf("reset decl_file: %w", err)
 		}
 	}
+	// UPDATE ... FROM over an aggregate sub-select: the builder has no form for it.
 	// One aggregate per reference, no second pass over it: the rows were inserted in this very
 	// transaction, so the planner has no statistics for them, and a self-join of the candidates
 	// (WITH cand ... JOIN uniq) was re-run once per candidate row (67 s for 138k references).
@@ -177,7 +183,7 @@ func (s *Store) ReplaceFileRank(ctx context.Context, repoID string, rows []domai
 	out := make([]rankRow, len(rows))
 	for i, r := range rows {
 		out[i] = rankRow{
-			RepoID: repoID, FilePath: r.Path, PageRank: r.PageRank, Hotness: r.Hotness, Rank: r.Rank,
+			RepoID: repoID, FilePath: domain.SanitizeText(r.Path), PageRank: r.PageRank, Hotness: r.Hotness, Rank: r.Rank,
 			Percentile: r.Percentile,
 		}
 	}
@@ -198,6 +204,7 @@ func (s *Store) ReplaceFileFacts(ctx context.Context, repoID string, rows []doma
 // or cron.
 func (s *Store) PatchFileFacts(ctx context.Context, repoID string, paths []string, rows []domain.FileFacts) error {
 	conn := s.conn(ctx)
+	paths = storablePaths(paths)
 	for part := range slices.Chunk(paths, deleteChunk) {
 		if err := conn.Where("repo_id = ? AND file_path IN ?", repoID, part).Delete(&factsRow{}).Error; err != nil {
 			return fmt.Errorf("delete file_facts of files: %w", err)
@@ -212,17 +219,38 @@ func insertFacts(conn *gorm.DB, repoID string, rows []domain.FileFacts) error {
 		if len(r.Endpoints) == 0 && len(r.Crons) == 0 {
 			continue
 		}
-		endpoints, err := marshalStrings(r.Endpoints)
+		endpoints, err := marshalStrings(sanitizeAll(r.Endpoints))
 		if err != nil {
 			return err
 		}
-		crons, err := marshalStrings(r.Crons)
+		crons, err := marshalStrings(sanitizeAll(r.Crons))
 		if err != nil {
 			return err
 		}
-		out = append(out, factsRow{RepoID: repoID, FilePath: r.Path, Endpoints: endpoints, Crons: crons})
+		out = append(out, factsRow{RepoID: repoID, FilePath: domain.SanitizeText(r.Path), Endpoints: endpoints, Crons: crons})
 	}
 	return insertChunks(conn, "file_facts", out)
+}
+
+// storablePaths drops the paths that no row can hold (not valid UTF-8, or holding U+0000): the
+// walk never indexes them, and Postgres would fail the statement on one of them. A changed path
+// reported by git can be one.
+func storablePaths(paths []string) []string {
+	if !slices.ContainsFunc(paths, unstorable) {
+		return paths
+	}
+	return slices.DeleteFunc(slices.Clone(paths), unstorable)
+}
+
+func unstorable(p string) bool { return !utf8.ValidString(p) || strings.IndexByte(p, 0) >= 0 }
+
+// sanitizeAll applies domain.SanitizeText to every element (jsonb refuses \u0000 too).
+func sanitizeAll(list []string) []string {
+	out := make([]string, len(list))
+	for i, s := range list {
+		out[i] = domain.SanitizeText(s)
+	}
+	return out
 }
 
 // DeleteRepoMaps deletes every repo_map_cache row of the repo.

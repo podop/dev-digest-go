@@ -233,6 +233,64 @@ func TestFull_SoftBudgetStopsParsingAndKeepsGraphTables(t *testing.T) {
 	}
 }
 
+func TestFull_RowBudgetStopsParsingAndKeepsGraphTables(t *testing.T) {
+	// Each file holds 1 symbol and 3 references = 4 rows; with a budget of 10 rows the third file
+	// reaches it (12 rows) and the fourth is never started.
+	e := newEnv(t, withMaxRows(10))
+	files := manyFiles(e, 6)
+	for _, f := range files {
+		ex := e.an.ex[f]
+		ex.References = []domain.Reference{{Name: "x", Line: 1}, {Name: "y", Line: 2}, {Name: "z", Line: 3}}
+		e.an.ex[f] = ex
+	}
+	e.seedIndex(domain.StatusFull)
+	e.graph.edges = []domain.Edge{{From: files[0], To: files[1]}}
+	var parsed []string
+	e.an.onExtract = func(p string) { parsed = append(parsed, p) }
+	prev := e.store.snapshot()
+
+	res, err := e.ix.Full(t.Context(), repoID)
+	if err != nil {
+		t.Fatalf("Full() error = %v", err)
+	}
+	if diff := cmp.Diff(files[:3], parsed); diff != "" {
+		t.Errorf("parsed files mismatch (-want +got):\n%s", diff)
+	}
+	st := e.state(t)
+	if res.Status != domain.StatusPartial || st.Status != domain.StatusPartial || res.Reason != "row_budget" {
+		t.Errorf("Full() = %+v, state status %q, want partial / row_budget", res, st.Status)
+	}
+	if st.Stats["rowBudgetReached"] != true || st.Stats["softBudgetReached"] != true {
+		t.Errorf("stats rowBudgetReached/softBudgetReached = %v/%v, want true/true", st.Stats["rowBudgetReached"], st.Stats["softBudgetReached"])
+	}
+	if st.FilesIndexed != 3 {
+		t.Errorf("state.FilesIndexed = %d, want 3", st.FilesIndexed)
+	}
+	d := e.store.data
+	if len(d.symbols) != 3 || len(d.refs) != 9 {
+		t.Errorf("rows = %d symbols / %d references, want 3 / 9 (the parsed files only)", len(d.symbols), len(d.refs))
+	}
+	for name, got := range map[string]any{"edges": d.edges, "ranks": d.ranks, "maps": d.maps, "facts": d.facts} {
+		want := map[string]any{"edges": prev.edges, "ranks": prev.ranks, "maps": prev.maps, "facts": prev.facts}[name]
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("%s changed (-want +got):\n%s", name, diff)
+		}
+	}
+}
+
+func TestFull_UnderTheRowBudgetIsUnchanged(t *testing.T) {
+	e := newEnv(t, withMaxRows(1000))
+	manyFiles(e, 6)
+	res, err := e.ix.Full(t.Context(), repoID)
+	if err != nil {
+		t.Fatalf("Full() error = %v", err)
+	}
+	st := e.state(t)
+	if _, has := st.Stats["rowBudgetReached"]; res.Status != domain.StatusFull || has || st.FilesIndexed != 6 {
+		t.Errorf("Full() = %+v, state %+v, want full, 6 files and no rowBudgetReached key", res, st)
+	}
+}
+
 func TestFull_GraphBuilderFailure(t *testing.T) {
 	tests := []struct {
 		name  string

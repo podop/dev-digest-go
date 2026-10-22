@@ -4,18 +4,13 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 var stateTime = time.Date(2026, 10, 22, 10, 0, 0, 123_456_789, time.UTC)
 
-func marshal(t *testing.T, v StateView) string {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
+func ptr(s string) *string { return &s }
 
 func TestNewStateView_Full(t *testing.T) {
 	// AC3001: bounded, softBudgetReached and every other stats key stay out.
@@ -24,53 +19,55 @@ func TestNewStateView_Full(t *testing.T) {
 		FilesIndexed: 10, FilesSkipped: 2, UpdatedAt: stateTime,
 		Stats: map[string]any{"durationMs": float64(1234), "bounded": float64(7), "softBudgetReached": false},
 	}
-	want := `{"repoId":"r1","status":"full","filesIndexed":10,"filesSkipped":2,"durationMs":1234,` +
-		`"lastIndexedSha":"abc","indexerVersion":2,"updatedAt":"2026-10-22T10:00:00.123Z"}`
-	if got := marshal(t, NewStateView(st)); got != want {
-		t.Errorf("NewStateView(full) = %s, want %s", got, want)
+	want := StateView{
+		RepoID: "r1", Status: StatusFull, FilesIndexed: 10, FilesSkipped: 2, DurationMs: 1234,
+		LastIndexedSha: "abc", IndexerVersion: 2, UpdatedAt: "2026-10-22T10:00:00.123Z",
+	}
+	if diff := cmp.Diff(want, NewStateView(st)); diff != "" {
+		t.Errorf("NewStateView(full) mismatch (-want +got):\n%s", diff)
 	}
 }
 
 func TestNewStateView_Degraded(t *testing.T) {
 	// AC3002.
+	const at = "2026-10-22T10:00:00.123Z"
 	tests := []struct {
 		name  string
 		state IndexState
-		want  string
+		want  StateView
 	}{
 		{
 			"degraded with reasons",
 			IndexState{RepoID: "r", Status: StatusDegraded, IndexerVersion: 2, UpdatedAt: stateTime,
 				Stats: map[string]any{"reason": "no_clone", "degradedReason": "no_data"}},
-			`{"repoId":"r","status":"degraded","filesIndexed":0,"filesSkipped":0,"durationMs":0,"reason":"no_clone",` +
-				`"lastIndexedSha":"","indexerVersion":2,"updatedAt":"2026-10-22T10:00:00.123Z","degraded":true,"degradedReason":"no_data"}`,
+			StateView{RepoID: "r", Status: StatusDegraded, Reason: ptr("no_clone"), IndexerVersion: 2,
+				UpdatedAt: at, Degraded: true, DegradedReason: ReasonNoData},
 		},
 		{
 			"failed without degradedReason",
 			IndexState{RepoID: "r", Status: StatusFailed, IndexerVersion: 2, UpdatedAt: stateTime,
 				Stats: map[string]any{"reason": "index_failed"}},
-			`{"repoId":"r","status":"failed","filesIndexed":0,"filesSkipped":0,"durationMs":0,"reason":"index_failed",` +
-				`"lastIndexedSha":"","indexerVersion":2,"updatedAt":"2026-10-22T10:00:00.123Z","degraded":true,"degradedReason":"index_failed"}`,
+			StateView{RepoID: "r", Status: StatusFailed, Reason: ptr("index_failed"), IndexerVersion: 2,
+				UpdatedAt: at, Degraded: true, DegradedReason: ReasonIndexFailed},
 		},
 		{
 			"unknown degradedReason falls back",
 			IndexState{RepoID: "r", Status: StatusDegraded, IndexerVersion: 2, UpdatedAt: stateTime,
 				Stats: map[string]any{"degradedReason": "weird"}},
-			`{"repoId":"r","status":"degraded","filesIndexed":0,"filesSkipped":0,"durationMs":0,` +
-				`"lastIndexedSha":"","indexerVersion":2,"updatedAt":"2026-10-22T10:00:00.123Z","degraded":true,"degradedReason":"index_failed"}`,
+			StateView{RepoID: "r", Status: StatusDegraded, IndexerVersion: 2, UpdatedAt: at,
+				Degraded: true, DegradedReason: ReasonIndexFailed},
 		},
 		{
 			"partial carries no degraded keys, even with a degradedReason in stats",
 			IndexState{RepoID: "r", Status: StatusPartial, IndexerVersion: 2, UpdatedAt: stateTime,
 				Stats: map[string]any{"degradedReason": "no_data", "reason": ""}},
-			`{"repoId":"r","status":"partial","filesIndexed":0,"filesSkipped":0,"durationMs":0,"reason":"",` +
-				`"lastIndexedSha":"","indexerVersion":2,"updatedAt":"2026-10-22T10:00:00.123Z"}`,
+			StateView{RepoID: "r", Status: StatusPartial, Reason: ptr(""), IndexerVersion: 2, UpdatedAt: at},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := marshal(t, NewStateView(tc.state)); got != tc.want {
-				t.Errorf("NewStateView() = %s, want %s", got, tc.want)
+			if diff := cmp.Diff(tc.want, NewStateView(tc.state)); diff != "" {
+				t.Errorf("NewStateView() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
@@ -103,10 +100,12 @@ func TestNewStateView_DurationMs(t *testing.T) {
 
 func TestSynthesised(t *testing.T) {
 	// AC3003: the id is echoed as sent.
-	want := `{"repoId":"5F0C-UPPER","status":"degraded","filesIndexed":0,"filesSkipped":0,"durationMs":0,"reason":"no_data",` +
-		`"lastIndexedSha":"","indexerVersion":2,"updatedAt":"1970-01-01T00:00:00.000Z","degraded":true,"degradedReason":"no_data"}`
-	if got := marshal(t, Synthesised("5F0C-UPPER")); got != want {
-		t.Errorf("Synthesised() = %s, want %s", got, want)
+	want := StateView{
+		RepoID: "5F0C-UPPER", Status: StatusDegraded, Reason: ptr("no_data"), IndexerVersion: 2,
+		UpdatedAt: "1970-01-01T00:00:00.000Z", Degraded: true, DegradedReason: ReasonNoData,
+	}
+	if diff := cmp.Diff(want, Synthesised("5F0C-UPPER")); diff != "" {
+		t.Errorf("Synthesised() mismatch (-want +got):\n%s", diff)
 	}
 }
 

@@ -9,6 +9,15 @@ import (
 	"dev-digest-go/backend/internal/repointel/domain"
 )
 
+// defaultMaxHeldRows is the number of symbol and reference rows a full index may hold in memory
+// before it stops starting files (L4 of the security review, NFR3002: at most 1 GiB). The rows
+// stay in memory until the transaction writes them, twice over while the per-file results are
+// folded. Measured per row, with append slack: 73 bytes for a reference, 272 for a symbol with a
+// 120-unit signature. 500,000 rows are therefore about 36 MB of references to 136 MB of symbols,
+// 73 to 272 MB folded; the files in flight when the budget is reached add at most one file each
+// (about 82,000 references in a 400 KiB file), so even seven workers stay under 0.5 GiB.
+const defaultMaxHeldRows = 500_000
+
 // parseTimeoutReason is the reason of a file whose parse ran past domain.ParseTimeout (FR3017).
 const parseTimeoutReason = "parse timed out after 2000 ms"
 
@@ -46,6 +55,9 @@ type parsed struct {
 	indexed  int
 	skipped  int
 	degraded []parseFailure
+	// rowBudget is true when parsing stopped because the symbols and references held in memory
+	// reached the row budget; files not started are not indexed.
+	rowBudget bool
 }
 
 // add folds one file's result into p; a failed file adds a parseDegraded entry until the list
@@ -116,26 +128,35 @@ func (ix *Indexer) parseFile(ctx context.Context, root, rel string) (res fileRes
 
 // parseFiles parses files with at most ix.workers in parallel (FR3014) and folds the results in
 // the order of files. stop, when not nil, is asked before each file is started; once it says
-// true no further file is started and softStop is true. It returns ctx's error when ctx ends.
-func (ix *Indexer) parseFiles(ctx context.Context, root string, files []string, stop func() bool) (out parsed, softStop bool, err error) {
+// true no further file is started and softStop is true. maxRows, when above zero, is the row
+// budget: once the files parsed so far hold that many symbol and reference rows no further file
+// is started and out.rowBudget is true. It returns ctx's error when ctx ends.
+func (ix *Indexer) parseFiles(ctx context.Context, root string, files []string, stop func() bool, maxRows int) (out parsed, softStop bool, err error) {
 	slots := make([]*fileResult, len(files))
 	var (
-		next    atomic.Int64
-		stopped atomic.Bool
-		wg      sync.WaitGroup
+		next        atomic.Int64
+		rows        atomic.Int64
+		softStopped atomic.Bool
+		rowStopped  atomic.Bool
+		wg          sync.WaitGroup
 	)
 	for range min(ix.workers, max(len(files), 1)) {
 		wg.Go(func() {
-			for ctx.Err() == nil && !stopped.Load() {
+			for ctx.Err() == nil && !softStopped.Load() && !rowStopped.Load() {
 				idx := int(next.Add(1)) - 1
 				if idx >= len(files) {
 					return
 				}
 				if stop != nil && stop() {
-					stopped.Store(true)
+					softStopped.Store(true)
+					return
+				}
+				if maxRows > 0 && rows.Load() >= int64(maxRows) {
+					rowStopped.Store(true)
 					return
 				}
 				r := ix.parseFile(ctx, root, files[idx])
+				rows.Add(int64(len(r.symbols) + len(r.refs)))
 				slots[idx] = &r
 			}
 		})
@@ -145,10 +166,11 @@ func (ix *Indexer) parseFiles(ctx context.Context, root string, files []string, 
 		return parsed{}, false, fmt.Errorf("parse files: %w", err)
 	}
 	out.degraded = []parseFailure{}
+	out.rowBudget = rowStopped.Load()
 	for i, r := range slots {
 		if r != nil {
 			out.add(files[i], *r)
 		}
 	}
-	return out, stopped.Load(), nil
+	return out, softStopped.Load(), nil
 }

@@ -66,14 +66,12 @@ func (s *Store) GetState(ctx context.Context, repoID string) (domain.IndexState,
 // a row of another indexer version (FR3008).
 func (s *Store) ListBackfill(ctx context.Context) ([]domain.Repo, error) {
 	var rows []repoRow
-	// A LEFT JOIN with an anti-condition on the right side: the builder has no join-with-null form.
-	err := s.conn(ctx).Raw(`
-SELECT r.id, r.workspace_id, r.owner, r.name, r.default_branch, r.clone_path
-FROM repos r
-LEFT JOIN repo_index_state st ON st.repo_id = r.id
-WHERE r.clone_path IS NOT NULL AND r.clone_path <> ''
-	AND (st.repo_id IS NULL OR st.indexer_version <> ?)
-ORDER BY r.id`, domain.IndexerVersion).Scan(&rows).Error
+	err := s.conn(ctx).Table("repos AS r").
+		Select("r.id, r.workspace_id, r.owner, r.name, r.default_branch, r.clone_path").
+		Joins("LEFT JOIN repo_index_state st ON st.repo_id = r.id").
+		Where("r.clone_path IS NOT NULL AND r.clone_path <> ''").
+		Where("(st.repo_id IS NULL OR st.indexer_version <> ?)", domain.IndexerVersion).
+		Order("r.id").Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select repos to backfill: %w", err)
 	}
@@ -99,14 +97,14 @@ type candidateRow struct {
 // the kind breaks the remaining ties, which the unique key allows.
 func (s *Store) MapCandidates(ctx context.Context, repoID string) ([]domain.MapCandidate, error) {
 	var rows []candidateRow
-	// The collation is set on the underlying columns, never on a select alias (invalid in ORDER BY).
-	err := s.conn(ctx).Raw(`
-SELECT s.path, s.name, s.exported, s.line, s.signature, f.rank
-FROM symbols s
-JOIN file_rank f ON f.repo_id = s.repo_id AND f.file_path = s.path
-WHERE s.repo_id = ? AND s.signature IS NOT NULL
-ORDER BY f.rank DESC, s.exported DESC, s.line ASC, s.name COLLATE "C" ASC, s.path COLLATE "C" ASC,
-	s.kind COLLATE "C" ASC`, repoID).Scan(&rows).Error
+	// The collation is set on the underlying columns, never on a select alias (invalid in ORDER BY);
+	// the builder takes the ORDER BY as a raw fragment because it has no collation form.
+	err := s.conn(ctx).Table("symbols AS s").
+		Select("s.path, s.name, s.exported, s.line, s.signature, f.rank").
+		Joins("JOIN file_rank f ON f.repo_id = s.repo_id AND f.file_path = s.path").
+		Where("s.repo_id = ? AND s.signature IS NOT NULL", repoID).
+		Order(`f.rank DESC, s.exported DESC, s.line ASC, s.name COLLATE "C" ASC, s.path COLLATE "C" ASC, s.kind COLLATE "C" ASC`).
+		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select repo map candidates: %w", err)
 	}
@@ -137,7 +135,7 @@ func (s *Store) CachedMap(ctx context.Context, repoID, sha string, budget int) (
 // FileRanks returns the percentile of each of paths that has a file_rank row (any order).
 func (s *Store) FileRanks(ctx context.Context, repoID string, paths []string) ([]domain.PathPercentile, error) {
 	var out []domain.PathPercentile
-	for part := range slices.Chunk(paths, deleteChunk) {
+	for part := range slices.Chunk(storablePaths(paths), deleteChunk) {
 		var rows []rankRow
 		err := s.conn(ctx).Where("repo_id = ? AND file_path IN ?", repoID, part).Find(&rows).Error
 		if err != nil {
@@ -165,13 +163,13 @@ type symbolInfoRow struct {
 // byte order. EndLine falls back to the line, then to 0.
 func (s *Store) SymbolsInFiles(ctx context.Context, repoID string, paths []string) ([]domain.SymbolInfo, error) {
 	var rows []symbolInfoRow
+	paths = storablePaths(paths)
 	for part := range slices.Chunk(paths, deleteChunk) {
 		var chunk []symbolInfoRow
-		err := s.conn(ctx).Raw(`
-SELECT path, name, kind, exported, line, end_line, signature
-FROM symbols
-WHERE repo_id = ? AND path IN ?
-ORDER BY path COLLATE "C" ASC, line ASC, name COLLATE "C" ASC, kind COLLATE "C" ASC`, repoID, part).
+		err := s.conn(ctx).Table("symbols").
+			Select("path, name, kind, exported, line, end_line, signature").
+			Where("repo_id = ? AND path IN ?", repoID, part).
+			Order(`path COLLATE "C" ASC, line ASC, name COLLATE "C" ASC, kind COLLATE "C" ASC`).
 			Scan(&chunk).Error
 		if err != nil {
 			return nil, fmt.Errorf("select symbols of files: %w", err)

@@ -4,6 +4,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // IsExcludedDir reports a directory name the walk never enters, at any depth (FR3013).
@@ -35,9 +36,11 @@ type FileEntry struct {
 
 // SelectFiles applies the walk rules of FR3013 to the regular files of a clone and returns the
 // source files to index. A file qualifies when its extension is supported and none of its
-// directories is excluded; each qualifying file counts in TotalCandidates; one larger than
-// MaxFileBytes counts in SkippedTooLarge and is left out. The paths are sorted in byte order and
-// only the first MaxIndexedFiles are kept, Bounded counting the rest. The input is not modified.
+// directories is excluded; each qualifying file counts in TotalCandidates. One larger than
+// MaxFileBytes, or whose path is not valid UTF-8 (Postgres cannot store it; Node reads such a
+// name as U+FFFD and cannot open it), counts in SkippedTooLarge and is left out. The paths are
+// sorted in byte order and only the first MaxIndexedFiles are kept, Bounded counting the rest.
+// The input is not modified.
 func SelectFiles(entries []FileEntry) WalkResult {
 	var res WalkResult
 	files := make([]string, 0, len(entries))
@@ -46,7 +49,7 @@ func SelectFiles(entries []FileEntry) WalkResult {
 			continue
 		}
 		res.Stats.TotalCandidates++
-		if e.Size > MaxFileBytes {
+		if e.Size > MaxFileBytes || !storablePath(e.Path) {
 			res.Stats.SkippedTooLarge++
 			continue
 		}
@@ -60,6 +63,9 @@ func SelectFiles(entries []FileEntry) WalkResult {
 	res.Files = files
 	return res
 }
+
+// storablePath reports whether p can be stored: valid UTF-8 without U+0000.
+func storablePath(p string) bool { return utf8.ValidString(p) && strings.IndexByte(p, 0) < 0 }
 
 // inExcludedDir reports whether any directory element of the slash-separated path is excluded.
 func inExcludedDir(p string) bool {

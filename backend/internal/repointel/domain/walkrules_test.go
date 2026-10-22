@@ -96,3 +96,21 @@ func TestSelectFiles_Empty(t *testing.T) {
 		t.Errorf("SelectFiles(nil) = %+v, want empty", got)
 	}
 }
+
+func TestSelectFiles_PathsThatCannotBeStoredAreSkipped(t *testing.T) {
+	in := []FileEntry{
+		{"src/ok.ts", 10},
+		{"src/\xff.ts", 10},         // a Latin-1 style name
+		{"src/trunc\xe2\x82.js", 5}, // a cut multi-byte sequence
+		{"src/café.ts", 10},         // valid non-ASCII stays
+		{"src/readme.md", 10},       // not a candidate at all
+	}
+	got := SelectFiles(in)
+	want := WalkResult{
+		Files: []string{"src/café.ts", "src/ok.ts"},
+		Stats: WalkStats{TotalCandidates: 4, SkippedTooLarge: 2},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("SelectFiles(invalid UTF-8 names) mismatch (-want +got):\n%s", diff)
+	}
+}

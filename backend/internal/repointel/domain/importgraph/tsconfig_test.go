@@ -175,7 +175,7 @@ func TestLoadAliases_Candidates(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			aliases, err := importgraph.LoadAliases(tc.tree)
+			aliases, err := importgraph.LoadAliases(t.Context(), tc.tree)
 			if err != nil {
 				t.Fatalf("LoadAliases() error: %v", err)
 			}
@@ -187,7 +187,7 @@ func TestLoadAliases_Candidates(t *testing.T) {
 }
 
 func TestLoadAliases_NoTSConfigIsNotAnError(t *testing.T) {
-	aliases, err := importgraph.LoadAliases(fakeTree{})
+	aliases, err := importgraph.LoadAliases(t.Context(), fakeTree{})
 	if err != nil || aliases == nil {
 		t.Errorf("LoadAliases(no tsconfig) = %v, %v, want empty aliases and no error", aliases, err)
 	}
@@ -205,7 +205,7 @@ func TestLoadAliases_BadRootDisablesAliases(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			aliases, err := importgraph.LoadAliases(tc.tree)
+			aliases, err := importgraph.LoadAliases(t.Context(), tc.tree)
 			if err == nil {
 				t.Fatal("LoadAliases() error = nil, want the reason aliases are off")
 			}
@@ -271,7 +271,7 @@ func TestLoadAliases_BadExtendsDropsOnlyThatParent(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			aliases, err := importgraph.LoadAliases(tc.tree)
+			aliases, err := importgraph.LoadAliases(t.Context(), tc.tree)
 			if err == nil {
 				t.Error("LoadAliases() error = nil, want the dropped part reported")
 			}
@@ -298,7 +298,7 @@ func TestLoadAliases_ExtendsDepth(t *testing.T) {
 				tree[fmt.Sprintf("c%d.json", i)] = fmt.Sprintf(`{"extends":"./c%d.json"}`, i+1)
 			}
 			tree[fmt.Sprintf("c%d.json", tc.hops)] = `{"compilerOptions":{"paths":{"@/*":["src/*"]}}}`
-			aliases, err := importgraph.LoadAliases(tree)
+			aliases, err := importgraph.LoadAliases(t.Context(), tree)
 			if tc.wantOK {
 				if err != nil || len(aliases.Candidates("@/x")) != 1 {
 					t.Errorf("LoadAliases(%d hops) = %v, %v, want aliases", tc.hops, aliases.Candidates("@/x"), err)

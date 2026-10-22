@@ -46,14 +46,14 @@ func rightmostName(src []byte, n *sitter.Node) string {
 // is a declaration of the same file (symbols), de-duplicated by (name, line). Like the Node
 // extractor it lists calls first, then `new` expressions, then JSX opening and self-closing
 // elements, each in document order.
-func extractReferences(root sitter.Node, src []byte, syntax domain.Syntax, symbols []domain.Symbol) []domain.Reference {
+func extractReferences(root sitter.Node, src []byte, syntax domain.Syntax, symbols []domain.Symbol, g *guard) ([]domain.Reference, error) {
 	declared := make(map[string]struct{}, len(symbols))
 	for _, s := range symbols {
 		declared[s.Name+":"+strconv.Itoa(s.Line)] = struct{}{}
 	}
 
 	var calls, news, opening, selfClosing []domain.Reference
-	walk(root, func(n *sitter.Node) bool {
+	err := walk(root, g, func(n *sitter.Node) bool {
 		switch n.Kind() {
 		case "import_statement":
 			return false
@@ -91,6 +91,9 @@ func extractReferences(root sitter.Node, src []byte, syntax domain.Syntax, symbo
 		}
 		return true
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	var out []domain.Reference
 	seen := map[string]struct{}{}
@@ -110,5 +113,5 @@ func extractReferences(root sitter.Node, src []byte, syntax domain.Syntax, symbo
 			out = append(out, r)
 		}
 	}
-	return out
+	return out, nil
 }

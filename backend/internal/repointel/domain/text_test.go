@@ -82,3 +82,20 @@ func TestClampName(t *testing.T) {
 		t.Errorf("UTF16Len(ClampName(callee)) = %d, want 254", got)
 	}
 }
+
+func TestSanitizeText(t *testing.T) {
+	tests := []struct{ name, in, want string }{
+		{"plain", "abc", "abc"},
+		{"empty", "", ""},
+		{"nul", "a\x00b\x00", "a�b�"},
+		{"invalid utf8", "a\xffb", "a�b"},
+		{"valid non-ascii", "café \U0001F600", "café \U0001F600"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := SanitizeText(tc.in); got != tc.want {
+				t.Errorf("SanitizeText(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}

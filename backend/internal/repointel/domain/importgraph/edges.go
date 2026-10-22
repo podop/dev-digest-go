@@ -2,6 +2,7 @@ package importgraph
 
 import (
 	"context"
+	"path"
 
 	"dev-digest-go/backend/internal/repointel/domain"
 )
@@ -15,7 +16,12 @@ type walkedTree struct {
 	fs     domain.SourceFS
 	root   string
 	walked map[string]struct{}
+	// dirs holds every directory above a walked file ("." included).
+	dirs map[string]struct{}
 }
+
+// ctxCheckEvery is the number of specifiers resolved between two looks at ctx in BuildEdges.
+const ctxCheckEvery = 256
 
 // NewTree returns the Tree of a clone: IsFile is true for the walked files (the only files an
 // edge can end in, so a file that exists on disk but was not walked, such as a .mts file or one
@@ -23,10 +29,27 @@ type walkedTree struct {
 // confines reads to root and refuses symbolic links.
 func NewTree(fs domain.SourceFS, root string, files []string) Tree {
 	walked := make(map[string]struct{}, len(files))
+	dirs := map[string]struct{}{}
 	for _, f := range files {
 		walked[f] = struct{}{}
+		for d := path.Dir(f); ; d = path.Dir(d) {
+			if _, ok := dirs[d]; ok {
+				break
+			}
+			dirs[d] = struct{}{}
+			if d == "." || d == "/" {
+				break
+			}
+		}
 	}
-	return &walkedTree{fs: fs, root: root, walked: walked}
+	return &walkedTree{fs: fs, root: root, walked: walked, dirs: dirs}
+}
+
+// HasFilesUnder reports whether a walked file lies somewhere below dir ("." is the clone root):
+// package.json is read only in such directories, which bounds the Resolver's cache by the walk.
+func (t *walkedTree) HasFilesUnder(dir string) bool {
+	_, ok := t.dirs[dir]
+	return ok
 }
 
 func (t *walkedTree) IsFile(rel string) bool {
@@ -47,11 +70,17 @@ func BuildEdges(ctx context.Context, files []string, r *Resolver, specs Specifie
 	}
 	edges := []domain.Edge{}
 	seen := make(map[domain.Edge]struct{})
+	resolved := 0
 	for _, from := range files {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		for _, spec := range specs(ctx, from) {
+			if resolved++; resolved%ctxCheckEvery == 0 {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+			}
 			to, ok := r.Resolve(from, spec)
 			if !ok || to == from {
 				continue
@@ -74,11 +103,14 @@ func BuildEdges(ctx context.Context, files []string, r *Resolver, specs Specifie
 }
 
 // Build loads the root tsconfig aliases and builds the edges of the walked files. aliasErr
-// explains why alias resolution is off (a malformed or unreadable tsconfig or extends chain);
-// the caller logs it, the edges are still built from relative imports. err is only ctx's error.
+// explains, in content-free words (categories and clone-relative config paths, see LoadAliases),
+// why alias resolution is off or partial; the caller logs it, the edges are still built from relative imports. err is only ctx's error.
 func Build(ctx context.Context, fs domain.SourceFS, root string, files []string, specs SpecifierSource) (edges []domain.Edge, aliasErr, err error) {
 	tree := NewTree(fs, root, files)
-	aliases, aliasErr := LoadAliases(tree)
+	aliases, aliasErr := LoadAliases(ctx, tree)
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
 	edges, err = BuildEdges(ctx, files, NewResolver(tree, aliases), specs)
 	return edges, aliasErr, err
 }

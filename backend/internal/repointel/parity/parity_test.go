@@ -71,10 +71,6 @@ type goldenFile struct {
 	Crons       []string          `json:"crons"`
 }
 
-// unstableDir holds broken parameter lists whose error recovery differs between the parser
-// versions (ast-grep 0.26 in Node, 0.25 in the Go binding); the goldens only record Node.
-const unstableDir = "syntax_errors_unstable/"
-
 func TestParity_Extract(t *testing.T) {
 	var golden struct {
 		Files []goldenFile `json:"files"`
@@ -86,9 +82,6 @@ func TestParity_Extract(t *testing.T) {
 	analyzer := treesitter.New()
 
 	for _, g := range golden.Files {
-		if strings.HasPrefix(g.Path, unstableDir) {
-			continue
-		}
 		t.Run(g.Path, func(t *testing.T) {
 			if g.Outcome != "indexed" {
 				t.Fatalf("golden outcome = %q, the corpus only holds indexed files", g.Outcome)

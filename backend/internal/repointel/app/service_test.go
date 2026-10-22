@@ -3,7 +3,6 @@ package app_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"strings"
@@ -19,11 +18,12 @@ import (
 func TestService_IndexState(t *testing.T) {
 	const upper = "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
 	at := time.Date(2026, 10, 22, 10, 0, 0, 123_000_000, time.UTC)
+	reasonR := "r"
 	tests := []struct {
 		name    string
 		id      string
 		setup   func(s *fakeStore)
-		want    string
+		want    domain.StateView
 		wantLog bool
 	}{
 		{
@@ -33,7 +33,8 @@ func TestService_IndexState(t *testing.T) {
 				s.states[repoID] = domain.IndexState{RepoID: repoID, LastIndexedSHA: "abc", IndexerVersion: 2, Status: domain.StatusFull,
 					FilesIndexed: 7, FilesSkipped: 1, UpdatedAt: at, Stats: map[string]any{"durationMs": 42, "bounded": 9, "reason": "r"}}
 			},
-			want: `{"repoId":"repo-1","status":"full","filesIndexed":7,"filesSkipped":1,"durationMs":42,"reason":"r","lastIndexedSha":"abc","indexerVersion":2,"updatedAt":"2026-10-22T10:00:00.123Z"}`,
+			want: domain.StateView{RepoID: repoID, Status: domain.StatusFull, FilesIndexed: 7, FilesSkipped: 1, DurationMs: 42,
+				Reason: &reasonR, LastIndexedSha: "abc", IndexerVersion: 2, UpdatedAt: "2026-10-22T10:00:00.123Z"},
 		},
 		{
 			name: "persisted failed state",
@@ -42,12 +43,13 @@ func TestService_IndexState(t *testing.T) {
 				s.states[repoID] = domain.IndexState{RepoID: repoID, IndexerVersion: 2, Status: domain.StatusFailed, UpdatedAt: at,
 					Stats: map[string]any{"degradedReason": "index_failed"}}
 			},
-			want: `{"repoId":"repo-1","status":"failed","filesIndexed":0,"filesSkipped":0,"durationMs":0,"lastIndexedSha":"","indexerVersion":2,"updatedAt":"2026-10-22T10:00:00.123Z","degraded":true,"degradedReason":"index_failed"}`,
+			want: domain.StateView{RepoID: repoID, Status: domain.StatusFailed, IndexerVersion: 2,
+				UpdatedAt: "2026-10-22T10:00:00.123Z", Degraded: true, DegradedReason: domain.ReasonIndexFailed},
 		},
 		{
 			name: "no row keeps the id as sent",
 			id:   upper,
-			want: `{"repoId":"AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE","status":"degraded","filesIndexed":0,"filesSkipped":0,"durationMs":0,"reason":"no_data","lastIndexedSha":"","indexerVersion":2,"updatedAt":"1970-01-01T00:00:00.000Z","degraded":true,"degradedReason":"no_data"}`,
+			want: domain.Synthesised(upper),
 		},
 		{
 			name: "read failure is synthesised and logged",
@@ -55,7 +57,7 @@ func TestService_IndexState(t *testing.T) {
 			setup: func(s *fakeStore) {
 				s.hooks["GetState"] = func(context.Context) error { return errors.New("connection refused") }
 			},
-			want:    `{"repoId":"repo-1","status":"degraded","filesIndexed":0,"filesSkipped":0,"durationMs":0,"reason":"no_data","lastIndexedSha":"","indexerVersion":2,"updatedAt":"1970-01-01T00:00:00.000Z","degraded":true,"degradedReason":"no_data"}`,
+			want:    domain.Synthesised(repoID),
 			wantLog: true,
 		},
 	}
@@ -67,12 +69,8 @@ func TestService_IndexState(t *testing.T) {
 			}
 			var logs bytes.Buffer
 			svc := app.NewService(store, &fakeQueue{}, slog.New(slog.NewTextHandler(&logs, nil)))
-			got, err := json.Marshal(svc.IndexState(t.Context(), tc.id))
-			if err != nil {
-				t.Fatalf("marshal: %v", err)
-			}
-			if diff := cmp.Diff(tc.want, string(got)); diff != "" {
-				t.Errorf("IndexState(%q) JSON mismatch (-want +got):\n%s", tc.id, diff)
+			if diff := cmp.Diff(tc.want, svc.IndexState(t.Context(), tc.id)); diff != "" {
+				t.Errorf("IndexState(%q) mismatch (-want +got):\n%s", tc.id, diff)
 			}
 			if warned := strings.Contains(logs.String(), "level=WARN"); warned != tc.wantLog {
 				t.Errorf("warning logged = %v, want %v:\n%s", warned, tc.wantLog, logs.String())

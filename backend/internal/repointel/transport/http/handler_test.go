@@ -150,6 +150,15 @@ func TestIndexState_DegradedAndFailedStates(t *testing.T) {
 				`"reason":"index_failed","lastIndexedSha":"","indexerVersion":2,"updatedAt":"2026-01-02T03:04:05.006Z",` +
 				`"degraded":true,"degradedReason":"index_failed"}`,
 		},
+		{
+			name: "partial keeps an empty reason and carries no degraded keys",
+			state: domain.IndexState{
+				RepoID: repoID, IndexerVersion: 2, Status: domain.StatusPartial, UpdatedAt: updated,
+				Stats: map[string]any{"degradedReason": "no_data", "reason": ""},
+			},
+			want: `{"repoId":"` + repoID + `","status":"partial","filesIndexed":0,"filesSkipped":0,"durationMs":0,` +
+				`"reason":"","lastIndexedSha":"","indexerVersion":2,"updatedAt":"2026-01-02T03:04:05.006Z"}`,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

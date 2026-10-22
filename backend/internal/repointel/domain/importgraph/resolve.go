@@ -30,6 +30,17 @@ type Tree interface {
 	ReadFile(rel string) ([]byte, error)
 }
 
+// DirLister is implemented by a Tree that knows which directories hold walked files. The
+// Resolver then reads package.json only there, so its cache cannot outgrow the walk.
+type DirLister interface {
+	// HasFilesUnder reports whether a file that resolution may land on lies below dir.
+	HasFilesUnder(dir string) bool
+}
+
+// maxPackageCache bounds the package.json cache of a Tree that is not a DirLister; past it a
+// directory is treated as having no package.json.
+const maxPackageCache = 1 << 16
+
 // Resolver maps import specifiers to clone files. It is safe for concurrent use.
 type Resolver struct {
 	tree    Tree
@@ -159,9 +170,16 @@ func (r *Resolver) resolveDir(dir string, hops int) (string, bool) {
 func (r *Resolver) packageMain(dir string) string {
 	r.mu.Lock()
 	main, cached := r.mains[dir]
+	full := len(r.mains) >= maxPackageCache
 	r.mu.Unlock()
 	if cached {
 		return main
+	}
+	if full {
+		return ""
+	}
+	if dl, ok := r.tree.(DirLister); ok && !dl.HasFilesUnder(dir) {
+		return ""
 	}
 	if data, err := r.tree.ReadFile(path.Join(dir, "package.json")); err == nil {
 		var pkg struct {

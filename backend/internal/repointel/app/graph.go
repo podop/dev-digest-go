@@ -2,8 +2,10 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"dev-digest-go/backend/internal/repointel/domain"
 	"dev-digest-go/backend/internal/repointel/domain/importgraph"
@@ -42,10 +44,23 @@ func (g *ImportGraph) BuildEdges(ctx context.Context, root string, files []strin
 		return nil, fmt.Errorf("build import graph: %w", err)
 	}
 	if aliasErr != nil {
-		// The text can quote a key of the clone's tsconfig, never source code.
-		g.log.WarnContext(ctx, "tsconfig aliases not used", "error", domain.ClampUTF16(aliasErr.Error(), domain.MaxErrorChars))
+		g.logAliasProblem(ctx, aliasErr)
 	}
 	return edges, nil
+}
+
+// logAliasProblem logs the problem categories and their count, nothing the clone's tsconfig said
+// (NFR3005): the error text is for the caller of importgraph, not for the log.
+func (g *ImportGraph) logAliasProblem(ctx context.Context, aliasErr error) {
+	var ae *importgraph.AliasError
+	if !errors.As(aliasErr, &ae) {
+		g.log.WarnContext(ctx, "tsconfig aliases not used", "reason", "unknown")
+		return
+	}
+	g.log.WarnContext(ctx, "tsconfig aliases not used",
+		"reason", strings.Join(ae.Categories, ","),
+		"problems", ae.Count,
+		"disabled", ae.Disabled)
 }
 
 // specifiers returns the SpecifierSource of the clone at root: each file is read and parsed

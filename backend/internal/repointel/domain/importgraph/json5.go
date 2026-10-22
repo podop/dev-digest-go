@@ -130,7 +130,7 @@ func (p *json5Parser) object(depth int) (any, error) {
 		}
 		p.skip()
 		if p.pos >= len(p.src) || p.src[p.pos] != ':' {
-			return nil, p.errorf("expected ':' after key %q", key)
+			return nil, p.errorf("expected ':' after a key")
 		}
 		p.pos++
 		p.skip()
@@ -320,7 +320,7 @@ func (p *json5Parser) literal() (any, error) {
 	word := p.src[start:p.pos]
 	switch word {
 	case "":
-		return nil, p.errorf("unexpected character %q", p.src[start])
+		return nil, p.errorf("unexpected character")
 	case "true":
 		return true, nil
 	case "false":
@@ -331,7 +331,7 @@ func (p *json5Parser) literal() (any, error) {
 	n, ok := number(word)
 	if !ok {
 		p.pos = start
-		return nil, p.errorf("invalid value %q", word)
+		return nil, p.errorf("invalid value")
 	}
 	return n, nil
 }

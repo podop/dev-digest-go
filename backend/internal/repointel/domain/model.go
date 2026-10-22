@@ -242,7 +242,8 @@ type IndexState struct {
 type WalkStats struct {
 	// TotalCandidates counts files with a supported extension before the size and bound filters.
 	TotalCandidates int
-	// SkippedTooLarge counts candidates larger than MaxFileBytes.
+	// SkippedTooLarge counts candidates left out because they are larger than MaxFileBytes or have
+	// a path that is not valid UTF-8 (the stats key keeps the Node name).
 	SkippedTooLarge int
 	// Bounded is the number of files dropped by the MaxIndexedFiles bound.
 	Bounded int

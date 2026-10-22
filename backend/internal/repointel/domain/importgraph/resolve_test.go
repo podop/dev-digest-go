@@ -8,7 +8,7 @@ import (
 
 func resolver(t *testing.T, tree fakeTree) *importgraph.Resolver {
 	t.Helper()
-	aliases, err := importgraph.LoadAliases(tree)
+	aliases, err := importgraph.LoadAliases(t.Context(), tree)
 	if err != nil {
 		t.Fatalf("LoadAliases() error: %v", err)
 	}

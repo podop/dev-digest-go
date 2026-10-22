@@ -55,6 +55,11 @@ type valueRef struct {
 // importScan collects the import specifiers of one file (spec section 7.5).
 type importScan struct {
 	src []byte
+	g   *guard
+	// err is the guard's error; once set the scan stops.
+	err error
+	// cur walks the tree in visit and sits on the node being visited.
+	cur *sitter.TreeCursor
 	// ts: the file is .ts or .tsx, so unused and type-only imports are dropped.
 	ts   bool
 	want map[string]struct{} // binding names of the file's import statements (ts only)
@@ -71,24 +76,37 @@ type importScan struct {
 // extractImports returns the import specifiers of a file in first-seen order, without empty
 // strings and duplicates. ts selects the TypeScript rules (imports that are never used as a value
 // are elided); otherwise every specifier counts.
-func extractImports(root sitter.Node, src []byte, ts bool) []string {
+func extractImports(root sitter.Node, src []byte, ts bool, g *guard) ([]string, error) {
 	s := &importScan{
 		src:   src,
+		g:     g,
 		ts:    ts,
 		want:  map[string]struct{}{},
 		bound: map[uintptr]struct{}{},
 		decls: map[uintptr]map[string]struct{}{},
 	}
 	if ts {
-		for _, top := range children(&root) {
+		eachChild(&root, func(top *sitter.Node) bool {
+			if s.stop() {
+				return false
+			}
 			if top.Kind() == "import_statement" {
 				for _, name := range s.importBindings(top) {
 					s.want[name] = struct{}{}
 				}
 			}
+			return true
+		})
+		if s.err != nil {
+			return nil, s.err
 		}
 	}
-	s.visit(&root, false)
+	s.cur = root.Walk()
+	defer s.cur.Close()
+	s.visit(nil, false)
+	if s.err != nil {
+		return nil, s.err
+	}
 
 	used := s.usedNames()
 	var out []string
@@ -106,7 +124,15 @@ func extractImports(root sitter.Node, src []byte, ts bool) []string {
 		seen[c.spec] = struct{}{}
 		out = append(out, c.spec)
 	}
-	return out
+	return out, nil
+}
+
+// stop counts one visited node and reports whether the context ended; the error is kept in err.
+func (s *importScan) stop() bool {
+	if s.err == nil {
+		s.err = s.g.tick()
+	}
+	return s.err != nil
 }
 
 func anyIn(set map[string]struct{}, names []string) bool {
@@ -135,15 +161,6 @@ func (s *importScan) usedNames() map[string]struct{} {
 		}
 	}
 	return used
-}
-
-func hasChildKind(n *sitter.Node, kind string) bool {
-	for i := range n.ChildCount() {
-		if c := n.Child(i); c != nil && c.Kind() == kind {
-			return true
-		}
-	}
-	return false
 }
 
 // importBindings returns the non-type binding names of an import statement.
@@ -239,21 +256,12 @@ func (s *importScan) reExport(stmt, source *sitter.Node) {
 // `export type * as ns from 'x'` (TypeScript 5.0 syntax) and wraps the keyword in an ERROR child
 // of the export statement; both forms are type-only and have no specifier.
 func typeKeywordInError(stmt *sitter.Node) bool {
-	for i := range stmt.ChildCount() {
-		if c := stmt.Child(i); c != nil && c.Kind() == "ERROR" && hasChildKind(c, "type") {
+	for _, c := range children(stmt) {
+		if c.Kind() == "ERROR" && hasChildKind(c, "type") {
 			return true
 		}
 	}
 	return false
-}
-
-func firstChildKind(n *sitter.Node, kind string) *sitter.Node {
-	for i := range n.ChildCount() {
-		if c := n.Child(i); c != nil && c.Kind() == kind {
-			return c
-		}
-	}
-	return nil
 }
 
 // callSpecifier records `import('x')`, `require('x')` and, in JavaScript files, the string
@@ -294,8 +302,13 @@ func (s *importScan) callSpecifier(call *sitter.Node) {
 }
 
 // visit walks the tree in document order, collecting specifiers, declarations and value
-// references.
-func (s *importScan) visit(n *sitter.Node, inType bool) {
+// references. The cursor sits on the node to visit (a child of parent, nil for the root) and is
+// back on it when visit returns, unless the context ended.
+func (s *importScan) visit(parent *sitter.Node, inType bool) {
+	if s.stop() {
+		return
+	}
+	n := s.cur.Node()
 	kind := n.Kind()
 	if s.ts && !inType {
 		if _, ok := typeOnlyKinds[kind]; ok {
@@ -324,19 +337,21 @@ func (s *importScan) visit(n *sitter.Node, inType bool) {
 		}
 	case "identifier", "shorthand_property_identifier":
 		if s.ts && !inType {
-			s.reference(n)
+			s.reference(n, parent)
 		}
 		return
 	}
 
 	pushed := s.enter(n, kind)
 	asType := kind == "as_expression" || kind == "satisfies_expression"
-	for i, count := uint(0), n.ChildCount(); i < count; i++ {
-		c := n.Child(i)
-		if c == nil {
-			continue
+	if s.cur.GotoFirstChild() {
+		for i := 0; ; i++ {
+			s.visit(n, inType || (s.ts && asType && i > 0))
+			if s.err != nil || !s.cur.GotoNextSibling() {
+				break
+			}
 		}
-		s.visit(c, inType || (s.ts && asType && i > 0))
+		s.cur.GotoParent()
 	}
 	if pushed {
 		s.stack = s.stack[:len(s.stack)-1]
@@ -454,8 +469,9 @@ func (s *importScan) bindPattern(n *sitter.Node, scope uintptr) {
 	}
 }
 
-// reference records a value reference to a wanted name.
-func (s *importScan) reference(id *sitter.Node) {
+// reference records a value reference to a wanted name; parent is the identifier's parent node
+// (Node.Parent searches from the root, which is slow in a wide tree).
+func (s *importScan) reference(id, parent *sitter.Node) {
 	if len(s.want) == 0 {
 		return
 	}
@@ -466,7 +482,7 @@ func (s *importScan) reference(id *sitter.Node) {
 	if _, isBinding := s.bound[id.Id()]; isBinding {
 		return
 	}
-	if p := id.Parent(); p != nil {
+	if p := parent; p != nil {
 		switch p.Kind() {
 		case "jsx_namespace_name":
 			return

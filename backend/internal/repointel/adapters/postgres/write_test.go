@@ -566,3 +566,84 @@ func TestWrites_JoinTheCallersTransaction(t *testing.T) {
 		}
 	}
 }
+
+// L1: one NUL or invalid byte in one name must not fail the whole index (SQLSTATE 22021, 22P05).
+func TestWrites_NULAndInvalidUTF8TextIsStorable(t *testing.T) {
+	e := newEnv(t)
+	ctx := t.Context()
+
+	// Two names that differ only in the NUL byte collapse to one row after the replacement.
+	syms := []domain.SymbolRow{
+		{Path: "a.ts", Name: "f\x00g", Kind: "function", Line: 1, EndLine: 2, Signature: "function f(x = '\x00')", ContentHash: "h"},
+		{Path: "a.ts", Name: "f�g", Kind: "function", Line: 1, EndLine: 2, Signature: "function f()", ContentHash: "h"},
+		{Path: "a.ts", Name: "bad\xffname", Kind: "function", Line: 3, EndLine: 3, Signature: "function bad()", ContentHash: "h"},
+	}
+	must(t, e.store.InsertSymbols(ctx, e.repo, syms))
+	must(t, e.store.InsertReferences(ctx, e.repo, []domain.ReferenceRow{
+		{FromPath: "a.ts", ToSymbol: "call\x00ee", Line: 5, ContentHash: "h"},
+	}))
+	must(t, e.store.ReplaceEdges(ctx, e.repo, []domain.Edge{{From: "a.ts", To: "b\x00.ts"}}))
+	must(t, e.store.ReplaceFileRank(ctx, e.repo, []domain.FileRankRow{{Path: "a\x00.ts", Rank: 1}}))
+	must(t, e.store.ReplaceFileFacts(ctx, e.repo, []domain.FileFacts{
+		{Path: "a.ts", Endpoints: []string{"GET /x\x00y"}, Crons: []string{"0 * * * *\x00"}},
+	}))
+	must(t, e.store.PatchFileFacts(ctx, e.repo, []string{"a.ts"}, []domain.FileFacts{
+		{Path: "a.ts", Endpoints: []string{"GET /p\x00q"}},
+	}))
+
+	var names []string
+	if err := e.db.Raw(`SELECT name FROM symbols WHERE repo_id = ? ORDER BY line`, e.repo).Scan(&names).Error; err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]string{"f�g", "bad�name"}, names); diff != "" {
+		t.Errorf("stored symbol names mismatch (-want +got):\n%s", diff)
+	}
+	var sig string
+	if err := e.db.Raw(`SELECT signature FROM symbols WHERE repo_id = ? AND line = 1`, e.repo).Scan(&sig).Error; err != nil {
+		t.Fatal(err)
+	}
+	if want := "function f(x = '�')"; sig != want {
+		t.Errorf("stored signature = %q, want %q", sig, want)
+	}
+	var target string
+	if err := e.db.Raw(`SELECT to_symbol FROM "references" WHERE repo_id = ?`, e.repo).Scan(&target).Error; err != nil {
+		t.Fatal(err)
+	}
+	if want := "call�ee"; target != want {
+		t.Errorf("stored to_symbol = %q, want %q", target, want)
+	}
+	var endpoints string
+	if err := e.db.Raw(`SELECT endpoints::text FROM file_facts WHERE repo_id = ?`, e.repo).Scan(&endpoints).Error; err != nil {
+		t.Fatal(err)
+	}
+	if want := `["GET /p` + "�" + `q"]`; endpoints != want {
+		t.Errorf("stored endpoints = %s, want %s", endpoints, want)
+	}
+	for _, table := range []string{"file_edges", "file_rank"} {
+		if got := count(t, e, table, e.repo); got != 1 {
+			t.Errorf("%s rows = %d, want 1", table, got)
+		}
+	}
+}
+
+// A changed path reported by git can be invalid UTF-8; no row can hold it, and the statement must
+// not fail on it.
+func TestPathLookups_IgnorePathsNoRowCanHold(t *testing.T) {
+	e := newEnv(t)
+	ctx := t.Context()
+	must(t, e.store.InsertSymbols(ctx, e.repo, []domain.SymbolRow{sym("a.ts", "keep", 1, true)}))
+	must(t, e.store.ReplaceFileRank(ctx, e.repo, []domain.FileRankRow{{Path: "a.ts", Rank: 1, Percentile: 50}}))
+	bad := []string{"src/\xff.ts", "a\x00.ts", "a.ts"}
+
+	must(t, e.store.DeleteFileRows(ctx, e.repo, bad))
+	if got := count(t, e, "symbols", e.repo); got != 0 {
+		t.Errorf("symbols after DeleteFileRows = %d, want 0 (a.ts deleted)", got)
+	}
+	must(t, e.store.PatchFileFacts(ctx, e.repo, bad, nil))
+	if _, err := e.store.FileRanks(ctx, e.repo, bad); err != nil {
+		t.Errorf("FileRanks(invalid paths) error = %v, want nil", err)
+	}
+	if _, err := e.store.SymbolsInFiles(ctx, e.repo, bad); err != nil {
+		t.Errorf("SymbolsInFiles(invalid paths) error = %v, want nil", err)
+	}
+}

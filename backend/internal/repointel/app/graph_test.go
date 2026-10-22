@@ -69,6 +69,48 @@ func TestImportGraph_MalformedTSConfigOnlyLogsAWarning(t *testing.T) {
 	}
 }
 
+// TestImportGraph_AliasWarningCarriesNoTSConfigContent is NFR3005: text a clone's tsconfig holds (a
+// key, a value, an extends string) reaches neither the returned error nor the log line, which has
+// the problem categories and their number only.
+func TestImportGraph_AliasWarningCarriesNoTSConfigContent(t *testing.T) {
+	const marker = "TSCONFIG-CONTENT-MARKER"
+	tests := []struct {
+		name     string
+		tsconfig string
+		want     []string
+	}{
+		{"bad value", `{"compilerOptions": {"baseUrl": ` + marker + `}}`, []string{"reason=malformed", "disabled=true"}},
+		{"bad key", `{"` + marker + `" 1}`, []string{"reason=malformed", "disabled=true"}},
+		{"package extends", `{"extends": "@corp/` + marker + `"}`, []string{"reason=extends_not_relative", "disabled=false"}},
+		{"extends outside", `{"extends": "../../` + marker + `"}`, []string{"reason=extends_outside", "problems=1"}},
+		{"extends not found", `{"extends": ["./` + marker + `", "./` + marker + `-2"]}`, []string{"reason=extends_", "problems=2"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			clone, an, files := graphFixture()
+			clone.files["tsconfig.json"] = []byte(tc.tsconfig)
+			var buf bytes.Buffer
+			g := app.NewImportGraph(clone, an, slog.New(slog.NewTextHandler(&buf, nil)))
+			got, err := g.BuildEdges(t.Context(), clonePath, files)
+			if err != nil || len(got) != 2 {
+				t.Fatalf("BuildEdges() = %v, %v, want 2 edges and no error", got, err)
+			}
+			log := buf.String()
+			if strings.Contains(log, marker) || strings.Contains(log, "error=") {
+				t.Errorf("log = %q, want no tsconfig content", log)
+			}
+			if !strings.Contains(log, "level=WARN") || !strings.Contains(log, "tsconfig aliases not used") {
+				t.Errorf("log = %q, want the alias warning", log)
+			}
+			for _, w := range tc.want {
+				if !strings.Contains(log, w) {
+					t.Errorf("log = %q, want it to contain %q", log, w)
+				}
+			}
+		})
+	}
+}
+
 func TestImportGraph_PanicBecomesAnError(t *testing.T) {
 	clone, an, files := graphFixture()
 	an.panicImports = map[string]bool{"src/a.ts": true}

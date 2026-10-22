@@ -78,6 +78,16 @@ func ContentHash(text string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// SanitizeText makes s storable in a Postgres text or jsonb column: U+0000, which neither accepts,
+// becomes U+FFFD, and so does every byte run that is not valid UTF-8. Text decoded by DecodeText
+// is valid UTF-8 already but may hold U+0000 (a NUL inside a string literal).
+func SanitizeText(s string) string {
+	if strings.IndexByte(s, 0) >= 0 {
+		s = strings.ReplaceAll(s, "\x00", "\uFFFD")
+	}
+	return strings.ToValidUTF8(s, "\uFFFD")
+}
+
 // ClampName cuts a symbol name or a reference's target to MaxNameUnits UTF-16 code units without
 // splitting a surrogate pair (FR3031).
 func ClampName(s string) string {

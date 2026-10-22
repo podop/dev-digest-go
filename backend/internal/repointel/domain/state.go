@@ -9,21 +9,22 @@ import (
 // TimeFormat is the wire format of timestamps: ISO-8601 UTC with milliseconds.
 const TimeFormat = "2006-01-02T15:04:05.000Z"
 
-// StateView is the RepoIndexState of the HTTP contract (section 7.2). The field order is the key
-// order of the JSON body; the json tags belong to the wire contract, not to storage.
+// StateView is the bounded view of an index state that the API answers (section 7.2). It carries
+// no wire tags: transport/http owns the JSON shape.
 type StateView struct {
-	RepoID       string `json:"repoId"`
-	Status       Status `json:"status"`
-	FilesIndexed int    `json:"filesIndexed"`
-	FilesSkipped int    `json:"filesSkipped"`
-	DurationMs   int    `json:"durationMs"`
-	// Reason is a pointer so that an empty stats.reason is still sent, as Node does.
-	Reason         *string        `json:"reason,omitempty"`
-	LastIndexedSha string         `json:"lastIndexedSha"`
-	IndexerVersion int            `json:"indexerVersion"`
-	UpdatedAt      string         `json:"updatedAt"`
-	Degraded       bool           `json:"degraded,omitempty"`
-	DegradedReason DegradedReason `json:"degradedReason,omitempty"`
+	RepoID       string
+	Status       Status
+	FilesIndexed int
+	FilesSkipped int
+	DurationMs   int
+	// Reason is a pointer so that an empty stats.reason is still told apart from none (Node sends
+	// it either way).
+	Reason         *string
+	LastIndexedSha string
+	IndexerVersion int
+	UpdatedAt      string
+	Degraded       bool
+	DegradedReason DegradedReason
 }
 
 // NewStateView builds the view of a persisted state row (FR3002): bounded and every stats key

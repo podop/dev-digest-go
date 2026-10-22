@@ -1,10 +1,15 @@
 package treesitter
 
+// #include <stdlib.h>
+import "C"
+
 import (
 	"context"
 	"fmt"
 	"path"
 	"strings"
+	"sync/atomic"
+	"unsafe"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
 
@@ -15,6 +20,30 @@ import (
 // readChunk bounds the bytes handed to the parser per read: the binding copies every chunk it is
 // given into C memory, so offering the whole remainder each time would be quadratic.
 const readChunk = 32 << 10
+
+// checkEvery is how many visited nodes pass between two looks at the context (see guard).
+const checkEvery = 1024
+
+// guard makes the extraction passes honour the context: they call tick for every node they
+// visit and stop with its error once the context is done, so a hostile file cannot keep a worker
+// busy past the caller's deadline after the parse itself has finished.
+type guard struct {
+	ctx context.Context
+	n   int
+}
+
+// tick counts one visited node and, every checkEvery nodes, returns an error wrapping the
+// context's error when the context is done.
+func (g *guard) tick() error {
+	g.n++
+	if g.n%checkEvery != 0 {
+		return nil
+	}
+	if err := g.ctx.Err(); err != nil {
+		return fmt.Errorf("extract: %w", err)
+	}
+	return nil
+}
 
 // Analyzer implements app.Analyzer with the tree-sitter grammars. It holds no state: every call
 // creates its own Parser (the binding has no finalizers, so the parser and the tree are closed
@@ -30,9 +59,13 @@ func New() *Analyzer { return &Analyzer{} }
 // errors yields what the parsable parts of its error-recovered tree hold.
 func (a *Analyzer) Extract(ctx context.Context, file, text string) (domain.Extraction, error) {
 	var out domain.Extraction
-	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, syntax domain.Syntax) {
-		out.Symbols = extractSymbols(root, src)
-		out.References = extractReferences(root, src, syntax, out.Symbols)
+	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, syntax domain.Syntax, g *guard) error {
+		var err error
+		if out.Symbols, err = extractSymbols(root, src, g); err != nil {
+			return err
+		}
+		out.References, err = extractReferences(root, src, syntax, out.Symbols, g)
+		return err
 	})
 	if err != nil {
 		return domain.Extraction{}, err
@@ -43,8 +76,10 @@ func (a *Analyzer) Extract(ctx context.Context, file, text string) (domain.Extra
 // Imports returns the import specifiers of one file in first-seen order (spec section 7.5).
 func (a *Analyzer) Imports(ctx context.Context, file, text string) ([]string, error) {
 	var out []string
-	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, _ domain.Syntax) {
-		out = extractImports(root, src, isTypeScriptPath(file))
+	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, _ domain.Syntax, g *guard) error {
+		var err error
+		out, err = extractImports(root, src, isTypeScriptPath(file), g)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -53,9 +88,9 @@ func (a *Analyzer) Imports(ctx context.Context, file, text string) ([]string, er
 }
 
 // withTree parses text with the grammar of file's extension and calls fn while the tree is
-// alive; the nodes passed to fn must not be used after it returns. The parse stops when ctx ends
-// (checked by the parser's progress callback) and the error then wraps ctx.Err().
-func withTree(ctx context.Context, file, text string, fn func(root sitter.Node, src []byte, syntax domain.Syntax)) error {
+// alive; the nodes passed to fn must not be used after it returns. The parse and fn's passes
+// (through the guard) stop when ctx ends, and the error then wraps ctx.Err().
+func withTree(ctx context.Context, file, text string, fn func(root sitter.Node, src []byte, syntax domain.Syntax, g *guard) error) error {
 	syntax, ok := domain.SyntaxForPath(file)
 	if !ok {
 		return fmt.Errorf("parse %q: unsupported extension", file)
@@ -73,14 +108,33 @@ func withTree(ctx context.Context, file, text string, fn func(root sitter.Node, 
 		return fmt.Errorf("parse: set %s language: %w", syntax, err)
 	}
 	src := []byte(text)
-	tree := parser.ParseWithOptions(func(offset int, _ sitter.Point) []byte {
+
+	// Cancellation goes through the parser's cancellation flag, not ParseWithOptions: that call
+	// saves its options in a global pointer table and never releases them, which leaks about
+	// 186 bytes per parse in go-tree-sitter v0.25.0. The C parser keeps the flag pointer between
+	// calls, so the word lives in C memory (cgo forbids C retaining a Go pointer) and is freed
+	// only after the parser has dropped it and the AfterFunc can no longer write to it.
+	flag := (*uintptr)(C.calloc(1, C.size_t(unsafe.Sizeof(uintptr(0)))))
+	if flag == nil {
+		return fmt.Errorf("parse: allocate cancellation flag")
+	}
+	parser.SetCancellationFlag(flag)
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		defer close(done)
+		atomic.StoreUintptr(flag, 1)
+	})
+	tree := parser.ParseWith(func(offset int, _ sitter.Point) []byte {
 		if offset >= len(src) {
 			return nil
 		}
 		return src[offset:min(offset+readChunk, len(src))]
-	}, nil, &sitter.ParseOptions{ProgressCallback: func(sitter.ParseState) bool {
-		return ctx.Err() != nil
-	}})
+	}, nil)
+	if !stop() {
+		<-done // the AfterFunc already started: wait until its store is over before freeing
+	}
+	parser.SetCancellationFlag(nil)
+	C.free(unsafe.Pointer(flag))
 	if tree == nil {
 		if err := ctx.Err(); err != nil {
 			return fmt.Errorf("parse: %w", err)
@@ -88,8 +142,7 @@ func withTree(ctx context.Context, file, text string, fn func(root sitter.Node, 
 		return fmt.Errorf("parse %s: no syntax tree", syntax)
 	}
 	defer tree.Close()
-	fn(*tree.RootNode(), src, syntax)
-	return nil
+	return fn(*tree.RootNode(), src, syntax, &guard{ctx: ctx})
 }
 
 // isTypeScriptPath reports whether p is a .ts or .tsx file: the files whose imports TypeScript
@@ -115,17 +168,55 @@ func field(n *sitter.Node, name string) *sitter.Node {
 	return n.ChildByFieldName(name)
 }
 
-// children returns all children of n (named and anonymous) in order.
+// children returns all children of n (named and anonymous) in order. It walks a cursor:
+// ts_node_child(i) restarts at the first child, so indexing a wide node (an error-recovered file
+// puts every token under the root) would be quadratic.
 func children(n *sitter.Node) []*sitter.Node {
-	count := n.ChildCount()
-	out := make([]*sitter.Node, 0, count)
-	for i := range count {
-		if c := n.Child(i); c != nil {
-			out = append(out, c)
+	cur := n.Walk()
+	defer cur.Close()
+	if !cur.GotoFirstChild() {
+		return nil
+	}
+	var out []*sitter.Node
+	for {
+		out = append(out, cur.Node())
+		if !cur.GotoNextSibling() {
+			return out
 		}
 	}
-	return out
 }
+
+// eachChild calls fn with every child of n in order until fn returns false. Unlike children it
+// builds no slice, so a caller that checks the context in fn stops a wide node promptly.
+func eachChild(n *sitter.Node, fn func(c *sitter.Node) bool) {
+	cur := n.Walk()
+	defer cur.Close()
+	if !cur.GotoFirstChild() {
+		return
+	}
+	for fn(cur.Node()) && cur.GotoNextSibling() {
+	}
+}
+
+// firstChildKind returns the first child of n of the given kind, or nil.
+func firstChildKind(n *sitter.Node, kind string) *sitter.Node {
+	cur := n.Walk()
+	defer cur.Close()
+	if !cur.GotoFirstChild() {
+		return nil
+	}
+	for {
+		if c := cur.Node(); c.Kind() == kind {
+			return c
+		}
+		if !cur.GotoNextSibling() {
+			return nil
+		}
+	}
+}
+
+// hasChildKind reports whether n has a child of the given kind.
+func hasChildKind(n *sitter.Node, kind string) bool { return firstChildKind(n, kind) != nil }
 
 // line returns the 1-based first line of n.
 func line(n *sitter.Node) int { return int(n.StartPosition().Row) + 1 }
@@ -134,17 +225,20 @@ func line(n *sitter.Node) int { return int(n.StartPosition().Row) + 1 }
 func endLine(n *sitter.Node) int { return int(n.EndPosition().Row) + 1 }
 
 // walk visits n and all its descendants in document order. visit returns false to skip the
-// subtree of the node it was given.
-func walk(root sitter.Node, visit func(n *sitter.Node) bool) {
+// subtree of the node it was given. It returns the guard's error once the context is done.
+func walk(root sitter.Node, g *guard, visit func(n *sitter.Node) bool) error {
 	cur := root.Walk()
 	defer cur.Close()
 	for {
+		if err := g.tick(); err != nil {
+			return err
+		}
 		if visit(cur.Node()) && cur.GotoFirstChild() {
 			continue
 		}
 		for !cur.GotoNextSibling() {
 			if !cur.GotoParent() {
-				return
+				return nil
 			}
 		}
 	}

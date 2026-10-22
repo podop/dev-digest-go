@@ -1,6 +1,6 @@
 // Package httpapi exposes the two repo-intel routes (GET /repos/:id/index-state and
 // POST /repos/:id/resync). It is the only place of the context that knows Echo and status codes;
-// the JSON of the index state is the wire contract carried by domain.StateView.
+// the JSON of the index state (indexStateResponse) is the wire contract.
 package httpapi
 
 import (
@@ -41,6 +41,40 @@ func AddRoutes(e *echo.Echo, svc service, tenants resolver) {
 	e.POST("/repos/:id/resync", h.resync)
 }
 
+// indexStateResponse is the RepoIndexState of the HTTP contract (section 7.2). The field order is
+// the key order of the body. Reason is a pointer so that an empty stats.reason is still sent, as
+// Node does; degraded and degradedReason appear only on a degraded or failed state.
+type indexStateResponse struct {
+	RepoID         string  `json:"repoId"`
+	Status         string  `json:"status"`
+	FilesIndexed   int     `json:"filesIndexed"`
+	FilesSkipped   int     `json:"filesSkipped"`
+	DurationMs     int     `json:"durationMs"`
+	Reason         *string `json:"reason,omitempty"`
+	LastIndexedSha string  `json:"lastIndexedSha"`
+	IndexerVersion int     `json:"indexerVersion"`
+	UpdatedAt      string  `json:"updatedAt"`
+	Degraded       bool    `json:"degraded,omitempty"`
+	DegradedReason string  `json:"degradedReason,omitempty"`
+}
+
+// toIndexStateResponse maps the domain view to the wire shape.
+func toIndexStateResponse(v domain.StateView) indexStateResponse {
+	return indexStateResponse{
+		RepoID:         v.RepoID,
+		Status:         string(v.Status),
+		FilesIndexed:   v.FilesIndexed,
+		FilesSkipped:   v.FilesSkipped,
+		DurationMs:     v.DurationMs,
+		Reason:         v.Reason,
+		LastIndexedSha: v.LastIndexedSha,
+		IndexerVersion: v.IndexerVersion,
+		UpdatedAt:      v.UpdatedAt,
+		Degraded:       v.Degraded,
+		DegradedReason: string(v.DegradedReason),
+	}
+}
+
 // resyncAccepted is the 202 body of an enqueued resync.
 type resyncAccepted struct {
 	Status string `json:"status"`
@@ -60,7 +94,7 @@ func (h *Handler) indexState(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, h.svc.IndexState(c.Request().Context(), repoID))
+	return c.JSON(http.StatusOK, toIndexStateResponse(h.svc.IndexState(c.Request().Context(), repoID)))
 }
 
 // resync never reads the request body: whatever a caller sends is ignored.
