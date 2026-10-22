@@ -149,6 +149,14 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 			Temperature: req.Temperature, MaxTokens: req.MaxTokens, SessionID: req.SessionID,
 		}, req.SchemaName)
 		if err != nil {
+			if res.Answered {
+				// The provider answered with something unusable: its tokens were spent all the same.
+				usage := res.Usage
+				if usage == nil {
+					usage = c.estimateUsage(req, messages, "")
+				}
+				c.reportUsage(ctx, req, attemptRecord{reported: res.CostUSD, usage: *usage})
+			}
 			return Result{}, c.fail(ctx, budgetCtx, label, key, err)
 		}
 

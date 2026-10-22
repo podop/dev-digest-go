@@ -80,11 +80,14 @@ func TestValidator(t *testing.T) {
 			"- candidates.1.category: Invalid enum value. Expected 'structure' | 'naming', received 'x'",
 			"- candidates.1.confidence: Number must be less than or equal to 1",
 			"- candidates.1.line: Expected integer, received float",
-			"- candidates.1.note: Invalid input",
+			"- candidates.1.note: Expected string, received number",
 		}},
 		{"array limits", `{"candidates":[]}`, []string{"- candidates: Array must contain at least 1 element(s)"}},
 		{"array too long", `{"candidates":[{"rule":"ab"},{"rule":"ab"},{"rule":"ab"},{"rule":"ab"}]}`, []string{"- candidates: Array must contain at most 3 element(s)"}},
 		{"wrong type", `{"candidates":"x"}`, []string{"- candidates: Expected array, received string"}},
+		// Zod's z.number().int() names the type "number" for a non-number and "integer" only for a float.
+		{"integer given a string", `{"candidates":[{"rule":"ab","line":"2"}]}`, []string{"- candidates.0.line: Expected number, received string"}},
+		{"integer given null", `{"candidates":[{"rule":"ab","line":null}]}`, []string{"- candidates.0.line: Expected number, received null"}},
 		{"utf16 length", `{"candidates":[{"rule":"😀😀😀"}]}`, []string{"- candidates.0.rule: String must contain at most 5 character(s)"}},
 	}
 	for _, tc := range tests {

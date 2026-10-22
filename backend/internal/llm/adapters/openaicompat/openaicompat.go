@@ -195,8 +195,15 @@ func (a *Adapter) Complete(ctx context.Context, key string, at llm.Attempt) (llm
 		if resp.Error != nil && resp.Error.Message != "" {
 			msg = ": " + resp.Error.Message
 		}
-		return llm.AttemptResult{}, fmt.Errorf("OpenRouter returned no choices for %s%s", at.SchemaName, msg)
+		out := a.attemptResult(resp)
+		out.Answered = true
+		return out, fmt.Errorf("OpenRouter returned no choices for %s%s", at.SchemaName, msg)
 	}
+	return a.attemptResult(resp), nil
+}
+
+// attemptResult reads the answer text and the usage of a response.
+func (a *Adapter) attemptResult(resp chatResponse) llm.AttemptResult {
 	out := llm.AttemptResult{}
 	if len(resp.Choices) > 0 && resp.Choices[0].Message.Content != nil {
 		out.Raw = *resp.Choices[0].Message.Content
@@ -207,7 +214,7 @@ func (a *Adapter) Complete(ctx context.Context, key string, at llm.Attempt) (llm
 			out.CostUSD = &cost
 		}
 	}
-	return out, nil
+	return out
 }
 
 type modelList struct {

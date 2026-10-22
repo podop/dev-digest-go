@@ -185,6 +185,9 @@ type AttemptResult struct {
 	Usage *Usage
 	// CostUSD is the provider-reported cost of this attempt (OpenRouter usage.cost, mock), or nil.
 	CostUSD *float64
+	// Answered is set on the result that accompanies an error when the provider did answer (a
+	// 200 without choices): its usage, or an estimate, is still counted and reported.
+	Answered bool
 }
 
 // Policy is a provider's transport defaults (spec FR210, FR214).

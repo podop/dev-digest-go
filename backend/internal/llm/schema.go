@@ -264,6 +264,16 @@ func (v *validator) checkObject(s *jobj, inst any, path []string, out *[]issue, 
 	}
 	for _, k := range []string{"anyOf", "oneOf"} {
 		if alts, ok := s.get(k); ok {
+			// A schema that is one alternative or null is a Zod nullable/nullish: Zod reports the
+			// issues of the inner type, not a union failure.
+			if list, ok := alts.([]any); ok {
+				if inner, isNullable := nullableInner(list); isNullable {
+					if inst != nil {
+						v.check(inner, inst, path, out)
+					}
+					return
+				}
+			}
 			if list, ok := alts.([]any); ok && len(list) > 0 && !v.anyValid(list, inst) {
 				add("Invalid input")
 				return
@@ -358,6 +368,28 @@ func (v *validator) checkObject(s *jobj, inst any, path []string, out *[]issue, 
 			}
 		}
 	}
+}
+
+// nullableInner recognises [X, {"type":"null"}] (either order) and returns X.
+func nullableInner(alts []any) (inner any, ok bool) {
+	if len(alts) != 2 {
+		return nil, false
+	}
+	isNull := func(n any) bool {
+		o, ok := n.(*jobj)
+		if !ok || len(o.keys) != 1 {
+			return false
+		}
+		t, ok := o.get("type")
+		return ok && t == "null"
+	}
+	switch {
+	case isNull(alts[1]) && !isNull(alts[0]):
+		return alts[0], true
+	case isNull(alts[0]) && !isNull(alts[1]):
+		return alts[1], true
+	}
+	return nil, false
 }
 
 func (v *validator) anyValid(alts []any, inst any) bool {
@@ -478,8 +510,17 @@ func typeMessage(t, inst any) string {
 		}
 	}
 	received := typeOf(inst)
-	if n, ok := inst.(json.Number); ok && slices.Contains(expected, "integer") && !isInteger(n) {
-		received = "float"
+	if n, ok := inst.(json.Number); ok {
+		if slices.Contains(expected, "integer") && !isInteger(n) {
+			received = "float"
+		}
+	} else {
+		// Zod's z.number().int() reports a non-number as "Expected number", not "integer".
+		for i, e := range expected {
+			if e == "integer" {
+				expected[i] = "number"
+			}
+		}
 	}
 	return fmt.Sprintf("Expected %s, received %s", strings.Join(expected, " | "), received)
 }

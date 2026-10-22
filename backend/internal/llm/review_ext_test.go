@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/platform/apperr"
@@ -283,5 +284,42 @@ func TestStructured_reviewAnswerWithNullsValidates(t *testing.T) {
 	req.Reprompts = llm.NoReprompts
 	if _, err := c2.Structured(t.Context(), req); err == nil || !strings.Contains(err.Error(), "findings.0.title: Expected string, received null") {
 		t.Errorf("Structured() with a null required title error = %v, want Expected string, received null", err)
+	}
+}
+
+// A 200 answer the adapter cannot use still cost tokens: they are reported to the observer
+// (parity with the Node provider, engine goldens llm.json no_choices_*), estimated when absent.
+func TestStructured_answeredErrorReportsUsage(t *testing.T) {
+	t.Parallel()
+	cost := 0.0001
+	tests := []struct {
+		name  string
+		reply llm.AttemptResult
+		want  llm.AttemptUsage
+	}{
+		{"provider usage", llm.AttemptResult{Answered: true, Usage: &llm.Usage{TokensIn: 10}, CostUSD: &cost}, llm.AttemptUsage{TokensIn: 10, CostUSD: &cost}},
+		// "sys\nhello" is 9 UTF-16 units: 3 tokens in, none out (the price book prices gpt-4.1, so the cost is not nil).
+		{"estimated", llm.AttemptResult{Answered: true}, llm.AttemptUsage{TokensIn: 3, TokensOut: 0}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ad := &fakeAdapter{reply: func(int, context.Context, llm.Attempt) (llm.AttemptResult, error) {
+				return tc.reply, errors.New("returned no choices")
+			}}
+			c, _ := newClient(t, ad, newKeys("OPENAI_API_KEY", openAIKey), nil)
+			var got []llm.AttemptUsage
+			req := baseRequest()
+			req.OnUsage = func(u llm.AttemptUsage) { got = append(got, u) }
+			if _, err := c.Structured(t.Context(), req); err == nil {
+				t.Fatal("Structured() error = nil, want the adapter's failure")
+			}
+			opts := []cmp.Option{}
+			if tc.reply.Usage == nil {
+				opts = append(opts, cmpopts.IgnoreFields(llm.AttemptUsage{}, "CostUSD"))
+			}
+			if diff := cmp.Diff([]llm.AttemptUsage{tc.want}, got, opts...); diff != "" {
+				t.Errorf("OnUsage calls mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
