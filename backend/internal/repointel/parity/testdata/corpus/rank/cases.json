@@ -1,0 +1,694 @@
+{
+  "note": "Hand-written graphs; the generator adds seeded random graphs. Node order = the order of files.",
+  "cases": [
+    {
+      "name": "empty",
+      "files": [],
+      "edges": []
+    },
+    {
+      "name": "single_file",
+      "files": [
+        "only.ts"
+      ],
+      "edges": []
+    },
+    {
+      "name": "single_file_self_loop",
+      "files": [
+        "only.ts"
+      ],
+      "edges": [
+        [
+          "only.ts",
+          "only.ts"
+        ]
+      ]
+    },
+    {
+      "name": "no_edges_all_isolated",
+      "files": [
+        "a.ts",
+        "b.ts",
+        "c.ts",
+        "d.ts",
+        "e.ts"
+      ],
+      "edges": []
+    },
+    {
+      "name": "star_in",
+      "files": [
+        "hub.ts",
+        "leaf0.ts",
+        "leaf1.ts",
+        "leaf2.ts",
+        "leaf3.ts",
+        "leaf4.ts",
+        "leaf5.ts",
+        "leaf6.ts",
+        "leaf7.ts"
+      ],
+      "edges": [
+        [
+          "leaf0.ts",
+          "hub.ts"
+        ],
+        [
+          "leaf1.ts",
+          "hub.ts"
+        ],
+        [
+          "leaf2.ts",
+          "hub.ts"
+        ],
+        [
+          "leaf3.ts",
+          "hub.ts"
+        ],
+        [
+          "leaf4.ts",
+          "hub.ts"
+        ],
+        [
+          "leaf5.ts",
+          "hub.ts"
+        ],
+        [
+          "leaf6.ts",
+          "hub.ts"
+        ],
+        [
+          "leaf7.ts",
+          "hub.ts"
+        ]
+      ]
+    },
+    {
+      "name": "star_out",
+      "files": [
+        "hub.ts",
+        "leaf0.ts",
+        "leaf1.ts",
+        "leaf2.ts",
+        "leaf3.ts",
+        "leaf4.ts",
+        "leaf5.ts",
+        "leaf6.ts",
+        "leaf7.ts"
+      ],
+      "edges": [
+        [
+          "hub.ts",
+          "leaf0.ts"
+        ],
+        [
+          "hub.ts",
+          "leaf1.ts"
+        ],
+        [
+          "hub.ts",
+          "leaf2.ts"
+        ],
+        [
+          "hub.ts",
+          "leaf3.ts"
+        ],
+        [
+          "hub.ts",
+          "leaf4.ts"
+        ],
+        [
+          "hub.ts",
+          "leaf5.ts"
+        ],
+        [
+          "hub.ts",
+          "leaf6.ts"
+        ],
+        [
+          "hub.ts",
+          "leaf7.ts"
+        ]
+      ]
+    },
+    {
+      "name": "chain",
+      "files": [
+        "c0.ts",
+        "c1.ts",
+        "c2.ts",
+        "c3.ts",
+        "c4.ts",
+        "c5.ts",
+        "c6.ts",
+        "c7.ts",
+        "c8.ts",
+        "c9.ts"
+      ],
+      "edges": [
+        [
+          "c0.ts",
+          "c1.ts"
+        ],
+        [
+          "c1.ts",
+          "c2.ts"
+        ],
+        [
+          "c2.ts",
+          "c3.ts"
+        ],
+        [
+          "c3.ts",
+          "c4.ts"
+        ],
+        [
+          "c4.ts",
+          "c5.ts"
+        ],
+        [
+          "c5.ts",
+          "c6.ts"
+        ],
+        [
+          "c6.ts",
+          "c7.ts"
+        ],
+        [
+          "c7.ts",
+          "c8.ts"
+        ],
+        [
+          "c8.ts",
+          "c9.ts"
+        ]
+      ]
+    },
+    {
+      "name": "cycle",
+      "files": [
+        "y0.ts",
+        "y1.ts",
+        "y2.ts",
+        "y3.ts",
+        "y4.ts",
+        "y5.ts"
+      ],
+      "edges": [
+        [
+          "y0.ts",
+          "y1.ts"
+        ],
+        [
+          "y1.ts",
+          "y2.ts"
+        ],
+        [
+          "y2.ts",
+          "y3.ts"
+        ],
+        [
+          "y3.ts",
+          "y4.ts"
+        ],
+        [
+          "y4.ts",
+          "y5.ts"
+        ],
+        [
+          "y5.ts",
+          "y0.ts"
+        ]
+      ]
+    },
+    {
+      "name": "two_cycle",
+      "files": [
+        "p.ts",
+        "q.ts"
+      ],
+      "edges": [
+        [
+          "p.ts",
+          "q.ts"
+        ],
+        [
+          "q.ts",
+          "p.ts"
+        ]
+      ]
+    },
+    {
+      "name": "dangling_nodes",
+      "files": [
+        "a.ts",
+        "b.ts",
+        "c.ts",
+        "d.ts",
+        "e.ts"
+      ],
+      "edges": [
+        [
+          "a.ts",
+          "b.ts"
+        ],
+        [
+          "a.ts",
+          "c.ts"
+        ],
+        [
+          "b.ts",
+          "c.ts"
+        ],
+        [
+          "d.ts",
+          "c.ts"
+        ]
+      ]
+    },
+    {
+      "name": "connected_plus_isolated",
+      "files": [
+        "m1.ts",
+        "m2.ts",
+        "m3.ts",
+        "iso1.ts",
+        "iso2.ts",
+        "iso3.ts"
+      ],
+      "edges": [
+        [
+          "m1.ts",
+          "m2.ts"
+        ],
+        [
+          "m2.ts",
+          "m3.ts"
+        ],
+        [
+          "m3.ts",
+          "m1.ts"
+        ],
+        [
+          "m1.ts",
+          "m3.ts"
+        ]
+      ]
+    },
+    {
+      "name": "equal_rank_leaves",
+      "files": [
+        "root.ts",
+        "l1.ts",
+        "l2.ts",
+        "l3.ts",
+        "l4.ts",
+        "u1.ts",
+        "u2.ts"
+      ],
+      "edges": [
+        [
+          "l1.ts",
+          "root.ts"
+        ],
+        [
+          "l2.ts",
+          "root.ts"
+        ],
+        [
+          "l3.ts",
+          "root.ts"
+        ],
+        [
+          "l4.ts",
+          "root.ts"
+        ]
+      ]
+    },
+    {
+      "name": "filtered_edges",
+      "files": [
+        "a.ts",
+        "b.ts",
+        "c.ts"
+      ],
+      "edges": [
+        [
+          "a.ts",
+          "a.ts"
+        ],
+        [
+          "a.ts",
+          "b.ts"
+        ],
+        [
+          "a.ts",
+          "b.ts"
+        ],
+        [
+          "b.ts",
+          "c.ts"
+        ],
+        [
+          "ghost.ts",
+          "a.ts"
+        ],
+        [
+          "a.ts",
+          "ghost.ts"
+        ],
+        [
+          "ghost.ts",
+          "ghost2.ts"
+        ],
+        [
+          "c.ts",
+          "a.ts"
+        ]
+      ]
+    },
+    {
+      "name": "complete_k5",
+      "files": [
+        "k0.ts",
+        "k1.ts",
+        "k2.ts",
+        "k3.ts",
+        "k4.ts"
+      ],
+      "edges": [
+        [
+          "k0.ts",
+          "k1.ts"
+        ],
+        [
+          "k0.ts",
+          "k2.ts"
+        ],
+        [
+          "k0.ts",
+          "k3.ts"
+        ],
+        [
+          "k0.ts",
+          "k4.ts"
+        ],
+        [
+          "k1.ts",
+          "k0.ts"
+        ],
+        [
+          "k1.ts",
+          "k2.ts"
+        ],
+        [
+          "k1.ts",
+          "k3.ts"
+        ],
+        [
+          "k1.ts",
+          "k4.ts"
+        ],
+        [
+          "k2.ts",
+          "k0.ts"
+        ],
+        [
+          "k2.ts",
+          "k1.ts"
+        ],
+        [
+          "k2.ts",
+          "k3.ts"
+        ],
+        [
+          "k2.ts",
+          "k4.ts"
+        ],
+        [
+          "k3.ts",
+          "k0.ts"
+        ],
+        [
+          "k3.ts",
+          "k1.ts"
+        ],
+        [
+          "k3.ts",
+          "k2.ts"
+        ],
+        [
+          "k3.ts",
+          "k4.ts"
+        ],
+        [
+          "k4.ts",
+          "k0.ts"
+        ],
+        [
+          "k4.ts",
+          "k1.ts"
+        ],
+        [
+          "k4.ts",
+          "k2.ts"
+        ],
+        [
+          "k4.ts",
+          "k3.ts"
+        ]
+      ]
+    },
+    {
+      "name": "unsorted_node_order",
+      "files": [
+        "z.ts",
+        "m.ts",
+        "a.ts",
+        "q.ts",
+        "b.ts"
+      ],
+      "edges": [
+        [
+          "z.ts",
+          "a.ts"
+        ],
+        [
+          "m.ts",
+          "a.ts"
+        ],
+        [
+          "a.ts",
+          "b.ts"
+        ],
+        [
+          "q.ts",
+          "z.ts"
+        ],
+        [
+          "b.ts",
+          "q.ts"
+        ]
+      ]
+    },
+    {
+      "name": "unicode_names",
+      "files": [
+        "src/é.ts",
+        "src/日本.ts",
+        "src/😀.ts",
+        "src/plain.ts"
+      ],
+      "edges": [
+        [
+          "src/é.ts",
+          "src/plain.ts"
+        ],
+        [
+          "src/日本.ts",
+          "src/plain.ts"
+        ],
+        [
+          "src/😀.ts",
+          "src/日本.ts"
+        ]
+      ]
+    },
+    {
+      "name": "two_components_equal",
+      "files": [
+        "a1.ts",
+        "a2.ts",
+        "b1.ts",
+        "b2.ts"
+      ],
+      "edges": [
+        [
+          "a1.ts",
+          "a2.ts"
+        ],
+        [
+          "b1.ts",
+          "b2.ts"
+        ]
+      ]
+    },
+    {
+      "name": "binary_tree_imports",
+      "files": [
+        "t0.ts",
+        "t1.ts",
+        "t2.ts",
+        "t3.ts",
+        "t4.ts",
+        "t5.ts",
+        "t6.ts",
+        "t7.ts",
+        "t8.ts",
+        "t9.ts",
+        "t10.ts",
+        "t11.ts",
+        "t12.ts",
+        "t13.ts",
+        "t14.ts"
+      ],
+      "edges": [
+        [
+          "t0.ts",
+          "t1.ts"
+        ],
+        [
+          "t1.ts",
+          "t3.ts"
+        ],
+        [
+          "t2.ts",
+          "t5.ts"
+        ],
+        [
+          "t3.ts",
+          "t7.ts"
+        ],
+        [
+          "t4.ts",
+          "t9.ts"
+        ],
+        [
+          "t5.ts",
+          "t11.ts"
+        ],
+        [
+          "t6.ts",
+          "t13.ts"
+        ],
+        [
+          "t0.ts",
+          "t2.ts"
+        ],
+        [
+          "t1.ts",
+          "t4.ts"
+        ],
+        [
+          "t2.ts",
+          "t6.ts"
+        ],
+        [
+          "t3.ts",
+          "t8.ts"
+        ],
+        [
+          "t4.ts",
+          "t10.ts"
+        ],
+        [
+          "t5.ts",
+          "t12.ts"
+        ],
+        [
+          "t6.ts",
+          "t14.ts"
+        ]
+      ]
+    },
+    {
+      "name": "hub_and_spoke_with_back_edges",
+      "files": [
+        "core.ts",
+        "s0.ts",
+        "s1.ts",
+        "s2.ts",
+        "s3.ts",
+        "s4.ts",
+        "s5.ts"
+      ],
+      "edges": [
+        [
+          "s0.ts",
+          "core.ts"
+        ],
+        [
+          "s1.ts",
+          "core.ts"
+        ],
+        [
+          "s2.ts",
+          "core.ts"
+        ],
+        [
+          "s3.ts",
+          "core.ts"
+        ],
+        [
+          "s4.ts",
+          "core.ts"
+        ],
+        [
+          "s5.ts",
+          "core.ts"
+        ],
+        [
+          "core.ts",
+          "s0.ts"
+        ],
+        [
+          "core.ts",
+          "s1.ts"
+        ]
+      ]
+    }
+  ],
+  "random": [
+    {
+      "name": "random_2000",
+      "nodes": 2000,
+      "edges": 5000,
+      "seed": 20261022,
+      "skew": 3,
+      "dangling_edges": 40,
+      "dup_edges": 60,
+      "self_loops": 25
+    },
+    {
+      "name": "random_300_dense",
+      "nodes": 300,
+      "edges": 3000,
+      "seed": 7,
+      "skew": 1,
+      "dangling_edges": 0,
+      "dup_edges": 100,
+      "self_loops": 5
+    },
+    {
+      "name": "random_50_sparse",
+      "nodes": 50,
+      "edges": 35,
+      "seed": 99,
+      "skew": 2,
+      "dangling_edges": 3,
+      "dup_edges": 2,
+      "self_loops": 1
+    }
+  ]
+}

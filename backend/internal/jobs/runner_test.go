@@ -606,3 +606,39 @@ func TestRunner_LogsOneLinePerFinishedJob(t *testing.T) {
 		}
 	})
 }
+
+// AC3013 (runner): the registered kinds are listable with their effective per-attempt limit.
+func TestRunner_Registered(t *testing.T) {
+	noop := func(context.Context, json.RawMessage) error { return nil }
+	r := jobs.New(newFakeStore(), jobs.Options{})
+	r.Register("own", noop, jobs.WithTimeout(7*time.Second))
+	r.Register("default", noop)
+	r.Register("ignored", noop, jobs.WithTimeout(0))
+
+	tests := []struct {
+		kind   string
+		want   time.Duration
+		wantOK bool
+	}{
+		{kind: "own", want: 7 * time.Second, wantOK: true},
+		{kind: "default", want: jobs.DefaultTimeout, wantOK: true},
+		{kind: "ignored", want: jobs.DefaultTimeout, wantOK: true},
+		{kind: "missing", want: 0, wantOK: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.kind, func(t *testing.T) {
+			got, ok := r.Registered(tc.kind)
+			if got != tc.want || ok != tc.wantOK {
+				t.Errorf("Registered(%q) = %v, %v, want %v, %v", tc.kind, got, ok, tc.want, tc.wantOK)
+			}
+		})
+	}
+}
+
+func TestRunner_Registered_FollowsRunnerTimeout(t *testing.T) {
+	r := jobs.New(newFakeStore(), jobs.Options{Timeout: 3 * time.Second})
+	r.Register("k", func(context.Context, json.RawMessage) error { return nil })
+	if got, ok := r.Registered("k"); got != 3*time.Second || !ok {
+		t.Errorf("Registered(k) = %v, %v, want 3s, true", got, ok)
+	}
+}

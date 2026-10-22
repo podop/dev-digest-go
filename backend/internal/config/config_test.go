@@ -33,6 +33,7 @@ func TestLoad(t *testing.T) {
 				RateLimitEnabled:    true,
 				AutoMigrate:         true,
 				AutoSeed:            true,
+				RepoIntelEnabled:    true,
 				ProjectContextGlobs: defaultGlobs,
 			},
 		},
@@ -60,6 +61,7 @@ func TestLoad(t *testing.T) {
 				RateLimitEnabled:    false,
 				AutoMigrate:         false,
 				AutoSeed:            false,
+				RepoIntelEnabled:    true,
 				ProjectContextGlobs: defaultGlobs,
 			},
 		},
@@ -81,6 +83,7 @@ func TestLoad(t *testing.T) {
 				RateLimitEnabled:    true,
 				AutoMigrate:         true,
 				AutoSeed:            true,
+				RepoIntelEnabled:    true,
 				ProjectContextGlobs: defaultGlobs,
 			},
 		},
@@ -104,6 +107,7 @@ func TestLoad(t *testing.T) {
 				RateLimitEnabled:    true,
 				AutoMigrate:         true,
 				AutoSeed:            true,
+				RepoIntelEnabled:    true,
 				ProjectContextGlobs: defaultGlobs,
 			},
 		},
@@ -129,6 +133,7 @@ func TestLoad(t *testing.T) {
 				AutoSeed:            true,
 				LLMProviderOverride: "mock",
 				LLMMockDelay:        1500 * time.Millisecond,
+				RepoIntelEnabled:    true,
 				ProjectContextGlobs: []string{"docs/*.md", "{a,b}/**/*.md"},
 			},
 		},
@@ -149,6 +154,7 @@ func TestLoad(t *testing.T) {
 				AutoMigrate:         true,
 				AutoSeed:            true,
 				LLMMockDelay:        60 * time.Second,
+				RepoIntelEnabled:    true,
 				ProjectContextGlobs: defaultGlobs,
 			},
 		},
@@ -201,6 +207,40 @@ func TestLoadProjectContextGlobs(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want, got.ProjectContextGlobs); diff != "" {
 				t.Errorf("Load(PROJECT_CONTEXT_GLOBS=%q) globs mismatch (-want +got):\n%s", tc.env, diff)
+			}
+		})
+	}
+}
+
+// AC3065: REPO_INTEL_ENABLED is off only when its trimmed value is exactly "false".
+func TestLoadRepoIntelEnabled(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		set   bool
+		want  bool
+	}{
+		{name: "unset", want: true},
+		{name: "empty", set: true, value: "", want: true},
+		{name: "true", set: true, value: "true", want: true},
+		{name: "zero", set: true, value: "0", want: true},
+		{name: "false with spaces", set: true, value: " false ", want: false},
+		{name: "false", set: true, value: "false", want: false},
+		{name: "upper case FALSE", set: true, value: "FALSE", want: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			env := map[string]string{"DATABASE_URL": "x"}
+			if tc.set {
+				env["REPO_INTEL_ENABLED"] = tc.value
+			}
+			got, err := config.Load(func(k string) string { return env[k] })
+			if err != nil {
+				t.Fatalf("Load(REPO_INTEL_ENABLED=%q) error: %v", tc.value, err)
+			}
+			if got.RepoIntelEnabled != tc.want {
+				t.Errorf("Load(REPO_INTEL_ENABLED=%q).RepoIntelEnabled = %t, want %t", tc.value, got.RepoIntelEnabled, tc.want)
 			}
 		})
 	}

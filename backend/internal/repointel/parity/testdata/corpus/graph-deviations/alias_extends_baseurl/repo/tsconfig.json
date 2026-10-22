@@ -1,0 +1,6 @@
+{
+  "extends": "./config/base.json",
+  "compilerOptions": {
+    "paths": { "@x/*": ["x/*"] }
+  }
+}

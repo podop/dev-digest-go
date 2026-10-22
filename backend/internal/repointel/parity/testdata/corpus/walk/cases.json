@@ -1,0 +1,353 @@
+{
+  "note": "Declarative trees: the generator materialises each case under a scratch dir, runs Node's walkClone and records the result. size = exact byte length of a filler file; link = symlink target.",
+  "cases": [
+    {
+      "name": "extensions_and_case",
+      "entries": [
+        {
+          "path": "a.ts"
+        },
+        {
+          "path": "b.tsx"
+        },
+        {
+          "path": "c.js"
+        },
+        {
+          "path": "d.jsx"
+        },
+        {
+          "path": "e.mjs"
+        },
+        {
+          "path": "f.cjs"
+        },
+        {
+          "path": "Upper.TS"
+        },
+        {
+          "path": "Mixed.Mjs"
+        },
+        {
+          "path": "g.json"
+        },
+        {
+          "path": "h.md"
+        },
+        {
+          "path": "i.d.ts"
+        },
+        {
+          "path": "j.mts"
+        },
+        {
+          "path": "k.cts"
+        },
+        {
+          "path": "noext"
+        },
+        {
+          "path": "trailing.ts.bak"
+        },
+        {
+          "path": "dir.ts/inner.ts"
+        },
+        {
+          "path": "dir.ts/inner.txt"
+        }
+      ]
+    },
+    {
+      "name": "dotfile_named_like_an_extension",
+      "entries": [
+        {
+          "path": ".ts"
+        },
+        {
+          "path": ".js"
+        },
+        {
+          "path": "src/.tsx"
+        },
+        {
+          "path": ".hidden.ts"
+        },
+        {
+          "path": ".config/x.ts"
+        },
+        {
+          "path": "src/ok.ts"
+        }
+      ]
+    },
+    {
+      "name": "excluded_directories",
+      "entries": [
+        {
+          "path": "src/keep.ts"
+        },
+        {
+          "path": "node_modules/pkg/index.js"
+        },
+        {
+          "path": "dist/out.js"
+        },
+        {
+          "path": "build/out.js"
+        },
+        {
+          "path": "coverage/lcov.js"
+        },
+        {
+          "path": ".next/server.js"
+        },
+        {
+          "path": "out/export.js"
+        },
+        {
+          "path": "vendor/lib.js"
+        },
+        {
+          "path": ".git/hooks/x.js"
+        },
+        {
+          "path": "src/node_modules/nested.js"
+        },
+        {
+          "path": "src/dist/nested.js"
+        },
+        {
+          "path": "pkg/vendor/deep/x.ts"
+        },
+        {
+          "path": "distant/ok.ts"
+        },
+        {
+          "path": "outside/ok.ts"
+        },
+        {
+          "path": "src/vendor-lib/ok.ts"
+        },
+        {
+          "path": "Build/ok.ts"
+        },
+        {
+          "path": "builds/ok.ts"
+        },
+        {
+          "path": "node_modules.ts"
+        },
+        {
+          "path": "dist.js"
+        },
+        {
+          "path": "src/out.ts"
+        }
+      ]
+    },
+    {
+      "name": "size_limit",
+      "entries": [
+        {
+          "path": "exact_limit.ts",
+          "size": 409600
+        },
+        {
+          "path": "one_over.ts",
+          "size": 409601
+        },
+        {
+          "path": "small.ts",
+          "size": 10
+        },
+        {
+          "path": "big.js",
+          "size": 1048576
+        },
+        {
+          "path": "big_unsupported.json",
+          "size": 1048576
+        },
+        {
+          "path": "empty.ts",
+          "size": 0
+        },
+        {
+          "path": "nested/over.tsx",
+          "size": 500000
+        }
+      ]
+    },
+    {
+      "name": "symlinks",
+      "entries": [
+        {
+          "path": "real.ts"
+        },
+        {
+          "path": "link_to_file.ts",
+          "link": "real.ts"
+        },
+        {
+          "path": "realdir/in.ts"
+        },
+        {
+          "path": "link_to_dir",
+          "link": "realdir"
+        },
+        {
+          "path": "dangling.ts",
+          "link": "does-not-exist.ts"
+        },
+        {
+          "path": "dir_loop/x.ts"
+        },
+        {
+          "path": "dir_loop/back",
+          "link": ".."
+        },
+        {
+          "path": "link_to_outside.ts",
+          "link": "../outside-the-root.ts"
+        }
+      ]
+    },
+    {
+      "name": "sort_order",
+      "entries": [
+        {
+          "path": "b.ts"
+        },
+        {
+          "path": "a.ts"
+        },
+        {
+          "path": "A.ts"
+        },
+        {
+          "path": "B.ts"
+        },
+        {
+          "path": "a-b.ts"
+        },
+        {
+          "path": "a_b.ts"
+        },
+        {
+          "path": "a.b.ts"
+        },
+        {
+          "path": "a/b.ts"
+        },
+        {
+          "path": "a0.ts"
+        },
+        {
+          "path": "a10.ts"
+        },
+        {
+          "path": "a2.ts"
+        },
+        {
+          "path": "_x.ts"
+        },
+        {
+          "path": "-x.ts"
+        },
+        {
+          "path": "1.ts"
+        },
+        {
+          "path": "~x.ts"
+        },
+        {
+          "path": "z/z.ts"
+        },
+        {
+          "path": "z.ts"
+        },
+        {
+          "path": "é.ts"
+        },
+        {
+          "path": "日本.ts"
+        },
+        {
+          "path": "ñ/x.ts"
+        },
+        {
+          "path": "src/Z.ts"
+        },
+        {
+          "path": "src/a.ts"
+        },
+        {
+          "path": "src/sub/a.ts"
+        },
+        {
+          "path": "src/sub.ts"
+        },
+        {
+          "path": "with space.ts"
+        }
+      ]
+    },
+    {
+      "name": "bounded_over_5000",
+      "bulk": {
+        "dir": "bulk",
+        "count": 5003,
+        "ext": ".ts"
+      },
+      "entries": [
+        {
+          "path": "zzz_last.ts"
+        },
+        {
+          "path": "aaa_first.ts"
+        }
+      ]
+    },
+    {
+      "name": "exactly_5000",
+      "bulk": {
+        "dir": "bulk",
+        "count": 5000,
+        "ext": ".ts"
+      },
+      "entries": []
+    },
+    {
+      "name": "empty_tree",
+      "entries": []
+    },
+    {
+      "name": "only_unsupported",
+      "entries": [
+        {
+          "path": "README.md"
+        },
+        {
+          "path": "package.json"
+        },
+        {
+          "path": "src/style.css"
+        }
+      ]
+    },
+    {
+      "name": "deeply_nested",
+      "entries": [
+        {
+          "path": "a/b/c/d/e/f/g/h/i/j/deep.ts"
+        },
+        {
+          "path": "a/b/c/d/e/f/g/h/i/j/node_modules/x.ts"
+        },
+        {
+          "path": "a/top.ts"
+        }
+      ]
+    }
+  ]
+}

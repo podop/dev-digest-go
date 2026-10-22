@@ -1,0 +1,97 @@
+{
+  "note": "Texts counted with js-tiktoken cl100k_base encode(text, [], []): special tokens are ordinary text. 'repeat' entries are expanded by the generator.",
+  "cases": [
+    {
+      "name": "empty",
+      "text": ""
+    },
+    {
+      "name": "ascii_sentence",
+      "text": "The quick brown fox jumps over the lazy dog."
+    },
+    {
+      "name": "ascii_repeated",
+      "text": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."
+    },
+    {
+      "name": "cjk",
+      "text": "日本語のテキストをトークン化します。中文文本，한국어 텍스트도 있습니다。"
+    },
+    {
+      "name": "emoji",
+      "text": "Ship it 🚀🚀 — party 🎉 flags 🇺🇦🇯🇵 family 👨‍👩‍👧‍👦 skin 👍🏽"
+    },
+    {
+      "name": "code_typescript",
+      "text": "export async function fetchAll(url: string, opts: { retries?: number } = {}): Promise<Response[]> {\n  const out: Response[] = [];\n  for (const u of urls) {\n    out.push(await fetch(u));\n  }\n  return out;\n}\n"
+    },
+    {
+      "name": "code_signature_lines",
+      "text": "# Repo skeleton (top-ranked by import graph only, partial view)\nsrc/a.ts:\n  export function run(a: number): void\n  export class Widget\n"
+    },
+    {
+      "name": "whitespace_runs",
+      "text": "a    b\t\t\tc\n\n\n\nd \n \n e\r\n\r\nf"
+    },
+    {
+      "name": "whitespace_exotic",
+      "text": "x y z w vu﻿end　fin​zw"
+    },
+    {
+      "name": "leading_trailing_whitespace",
+      "text": "   \t padded \n\n   "
+    },
+    {
+      "name": "digits_and_symbols",
+      "text": "1234567890 3.14159 0xDEADBEEF !@#$%^&*()_+-=[]{}|;':\",./<>?`~"
+    },
+    {
+      "name": "special_endoftext",
+      "text": "before <|endoftext|> after"
+    },
+    {
+      "name": "special_only",
+      "text": "<|endoftext|>"
+    },
+    {
+      "name": "special_multiple",
+      "text": "<|endoftext|><|fim_prefix|><|fim_middle|><|fim_suffix|><|endofprompt|>"
+    },
+    {
+      "name": "special_lookalike",
+      "text": "<|endoftext| and <|notspecial|> and |endoftext|>"
+    },
+    {
+      "name": "normal_after_special",
+      "text": "The quick brown fox jumps over the lazy dog."
+    },
+    {
+      "name": "newlines_only",
+      "text": "\n\n\n\n\n\n"
+    },
+    {
+      "name": "long_word",
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "combining_marks",
+      "text": "é ñ å  Z͢͡a̴lgo"
+    },
+    {
+      "name": "invalid_replacement_char",
+      "text": "bad �� bytes �"
+    }
+  ],
+  "repeat": [
+    {
+      "name": "ten_kb_ascii",
+      "unit": "The quick brown fox jumps over the lazy dog. 0123456789 function foo(bar) { return bar + 1; }\n",
+      "bytes": 10240
+    },
+    {
+      "name": "ten_kb_mixed",
+      "unit": "日本語 text 🚀 mixed ünïcödé \t spaces    and\nnewlines <|endoftext|> ",
+      "bytes": 10240
+    }
+  ]
+}

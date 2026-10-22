@@ -9,9 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"dev-digest-go/backend/internal/platform/gitcli"
 )
@@ -474,5 +477,140 @@ func TestClone_URLCannotBeAnOption(t *testing.T) {
 	argv := strings.SplitN(readFile(t, log), "\n", 2)[0]
 	if !strings.Contains(argv, "[--] [--upload-pack=touch /tmp/pwned]") {
 		t.Errorf("clone argv = %q, want url after `--`", argv)
+	}
+}
+
+func TestDiffNames_ListsChangedPathsRaw(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	r.commit("keep.txt", "keep")
+	r.commit("old name.txt", "same content, long enough to be detected as a rename of the old file")
+	c := newClient(t, gitcli.Options{CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{}); err != nil {
+		t.Fatalf("Clone() error: %v", err)
+	}
+	base, err := c.Head(t.Context(), "o", "r")
+	if err != nil {
+		t.Fatalf("Head() error: %v", err)
+	}
+
+	// modify, add (odd names), delete, rename: every case git could quote or fold.
+	if err := os.WriteFile(filepath.Join(r.work, "a.txt"), []byte("changed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"dir/ü ni.txt", "tab\there.txt", "line\nbreak.txt"} {
+		p := filepath.Join(r.work, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git(t, r.work, "rm", "-q", "keep.txt")
+	git(t, r.work, "mv", "old name.txt", "new name.txt")
+	git(t, r.work, "add", "-A")
+	git(t, r.work, "commit", "-q", "-m", "mixed")
+	git(t, r.work, "push", "-q", "origin", "main")
+	if _, err := c.Sync(t.Context(), "o", "r", "main"); err != nil {
+		t.Fatalf("Sync() error: %v", err)
+	}
+	head, err := c.Head(t.Context(), "o", "r")
+	if err != nil {
+		t.Fatalf("Head() error: %v", err)
+	}
+
+	got, err := c.DiffNames(t.Context(), "o", "r", base, head)
+	if err != nil {
+		t.Fatalf("DiffNames() error: %v", err)
+	}
+	slices.Sort(got)
+	want := []string{"a.txt", "dir/ü ni.txt", "keep.txt", "line\nbreak.txt", "new name.txt", "old name.txt", "tab\there.txt"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("DiffNames(%.7s, %.7s) mismatch (-want +got):\n%s", base, head, diff)
+	}
+
+	same, err := c.DiffNames(t.Context(), "o", "r", head, head)
+	if err != nil || len(same) != 0 {
+		t.Errorf("DiffNames(head, head) = %v, %v, want empty, nil", same, err)
+	}
+}
+
+func TestDiffNames_RejectsNonHexIDs(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	bin, log := wrapper(t, `exec git "$@"`)
+	c := newClient(t, gitcli.Options{Binary: bin, CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{Depth: 1}); err != nil {
+		t.Fatal(err)
+	}
+	head := git(t, r.work, "rev-parse", "HEAD")
+	before := readFile(t, log)
+	for _, bad := range []string{"", "abc", "--output=x", "-p", "HEAD", "main..main", "zzzz", head + "g", strings.Repeat("a", 65)} {
+		if _, err := c.DiffNames(t.Context(), "o", "r", bad, head); !errors.Is(err, gitcli.ErrInvalidSHA) {
+			t.Errorf("DiffNames(base=%q) error = %v, want ErrInvalidSHA", bad, err)
+		}
+		if _, err := c.DiffNames(t.Context(), "o", "r", head, bad); !errors.Is(err, gitcli.ErrInvalidSHA) {
+			t.Errorf("DiffNames(head=%q) error = %v, want ErrInvalidSHA", bad, err)
+		}
+	}
+	if after := readFile(t, log); after != before {
+		t.Errorf("git ran for an invalid id:\n%s", strings.TrimPrefix(after, before))
+	}
+}
+
+func TestDiffNames_ArgvAndUnknownClone(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	bin, log := wrapper(t, `exec git "$@"`)
+	c := newClient(t, gitcli.Options{Binary: bin, CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{Depth: 1}); err != nil {
+		t.Fatal(err)
+	}
+	head := git(t, r.work, "rev-parse", "HEAD")
+	if _, err := c.DiffNames(t.Context(), "o", "r", head, head); err != nil {
+		t.Fatalf("DiffNames() error: %v", err)
+	}
+	wantArgv := "[diff] [--name-only] [--no-renames] [-z] [" + head + "] [" + head + "] [--]"
+	if got := readFile(t, log); !strings.Contains(got, wantArgv+"\n") {
+		t.Errorf("git argv missing %q in:\n%s", wantArgv, got)
+	}
+	if _, err := c.DiffNames(t.Context(), "o", "missing", head, head); err == nil {
+		t.Error("DiffNames(unknown clone) error = nil, want an error")
+	}
+}
+
+func TestDiffNames_MissingBaseInShallowCloneIsAnError(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	c := newClient(t, gitcli.Options{CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{Depth: 1}); err != nil {
+		t.Fatal(err)
+	}
+	head, err := c.Head(t.Context(), "o", "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, err := c.DiffNames(t.Context(), "o", "r", strings.Repeat("1", 40), head)
+	var ge *gitcli.Error
+	if !errors.As(err, &ge) || names != nil {
+		t.Errorf("DiffNames(missing base) = %v, %v, want nil, *gitcli.Error", names, err)
+	}
+}
+
+func TestDiffNames_OutputAboveTheCapIsRefused(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	body := `if [ "$(printf %s "$*" | grep -c ' diff ')" = 1 ]; then head -c 1048577 /dev/zero | tr '\0' 'a'; exit 0; fi
+exec git "$@"`
+	bin, _ := wrapper(t, body)
+	c := newClient(t, gitcli.Options{Binary: bin, CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{Depth: 1}); err != nil {
+		t.Fatal(err)
+	}
+	head := git(t, r.work, "rev-parse", "HEAD")
+	names, err := c.DiffNames(t.Context(), "o", "r", head, head)
+	if !errors.Is(err, gitcli.ErrOutputTooLarge) || names != nil {
+		t.Errorf("DiffNames(output of 1 MiB + 1) = %d names, %v, want nil, ErrOutputTooLarge", len(names), err)
 	}
 }

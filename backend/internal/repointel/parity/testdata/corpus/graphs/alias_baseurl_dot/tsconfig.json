@@ -1,0 +1,12 @@
+{
+  // comments and trailing commas are accepted by TypeScript
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@lib": ["src/lib/index.ts"],
+      "@exact/thing": ["src/thing.ts"],
+      "@multi/*": ["nope/*", "src/multi/*"],
+    },
+  },
+}

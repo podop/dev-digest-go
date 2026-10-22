@@ -1,0 +1,412 @@
+{
+  "note": "Candidates are already in repo-map order (rank DESC, exported DESC, line ASC); the generator adds a seeded 'many_files' case.",
+  "cases": [
+    {
+      "name": "empty",
+      "budgets": [
+        1500,
+        0
+      ],
+      "candidates": []
+    },
+    {
+      "name": "all_null_or_empty_signatures",
+      "budgets": [
+        1500
+      ],
+      "candidates": [
+        {
+          "path": "a.ts",
+          "name": "x",
+          "exported": true,
+          "signature": null,
+          "rank": 0.5
+        },
+        {
+          "path": "a.ts",
+          "name": "y",
+          "exported": true,
+          "signature": "",
+          "rank": 0.5
+        },
+        {
+          "path": "b.ts",
+          "name": "z",
+          "exported": false,
+          "signature": null,
+          "rank": 0.4
+        }
+      ]
+    },
+    {
+      "name": "single_item",
+      "budgets": [
+        0,
+        1,
+        20,
+        40,
+        80,
+        160,
+        400,
+        1500,
+        100000
+      ],
+      "candidates": [
+        {
+          "path": "src/a.ts",
+          "name": "run",
+          "exported": true,
+          "signature": "export function run(a: number): void",
+          "rank": 0.9
+        }
+      ]
+    },
+    {
+      "name": "dual_emitted_methods",
+      "budgets": [
+        1500,
+        60
+      ],
+      "candidates": [
+        {
+          "path": "src/w.ts",
+          "name": "Widget",
+          "exported": true,
+          "signature": "export class Widget",
+          "rank": 0.9
+        },
+        {
+          "path": "src/w.ts",
+          "name": "Widget.render",
+          "exported": true,
+          "signature": "render(depth: number): string",
+          "rank": 0.9
+        },
+        {
+          "path": "src/w.ts",
+          "name": "render",
+          "exported": true,
+          "signature": "render(depth: number): string",
+          "rank": 0.9
+        },
+        {
+          "path": "src/w.ts",
+          "name": "Widget.load",
+          "exported": true,
+          "signature": "async load(): Promise<void>",
+          "rank": 0.9
+        },
+        {
+          "path": "src/w.ts",
+          "name": "load",
+          "exported": true,
+          "signature": "async load(): Promise<void>",
+          "rank": 0.9
+        }
+      ]
+    },
+    {
+      "name": "duplicate_pairs_and_shared_signature",
+      "budgets": [
+        1500
+      ],
+      "candidates": [
+        {
+          "path": "a.ts",
+          "name": "f",
+          "exported": true,
+          "signature": "function f()",
+          "rank": 0.9
+        },
+        {
+          "path": "a.ts",
+          "name": "f",
+          "exported": true,
+          "signature": "function f()",
+          "rank": 0.9
+        },
+        {
+          "path": "b.ts",
+          "name": "f",
+          "exported": true,
+          "signature": "function f()",
+          "rank": 0.8
+        },
+        {
+          "path": "a.ts",
+          "name": "g",
+          "exported": false,
+          "signature": "function g()",
+          "rank": 0.7
+        },
+        {
+          "path": "b.ts",
+          "name": "g",
+          "exported": false,
+          "signature": "function g()",
+          "rank": 0.6
+        },
+        {
+          "path": "a.ts",
+          "name": "h",
+          "exported": true,
+          "signature": "function f()",
+          "rank": 0.5
+        }
+      ]
+    },
+    {
+      "name": "interleaved_files_first_appearance_order",
+      "budgets": [
+        1500,
+        50
+      ],
+      "candidates": [
+        {
+          "path": "z.ts",
+          "name": "a1",
+          "exported": true,
+          "signature": "function a1()",
+          "rank": 0.9
+        },
+        {
+          "path": "a.ts",
+          "name": "b1",
+          "exported": true,
+          "signature": "function b1()",
+          "rank": 0.8
+        },
+        {
+          "path": "z.ts",
+          "name": "a2",
+          "exported": true,
+          "signature": "function a2()",
+          "rank": 0.7
+        },
+        {
+          "path": "m.ts",
+          "name": "c1",
+          "exported": true,
+          "signature": "function c1()",
+          "rank": 0.6
+        },
+        {
+          "path": "a.ts",
+          "name": "b2",
+          "exported": true,
+          "signature": "function b2()",
+          "rank": 0.5
+        }
+      ]
+    },
+    {
+      "name": "cut_mid_file",
+      "budgets": [
+        40,
+        50,
+        60,
+        70,
+        90,
+        120,
+        1500
+      ],
+      "candidates": [
+        {
+          "path": "src/big.ts",
+          "name": "fn0",
+          "exported": true,
+          "signature": "export function fn0(argument0: string, other0: number): Promise<void>",
+          "rank": 0.9
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn1",
+          "exported": true,
+          "signature": "export function fn1(argument1: string, other1: number): Promise<void>",
+          "rank": 0.89
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn2",
+          "exported": true,
+          "signature": "export function fn2(argument2: string, other2: number): Promise<void>",
+          "rank": 0.88
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn3",
+          "exported": true,
+          "signature": "export function fn3(argument3: string, other3: number): Promise<void>",
+          "rank": 0.87
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn4",
+          "exported": true,
+          "signature": "export function fn4(argument4: string, other4: number): Promise<void>",
+          "rank": 0.86
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn5",
+          "exported": true,
+          "signature": "export function fn5(argument5: string, other5: number): Promise<void>",
+          "rank": 0.85
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn6",
+          "exported": true,
+          "signature": "export function fn6(argument6: string, other6: number): Promise<void>",
+          "rank": 0.8400000000000001
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn7",
+          "exported": true,
+          "signature": "export function fn7(argument7: string, other7: number): Promise<void>",
+          "rank": 0.8300000000000001
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn8",
+          "exported": true,
+          "signature": "export function fn8(argument8: string, other8: number): Promise<void>",
+          "rank": 0.8200000000000001
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn9",
+          "exported": true,
+          "signature": "export function fn9(argument9: string, other9: number): Promise<void>",
+          "rank": 0.81
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn10",
+          "exported": true,
+          "signature": "export function fn10(argument10: string, other10: number): Promise<void>",
+          "rank": 0.8
+        },
+        {
+          "path": "src/big.ts",
+          "name": "fn11",
+          "exported": true,
+          "signature": "export function fn11(argument11: string, other11: number): Promise<void>",
+          "rank": 0.79
+        }
+      ]
+    },
+    {
+      "name": "special_token_in_signature",
+      "budgets": [
+        1500,
+        30
+      ],
+      "candidates": [
+        {
+          "path": "src/s.ts",
+          "name": "sp",
+          "exported": true,
+          "signature": "export const sp = '<|endoftext|>'",
+          "rank": 0.9
+        },
+        {
+          "path": "src/s.ts",
+          "name": "sp2",
+          "exported": true,
+          "signature": "export const sp2 = '<|fim_prefix|> <|endofprompt|>'",
+          "rank": 0.8
+        },
+        {
+          "path": "src/t.ts",
+          "name": "plain",
+          "exported": true,
+          "signature": "export function plain()",
+          "rank": 0.7
+        }
+      ]
+    },
+    {
+      "name": "unicode_signatures",
+      "budgets": [
+        1500,
+        45
+      ],
+      "candidates": [
+        {
+          "path": "src/日本.ts",
+          "name": "日本語",
+          "exported": true,
+          "signature": "export const 日本語 = (引数: number) =>",
+          "rank": 0.9
+        },
+        {
+          "path": "src/emoji.ts",
+          "name": "e",
+          "exported": true,
+          "signature": "export function e(label = '😀😀😀🎉'): string",
+          "rank": 0.8
+        },
+        {
+          "path": "src/é.ts",
+          "name": "grüße",
+          "exported": false,
+          "signature": "function grüße(name = 'Ünïcödé')",
+          "rank": 0.7
+        }
+      ]
+    },
+    {
+      "name": "whitespace_inside_signature",
+      "budgets": [
+        1500
+      ],
+      "candidates": [
+        {
+          "path": "a.ts",
+          "name": "w",
+          "exported": true,
+          "signature": "function w(a:  number,\tb: string)",
+          "rank": 0.9
+        },
+        {
+          "path": "a.ts",
+          "name": "v",
+          "exported": true,
+          "signature": "function v()  ",
+          "rank": 0.8
+        }
+      ]
+    },
+    {
+      "name": "header_only_when_nothing_fits",
+      "budgets": [
+        1,
+        5,
+        10
+      ],
+      "candidates": [
+        {
+          "path": "a.ts",
+          "name": "f",
+          "exported": true,
+          "signature": "export function f(): void",
+          "rank": 0.9
+        }
+      ]
+    }
+  ],
+  "random": [
+    {
+      "name": "many_files",
+      "files": 80,
+      "perFile": 9,
+      "seed": 4242,
+      "budgets": [
+        1500,
+        400
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+function loneCR(a) {  return a;}function second() {  loneCR(1);}

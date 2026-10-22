@@ -193,6 +193,21 @@ func (r *Runner) Register(kind string, h Handler, opts ...RegisterOption) {
 	r.handlers[kind] = reg
 }
 
+// Registered reports whether a handler is registered for kind and, if so, the per-attempt limit
+// its jobs run under: the kind's own WithTimeout, else the runner's timeout.
+func (r *Runner) Registered(kind string) (time.Duration, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	reg, ok := r.handlers[kind]
+	if !ok {
+		return 0, false
+	}
+	if reg.timeout > 0 {
+		return reg.timeout, true
+	}
+	return r.timeout, true
+}
+
 // Enqueue stores a `queued` row for the job and schedules it; it returns the job id without
 // waiting for the work. payload is marshalled to JSON. ctx bounds only the insert: the job runs
 // on the runner's own lifecycle. It returns ErrUnknownKind when no handler is registered and

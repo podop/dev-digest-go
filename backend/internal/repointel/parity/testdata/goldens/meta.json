@@ -1,0 +1,13 @@
+{
+  "note": "Provenance of the goldens. Regenerate with the command in gen/README.md.",
+  "devDigestCommit": "d1c9093c19bafea4365f1d6bae435f5f8ae2ed6b",
+  "tools": {
+    "@ast-grep/napi": "0.43.0",
+    "dependency-cruiser": "17.4.3",
+    "typescript": "5.9.3",
+    "enhanced-resolve": "5.22.1",
+    "graphology": "0.26.0",
+    "graphology-metrics": "2.4.0",
+    "js-tiktoken": "1.0.21"
+  }
+}

@@ -1,0 +1,1016 @@
+{
+  "note": "Node parseSymbols/parseReferences/extractEndpoints/extractCrons through parseSourceFile; compare symbols and references as sets, endpoints and crons as sets. contentHash = sha1 of the utf8-decoded text (invalid bytes -> U+FFFD, BOM kept).",
+  "files": [
+    {
+      "path": "bom.ts",
+      "outcome": "indexed",
+      "contentHash": "b4b9a7ab4e29952c88f8375f96f88185cd613736",
+      "symbols": [
+        {"name": "afterBom", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function afterBom(a: number): number"},
+        {"name": "bomArrow", "kind": "function", "line": 5, "endLine": 5, "exported": true, "signature": "const bomArrow = ()"}
+      ],
+      "references": [
+        {"toSymbol": "afterBom", "line": 5}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "bom_crlf.ts",
+      "outcome": "indexed",
+      "contentHash": "cbc9f78b4f1f7bea18fb3e4e91137f8c15e458f4",
+      "symbols": [
+        {"name": "bomCrlf", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function bomCrlf(a: number): number"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "crlf.ts",
+      "outcome": "indexed",
+      "contentHash": "8407ea4cfc800aa89db43b2801b364350e2cf5c1",
+      "symbols": [
+        {"name": "crlfOne", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function crlfOne(a: number): number"},
+        {"name": "Crlf", "kind": "class", "line": 5, "endLine": 11, "exported": true, "signature": "class Crlf"},
+        {"name": "Crlf.method", "kind": "method", "line": 6, "endLine": 10, "exported": true, "signature": "method( x: string, ): void"},
+        {"name": "method", "kind": "method", "line": 6, "endLine": 10, "exported": true, "signature": "method( x: string, ): void"},
+        {"name": "crlfArrow", "kind": "function", "line": 13, "endLine": 14, "exported": false, "signature": "const crlfArrow = (v: number)"},
+        {"name": "callsOnTwo", "kind": "function", "line": 16, "endLine": 18, "exported": false, "signature": "function callsOnTwo()"}
+      ],
+      "references": [
+        {"toSymbol": "helper", "line": 9},
+        {"toSymbol": "crlfOne", "line": 17}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/blank_lines.ts",
+      "outcome": "indexed",
+      "contentHash": "7c338ed2840d2bf55f9f5e4eed04f66c80840eb3",
+      "symbols": [],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/bom_invalid.ts",
+      "outcome": "indexed",
+      "contentHash": "def1e3705e1e6fcc54bf271ffac19eae47e2401c",
+      "symbols": [
+        {"name": "bomInvalid", "kind": "function", "line": 2, "endLine": 2, "exported": true, "signature": "function bomInvalid(): void"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/comment_only.ts",
+      "outcome": "indexed",
+      "contentHash": "3c0d32ced71a5396deb674d6756c3c37f74de1b4",
+      "symbols": [],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/empty.ts",
+      "outcome": "indexed",
+      "contentHash": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "symbols": [],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/invalid_and_nul.ts",
+      "outcome": "indexed",
+      "contentHash": "ef4dc2998d84d6986dd537864b29cd83b7004cb7",
+      "symbols": [
+        {"name": "mixed", "kind": "function", "line": 1, "endLine": 4, "exported": true, "signature": "function mixed(a: number): number"},
+        {"name": "arrowAfter", "kind": "function", "line": 6, "endLine": 6, "exported": true, "signature": "const arrowAfter = ()"}
+      ],
+      "references": [
+        {"toSymbol": "mixed", "line": 6}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/invalid_utf8.ts",
+      "outcome": "indexed",
+      "contentHash": "dfef40fea3acc1efa58ec796341e543df59eb12e",
+      "symbols": [
+        {"name": "validBefore", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function validBefore(a: number): number"},
+        {"name": "validAfter", "kind": "function", "line": 6, "endLine": 8, "exported": true, "signature": "function validAfter(b: string): string"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/latin1.js",
+      "outcome": "indexed",
+      "contentHash": "839f76d2e4cbf576df9583961a639fd7909b7169",
+      "symbols": [
+        {"name": "latin1", "kind": "function", "line": 1, "endLine": 1, "exported": false, "signature": "function latin1(s)"},
+        {"name": "fine", "kind": "function", "line": 2, "endLine": 2, "exported": false, "signature": "function fine()"}
+      ],
+      "references": [
+        {"toSymbol": "latin1", "line": 2}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/no_trailing_newline.ts",
+      "outcome": "indexed",
+      "contentHash": "060d1363046548db2aff8147621b9247462760c9",
+      "symbols": [
+        {"name": "noTrailingNewline", "kind": "function", "line": 1, "endLine": 1, "exported": true, "signature": "function noTrailingNewline()"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "encoding/nul_byte.ts",
+      "outcome": "indexed",
+      "contentHash": "75eaeba31314b15aaf7a2b99e6fae9980d9f04d1",
+      "symbols": [
+        {"name": "beforeNul", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function beforeNul(): string"},
+        {"name": "afterNul", "kind": "function", "line": 5, "endLine": 7, "exported": true, "signature": "function afterNul(): void"}
+      ],
+      "references": [
+        {"toSymbol": "beforeNul", "line": 6}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "export_default_forms.ts",
+      "outcome": "indexed",
+      "contentHash": "d0e68a80d7117b416d065d506951a73de2004396",
+      "symbols": [
+        {"name": "b", "kind": "function", "line": 4, "endLine": 4, "exported": true, "signature": "const a = 1, b = ()"},
+        {"name": "c", "kind": "function", "line": 4, "endLine": 4, "exported": true, "signature": "const a = 1, b = () => 2, c = function ()"},
+        {"name": "ConstEnum", "kind": "enum", "line": 10, "endLine": 12, "exported": true, "signature": "const enum ConstEnum"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "export_forms.ts",
+      "outcome": "indexed",
+      "contentHash": "0b559adb896ed5ffb597150d7df5dd34af1f2771",
+      "symbols": [
+        {"name": "alpha", "kind": "function", "line": 1, "endLine": 1, "exported": true, "signature": "function alpha()"},
+        {"name": "beta", "kind": "function", "line": 2, "endLine": 2, "exported": true, "signature": "function beta()"},
+        {"name": "gamma", "kind": "function", "line": 3, "endLine": 3, "exported": true, "signature": "const gamma = ()"},
+        {"name": "Delta", "kind": "class", "line": 4, "endLine": 6, "exported": true, "signature": "class Delta"},
+        {"name": "Delta.m", "kind": "method", "line": 5, "endLine": 5, "exported": false, "signature": "m()"},
+        {"name": "m", "kind": "method", "line": 5, "endLine": 5, "exported": false, "signature": "m()"},
+        {"name": "Eps", "kind": "interface", "line": 7, "endLine": 7, "exported": true, "signature": "interface Eps"},
+        {"name": "Zeta", "kind": "type", "line": 8, "endLine": 8, "exported": true, "signature": "type Zeta = number;"},
+        {"name": "Eta", "kind": "enum", "line": 9, "endLine": 11, "exported": true, "signature": "enum Eta"},
+        {"name": "defaultFn", "kind": "function", "line": 19, "endLine": 19, "exported": true, "signature": "function defaultFn()"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "facts/crlf_facts.ts",
+      "outcome": "indexed",
+      "contentHash": "e0d0964a3a46d34690142354786c09ca603eba79",
+      "symbols": [],
+      "references": [
+        {"toSymbol": "schedule", "line": 2},
+        {"toSymbol": "register", "line": 3}
+      ],
+      "endpoints": ["GET /crlf"],
+      "crons": ["0 0 * * *", "job:crlf_job"]
+    },
+    {
+      "path": "facts/crons.ts",
+      "outcome": "indexed",
+      "contentHash": "398595a48e55dc43f4d87bbd48e92e8f1c50a1f7",
+      "symbols": [],
+      "references": [
+        {"toSymbol": "schedule", "line": 1},
+        {"toSymbol": "schedule", "line": 2},
+        {"toSymbol": "schedule", "line": 3},
+        {"toSymbol": "schedule", "line": 4},
+        {"toSymbol": "CronJob", "line": 6},
+        {"toSymbol": "cron", "line": 7},
+        {"toSymbol": "schedule", "line": 8},
+        {"toSymbol": "schedule", "line": 9},
+        {"toSymbol": "schedule", "line": 10},
+        {"toSymbol": "Schedule", "line": 11},
+        {"toSymbol": "SCHEDULE", "line": 12},
+        {"toSymbol": "scheduler", "line": 13},
+        {"toSymbol": "schedule", "line": 14},
+        {"toSymbol": "schedule", "line": 15},
+        {"toSymbol": "schedule", "line": 18},
+        {"toSymbol": "schedule", "line": 19},
+        {"toSymbol": "cron", "line": 20},
+        {"toSymbol": "cron", "line": 21},
+        {"toSymbol": "CronJob", "line": 5}
+      ],
+      "endpoints": [],
+      "crons": [
+        "*/5 * * * *",
+        "0 0 * * *",
+        "0 9 * * 1",
+        "30 4 1 * *",
+        "0 0 12 * * *",
+        "15 10 * * *",
+        "1 2 3",
+        "0 12 * * *",
+        "* * * * *",
+        "1 1 1 1 1",
+        "0 1 * * *",
+        "*",
+        "12   34"
+      ]
+    },
+    {
+      "path": "facts/endpoints.ts",
+      "outcome": "indexed",
+      "contentHash": "cc66ccae6eb9309d4802655e2ea4d5cf7a06f27d",
+      "symbols": [],
+      "references": [
+        {"toSymbol": "post", "line": 2},
+        {"toSymbol": "put", "line": 3},
+        {"toSymbol": "patch", "line": 4},
+        {"toSymbol": "options", "line": 6},
+        {"toSymbol": "head", "line": 7},
+        {"toSymbol": "post", "line": 9},
+        {"toSymbol": "GET", "line": 12},
+        {"toSymbol": "Post", "line": 13},
+        {"toSymbol": "trace", "line": 14},
+        {"toSymbol": "post", "line": 24}
+      ],
+      "endpoints": [
+        "GET /users",
+        "POST /users",
+        "PUT /users/:id",
+        "PATCH /users/:id",
+        "DELETE /users/:id",
+        "OPTIONS /users",
+        "HEAD /ping",
+        "GET /typed/:id",
+        "POST /spaced",
+        "GET /upper",
+        "POST /mixed-case",
+        "GET /member-receiver",
+        "GET /tpl/${id}",
+        "GET /first",
+        "GET /in-comment",
+        "GET /in-string",
+        "GET /with space",
+        "GET /üñí/日本"
+      ],
+      "crons": []
+    },
+    {
+      "path": "facts/job_kinds.ts",
+      "outcome": "indexed",
+      "contentHash": "25010930d11ee332a2bc92a83f64cbd973afe50f",
+      "symbols": [],
+      "references": [
+        {"toSymbol": "register", "line": 1},
+        {"toSymbol": "register", "line": 2},
+        {"toSymbol": "register", "line": 3},
+        {"toSymbol": "enqueue", "line": 4},
+        {"toSymbol": "enqueue", "line": 5},
+        {"toSymbol": "enqueue", "line": 6},
+        {"toSymbol": "register", "line": 7},
+        {"toSymbol": "register", "line": 8},
+        {"toSymbol": "register", "line": 9},
+        {"toSymbol": "register", "line": 10},
+        {"toSymbol": "register", "line": 11},
+        {"toSymbol": "register", "line": 12},
+        {"toSymbol": "register", "line": 13},
+        {"toSymbol": "register", "line": 14},
+        {"toSymbol": "register", "line": 15},
+        {"toSymbol": "register", "line": 16},
+        {"toSymbol": "enqueue", "line": 17},
+        {"toSymbol": "register", "line": 18},
+        {"toSymbol": "register", "line": 19},
+        {"toSymbol": "register", "line": 20},
+        {"toSymbol": "reregister", "line": 22},
+        {"toSymbol": "unregister", "line": 23},
+        {"toSymbol": "register", "line": 24},
+        {"toSymbol": "register", "line": 25},
+        {"toSymbol": "register", "line": 26},
+        {"toSymbol": "register", "line": 27},
+        {"toSymbol": "register", "line": 28},
+        {"toSymbol": "register", "line": 29},
+        {"toSymbol": "register", "line": 30}
+      ],
+      "endpoints": [],
+      "crons": [
+        "job:poll_repos",
+        "job:clone_repo",
+        "job:index_repo",
+        "job:digest",
+        "job:Sync_Things",
+        "job:bare_register_job",
+        "job:dotted_first_arg",
+        "job:first_kind",
+        "job:commented",
+        "job:spaced_job",
+        "job:cron_kind",
+        "job:schedule",
+        "job:clone",
+        "job:poll",
+        "job:JOB"
+      ]
+    },
+    {
+      "path": "facts/mixed_facts.js",
+      "outcome": "indexed",
+      "contentHash": "014e464c2d259244f8a44ac1570a6d64dfcdc356",
+      "symbols": [],
+      "references": [
+        {"toSymbol": "require", "line": 1},
+        {"toSymbol": "express", "line": 2},
+        {"toSymbol": "send", "line": 3},
+        {"toSymbol": "post", "line": 4},
+        {"toSymbol": "schedule", "line": 6},
+        {"toSymbol": "require", "line": 6},
+        {"toSymbol": "register", "line": 7}
+      ],
+      "endpoints": ["GET /health", "POST /items", "DELETE /items/:id"],
+      "crons": ["0 * * * *", "job:sync_all"]
+    },
+    {
+      "path": "facts/no_facts.ts",
+      "outcome": "indexed",
+      "contentHash": "010a60257ecbd5f628d298ef66ee5dad925123cb",
+      "symbols": [
+        {"name": "nothingToSee", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function nothingToSee()"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "facts/route_objects.ts",
+      "outcome": "indexed",
+      "contentHash": "8261b765df81f53c8a513e363fdee99a000c55b2",
+      "symbols": [],
+      "references": [
+        {"toSymbol": "route", "line": 1},
+        {"toSymbol": "route", "line": 2},
+        {"toSymbol": "route", "line": 3},
+        {"toSymbol": "route", "line": 4},
+        {"toSymbol": "route", "line": 5},
+        {"toSymbol": "route", "line": 6},
+        {"toSymbol": "route", "line": 7},
+        {"toSymbol": "route", "line": 8},
+        {"toSymbol": "route", "line": 12},
+        {"toSymbol": "route", "line": 13},
+        {"toSymbol": "route", "line": 14},
+        {"toSymbol": "route", "line": 16},
+        {"toSymbol": "route", "line": 17}
+      ],
+      "endpoints": [
+        "GET /obj",
+        "POST /obj-post",
+        "DELETE /tight/:id",
+        "PUT /lower-method",
+        "GET /after-handler",
+        "PATCH /spaced-colon",
+        "GET /mismatch",
+        "GET /a",
+        "GET /both",
+        "GET /both-obj",
+        "GET /loose-object",
+        "GET /separate-objects"
+      ],
+      "crons": []
+    },
+    {
+      "path": "keyword_names.ts",
+      "outcome": "indexed",
+      "contentHash": "454f899658052a9bce485e5fc5f1b86b62450e5f",
+      "symbols": [
+        {"name": "Holder", "kind": "class", "line": 1, "endLine": 31, "exported": false, "signature": "class Holder"},
+        {"name": "Holder.normal", "kind": "method", "line": 30, "endLine": 30, "exported": false, "signature": "normal()"},
+        {"name": "normal", "kind": "method", "line": 30, "endLine": 30, "exported": false, "signature": "normal()"},
+        {"name": "of2", "kind": "function", "line": 36, "endLine": 36, "exported": false, "signature": "function of2()"},
+        {"name": "real", "kind": "function", "line": 39, "endLine": 39, "exported": true, "signature": "const real = ()"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "line_separators.ts",
+      "outcome": "indexed",
+      "contentHash": "43cbc39de6f3f9edfb30280b675ee6a34ccb7a12",
+      "symbols": [
+        {"name": "a", "kind": "function", "line": 1, "endLine": 1, "exported": false, "signature": "const a = ()"},
+        {"name": "b", "kind": "function", "line": 2, "endLine": 2, "exported": false, "signature": "const b = ()"},
+        {"name": "after", "kind": "function", "line": 4, "endLine": 6, "exported": false, "signature": "function after()"},
+        {"name": "last", "kind": "function", "line": 8, "endLine": 8, "exported": false, "signature": "function last()"}
+      ],
+      "references": [
+        {"toSymbol": "b", "line": 5},
+        {"toSymbol": "after", "line": 8}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "lone_cr.js",
+      "outcome": "indexed",
+      "contentHash": "24e50e52c63f3dcaab3e92ea0bd4392ce50f782c",
+      "symbols": [
+        {"name": "loneCR", "kind": "function", "line": 1, "endLine": 1, "exported": false, "signature": "function loneCR(a)"},
+        {"name": "second", "kind": "function", "line": 1, "endLine": 1, "exported": false, "signature": "function second()"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "long_names.ts",
+      "outcome": "indexed",
+      "contentHash": "57a39e4a8246bec40929c8c7365719ab7acf87cf",
+      "symbols": [
+        {
+          "name": "aVeryLongFunctionNameThatKeepsGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoing_end",
+          "kind": "function",
+          "line": 1,
+          "endLine": 3,
+          "exported": true,
+          "signature": "function aVeryLongFunctionNameThatKeepsGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAnd…"
+        }
+      ],
+      "references": [
+        {
+          "toSymbol": "callee_aVeryLongCalleeNameThatKeepsGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoingAndGoing_end",
+          "line": 2
+        }
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "long_names_extreme.ts",
+      "outcome": "indexed",
+      "contentHash": "e60acd4f48add11c9755a2edee2927a3c95a6293",
+      "symbols": [
+        {
+          "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+          "kind": "function",
+          "line": 1,
+          "endLine": 3,
+          "exported": true,
+          "signature": "function nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn…"
+        }
+      ],
+      "references": [
+        {
+          "toSymbol": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc😀dddddddddddddddddddddddddddddddddddddddddddd",
+          "line": 2
+        }
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "multiline_heads.ts",
+      "outcome": "indexed",
+      "contentHash": "8e40a52c8e2e826b5533a76f3f8a8a7b18013ed2",
+      "symbols": [
+        {
+          "name": "withManyParams",
+          "kind": "function",
+          "line": 1,
+          "endLine": 7,
+          "exported": true,
+          "signature": "function withManyParams( first: string, second: number, third: boolean, ): Promise<void>"
+        },
+        {
+          "name": "multiArrow",
+          "kind": "function",
+          "line": 9,
+          "endLine": 14,
+          "exported": true,
+          "signature": "const multiArrow = ( alpha: string, beta: number, ): string"
+        },
+        {
+          "name": "Spread",
+          "kind": "class",
+          "line": 16,
+          "endLine": 25,
+          "exported": true,
+          "signature": "class Spread< TKey extends string, TValue, > extends Map<TKey, TValue>"
+        },
+        {"name": "Spread.lookup", "kind": "method", "line": 20, "endLine": 24, "exported": true, "signature": "lookup( key: TKey, ): TValue | undefined"},
+        {"name": "lookup", "kind": "method", "line": 20, "endLine": 24, "exported": true, "signature": "lookup( key: TKey, ): TValue | undefined"},
+        {"name": "Wide", "kind": "interface", "line": 27, "endLine": 33, "exported": true, "signature": "interface Wide< A, B, >"},
+        {"name": "Union", "kind": "type", "line": 35, "endLine": 38, "exported": true, "signature": "type Union = | 'one' | 'two' | 'three';"},
+        {"name": "spaced", "kind": "function", "line": 40, "endLine": 42, "exported": false, "signature": "const spaced = async ( x : number )"},
+        {"name": "tabbed", "kind": "function", "line": 44, "endLine": 45, "exported": false, "signature": "function tabbed ( a )"},
+        {"name": "nobody", "kind": "function", "line": 47, "endLine": 47, "exported": true, "signature": "const nobody = (x: number)"},
+        {"name": "nobody2", "kind": "function", "line": 48, "endLine": 48, "exported": true, "signature": "const nobody2 = async (x: number)"}
+      ],
+      "references": [
+        {"toSymbol": "resolve", "line": 6},
+        {"toSymbol": "resolve", "line": 48}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_calls.ts",
+      "outcome": "indexed",
+      "contentHash": "77263125c470336fb5a25ecaec48072e3b41b80b",
+      "symbols": [
+        {"name": "alpha", "kind": "function", "line": 4, "endLine": 4, "exported": false, "signature": "const alpha = ()"},
+        {"name": "declaredHere", "kind": "function", "line": 6, "endLine": 31, "exported": false, "signature": "function declaredHere()"},
+        {"name": "K", "kind": "class", "line": 33, "endLine": 38, "exported": false, "signature": "class K"},
+        {"name": "K.run", "kind": "method", "line": 34, "endLine": 37, "exported": false, "signature": "run()"},
+        {"name": "run", "kind": "method", "line": 34, "endLine": 37, "exported": false, "signature": "run()"},
+        {"name": "k", "kind": "function", "line": 45, "endLine": 45, "exported": false, "signature": "function k()"},
+        {"name": "self", "kind": "function", "line": 46, "endLine": 46, "exported": false, "signature": "const self = ()"}
+      ],
+      "references": [
+        {"toSymbol": "alpha", "line": 7},
+        {"toSymbol": "imported", "line": 8},
+        {"toSymbol": "method", "line": 9},
+        {"toSymbol": "call", "line": 10},
+        {"toSymbol": "deep", "line": 11},
+        {"toSymbol": "chained", "line": 12},
+        {"toSymbol": "b", "line": 12},
+        {"toSymbol": "fn", "line": 16},
+        {"toSymbol": "maybe", "line": 17},
+        {"toSymbol": "getFactory", "line": 18},
+        {"toSymbol": "getCtor", "line": 22},
+        {"toSymbol": "parent", "line": 24},
+        {"toSymbol": "require", "line": 26},
+        {"toSymbol": "map", "line": 27},
+        {"toSymbol": "check", "line": 28},
+        {"toSymbol": "nested", "line": 28},
+        {"toSymbol": "listOf", "line": 29},
+        {"toSymbol": "use", "line": 29},
+        {"toSymbol": "later", "line": 30},
+        {"toSymbol": "helper", "line": 35},
+        {"toSymbol": "run", "line": 36},
+        {"toSymbol": "interpolated", "line": 40},
+        {"toSymbol": "alpha", "line": 41},
+        {"toSymbol": "twice", "line": 42},
+        {"toSymbol": "sameLine", "line": 43},
+        {"toSymbol": "other2", "line": 43},
+        {"toSymbol": "declaredHere", "line": 44},
+        {"toSymbol": "guard", "line": 47},
+        {"toSymbol": "voided", "line": 48},
+        {"toSymbol": "awaited", "line": 48},
+        {"toSymbol": "yield_", "line": 48},
+        {"toSymbol": "Plain", "line": 19},
+        {"toSymbol": "Namespaced", "line": 20},
+        {"toSymbol": "Deep", "line": 21},
+        {"toSymbol": "Generic", "line": 23}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_commonjs.cjs",
+      "outcome": "indexed",
+      "contentHash": "5acaad0abe212f8a8e0ff64111c86b9e95fa03ab",
+      "symbols": [
+        {"name": "main", "kind": "function", "line": 4, "endLine": 8, "exported": false, "signature": "function main()"}
+      ],
+      "references": [
+        {"toSymbol": "require", "line": 1},
+        {"toSymbol": "require", "line": 2},
+        {"toSymbol": "a", "line": 5},
+        {"toSymbol": "readFileSync", "line": 6},
+        {"toSymbol": "exported", "line": 7},
+        {"toSymbol": "main", "line": 11}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_in_imports.ts",
+      "outcome": "indexed",
+      "contentHash": "32aae46a825373b739c76ddeefc014ebd18ecb78",
+      "symbols": [
+        {"name": "declared", "kind": "function", "line": 10, "endLine": 10, "exported": false, "signature": "function declared()"}
+      ],
+      "references": [
+        {"toSymbol": "require", "line": 9},
+        {"toSymbol": "useIt", "line": 10},
+        {"toSymbol": "declared", "line": 11}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_jsx.jsx",
+      "outcome": "indexed",
+      "contentHash": "6df5595cad85a7d7acd335898e3725b199453197",
+      "symbols": [
+        {"name": "Page", "kind": "function", "line": 3, "endLine": 12, "exported": true, "signature": "function Page()"},
+        {"name": "Shell", "kind": "function", "line": 14, "endLine": 16, "exported": false, "signature": "function Shell()"}
+      ],
+      "references": [
+        {"toSymbol": "go", "line": 6},
+        {"toSymbol": "compute", "line": 15},
+        {"toSymbol": "Button", "line": 6},
+        {"toSymbol": "Panel", "line": 7},
+        {"toSymbol": "Page", "line": 9},
+        {"toSymbol": "Page", "line": 15}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_jsx.tsx",
+      "outcome": "indexed",
+      "contentHash": "6b5fb1278329bb2a765dda4f3637a323033fec24",
+      "symbols": [
+        {"name": "App", "kind": "function", "line": 4, "endLine": 26, "exported": true, "signature": "function App()"},
+        {"name": "Self", "kind": "function", "line": 28, "endLine": 30, "exported": false, "signature": "function Self()"},
+        {"name": "Arrow", "kind": "function", "line": 32, "endLine": 32, "exported": false, "signature": "const Arrow = ()"},
+        {"name": "Wrapper", "kind": "function", "line": 33, "endLine": 37, "exported": false, "signature": "const Wrapper = ()"},
+        {"name": "Comp", "kind": "class", "line": 38, "endLine": 42, "exported": false, "signature": "class Comp extends React.Component"},
+        {"name": "Comp.render", "kind": "method", "line": 39, "endLine": 41, "exported": false, "signature": "render()"},
+        {"name": "render", "kind": "method", "line": 39, "endLine": 41, "exported": false, "signature": "render()"},
+        {"name": "lowercaseVar", "kind": "function", "line": 43, "endLine": 43, "exported": false, "signature": "const lowercaseVar = ()"},
+        {"name": "dollar", "kind": "function", "line": 44, "endLine": 44, "exported": false, "signature": "const dollar = ()"}
+      ],
+      "references": [
+        {"toSymbol": "map", "line": 21},
+        {"toSymbol": "render", "line": 22},
+        {"toSymbol": "handler", "line": 23},
+        {"toSymbol": "make", "line": 34},
+        {"toSymbol": "Local", "line": 8},
+        {"toSymbol": "Outer", "line": 17},
+        {"toSymbol": "Provider", "line": 34},
+        {"toSymbol": "Imported", "line": 7},
+        {"toSymbol": "Self", "line": 13},
+        {"toSymbol": "Generic", "line": 14},
+        {"toSymbol": "Frag", "line": 16},
+        {"toSymbol": "Inner", "line": 18},
+        {"toSymbol": "Cond", "line": 20},
+        {"toSymbol": "Item", "line": 21},
+        {"toSymbol": "Attr", "line": 23},
+        {"toSymbol": "InAttr", "line": 23},
+        {"toSymbol": "Self2", "line": 29},
+        {"toSymbol": "Child", "line": 35},
+        {"toSymbol": "Rendered", "line": 40},
+        {"toSymbol": "_private", "line": 43},
+        {"toSymbol": "$Dollar", "line": 44}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_jsx_in_js.js",
+      "outcome": "indexed",
+      "contentHash": "b405ea3dfd3d0d403acadab9109b4b3326f748fe",
+      "symbols": [
+        {"name": "view", "kind": "function", "line": 3, "endLine": 5, "exported": true, "signature": "function view()"},
+        {"name": "other", "kind": "function", "line": 7, "endLine": 7, "exported": true, "signature": "const other = ()"}
+      ],
+      "references": [
+        {"toSymbol": "format", "line": 4}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_mjs.mjs",
+      "outcome": "indexed",
+      "contentHash": "7084b475c4dc2dba5f2f05232c07e1d1c11e0fda",
+      "symbols": [
+        {"name": "boot", "kind": "function", "line": 3, "endLine": 7, "exported": true, "signature": "async function boot()"}
+      ],
+      "references": [
+        {"toSymbol": "default", "line": 5},
+        {"toSymbol": "load", "line": 6},
+        {"toSymbol": "boot", "line": 9}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "refs_ts_cast.ts",
+      "outcome": "indexed",
+      "contentHash": "ef5d167ef44e618c3095e06a565e1047c67a61fe",
+      "symbols": [
+        {"name": "cast", "kind": "function", "line": 2, "endLine": 6, "exported": false, "signature": "function cast(x: unknown)"}
+      ],
+      "references": [
+        {"toSymbol": "convert", "line": 5},
+        {"toSymbol": "identity", "line": 7},
+        {"toSymbol": "Box", "line": 8}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "signature_limits.ts",
+      "outcome": "indexed",
+      "contentHash": "855fef1c8ec36419f0ac8107d252152c34b92650",
+      "symbols": [
+        {
+          "name": "veryLongSignatureOne",
+          "kind": "function",
+          "line": 1,
+          "endLine": 3,
+          "exported": true,
+          "signature": "function veryLongSignatureOne(parameterNumber0: string, parameterNumber1: string, parameterNumber2: string, parameterNu…"
+        },
+        {
+          "name": "s119",
+          "kind": "function",
+          "line": 5,
+          "endLine": 5,
+          "exported": false,
+          "signature": "function s119(xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx): void"
+        },
+        {
+          "name": "s120",
+          "kind": "function",
+          "line": 6,
+          "endLine": 6,
+          "exported": false,
+          "signature": "function s120(xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx): void"
+        },
+        {
+          "name": "s121",
+          "kind": "function",
+          "line": 7,
+          "endLine": 7,
+          "exported": false,
+          "signature": "function s121(xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx): vo…"
+        },
+        {
+          "name": "s122",
+          "kind": "function",
+          "line": 8,
+          "endLine": 8,
+          "exported": false,
+          "signature": "function s122(xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx): v…"
+        },
+        {
+          "name": "astral",
+          "kind": "function",
+          "line": 9,
+          "endLine": 9,
+          "exported": false,
+          "signature": "function astral(yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy😀…"
+        },
+        {
+          "name": "astral_cut",
+          "kind": "function",
+          "line": 10,
+          "endLine": 10,
+          "exported": false,
+          "signature": "function astral_cut(yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy…"
+        },
+        {"name": "astral2", "kind": "function", "line": 11, "endLine": 11, "exported": false, "signature": "function astral2(😀😀😀😀😀😀😀😀😀😀): void"},
+        {
+          "name": "longArrow",
+          "kind": "function",
+          "line": 12,
+          "endLine": 14,
+          "exported": true,
+          "signature": "const longArrow = (arg0: number, arg1: number, arg2: number, arg3: number, arg4: number, arg5: number, arg6: number, ar…"
+        },
+        {
+          "name": "LongClassNameLongClassNameLongClassNameLongClassNameLongClassNameLongClassName",
+          "kind": "class",
+          "line": 15,
+          "endLine": 17,
+          "exported": true,
+          "signature": "class LongClassNameLongClassNameLongClassNameLongClassNameLongClassNameLongClassName extends SomeVeryLongBaseClassNameT…"
+        },
+        {
+          "name": "LongClassNameLongClassNameLongClassNameLongClassNameLongClassNameLongClassName.m",
+          "kind": "method",
+          "line": 16,
+          "endLine": 16,
+          "exported": true,
+          "signature": "m()"
+        },
+        {"name": "m", "kind": "method", "line": 16, "endLine": 16, "exported": true, "signature": "m()"}
+      ],
+      "references": [
+        {"toSymbol": "resolve", "line": 2}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "symbols_basic.ts",
+      "outcome": "indexed",
+      "contentHash": "21570121c11ce6cbf3727ac4a5652354ffdd53e6",
+      "symbols": [
+        {"name": "plain", "kind": "function", "line": 3, "endLine": 5, "exported": true, "signature": "function plain(a: number, b: string): string"},
+        {"name": "gen", "kind": "function", "line": 7, "endLine": 9, "exported": false, "signature": "function* gen(n: number)"},
+        {"name": "exportedGen", "kind": "function", "line": 11, "endLine": 13, "exported": true, "signature": "function* exportedGen(): Generator<number>"},
+        {
+          "name": "fetchAll",
+          "kind": "function",
+          "line": 15,
+          "endLine": 17,
+          "exported": true,
+          "signature": "async function fetchAll(url: string): Promise<void>"
+        },
+        {"name": "internalAsync", "kind": "function", "line": 19, "endLine": 21, "exported": false, "signature": "async function internalAsync()"},
+        {"name": "arrow", "kind": "function", "line": 23, "endLine": 23, "exported": true, "signature": "const arrow = (x: number)"},
+        {
+          "name": "asyncArrow",
+          "kind": "function",
+          "line": 25,
+          "endLine": 27,
+          "exported": true,
+          "signature": "const asyncArrow = async (x: number): Promise<number>"
+        },
+        {"name": "fnExpr", "kind": "function", "line": 29, "endLine": 31, "exported": false, "signature": "const fnExpr = function (a: string)"},
+        {"name": "genExpr", "kind": "function", "line": 33, "endLine": 35, "exported": false, "signature": "let genExpr = function* ()"},
+        {"name": "oldStyle", "kind": "function", "line": 37, "endLine": 39, "exported": false, "signature": "var oldStyle = function legacy()"},
+        {"name": "Widget", "kind": "class", "line": 44, "endLine": 68, "exported": true, "signature": "class Widget"},
+        {"name": "Widget.render", "kind": "method", "line": 49, "endLine": 51, "exported": true, "signature": "render(depth: number): string"},
+        {"name": "render", "kind": "method", "line": 49, "endLine": 51, "exported": true, "signature": "render(depth: number): string"},
+        {"name": "Widget.create", "kind": "method", "line": 53, "endLine": 55, "exported": true, "signature": "static create(): Widget"},
+        {"name": "create", "kind": "method", "line": 53, "endLine": 55, "exported": true, "signature": "static create(): Widget"},
+        {"name": "Widget.load", "kind": "method", "line": 57, "endLine": 57, "exported": true, "signature": "async load(): Promise<void>"},
+        {"name": "load", "kind": "method", "line": 57, "endLine": 57, "exported": true, "signature": "async load(): Promise<void>"},
+        {"name": "Widget.label", "kind": "method", "line": 59, "endLine": 61, "exported": true, "signature": "get label(): string"},
+        {"name": "label", "kind": "method", "line": 59, "endLine": 61, "exported": true, "signature": "get label(): string"},
+        {"name": "Widget.label", "kind": "method", "line": 63, "endLine": 65, "exported": true, "signature": "set label(v: string)"},
+        {"name": "label", "kind": "method", "line": 63, "endLine": 65, "exported": true, "signature": "set label(v: string)"},
+        {"name": "Widget.hidden", "kind": "method", "line": 67, "endLine": 67, "exported": true, "signature": "private hidden()"},
+        {"name": "hidden", "kind": "method", "line": 67, "endLine": 67, "exported": true, "signature": "private hidden()"},
+        {"name": "Internal", "kind": "class", "line": 70, "endLine": 72, "exported": false, "signature": "class Internal"},
+        {"name": "Internal.run", "kind": "method", "line": 71, "endLine": 71, "exported": false, "signature": "run()"},
+        {"name": "run", "kind": "method", "line": 71, "endLine": 71, "exported": false, "signature": "run()"},
+        {"name": "Options", "kind": "interface", "line": 74, "endLine": 77, "exported": true, "signature": "interface Options"},
+        {"name": "Local", "kind": "interface", "line": 79, "endLine": 81, "exported": false, "signature": "interface Local<T> extends Options"},
+        {"name": "Id", "kind": "type", "line": 83, "endLine": 83, "exported": true, "signature": "type Id = string | number;"},
+        {"name": "Pair", "kind": "type", "line": 85, "endLine": 85, "exported": false, "signature": "type Pair<A, B> = [A, B];"},
+        {"name": "Color", "kind": "enum", "line": 87, "endLine": 90, "exported": true, "signature": "enum Color"},
+        {"name": "Local2", "kind": "enum", "line": 92, "endLine": 94, "exported": false, "signature": "enum Local2"},
+        {"name": "DefaultThing", "kind": "class", "line": 113, "endLine": 115, "exported": true, "signature": "class DefaultThing"},
+        {"name": "DefaultThing.go", "kind": "method", "line": 114, "endLine": 114, "exported": true, "signature": "go()"},
+        {"name": "go", "kind": "method", "line": 114, "endLine": 114, "exported": true, "signature": "go()"}
+      ],
+      "references": [
+        {"toSymbol": "helper", "line": 16},
+        {"toSymbol": "String", "line": 50},
+        {"toSymbol": "Widget", "line": 54}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors/broken_import.ts",
+      "outcome": "indexed",
+      "contentHash": "a7730174c0e998e5f70861a2c4245997421c20c4",
+      "symbols": [
+        {"name": "useA", "kind": "function", "line": 5, "endLine": 7, "exported": true, "signature": "function useA()"}
+      ],
+      "references": [
+        {"toSymbol": "a", "line": 6}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors/broken_jsx.tsx",
+      "outcome": "indexed",
+      "contentHash": "d22d2e5bce55068e4f95888cd4d282eebbf35d08",
+      "symbols": [
+        {"name": "Ok", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function Ok()"},
+        {"name": "Broken", "kind": "function", "line": 5, "endLine": 7, "exported": true, "signature": "function Broken()"},
+        {"name": "Tail", "kind": "function", "line": 9, "endLine": 11, "exported": true, "signature": "function Tail()"}
+      ],
+      "references": [
+        {"toSymbol": "Ok", "line": 10}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors/second_function_broken.ts",
+      "outcome": "indexed",
+      "contentHash": "5229efb04f017086216bb0b4ecc432ce126968b7",
+      "symbols": [
+        {"name": "first", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function first(a: number): number"},
+        {"name": "second", "kind": "function", "line": 5, "endLine": 8, "exported": true, "signature": "function second(a: number): number"},
+        {"name": "third", "kind": "function", "line": 10, "endLine": 12, "exported": true, "signature": "function third(b: string): string"}
+      ],
+      "references": [
+        {"toSymbol": "trim", "line": 11}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors/stray_tokens.ts",
+      "outcome": "indexed",
+      "contentHash": "c322eedd1095706f9c8da73e7e7171f097373cb1",
+      "symbols": [
+        {"name": "good", "kind": "function", "line": 1, "endLine": 1, "exported": false, "signature": "const good = ()"},
+        {"name": "afterGarbage", "kind": "function", "line": 3, "endLine": 5, "exported": true, "signature": "function afterGarbage()"}
+      ],
+      "references": [
+        {"toSymbol": "good", "line": 4}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors/unclosed_brace.ts",
+      "outcome": "indexed",
+      "contentHash": "3d710fa5145575659a5b96916f6df058d4f38eaa",
+      "symbols": [
+        {"name": "ok", "kind": "function", "line": 1, "endLine": 1, "exported": true, "signature": "function ok(): void"},
+        {"name": "unclosed", "kind": "function", "line": 3, "endLine": 5, "exported": true, "signature": "function unclosed(x: number)"}
+      ],
+      "references": [
+        {"toSymbol": "callMe", "line": 5}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors_unstable/broken_class.ts",
+      "outcome": "indexed",
+      "contentHash": "b3cb1ffd84b8c92af2c2e1265c4bd446f842a8c8",
+      "symbols": [
+        {"name": "Partial", "kind": "class", "line": 1, "endLine": 6, "exported": true, "signature": "class Partial"},
+        {"name": "Partial.fine", "kind": "method", "line": 2, "endLine": 2, "exported": true, "signature": "fine(): void"},
+        {"name": "fine", "kind": "method", "line": 2, "endLine": 2, "exported": true, "signature": "fine(): void"},
+        {"name": "Thing", "kind": "interface", "line": 8, "endLine": 10, "exported": true, "signature": "interface Thing"}
+      ],
+      "references": [],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors_unstable/broken_js.js",
+      "outcome": "indexed",
+      "contentHash": "2dfe40d6215a2bd2579969b4fa9f58b46e8f5008",
+      "symbols": [
+        {"name": "one", "kind": "function", "line": 1, "endLine": 1, "exported": false, "signature": "function one()"}
+      ],
+      "references": [
+        {"toSymbol": "one", "line": 3}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "syntax_errors_unstable/second_function_broken_params.ts",
+      "outcome": "indexed",
+      "contentHash": "d817f1ae3fd73f646f0bda7d82c87a38b4f4a0ad",
+      "symbols": [
+        {"name": "first", "kind": "function", "line": 1, "endLine": 3, "exported": true, "signature": "function first(a: number): number"},
+        {"name": "second", "kind": "function", "line": 5, "endLine": 7, "exported": true, "signature": "function second(a: number"},
+        {"name": "third", "kind": "function", "line": 9, "endLine": 11, "exported": true, "signature": "function third(b: string): string"}
+      ],
+      "references": [
+        {"toSymbol": "trim", "line": 10}
+      ],
+      "endpoints": [],
+      "crons": []
+    },
+    {
+      "path": "unicode.ts",
+      "outcome": "indexed",
+      "contentHash": "0684cb07b1268a426e891d29b17123f4cb179199",
+      "symbols": [
+        {"name": "grüße", "kind": "function", "line": 2, "endLine": 4, "exported": true, "signature": "function grüße(name: string = 'Ünïcödé'): string"},
+        {"name": "日本語", "kind": "function", "line": 6, "endLine": 6, "exported": true, "signature": "const 日本語 = (引数: number)"},
+        {"name": "emoji", "kind": "function", "line": 8, "endLine": 10, "exported": true, "signature": "function emoji(label: string = '😀😀😀'): string"},
+        {"name": "Café", "kind": "class", "line": 12, "endLine": 16, "exported": true, "signature": "class Café"},
+        {"name": "Café.menü", "kind": "method", "line": 13, "endLine": 15, "exported": true, "signature": "menü(x: string = 'ä'): string"},
+        {"name": "menü", "kind": "method", "line": 13, "endLine": 15, "exported": true, "signature": "menü(x: string = 'ä'): string"},
+        {"name": "after", "kind": "function", "line": 17, "endLine": 17, "exported": false, "signature": "const after = (x: number = 1)"},
+        {"name": "lineSep", "kind": "function", "line": 18, "endLine": 18, "exported": false, "signature": "function lineSep()"},
+        {"name": "nel", "kind": "function", "line": 19, "endLine": 19, "exported": false, "signature": "function nel()"},
+        {"name": "last", "kind": "function", "line": 20, "endLine": 20, "exported": false, "signature": "function last(a = '😀')"},
+        {"name": "callsLater", "kind": "function", "line": 21, "endLine": 21, "exported": false, "signature": "function callsLater()"}
+      ],
+      "references": [
+        {"toSymbol": "callsLater", "line": 20}
+      ],
+      "endpoints": [],
+      "crons": []
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"gorm.io/gorm"
 
 	pg "dev-digest-go/backend/internal/platform/postgres"
@@ -200,5 +201,177 @@ func TestConn_IgnoresTxOfAnotherDatabase(t *testing.T) {
 	}
 	if got := rowCount(t, dbA); got != 0 {
 		t.Errorf("rows in A = %d, want 0", got)
+	}
+}
+
+func TestSavepoint_WithoutTxIsAnError(t *testing.T) {
+	_, tx := newTable(t)
+	called := false
+	err := tx.Savepoint(t.Context(), func(context.Context) error { called = true; return nil })
+	if !errors.Is(err, pg.ErrNoTransaction) {
+		t.Errorf("Savepoint() error = %v, want ErrNoTransaction", err)
+	}
+	if called {
+		t.Error("Savepoint() ran fn without a transaction")
+	}
+}
+
+func TestSavepoint_IgnoresTxOfAnotherDatabase(t *testing.T) {
+	_, txA := newTable(t)
+	_, txB := newTable(t)
+	err := txA.InTx(t.Context(), func(ctx context.Context) error {
+		return txB.Savepoint(ctx, func(context.Context) error { return nil })
+	})
+	if !errors.Is(err, pg.ErrNoTransaction) {
+		t.Errorf("Savepoint() with the tx of another database error = %v, want ErrNoTransaction", err)
+	}
+}
+
+func TestSavepoint_KeepsOrUndoesOnlyItsOwnWork(t *testing.T) {
+	boom := errors.New("boom")
+	tests := []struct {
+		name    string
+		spErr   error
+		wantIDs []int64
+	}{
+		{name: "success keeps the savepoint's writes", wantIDs: []int64{1, 2, 3}},
+		{name: "error undoes only the savepoint's writes", spErr: boom, wantIDs: []int64{1, 3}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, tx := newTable(t)
+			err := tx.InTx(t.Context(), func(ctx context.Context) error {
+				if err := insert(t, ctx, db, 1); err != nil {
+					return err
+				}
+				got := tx.Savepoint(ctx, func(ctx context.Context) error {
+					if err := insert(t, ctx, db, 2); err != nil {
+						return err
+					}
+					return tc.spErr
+				})
+				if !errors.Is(got, tc.spErr) {
+					t.Errorf("Savepoint() error = %v, want %v", got, tc.spErr)
+				}
+				return insert(t, ctx, db, 3)
+			})
+			if err != nil {
+				t.Fatalf("InTx() error = %v, want nil", err)
+			}
+			var ids []int64
+			if err := db.Raw(`SELECT id FROM items ORDER BY id`).Scan(&ids).Error; err != nil {
+				t.Fatal(err)
+			}
+			if diff := cmp.Diff(tc.wantIDs, ids); diff != "" {
+				t.Errorf("committed ids mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// A failed statement aborts a Postgres transaction; the savepoint is what makes it usable again.
+func TestSavepoint_SQLErrorDoesNotPoisonTheTransaction(t *testing.T) {
+	db, tx := newTable(t)
+	err := tx.InTx(t.Context(), func(ctx context.Context) error {
+		if err := insert(t, ctx, db, 1); err != nil {
+			return err
+		}
+		sqlErr := tx.Savepoint(ctx, func(ctx context.Context) error { return insert(t, ctx, db, 1) }) // duplicate key
+		if sqlErr == nil {
+			t.Error("Savepoint() error = nil, want the duplicate key error")
+		}
+		return insert(t, ctx, db, 2)
+	})
+	if err != nil {
+		t.Fatalf("InTx() error = %v, want nil", err)
+	}
+	if got := rowCount(t, db); got != 2 {
+		t.Errorf("rows = %d, want 2", got)
+	}
+}
+
+func TestSavepoint_Nested(t *testing.T) {
+	db, tx := newTable(t)
+	boom := errors.New("boom")
+	err := tx.InTx(t.Context(), func(ctx context.Context) error {
+		outer := tx.Savepoint(ctx, func(ctx context.Context) error {
+			if err := insert(t, ctx, db, 1); err != nil {
+				return err
+			}
+			inner := tx.Savepoint(ctx, func(ctx context.Context) error {
+				if err := insert(t, ctx, db, 2); err != nil {
+					return err
+				}
+				return boom
+			})
+			if !errors.Is(inner, boom) {
+				t.Errorf("inner Savepoint() error = %v, want %v", inner, boom)
+			}
+			return insert(t, ctx, db, 3)
+		})
+		if outer != nil {
+			t.Errorf("outer Savepoint() error = %v, want nil", outer)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	if err := db.Raw(`SELECT id FROM items ORDER BY id`).Scan(&ids).Error; err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]int64{1, 3}, ids); diff != "" {
+		t.Errorf("committed ids mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestSavepoint_PanicRollsBackToTheSavepointAndPropagates(t *testing.T) {
+	db, tx := newTable(t)
+	err := tx.InTx(t.Context(), func(ctx context.Context) error {
+		if err := insert(t, ctx, db, 1); err != nil {
+			return err
+		}
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Error("Savepoint did not propagate the panic")
+				}
+			}()
+			_ = tx.Savepoint(ctx, func(ctx context.Context) error {
+				if err := insert(t, ctx, db, 2); err != nil {
+					return err
+				}
+				panic("boom")
+			})
+		}()
+		return insert(t, ctx, db, 3)
+	})
+	if err != nil {
+		t.Fatalf("InTx() error = %v, want nil", err)
+	}
+	var ids []int64
+	if err := db.Raw(`SELECT id FROM items ORDER BY id`).Scan(&ids).Error; err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]int64{1, 3}, ids); diff != "" {
+		t.Errorf("committed ids mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestSavepoint_OuterRollbackUndoesReleasedSavepoint(t *testing.T) {
+	db, tx := newTable(t)
+	boom := errors.New("boom")
+	err := tx.InTx(t.Context(), func(ctx context.Context) error {
+		if err := tx.Savepoint(ctx, func(ctx context.Context) error { return insert(t, ctx, db, 1) }); err != nil {
+			return err
+		}
+		return boom
+	})
+	if !errors.Is(err, boom) {
+		t.Fatalf("InTx() error = %v, want %v", err, boom)
+	}
+	if got := rowCount(t, db); got != 0 {
+		t.Errorf("rows = %d, want 0", got)
 	}
 }

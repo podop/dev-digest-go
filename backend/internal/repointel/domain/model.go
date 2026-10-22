@@ -298,7 +298,8 @@ type SourceFS interface {
 	Walk(ctx context.Context, root string) (WalkResult, error)
 	// ReadFile returns the raw bytes of the regular file rel (any file, e.g. tsconfig.json), or an
 	// error when it is missing, a symlink, behind a symlink, not repo-relative or larger than the
-	// read cap. Decoding to text is the caller's job (see the text rules of this package).
+	// read cap; a file that cannot be reached satisfies errors.Is(err, fs.ErrNotExist). Decoding to
+	// text is the caller's job (see the text rules of this package).
 	ReadFile(root, rel string) ([]byte, error)
 }
 

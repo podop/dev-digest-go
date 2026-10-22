@@ -1,0 +1,1 @@
+export function noTrailingNewline() { return 1; }

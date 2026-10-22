@@ -41,8 +41,14 @@ const (
 	killWaitDelay = 2 * time.Second
 )
 
-// ErrNoDefaultBranch means the remote did not report a symbolic HEAD.
-var ErrNoDefaultBranch = errors.New("remote default branch not reported")
+var (
+	// ErrNoDefaultBranch means the remote did not report a symbolic HEAD.
+	ErrNoDefaultBranch = errors.New("remote default branch not reported")
+	// ErrInvalidSHA reports a commit id that is not 4 to 64 hexadecimal digits.
+	ErrInvalidSHA = errors.New("invalid commit sha")
+	// ErrOutputTooLarge means git printed more than the stdout cap, so the output is incomplete.
+	ErrOutputTooLarge = errors.New("git output exceeds the size limit")
+)
 
 // TokenProvider returns the GitHub token at call time, so rotations apply
 // without a restart. An empty token means anonymous access.
@@ -213,6 +219,49 @@ func (c *Client) Head(ctx context.Context, owner, name string) (string, error) {
 	return c.head(ctx, dest)
 }
 
+// DiffNames lists the paths that differ between the commits base and head of an existing clone
+// (`git diff --name-only --no-renames -z base head --`): a rename shows as its two paths. Both
+// ids must be hexadecimal, so neither can be read as an option or a range. Paths are returned
+// as git prints them, in git's order, raw (no quoting). A missing commit, as in a shallow
+// clone, is an *Error; output above the stdout cap is ErrOutputTooLarge, never a short list.
+func (c *Client) DiffNames(ctx context.Context, owner, name, base, head string) ([]string, error) {
+	dest, err := c.existingClone(owner, name)
+	if err != nil {
+		return nil, err
+	}
+	if !validSHA(base) || !validSHA(head) {
+		return nil, ErrInvalidSHA
+	}
+	out, truncated, err := c.runCapped(ctx, dest, "diff", "--name-only", "--no-renames", "-z", base, head, "--")
+	if err != nil {
+		return nil, err
+	}
+	if truncated {
+		return nil, &Error{Op: "diff", Err: ErrOutputTooLarge}
+	}
+	names := []string{}
+	for _, p := range strings.Split(out, "\x00") {
+		if p != "" {
+			names = append(names, p)
+		}
+	}
+	return names, nil
+}
+
+// validSHA accepts 4 to 64 hexadecimal digits (SHA-1 and SHA-256 object ids, abbreviations too).
+func validSHA(s string) bool {
+	if len(s) < 4 || len(s) > 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *Client) existingClone(owner, name string) (string, error) {
 	dest, err := c.ClonePath(owner, name)
 	if err != nil {
@@ -264,12 +313,18 @@ func stripCredentials(raw string) string {
 // run executes `git <hardening> <args...>` in dir; args[0] is the subcommand,
 // which names the operation in errors. Returns stdout.
 func (c *Client) run(ctx context.Context, dir string, args ...string) (string, error) {
+	out, _, err := c.runCapped(ctx, dir, args...)
+	return out, err
+}
+
+// runCapped is run that also reports whether stdout hit the cap and was cut short.
+func (c *Client) runCapped(ctx context.Context, dir string, args ...string) (string, bool, error) {
 	op := args[0]
 	var token string
 	if c.token != nil {
 		t, err := c.token(ctx)
 		if err != nil {
-			return "", &Error{Op: op, Err: fmt.Errorf("resolve token: %w", err)}
+			return "", false, &Error{Op: op, Err: fmt.Errorf("resolve token: %w", err)}
 		}
 		token = t
 	}
@@ -288,11 +343,11 @@ func (c *Client) run(ctx context.Context, dir string, args ...string) (string, e
 
 	if err := cmd.Run(); err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return "", &Error{Op: op, Err: ctxErr}
+			return "", false, &Error{Op: op, Err: ctxErr}
 		}
-		return "", &Error{Op: op, Err: err, Stderr: tail(scrub(stderr.String(), token), stderrReport)}
+		return "", false, &Error{Op: op, Err: err, Stderr: tail(scrub(stderr.String(), token), stderrReport)}
 	}
-	return stdout.String(), nil
+	return stdout.String(), stdout.truncated, nil
 }
 
 // gitEnv builds the child environment: the parent's, minus variables that could
@@ -358,16 +413,19 @@ func tail(s string, n int) string {
 }
 
 // limitedBuffer keeps at most limit bytes and silently drops the rest, so a
-// chatty git cannot grow memory without bound.
+// chatty git cannot grow memory without bound. truncated records that bytes were dropped.
 type limitedBuffer struct {
-	buf   bytes.Buffer
-	limit int
+	buf       bytes.Buffer
+	limit     int
+	truncated bool
 }
 
 func (b *limitedBuffer) Write(p []byte) (int, error) {
-	if room := b.limit - b.buf.Len(); room > 0 {
-		b.buf.Write(p[:min(room, len(p))])
+	room := max(b.limit-b.buf.Len(), 0)
+	if len(p) > room {
+		b.truncated = true
 	}
+	b.buf.Write(p[:min(room, len(p))])
 	return len(p), nil
 }
 

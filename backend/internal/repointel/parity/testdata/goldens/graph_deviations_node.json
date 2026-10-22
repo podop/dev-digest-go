@@ -1,0 +1,86 @@
+{
+  "note": "INFORMATIONAL: what Node produces for the deviation fixtures (cwd elsewhere = the server process; cwd root = the fixture root). Not an expectation for Go: those are hand-written in graph-deviations.json.",
+  "cases": [
+    {
+      "name": "alias_baseurl_src",
+      "nodeEdgesCwdElsewhere": [
+        ["src/app.ts", "src/rel.ts"]
+      ],
+      "nodeEdgesCwdRoot": [
+        ["src/app.ts", "src/rel.ts"]
+      ]
+    },
+    {
+      "name": "alias_extends_baseurl",
+      "nodeEdgesCwdElsewhere": [
+        ["src/app.ts", "src/sibling.ts"]
+      ],
+      "nodeEdgesCwdRoot": [
+        ["src/app.ts", "src/sibling.ts"]
+      ]
+    },
+    {
+      "name": "alias_extends_paths_only",
+      "nodeEdgesCwdElsewhere": [
+        ["src/app.ts", "src/sibling.ts"]
+      ],
+      "nodeEdgesCwdRoot": [
+        ["src/app.ts", "src/sibling.ts"]
+      ]
+    },
+    {
+      "name": "malformed_tsconfig",
+      "nodeEdgesCwdElsewhere": [],
+      "nodeEdgesCwdRoot": []
+    },
+    {
+      "name": "extends_outside_the_clone",
+      "nodeEdgesCwdElsewhere": [
+        ["a.ts", "b.ts"]
+      ],
+      "nodeEdgesCwdRoot": [
+        ["a.ts", "b.ts"]
+      ]
+    },
+    {
+      "name": "extends_missing_file",
+      "nodeEdgesCwdElsewhere": [
+        ["a.ts", "b.ts"]
+      ],
+      "nodeEdgesCwdRoot": [
+        ["a.ts", "b.ts"]
+      ]
+    },
+    {
+      "name": "symlinks_not_followed",
+      "nodeEdgesCwdElsewhere": [
+        ["importer.ts", "direct.ts"],
+        ["importer.ts", "target_a.ts"],
+        ["importer.ts", "libdir/x.ts"]
+      ],
+      "nodeEdgesCwdRoot": [
+        ["importer.ts", "direct.ts"],
+        ["importer.ts", "target_a.ts"],
+        ["importer.ts", "libdir/x.ts"]
+      ]
+    },
+    {
+      "name": "vanished_file",
+      "nodeEdgesCwdElsewhere": [],
+      "nodeEdgesCwdRoot": []
+    },
+    {
+      "name": "syntax_error_imports",
+      "nodeEdgesCwdElsewhere": [
+        ["broken.js", "target1.js"],
+        ["broken.ts", "target2.ts"],
+        ["plain.ts", "target3.ts"]
+      ],
+      "nodeEdgesCwdRoot": [
+        ["broken.js", "target1.js"],
+        ["broken.ts", "target2.ts"],
+        ["plain.ts", "target3.ts"]
+      ]
+    }
+  ]
+}
