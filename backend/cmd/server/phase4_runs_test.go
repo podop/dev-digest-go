@@ -315,20 +315,87 @@ func (oneWorkspace) Resolve(context.Context) (tenancy.Identity, error) {
 	return tenancy.Identity{WorkspaceID: "11111111-2222-4333-8444-555555555555"}, nil
 }
 
+// stallListener wraps the connections the server accepts. arm makes the next accepted connection
+// a stalled one: after budget written bytes its Write blocks until release, which is what a client
+// that stopped reading looks like to the server once the kernel buffers are full. The kernel
+// buffers themselves are left alone: their size and TCP's window probing vary with machine load,
+// which made the cut-off of a real stalled socket depend on timing.
+type stallListener struct {
+	net.Listener
+	mu   sync.Mutex
+	next *stall
+}
+
+func (l *stallListener) arm(budget int) *stall {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.next = &stall{budget: budget, release: make(chan struct{})}
+	return l.next
+}
+
+func (l *stallListener) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.next == nil {
+		return c, nil
+	}
+	st := l.next
+	l.next = nil
+	return &stalledConn{Conn: c, st: st}, nil
+}
+
+type stall struct {
+	budget  int
+	release chan struct{}
+	once    sync.Once
+}
+
+// Release lets the blocked and all later writes through; it is safe to call more than once.
+func (s *stall) Release() { s.once.Do(func() { close(s.release) }) }
+
+type stalledConn struct {
+	net.Conn
+	st      *stall
+	mu      sync.Mutex
+	written int
+}
+
+// Write passes writes through until the budget is used up, then blocks until Release or Close.
+func (c *stalledConn) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	over := c.written >= c.st.budget
+	c.written += len(p)
+	c.mu.Unlock()
+	if over {
+		select {
+		case <-c.st.release:
+		case <-time.After(time.Minute): // a test that never released must not hang the server
+			return 0, os.ErrDeadlineExceeded
+		}
+	}
+	return c.Conn.Write(p)
+}
+
+// SetWriteDeadline is a no-op: the stream arms a per-frame deadline that a long stall in the test
+// would otherwise turn into a failed write instead of a cut-off subscriber.
+func (c *stalledConn) SetWriteDeadline(time.Time) error { return nil }
+
 // AC4021 (EC4027, NFR4011): over a real socket and a real bus, a disconnected client releases its
 // subscription within a second, and a client that reads nothing is cut off after 1,024 queued
-// events while publishing never waits for it. The server's send buffer and the client's receive
-// buffer are small, so the handler really blocks in a write.
+// events while publishing never waits for it. The stalled client is simulated at the server's end
+// of the socket (stallListener), so the handler really blocks in a write and the pending count
+// provably backs up, whatever the kernel's buffers or the machine's load.
 func TestEvents_DisconnectAndSlowSubscribers(t *testing.T) {
 	bus := runbus.New(runbus.Options{})
 	e := httpx.New(httpx.Options{})
 	reviewshttp.AddRoutes(e, busAPI{bus: peers.NewBus(bus)}, oneWorkspace{})
 	srv := httptest.NewUnstartedServer(e)
-	srv.Config.ConnState = func(c net.Conn, st http.ConnState) {
-		if tc, ok := c.(*net.TCPConn); ok && st == http.StateNew {
-			_ = tc.SetWriteBuffer(4096)
-		}
-	}
+	stalls := &stallListener{Listener: srv.Listener}
+	srv.Listener = stalls
 	srv.Start()
 	t.Cleanup(srv.Close)
 
@@ -339,9 +406,6 @@ func TestEvents_DisconnectAndSlowSubscribers(t *testing.T) {
 			t.Fatal(err)
 		}
 		t.Cleanup(func() { _ = conn.Close() })
-		if tc, ok := conn.(*net.TCPConn); ok {
-			_ = tc.SetReadBuffer(2048)
-		}
 		fmt.Fprintf(conn, "GET /runs/%s/events HTTP/1.1\r\nHost: localhost\r\n\r\n", run)
 		return conn
 	}
@@ -368,28 +432,38 @@ func TestEvents_DisconnectAndSlowSubscribers(t *testing.T) {
 	})
 
 	t.Run("a subscriber that reads nothing", func(t *testing.T) {
-		const run = "7e1d0000-0000-4000-8000-0000000000a2"
+		const (
+			run       = "7e1d0000-0000-4000-8000-0000000000a2"
+			published = 1100
+			backlog   = 1024
+			budget    = 16 << 10 // the bytes the server writes before the client "stops reading"
+		)
+		st := stalls.arm(budget)
+		t.Cleanup(st.Release)
 		conn := connect(run)
 		eventually(t, 5*time.Second, "one subscriber", func() bool { return bus.Subscribers(run) == 1 })
 		msg := strings.Repeat("x", 1024)
 		// Publishing never waits for the stalled client: the loop ends although nothing reads. The
 		// guard only turns a hang into a failure; no latency is asserted.
-		published := make(chan struct{})
+		publishedAll := make(chan struct{})
 		go func() {
-			defer close(published)
-			for i := range 1100 {
+			defer close(publishedAll)
+			for i := range published {
 				bus.Publish(run, "info", fmt.Sprintf("%d %s", i, msg), nil)
 			}
 		}()
 		select {
-		case <-published:
+		case <-publishedAll:
 		case <-time.After(time.Minute):
 			t.Fatal("Publish did not return while the client was not reading")
 		}
-		eventually(t, 5*time.Second, "the slow subscriber to be dropped", func() bool { return bus.Subscribers(run) == 0 })
+		// The handler is blocked in a write with at most budget bytes of frames delivered, so more
+		// than the backlog is pending: the cut happens no matter how the machine is loaded.
+		eventually(t, 10*time.Second, "the slow subscriber to be dropped", func() bool { return bus.Subscribers(run) == 0 })
 
 		// Reading now drains what was queued and ends the response (chunked, so the end is the
 		// terminating chunk; the connection itself stays open).
+		st.Release()
 		_ = conn.SetReadDeadline(time.Now().Add(20 * time.Second))
 		resp, err := http.ReadResponse(bufio.NewReader(conn), nil)
 		if err != nil {
@@ -399,9 +473,11 @@ func TestEvents_DisconnectAndSlowSubscribers(t *testing.T) {
 		if err != nil {
 			t.Fatalf("the stream did not end after %d bytes: %v", len(body), err)
 		}
-		got := bytes.NewBuffer(body)
-		if n := strings.Count(got.String(), "\nevent: info\n"); n >= 1100 || n < 1000 {
-			t.Errorf("frames delivered = %d, want the queued part (1,000-1,099) of the 1,100 published", n)
+		// The queued 1,024 events, plus the few the server wrote before it blocked (the budget at
+		// about 1.1 KB a frame, a flush of up to 4 KB past it, the frame blocked in flight); the rest of the 1,100 was cut.
+		const sentBeforeBlocking = budget/1024 + 8
+		if n := strings.Count(string(body), "\nevent: info\n"); n < backlog || n > backlog+sentBeforeBlocking {
+			t.Errorf("frames delivered = %d, want %d-%d of the %d published", n, backlog, backlog+sentBeforeBlocking, published)
 		}
 	})
 }

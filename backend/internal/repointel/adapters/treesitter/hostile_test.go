@@ -44,8 +44,13 @@ func run(ctx context.Context, a *treesitter.Analyzer, op, file, src string) (tim
 // extraction, not only the parse. The two shapes of the review (409,600 open parentheses, and
 // the broken-token file) used to take 27 and 3 minutes; now each call returns within the limit
 // plus slack, with a result or an error wrapping context.DeadlineExceeded.
+//
+// The slack is a regression bound, not a latency target: the C parser polls its cancel flag at
+// intervals, and under -race with other packages running (the full gate) a call was measured
+// 1.2 s past the limit. A run-away extraction takes minutes, so a few seconds of slack still
+// separates the two.
 func TestHostileFile_TwoSecondLimit(t *testing.T) {
-	const slack = time.Second // the C parser polls the flag at intervals; CI machines are busy
+	const slack = 8 * time.Second
 	a := treesitter.New()
 	for _, name := range []string{"open_parens", "broken_tokens"} {
 		src := hostile()[name]
@@ -66,11 +71,12 @@ func TestHostileFile_TwoSecondLimit(t *testing.T) {
 }
 
 // TestHostileFiles_StopAtTheDeadline: every hostile shape, in every grammar, stops soon after a
-// short deadline, with an error that wraps context.DeadlineExceeded.
+// short deadline, with an error that wraps context.DeadlineExceeded. The slack is generous for the
+// reason given at TestHostileFile_TwoSecondLimit; the old behaviour overran by minutes.
 func TestHostileFiles_StopAtTheDeadline(t *testing.T) {
 	const (
 		deadline = 100 * time.Millisecond
-		slack    = time.Second
+		slack    = 5 * time.Second
 	)
 	a := treesitter.New()
 	for name, src := range hostile() {
@@ -100,7 +106,7 @@ func TestExtract_CancelledMidParse(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("Extract(open_parens) error = %v, want context.Canceled", err)
 	}
-	if elapsed > time.Second {
-		t.Errorf("Extract(open_parens) took %v after cancel, want under 1s", elapsed)
+	if elapsed > 5*time.Second { // see TestHostileFile_TwoSecondLimit on the slack
+		t.Errorf("Extract(open_parens) took %v after cancel, want under 5s", elapsed)
 	}
 }

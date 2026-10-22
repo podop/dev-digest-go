@@ -34,7 +34,9 @@ func RunsTrend(runs []RunFact, win PeriodWindow) []StatPoint {
 	s := trendSlices(win)
 	values := make([]int, s.count)
 	for i := range runs {
-		values[s.index(runs[i].RanAt)]++
+		if at := s.index(runs[i].RanAt); at >= 0 {
+			values[at]++
+		}
 	}
 	out := make([]StatPoint, s.count)
 	for i, v := range values {
@@ -52,7 +54,11 @@ func FindingsBySeverity(facts []FindingFact, win PeriodWindow) []SeverityBucket 
 		out[i].From = s.start(i)
 	}
 	for _, f := range facts {
-		b := &out[s.index(f.RanAt)]
+		at := s.index(f.RanAt)
+		if at < 0 { // a zero-span window has no slice for the finding (the periods of the routes are never empty)
+			continue
+		}
+		b := &out[at]
 		switch f.Severity {
 		case "CRITICAL":
 			b.Critical += f.Count

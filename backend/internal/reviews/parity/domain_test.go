@@ -300,7 +300,9 @@ func TestGroundingParity(t *testing.T) {
 			Intent   any           `json:"intent"`
 			Findings []wireFinding `json:"findings"`
 			Result   struct {
-				Findings []wireFinding `json:"findings"`
+				Findings                []wireFinding `json:"findings"`
+				OutOfScopeCount         int           `json:"outOfScopeCount"`
+				OutOfScopeCriticalCount int           `json:"outOfScopeCriticalCount"`
 			} `json:"result"`
 		} `json:"scope"`
 	}
@@ -336,16 +338,30 @@ func TestGroundingParity(t *testing.T) {
 			}
 		})
 	}
+	// Both switch states: a row with an intent is the switch-on case (spec 7.5, D5017), a row without
+	// one the switch-off case that Phase 4 pinned.
+	if len(g.Scope) < 2 {
+		t.Fatalf("grounding.json has %d scope cases, want the no-intent and the intent row", len(g.Scope))
+	}
+	withIntent := 0
 	for _, tc := range g.Scope {
-		if tc.Intent != nil {
-			continue // Phase 4 has no intent: only the no-intent rows apply
+		hasIntent := tc.Intent != nil
+		if hasIntent {
+			withIntent++
 		}
 		t.Run("scope/"+tc.Name, func(t *testing.T) {
-			got := reviewer.ApplyScopePolicy(domainFindings(tc.Findings), false)
+			got := reviewer.ApplyScopePolicy(domainFindings(tc.Findings), hasIntent)
 			if diff := cmp.Diff(domainFindings(tc.Result.Findings), got.Findings, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("ApplyScopePolicy(no intent) findings mismatch (-want +got):\n%s", diff)
+				t.Errorf("ApplyScopePolicy(hasIntent=%v) findings mismatch (-want +got):\n%s", hasIntent, diff)
+			}
+			if got.OutOfScope != tc.Result.OutOfScopeCount || got.OutOfScopeCritical != tc.Result.OutOfScopeCriticalCount {
+				t.Errorf("ApplyScopePolicy(hasIntent=%v) counts = %d/%d critical, want %d/%d critical", hasIntent,
+					got.OutOfScope, got.OutOfScopeCritical, tc.Result.OutOfScopeCount, tc.Result.OutOfScopeCriticalCount)
 			}
 		})
+	}
+	if withIntent == 0 {
+		t.Error("grounding.json has no scope row with an intent")
 	}
 }
 

@@ -290,6 +290,12 @@ func (v *validator) checkObject(s *jobj, inst any, path []string, out *[]issue, 
 			for i, c := range list {
 				opts[i] = display(c)
 			}
+			// Zod's z.enum reports a value that is not a string as an invalid_type issue (the
+			// options as the expected type), and only a string outside the options as an enum issue.
+			if _, isString := inst.(string); !isString && allStrings(list) {
+				add(fmt.Sprintf("Expected %s, received %s", strings.Join(opts, " | "), typeOf(inst)))
+				return
+			}
 			add(fmt.Sprintf("Invalid enum value. Expected %s, received %s", strings.Join(opts, " | "), display(inst)))
 			return
 		}
@@ -457,6 +463,16 @@ func floatKeyword(s *jobj, k string) (float64, bool) {
 	}
 	f, err := n.Float64()
 	return f, err == nil
+}
+
+// allStrings reports whether every value of an enum is a string (a Zod z.enum).
+func allStrings(list []any) bool {
+	for _, c := range list {
+		if _, ok := c.(string); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // typeOf names a decoded value the way Zod does.

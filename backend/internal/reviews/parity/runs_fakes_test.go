@@ -194,11 +194,14 @@ type runScenario struct {
 
 // loadRunRefs maps each run id of the corpus to the agent key (sec, gen, mr) the scenario's skills,
 // project context and skill errors are keyed by (corpus/runs/cases.json; the goldens do not repeat it).
-func loadRunRefs(t testing.TB) map[string]string {
+func loadRunRefs(t testing.TB) map[string]string { return loadCorpusRefs(t, "runs") }
+
+// loadCorpusRefs is loadRunRefs for any corpus directory with the same cases layout (runs, intent).
+func loadCorpusRefs(t testing.TB, corpus string) map[string]string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", "corpus", "runs", "cases.json"))
+	b, err := os.ReadFile(filepath.Join("testdata", "corpus", corpus, "cases.json"))
 	if err != nil {
-		t.Fatalf("read the runs corpus: %v", err)
+		t.Fatalf("read the %s corpus: %v", corpus, err)
 	}
 	var c struct {
 		Cases []struct {
@@ -257,6 +260,9 @@ func (s *syncBuf) lines() [][]byte {
 type harnessOptions struct {
 	// agentConcurrency bounds the agent runs in flight; 1 reproduces Node's sequential agents.
 	agentConcurrency int
+	// intent builds the executor's IntentResolver (the switch REVIEW_INTENT_ENABLED on); nil leaves
+	// Deps.Intent nil, the Phase 4 switch-off case.
+	intent func(h *runHarness) reviewsapp.IntentResolver
 }
 
 type runHarness struct {
@@ -309,6 +315,10 @@ func newRunHarness(t *testing.T, sc *runScenario, refs map[string]string, opts h
 	h.tx = &fakeRunTx{h: h}
 	h.client = newRecordingClient(h)
 
+	var intent reviewsapp.IntentResolver
+	if opts.intent != nil {
+		intent = opts.intent(h)
+	}
 	h.exec = executor.New(executor.Deps{
 		Store: h.store, Tx: h.tx, Bus: h.bus,
 		Providers: peers.NewProviders(h.client, func(c peers.CallerConfig) reviewerapp.LLM {
@@ -316,6 +326,7 @@ func newRunHarness(t *testing.T, sc *runScenario, refs map[string]string, opts h
 		}),
 		RepoIntel:      &fakeRepoIntel{h: h},
 		ProjectContext: &fakeProjectContext{h: h},
+		Intent:         intent,
 		Engine:         reviewerapp.Run,
 		Clock:          h.clock.Now,
 		Log:            slog.New(slog.NewJSONHandler(h.execLogs, &slog.HandlerOptions{Level: slog.LevelDebug})),
@@ -362,7 +373,7 @@ func (h *runHarness) batch() domain.Batch {
 		WorkspaceID: in.WorkspaceID,
 		Pull: domain.ReviewPull{
 			ID: in.Pull.ID, WorkspaceID: in.Pull.WorkspaceID, RepoID: in.Pull.RepoID, Number: in.Pull.Number,
-			Title: in.Pull.Title, Author: in.Pull.Author, Base: in.Pull.Base, HeadSHA: in.Pull.HeadSHA, Body: in.Pull.Body,
+			Title: in.Pull.Title, Author: in.Pull.Author, Base: in.Pull.Base, Branch: in.Pull.Branch, HeadSHA: in.Pull.HeadSHA, Body: in.Pull.Body,
 		},
 		Repo: domain.ReviewRepo{ID: in.Repo.ID, Owner: in.Repo.Owner, Name: in.Repo.Name},
 	}
@@ -669,7 +680,7 @@ func (s *fakeRunStore) InsertReview(ctx context.Context, r domain.NewReview) (st
 }
 
 // InsertFindings records the rows by the mapping the port documents (spec 7.3): kind defaults to
-// finding, out_of_scope is false, skill_id is the run's skill with the cited name.
+// finding, out_of_scope is the coerced flag (false for nil), skill_id is the run's skill with the cited name.
 func (s *fakeRunStore) InsertFindings(ctx context.Context, rid string, findings []reviewer.Finding, skillIDs map[string]string) error {
 	if len(findings) == 0 {
 		return nil
@@ -684,6 +695,7 @@ func (s *fakeRunStore) InsertFindings(ctx context.Context, rid string, findings 
 		if f.Skill != nil && skillIDs[*f.Skill] != "" {
 			skillID = skillIDs[*f.Skill]
 		}
+		outOfScope := f.OutOfScope != nil && *f.OutOfScope
 		var trifecta any
 		if f.TrifectaComponents != nil {
 			trifecta = f.TrifectaComponents
@@ -692,7 +704,7 @@ func (s *fakeRunStore) InsertFindings(ctx context.Context, rid string, findings 
 			"reviewId": rid, "file": f.File, "startLine": f.StartLine, "endLine": f.EndLine,
 			"severity": string(f.Severity), "category": string(f.Category), "title": f.Title,
 			"rationale": f.Rationale, "suggestion": f.Suggestion, "confidence": f.Confidence, "kind": kind,
-			"trifectaComponents": trifecta, "skillName": f.Skill, "skillId": skillID, "outOfScope": false,
+			"trifectaComponents": trifecta, "skillName": f.Skill, "skillId": skillID, "outOfScope": outOfScope,
 		}
 	}
 	s.txOf(ctx).add(map[string]any{"kind": "insert", "table": "findings", "returning": true, "values": rows})

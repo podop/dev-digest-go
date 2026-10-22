@@ -177,7 +177,7 @@ func CollectTodoLines(perFile [][]TodoLine) []TodoLine {
 	return out
 }
 
-var testPathRE = regexp.MustCompile(`(?:[._-](?:` + ci("test") + `|` + ci("spec") + `)\.[^/]+$)|(?:(?:^|/)(?:` + ci("__tests__") + `|` + ci("test") + `s?)/)`)
+var testPathRE = regexp.MustCompile(`(?:[._-](?:` + ci("test") + `|` + ci("spec") + `)\.[^/]+$)|(?:(?:^|/)(?:` + ci("__tests__") + `|` + ci("tests?") + `)/)`)
 
 // IsTestPath reports whether a repo-relative path is a test file or lies in a test folder.
 func IsTestPath(path string) bool { return testPathRE.MatchString(path) }

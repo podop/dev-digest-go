@@ -7,6 +7,7 @@ package domain
 // ever kept.
 
 import (
+	"math"
 	"regexp"
 	"slices"
 	"strconv"
@@ -63,7 +64,10 @@ func ChangedRanges(patch string) []LineRange {
 		}
 		end := start
 		if count > 1 {
-			end = start + count - 1
+			end = math.MaxInt // a sum beyond the int range saturates, as the numbers themselves do
+			if count-1 <= math.MaxInt-start {
+				end = start + count - 1
+			}
 		}
 		out = append(out, LineRange{Start: start, End: end})
 	}

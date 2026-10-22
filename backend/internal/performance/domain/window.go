@@ -92,9 +92,13 @@ func newSlices(win PeriodWindow, count int) sliceSpec {
 }
 
 // index is the slice an instant falls in, clamped to the first and last slice: the end of an
-// inclusive preset belongs to the last one.
+// inclusive preset belongs to the last one. It is -1 for no slice: a zero-width window puts the
+// instant at 0/0 = NaN, which Node's array write ignored (the run is in no slice).
 func (s sliceSpec) index(at time.Time) int {
 	i := math.Floor(float64(at.UnixMilli()-s.from) / s.width)
+	if math.IsNaN(i) {
+		return -1
+	}
 	return int(math.Min(math.Max(i, 0), float64(s.count-1)))
 }
 
