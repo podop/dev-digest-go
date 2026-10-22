@@ -144,7 +144,7 @@ func (e *Executor) execute(ctx context.Context, st *runState) (findings int, err
 func (e *Executor) attachSkills(ctx context.Context, st *runState) error {
 	skills, err := e.store.EnabledSkills(ctx, st.job.Agent.ID)
 	if err != nil {
-		return fmt.Errorf("load skills: %w", err)
+		return err // not wrapped: the failed run's note is the lookup's own error text
 	}
 	if len(skills) == 0 {
 		return nil

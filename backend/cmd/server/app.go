@@ -38,6 +38,7 @@ import (
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/postgres"
 	"dev-digest-go/backend/internal/platform/postgres/migrate"
+	"dev-digest-go/backend/internal/platform/runbus"
 	"dev-digest-go/backend/internal/platform/secrets"
 	pcclone "dev-digest-go/backend/internal/projectcontext/adapters/clonedocs"
 	pcpg "dev-digest-go/backend/internal/projectcontext/adapters/postgres"
@@ -57,6 +58,12 @@ import (
 	reposdb "dev-digest-go/backend/internal/repos/adapters/postgres"
 	reposapp "dev-digest-go/backend/internal/repos/app"
 	reposhttp "dev-digest-go/backend/internal/repos/transport/http"
+	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
+	"dev-digest-go/backend/internal/reviews/adapters/peers"
+	revpg "dev-digest-go/backend/internal/reviews/adapters/postgres"
+	reviewsapp "dev-digest-go/backend/internal/reviews/app"
+	"dev-digest-go/backend/internal/reviews/app/executor"
+	reviewshttp "dev-digest-go/backend/internal/reviews/transport/http"
 	"dev-digest-go/backend/internal/seed"
 	seedpg "dev-digest-go/backend/internal/seed/adapters/postgres"
 	settingspg "dev-digest-go/backend/internal/settings/adapters/postgres"
@@ -91,6 +98,9 @@ type options struct {
 	// llmURLs point the three provider adapters at stubs; "" = the real endpoint. Ignored with
 	// LLM_PROVIDER_OVERRIDE=mock.
 	llmURLs llmURLs
+	// llmAdapters replaces the provider adapters outright (scripted providers that block or ignore
+	// cancellation); nil = the adapters llmAdapters builds from llmURLs.
+	llmAdapters map[llm.Provider]llm.Adapter
 	// llm tunes the LLM client (retry backoff, budget, price book); Keys, Adapters and Logger are
 	// always set by wire.
 	llm llm.Options
@@ -111,8 +121,9 @@ type option func(*options)
 func withGetenv(getenv func(string) string) option { return func(o *options) { o.getenv = getenv } }
 func withLogOutput(w io.Writer) option             { return func(o *options) { o.logOut = w } }
 
-// serve runs the API until ctx ends: migrate, seed, start jobs, listen; on stop it drains HTTP
-// (up to 20 s) in parallel with the job runner (up to 10 s), then closes the database.
+// serve runs the API until ctx ends: migrate, seed, start jobs, listen; on stop it cancels the live
+// review runs (up to 5 s to record themselves) in parallel with the job runner (up to 10 s), then
+// drains HTTP (up to 20 s) and closes the database.
 func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	o := options{getenv: func(string) string { return "" }, logOut: io.Discard}
 	for _, opt := range opts {
@@ -150,6 +161,11 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	} else if failed > 0 {
 		log.WarnContext(ctx, "interrupted convention scans failed", "count", failed)
 	}
+	// Review runs left running by a crash or a hard stop fail the same way; the use case logs the
+	// count. Non-fatal for the same reason (Phase 1 AC33, EC4034).
+	if _, err := w.reviews.FailInterrupted(ctx); err != nil {
+		log.ErrorContext(ctx, "interrupted review runs not failed", "error", err)
+	}
 	// Repos cloned before repo-intel existed get one index job each (D3005). Like the reap above,
 	// a failure is logged once and startup goes on (FR3008, Phase 1 AC33).
 	if n, err := w.backfill.Run(ctx); err != nil {
@@ -157,7 +173,7 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	} else if n > 0 {
 		log.InfoContext(ctx, "repo-intel backfill enqueued", "count", n)
 	}
-	return listen(ctx, cfg, o, w.echo, runner, log)
+	return listen(ctx, cfg, o, w, runner, log)
 }
 
 // startupDB applies pending migrations and then the seed, each unless switched off (FR18).
@@ -188,6 +204,8 @@ type wired struct {
 	llm         *llm.Client // closed by serve on exit
 	conventions *conventionsapp.Service
 	backfill    *intelapp.Backfill
+	reviews     reviewsapp.Lifecycle
+	executor    *executor.Executor // shut down by listen before HTTP drains
 }
 
 // intelHandlers are the three repo-intel job handlers.
@@ -257,7 +275,10 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 
 	llmOpts := o.llm
 	llmOpts.Keys = sec
-	llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, log)
+	llmOpts.Adapters = o.llmAdapters
+	if llmOpts.Adapters == nil {
+		llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, log)
+	}
 	llmOpts.Logger = log
 	llmClient := llm.New(llmOpts)
 
@@ -288,7 +309,10 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Redact: llmClient,
 	}, intelapp.JobsOptions{Log: log})
 	intelSvc := intelapp.NewService(intelStore, runner, log)
-	intelReader := intelapp.NewReader(intelStore, cfg.RepoIntelEnabled)
+	// The caller scan is what the review prompt's callers digest runs on; the conventions ranker
+	// uses the same reader.
+	intelReader := intelapp.NewReader(intelStore, cfg.RepoIntelEnabled,
+		intelapp.WithCallerScan(intelapp.CallerScan{Repos: intelStore, Files: intelFiles, Analyzer: intelAnalyzer}))
 
 	reposStore := reposdb.NewStore(db)
 	reposSvc := reposapp.NewService(reposStore, runner, git.Root())
@@ -330,6 +354,23 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Conventions: convSvc,
 	})
 
+	// One bus serves the executor (publishing) and the service (replay, cancel, subscribe).
+	runs := peers.NewBus(runbus.New(runbus.Options{}))
+	reviewsStore := revpg.NewStore(db)
+	reviewsExec := executor.New(executor.Deps{
+		Store:          reviewsStore,
+		Tx:             tx,
+		Bus:            runs,
+		Providers:      peers.NewProviders(llmClient),
+		RepoIntel:      peers.NewRepoIntel(intelReader),
+		ProjectContext: peers.NewProjectContext(pcSvc.WithGit(git)),
+		Engine:         reviewerapp.Run,
+		Log:            log,
+	}, executor.Options{AgentConcurrency: cfg.ReviewAgentConcurrency, MapConcurrency: cfg.ReviewMapConcurrency})
+	reviewsSvc := reviewsapp.NewService(reviewsapp.Deps{
+		Store: reviewsStore, Tx: tx, Executor: reviewsExec, Bus: runs, Log: log,
+	})
+
 	limits := skillshttp.BodyLimits()
 	maps.Copy(limits, pchttp.BodyLimits())
 	e := httpx.New(httpx.Options{
@@ -339,7 +380,10 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		BodyLimits:   limits,
 		RateLimit: httpx.RateLimit{
 			Enabled: cfg.RateLimitEnabled,
-			Buckets: settingshttp.RateLimitBuckets(),
+			Buckets: append(settingshttp.RateLimitBuckets(),
+				httpx.Bucket{Method: http.MethodPost, Path: "/pulls/:id/review", Limit: 10}),
+			// A live run stream is long-lived and reconnects on its own: it never counts.
+			Exempt: []httpx.Route{{Method: http.MethodGet, Path: "/runs/:id/events"}},
 		},
 	})
 	health.AddRoutes(e, sqlDB, log)
@@ -352,19 +396,42 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	conventionshttp.AddRoutes(e, convSvc, resolver)
 	pchttp.AddRoutes(e, pcSvc, resolver)
 	intelhttp.AddRoutes(e, intelSvc, resolver)
-	return &wired{echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs)}, nil
+	reviewshttp.AddRoutes(e, reviewsSvc, resolver)
+	return &wired{
+		echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs),
+		reviews: reviewsSvc, executor: reviewsExec,
+	}, nil
 }
 
-// listen serves e until ctx ends, then shuts HTTP and the job runner down in parallel. A
-// server that cannot drain within the grace period makes the process fail (FR43); jobs that
-// do not settle in time keep their `running` rows and only produce a warning.
-func listen(ctx context.Context, cfg config.Config, o options, e *echo.Echo, runner *jobs.Runner, log *slog.Logger) error {
-	runCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
+// listen serves w.echo until ctx ends. On stop the review executor shuts down first (every live
+// run is cancelled, up to 5 s to record itself, then every run bus completes so the SSE streams
+// end) in parallel with the job runner (10 s); only then does Echo get its stop signal and drain
+// the remaining requests (20 s grace, FR43, FR4042). Echo runs on its own context for that
+// reason: the signal context would stop it before the runs could finish. A server that cannot
+// drain within the grace period makes the process fail; runs and jobs that do not settle in time
+// keep their `running` rows (reaped at the next start) and only produce a warning.
+func listen(ctx context.Context, cfg config.Config, o options, w *wired, runner *jobs.Runner, log *slog.Logger) error {
+	// stopCtx ends on the stop signal, or when the server stopped by itself (port in use).
+	stopCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	// The values of ctx stay; its cancellation does not reach Echo.
+	echoCtx, stopEcho := context.WithCancel(context.WithoutCancel(ctx))
+	defer stopEcho()
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		<-runCtx.Done()
+		<-stopCtx.Done()
+		if err := w.executor.Shutdown(context.WithoutCancel(ctx)); err != nil {
+			if errors.Is(err, executor.ErrNotDrained) {
+				log.Warn("review runs did not finish recording; the next start reaps them", "error", err)
+			} else {
+				log.Error("review executor shutdown", "error", err)
+			}
+		}
+		stopEcho()
+	})
+	wg.Go(func() {
+		<-stopCtx.Done()
 		if err := runner.Shutdown(jobs.DefaultShutdownTimeout); err != nil {
 			log.Warn("job runner did not settle", "error", err)
 		}
@@ -389,8 +456,8 @@ func listen(ctx context.Context, cfg config.Config, o options, e *echo.Echo, run
 			return nil
 		},
 	}
-	startErr := sc.Start(runCtx, e)
-	cancel()
+	startErr := sc.Start(echoCtx, w.echo)
+	stop()
 	wg.Wait()
 
 	switch {

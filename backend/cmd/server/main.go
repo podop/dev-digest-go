@@ -18,6 +18,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // embedded zone database: TZ names resolve on Alpine (D4016)
 
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/platform/logging"

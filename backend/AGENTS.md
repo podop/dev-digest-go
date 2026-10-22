@@ -29,7 +29,11 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 
 ## Conventions (non-default)
 - Layout: `cmd/server/` is the composition root (config, wiring, migrate → seed → jobs → listen,
-  shutdown). Features live in `internal/<context>/{domain,app,adapters/<tech>,transport/http}`;
+  shutdown). Startup reaps (conventions scans, review runs) are non-fatal. Shutdown order: the
+  review executor cancels live runs (≤ 5 s) and completes the run buses so SSE streams end, in
+  parallel with the job runner (10 s); only then does Echo (own start context) drain HTTP (20 s).
+  The SSE route `GET /runs/:id/events` is exempt from rate limiting; `POST /pulls/:id/review` has
+  a 10/min bucket. Features live in `internal/<context>/{domain,app,adapters/<tech>,transport/http}`;
   shared plumbing in `internal/platform/<what>` (httpx, postgres, apperr, secrets, gitcli, github,
   retry, logging). Dependencies point inward only.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/`. GORM only in

@@ -695,7 +695,7 @@ var phase2Routes = []string{
 }
 
 // AC201: every Phase 2 route is registered; the routes outside the scope still answer the
-// router's 404 envelope.
+// router's 404 envelope (the review routes left that list in Phase 4).
 func TestHTTP_Phase2RoutesRegistered(t *testing.T) {
 	if len(phase2Routes) != 38 {
 		t.Fatalf("phase2Routes has %d entries, want 38", len(phase2Routes))
@@ -723,7 +723,7 @@ func TestHTTP_Phase2RoutesRegistered(t *testing.T) {
 		}
 	}
 
-	for _, route := range []string{"GET /runs/x/events", "GET /eval/dashboard", "POST /pulls/" + id + "/review"} {
+	for _, route := range []string{"GET /eval/dashboard"} {
 		method, path, _ := strings.Cut(route, " ")
 		var body any
 		if method == http.MethodPost {

@@ -347,24 +347,34 @@ func (v *validator) checkObject(s *jobj, inst any, path []string, out *[]issue, 
 			}
 		}
 	case map[string]any:
+		// Zod walks the shape in property order: a missing required key is reported where its
+		// property is, not ahead of the other keys' issues.
+		var required []string
 		if req, ok := s.get("required"); ok {
 			if names, ok := req.([]any); ok {
 				for _, n := range names {
 					if name, ok := n.(string); ok {
-						if _, present := x[name]; !present {
-							*out = append(*out, issue{path: append(slices.Clone(path), name), msg: "Required"})
-						}
+						required = append(required, name)
 					}
 				}
 			}
 		}
+		seen := map[string]bool{}
 		if props, ok := s.get("properties"); ok {
 			if po, ok := props.(*jobj); ok {
 				for _, name := range po.keys {
+					seen[name] = true
 					if val, present := x[name]; present {
 						v.check(po.m[name], val, append(slices.Clone(path), name), out)
+					} else if slices.Contains(required, name) {
+						*out = append(*out, issue{path: append(slices.Clone(path), name), msg: "Required"})
 					}
 				}
+			}
+		}
+		for _, name := range required {
+			if _, present := x[name]; !present && !seen[name] {
+				*out = append(*out, issue{path: append(slices.Clone(path), name), msg: "Required"})
 			}
 		}
 	}
