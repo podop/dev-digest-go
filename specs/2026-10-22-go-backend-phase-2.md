@@ -564,7 +564,7 @@ The backend has no own screens. This table states what the existing UI shows in 
 - NFR204 [skills] — Skill import resource limits: at most 2,162,688 request bytes, 1,048,576 downloaded bytes, 500 zip entries, one inflated entry of at most 262,145 bytes, 10 s per URL import; nothing is written to disk.
 - NFR205 [context] — Project context and conventions shall never read a path outside the real clone root, never follow a symlink, never write to the clone and never execute repository content.
 - NFR206 [llm] — Untrusted content stays marked: repository samples are wrapped in `untrusted` tags with inner tags neutralized; imported skills (file, URL, community) are stored disabled.
-- NFR207 [conventions] — Time and cost bounds: a scan leaves `running` within 130 s of its job start; each scan makes at most 2 model attempts and the job is never retried, so a scan is never billed twice.
+- NFR207 [conventions] — Time and cost bounds: a scan leaves `running` within its job limit + 10 s of its job start (310 s with the 300 s limit of D208; a provider that never answers ends the scan after the 100 s request timeout, which is not retried, see AC299); each scan makes at most 2 model attempts and the job is never retried, so a scan is never billed twice.
 - NFR208 [context] — `GET /repos/:id/context` on a clone with 5,000 files of which 500 match (each ≤ 20 KB) shall respond within 3 s on the development stack.
 - NFR209 [ops] — Observability:
   - the Phase 1 job log line for each `conventions.extract` job;
