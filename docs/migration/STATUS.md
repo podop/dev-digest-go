@@ -3,17 +3,43 @@
 Last updated: 2026-10-22 · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
-**Phases 1–3 are implemented and passed the review gate.** Phase 3 (repo-intel: indexing, rank, repo
-map — 2 routes) was finished on 2026-10-22. Still open: two manual UI walkthroughs that need the user's
-credentials — Phase 1 AC97 (GitHub token) and Phase 2 AC301 (OpenAI or OpenRouter key).
+**Phases 1–4 are implemented and passed the review gate.** Phase 4 (reviews: reviewer-core engine, LLM
+extensions, run bus + SSE, multi-agent — 15 routes) was finished on 2026-10-22. Phase 5 spec is being
+written. Still open (user, credentials needed): Phase 1 AC97 (GitHub token), Phase 2 AC301 and Phase 4
+AC4077 real-key half (OpenAI/OpenRouter key).
 
-| Item | Phase 1 | Phase 2 | Phase 3 |
-|---|---|---|---|
-| Spec | `specs/2026-10-21-go-backend-phase-1.md` | `specs/2026-10-22-go-backend-phase-2.md` — FR201–FR262, AC201–AC303, D201–D223 (D208 300 s job limit: user) | `specs/2026-10-22-go-backend-phase-3.md` — FR3001…, AC3001–AC3071, D3001–D3019 (D3002 CGO tree-sitter, D3019 fix Node import-graph bugs: user); §7.5 step 4 amended (baseUrl lookup) |
-| Plan | `docs/plans/2026-10-21-go-backend-phase-1.md` — S1–S19 done | `docs/plans/2026-10-22-go-backend-phase-2.md` (+ `.context.md`) — S1–S25 done, 4 waves | `docs/plans/2026-10-22-go-backend-phase-3.md` (+ `.context.md`) — S1–S25 done, 5 waves (W0–W4) |
-| Backend gate | `make backend-check` green (gofmt, build, vet, `go test -race -shuffle=on -count=1 ./...` incl. testcontainers) — 68 packages after Phase 3 | | |
-| Frontend | `pnpm exec vitest run src/test/go-backend-contracts.test.ts` 68/68 (Phase 1–3 goldens) | | |
-| Stack | `make up` → db, backend, frontend healthy on 127.0.0.1:5433/3101/3100; backend rebuilt 2026-10-22 with Phase 3 (CGO image; startup backfill found no cloned repo to index) | | |
+| Item | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
+|---|---|---|---|---|
+| Spec | `specs/2026-10-21-go-backend-phase-1.md` | `specs/2026-10-22-go-backend-phase-2.md` — FR201–FR262, AC201–AC303, D201–D223 | `specs/2026-10-22-go-backend-phase-3.md` — AC3001–AC3071, D3001–D3019 | `specs/2026-10-22-go-backend-phase-4.md` — FR4001–FR4047, AC4001–AC4077, D4001–D4018 (D4001 intent deferred: user) |
+| Plan | `docs/plans/2026-10-21-go-backend-phase-1.md` — S1–S19 | `docs/plans/2026-10-22-go-backend-phase-2.md` — S1–S25, 4 waves | `docs/plans/2026-10-22-go-backend-phase-3.md` — S1–S25, 5 waves | `docs/plans/2026-10-22-go-backend-phase-4.md` (+ `.context.md`) — S1–S29, 5 waves (W0–W4), P1–P17 |
+| Backend gate | `make backend-check` green — 79 packages after Phase 4 | | | |
+| Frontend | `pnpm exec vitest run src/test/go-backend-contracts.test.ts` 88/88 (Phase 1–4 goldens) | | | |
+| Stack | `make up` → db, backend, frontend healthy on 127.0.0.1:5433/3101/3100; backend rebuilt 2026-10-22 with Phase 4 (seed added the PR #482 demo review: 1 review, 2 findings, 1 run) | | | |
+
+## Phase 4 review gate (reports in `.sdd/review/2026-10-22-go-backend-phase-4/`, git-ignored)
+| Reviewer | r1 (`4d1a2b3`) | r2 (fix delta `c7de1c0`) |
+|---|---|---|
+| Architecture | **PASS**, 2 MEDIUM (Raw EXISTS in seed; peers → llmcall adapter import) + 2 LOW | **PASS**, 0 findings (LOW 4 json-tagged event data in reviews/domain accepted) |
+| Security | **FAIL**, 1 MEDIUM (caller scan ignored its 30 s bound inside a file: 31–89 s, cancel at 4 s → 51 s) + 2 LOW (queued-run cancel lost after bus eviction; SSE exemption unconditional, 105 KB per subscriber, no stream caps) | **PASS** — all closed (scan 2.6–3.2 s, cancel → 4.3 s; 2.3 KB per subscriber; caps 32/run, 256 total) |
+| Plan verification | 156 PASS · 0 FAIL · 6 CANNOT_VERIFY (manual S29 rows) | **PASS** — 167 PASS · 0 FAIL · 0 CANNOT_VERIFY (DB evidence `db-tests-r2.log` 3,079 PASS / 0 SKIP; manual rows on accepted W4 evidence) |
+
+Manual checks (S29, throwaway compose projects): AC4009 20 sequential 4-agent starts p95 46 ms (limit
+500; rate limiter off — the 10/min bucket would 429 from the 11th); AC4023 `curl -N` stream open 660 s
+with 34 events, not cut by Echo's ReadTimeout; AC4061 callers + repo map + rank on a 5,001-file clone
+156–275 ms (limit 10 s), canaries outside the clone untouched; AC4077 mock half: headless Chrome
+(`agent-browser` 0.27) 3 flows / 89 steps (single-agent review + accept/dismiss + trace; cancel + delete;
+3-agent multi-agent with estimates + Learn) plus Node e2e flow 08.
+
+Phase 4 decisions worth knowing (details in the spec/plan): reviews run without PR intent until Phase 5
+(D14); SSE matches fastify-sse-v2 byte for byte (`retry: 3000`, no heartbeat, live streams end by
+closing); Echo's 30 s ReadTimeout does not cut bodyless streaming GETs (W0 proof) — no server timeout
+changes; runs execute in-process (no jobs rows), REVIEW_AGENT_CONCURRENCY per request, no global cap
+(Q4001); shutdown: executor cancels runs, ≤ 5 s drain, completes buses, then Echo drains; startup reaps
+`running` runs to failed (non-fatal); `reviews.run_id` has ON DELETE CASCADE (DeleteRun = one DELETE);
+findings are read in physical order (`ctid`, as Node — may change after accept/dismiss); Node parity via
+goldens from `backend/internal/reviews/parity/testdata/gen` (short TMPDIR); llm validator honours
+`nullable: true`, Zod-equivalent messages; a provider panic fails only its run (pool re-raises on the
+caller); queued runs re-check their row after bus eviction.
 
 ## Phase 3 review gate (reports in `.sdd/review/2026-10-22-go-backend-phase-3/`, git-ignored)
 | Reviewer | r1 (`43c89c8`) | r2 (fix delta `5d7b081`) |
@@ -64,10 +90,12 @@ swaps every provider for a deterministic mock with a startup warning (D214).
      to the agent; create/edit/rename/delete a store file; pick an OpenRouter model on Settings › Models.
      Without a key: `LLM_PROVIDER_OVERRIDE=mock` in `.env`, `docker compose up -d backend`.
    - Phase 1 **AC97** — five UI flows with a real `GITHUB_TOKEN`.
-2. Follow-ups (README): pin base images by digest; `govulncheck` once CI exists; optional arch LOW
-   (fake catalog in `skills/app` importer tests).
+   - Phase 4 **AC4077 real-key half** — run a single-agent and a multi-agent review with a real OpenRouter
+     key (the mock half passed in a headless browser).
    - Phase 3 (optional, same session as AC97): after a clone, the repo's index state turns `full`
      within about a minute (`GET /repos/:id/index-state`, or the UI's repo-intel status), and Resync works.
+2. Follow-ups (README): pin base images by digest; `govulncheck` once CI exists; optional arch LOW
+   (fake catalog in `skills/app` importer tests).
 3. Phase 3 follow-ups (optional): the import-graph phase re-parses every walked file serially (≈8 s of
    the 28.7 s on 5,000 files) — reuse the parse phase's imports or parallelise; extraction guard ticks per
    node, so a few passes overshoot the 2,000 ms limit by ≤ 0.4 s (security r2 INFO); the 500,000-row budget
@@ -75,10 +103,13 @@ swaps every provider for a deterministic mock with a startup warning (D214).
    go-tree-sitter (removed in 0.26) — revisit the leak-free cancellation in
    `repointel/adapters/treesitter/parser.go` when bumping the binding; the golden generator needs a short
    `TMPDIR` (tsx IPC socket path).
-4. **Phase 4** (reviews: reviewer-core engine, LLM providers, run bus + SSE, multi-agent — 15 routes):
-   spec → plan → waves → review gate, same flow. It consumes the repo-intel read port
-   (`repointel/app.Reader`: RepoMap, SymbolsInFiles, …) and implements the contract-only operations
-   BlastRadius / CallerSignatures / UnresolvedReferences if it needs them (`repointel/app/doc.go`).
+4. Phase 4 follow-ups (optional): global cap on concurrent review runs / chunks per run (Q4001 declined;
+   map-reduce is one LLM call per changed file — cost risk under load); per-client fairness for the 256
+   SSE slots; caller scan: one hostile line can still delay the ctx check ≈ 4.7 s (tick by whitespace
+   trimmed); share one caller scan per batch across agents; findings order after accept/dismiss (needs an
+   ordering column + migration); persist-path run notes keep Go prefixes (`insert review: …`).
+5. **Phase 5** (intent, smart-diff, blast, brief, onboarding, performance — 11 routes, plus the review
+   intent hook deferred by D14): spec in progress → plan → waves → review gate.
 
 Recipe for a fresh-volume check without touching the real volumes: an override file that renames
 `pgdata`/`backend_data` (e.g. `devdigest_go_ac_*`), `WEB_PORT=3200 API_PORT=3201 DB_PORT=5434`,
@@ -97,3 +128,5 @@ r2 security LOWs (Host port validation, `ALLOWED_HOSTS` fail-closed) fixed in `7
   `2b24b9c`, `fab4f7b`, `c35aba5`, review fixes `26620b5`, `60241b1`.
 - Phase 3: spec `8b6c896`, plan `83638d8`, waves `53ed885` (W0), `e61dcf6` (W1), `14fdafc` (W2),
   `14fe593` (W3), `43c89c8` (W4), review fixes `5d7b081`, `12505fc`.
+- Phase 4: spec `f1f16bb`, plan `f63a41a`, waves `95e5146` (W0), `f0f5c39` (W1), `ba80ea6` (W2),
+  `7c4609d` (W3), `4d1a2b3` (W4), review fixes `c7de1c0`.

@@ -11,6 +11,9 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-22 — a 1,024-slot chan per SSE subscriber costs ~105 KB each (2,000 streams = 213 MB) → runbus uses a growing slice queue + 1-slot wake channel + pump goroutine (≈3.5 KB idle); callers must drain C() or Close (platform/runbus state.go)
+- 2026-10-22 — per-name ReferenceLines over a hostile clone file is O(names × size) between ctx checks (1,000 names × 2 MB: 31–89 s, cancel ignored) → one Aho-Corasick pass per file with a ctx tick every ~32K units of work, plus a binary-search enclosing-symbol index (repointel/domain/refscan.go; differential test vs ReferenceLines)
+- 2026-10-22 — a panic on a pool worker goroutine (reviewer/app mapOrdered → LLM port/provider adapter) bypasses the run's recover and kills the whole server → workers recover, stop the pool and re-raise on the caller after wg.Wait (pool.go; TestRun_APanicInAProviderFailsOnlyThatRun); same rule for project-context reader goroutines (readRunDocSafely)
 - 2026-10-22 — a CTE + self-join UPDATE over rows bulk-inserted earlier in the same transaction (repointel ResolveReferences): the planner has no statistics for them and re-ran a HashAggregate per row — 67 s for 138k references on a 5,000-file repo (AC3066 failed at 92 s) → one GROUP BY … HAVING count(DISTINCT …)=1 subquery (≈1 s); don't ANALYZE inside the tx (SHARE UPDATE EXCLUSIVE serialises concurrent index jobs) — TestResolveReferences_FreshRowsResolveInTime
 - 2026-10-22 — path.Ext/filepath.Ext('.ts') is ".ts" while Node path.extname('.ts') is '' — files named .ts/.js would be walked in Go but not in Node → guard with domain.IsSupported, not SyntaxForPath alone (walk.json case dotfile_named_like_an_extension)
 - 2026-10-22 — decoding clone bytes with []rune(string) or strings.ToValidUTF8: replacement differs from Node Buffer.toString('utf8') (WHATWG: one U+FFFD per maximal subpart, e.g. E2 82 → 1, ED A0 80 → 3) and changes content hashes → use repointel/domain.DecodeText (matched Node on 40k random sequences)
@@ -23,6 +26,10 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-22 — findings has no ordering column: 'insertion order' is ORDER BY ctid (Node had no ORDER BY), and an accept/dismiss UPDATE can move the row → stable order after triage needs a new column + migration (reviews/adapters/postgres reads.go)
+- 2026-10-22 — seed changes to PR #482 (demo review) shift every deterministic placeholder id in cmd/server/testdata/contracts and the pulls rollup tests → after touching the seed run go test ./cmd/server -run TestContracts_GoldenResponses -update (flag AFTER the package), review the diff, clear demo rows in rollup tests
+- 2026-10-22 — reviews executor: a cancel of a queued run lives only in the bus flag, which the 5 min TTL evicts → re-read the run row before starting ONLY when the flag is absent; with the flag set the Node goldens require the full cancelled path (skills recorded, ended trace) — executor run.go endedWhileQueued
+- 2026-10-22 — llm schema validator must mirror Zod for parity of re-prompt text: honour 'nullable: true' (Node toJsonSchema writes .nullish() scalars that way), validate anyOf[X,null] as X, report a non-number for an integer as 'Expected number', and emit issues in property order (internal/llm/schema.go; reviews/parity llm/runs goldens)
 - 2026-10-22 — cmd/server test newConfig leaves RepoIntelEnabled false (zero value) while production defaults it on → tests of the ranker / flag-on behaviour set it explicitly (phase3_test.go intelOn)
 - 2026-10-22 — freezing a transaction mid-flight in an integration test: an AFTER INSERT … FOR EACH STATEMENT trigger calling pg_advisory_xact_lock(hashtextextended(key,0)) while the test holds the key on another connection; detect 'blocked' by polling pg_locks (locktype='advisory' AND NOT granted) — repointel/integration helpers_test.go (AC3040/3041/3056/3071)
 - 2026-10-22 — repointel stats key set of a normal full index is pinned by TestFull_WritesAllSevenTables and the index-state contract test → add new stats keys only conditionally (rowBudgetReached, graphFailed)
@@ -40,6 +47,10 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-22 — JS-parity text: x/text collate.New(language.English) equals Node localeCompare(b,'en') (0 mismatches / 20k pairs; Collator not goroutine-safe → one per sort); JS String.trim trims U+FEFF but not U+0085, strings.TrimSpace does the reverse → use reviewer/domain.JSTrim
+- 2026-10-22 — echo/v5 AutoHandleHEAD runs the GET handler for HEAD, so an SSE route opens a stream on HEAD → answer HEAD explicitly before subscribing (TestEvents_HeadAnswersHeadersAndReleasesTheSubscription)
+- 2026-10-22 — Go encoding/json escapes U+2028/U+2029 even with SetEscapeHTML(false), JSON.stringify never does → SSE data lines un-escape them pairwise (reviews/transport/http sse.go unescapeLineSeparators; golden line_separators_are_not_escaped_by_node)
+- 2026-10-22 — echo/v5@5.4.0 + Go 1.27 net/http: the hard-coded 30 s ReadTimeout does NOT cut a bodyless streaming GET (startBackgroundRead clears the read deadline before the handler runs), but a server WriteTimeout does → never set WriteTimeout; httpx.OpenStream lifts deadlines and sets a 10 s deadline per frame (stream_test.go; AC4023 660 s manual run)
 - 2026-10-22 — go-tree-sitter Node.Child(i) and Node.Parent() are O(position)/O(depth×siblings) (Parent searches from the root): a 400 KB file of '(' took ≈27 min to extract with Child(i) loops → iterate with a TreeCursor and tick a ctx guard every ~1,024 nodes (repointel treesitter guard, hostile_test.go)
 - 2026-10-22 — go-tree-sitter@v0.25.0 ParseWithOptions leaks its options via pointer.Save with no Unref (≈186 B per parse; reusing one options object doesn't help) ⚠ conflicts with 2026-10-22 entry recommending ProgressCallback → parse with ParseWith(cb, nil) + Parser.SetCancellationFlag on a C.calloc'd word raised by context.AfterFunc, freed after stop()/done (cgo forbids C retaining a Go pointer); SetCancellationFlag is removed in 0.26 (repointel/adapters/treesitter/parser.go withTree, leak_test.go)
 - 2026-10-22 — tiktoken-go/tokenizer@v0.7.0 codec.Count treats special-token literals (<|endoftext|>) as ordinary text, equal to js-tiktoken encode(t, [], []) — not Node's TiktokenTokenizer, which falls back to chars/4 → compare against encode(t,[],[]) in goldens (repointel/adapters/tokenizer tests)
@@ -60,6 +71,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Recurring Errors & Fixes
 <!-- error message → cause → fix -->
+- 2026-10-22 — httpx rate limiter 429 renders as code internal_error (Node parity quirk, ratelimit_test.go) → a new 429 that must say rate_limited writes httpx.ErrorBody itself (reviews SSE stream caps)
 - 2026-10-22 — go build ./cmd/... (one main package matched) from backend/ writes a 25 MB 'server' binary into the tree → use go build -o /dev/null ./...; /backend/server is now git-ignored
 - 2026-10-22 — golden generator (tsx) fails with a spurious EADDRINUSE when TMPDIR is a long path (IPC socket path too long, e.g. the Claude scratchpad) → run it with a short TMPDIR such as /tmp/ac68
 - 2026-10-22 — repointel tests under -race: several large files parsed in parallel each exceed the 2,000 ms ParseTimeout (the index goes partial with 'parse timed out') although production parses them in ms → build fixtures from many small files, not a few 5,000-line ones
@@ -70,6 +82,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Session Notes
 <!-- YYYY-MM-DD — one-line summary of a meaningful session -->
+- 2026-10-22 — reviews Phase 4 done: W1 ran 8 parallel lanes and W2 6 on W0 contract code; gate needed one fix round (caller-scan DoS, queued cancel after eviction, SSE caps); the W0 smoke test disproved the Echo ReadTimeout risk before any lane built on it
 - 2026-10-22 — Phase 3 (repo-intel) implemented in 5 waves; review gate arch PASS, security PASS after r1 fixes (3 MEDIUM hostile-clone DoS + 5 LOW closed), plan-verify PASS; AC3066 5,000-file index 28.7 s after the ResolveReferences rewrite — see docs/migration/STATUS.md
 - 2026-10-22 — Phase 2 (agents, skills, conventions, project-context + minimal LLM layer) implemented in 4 waves of parallel implementer lanes; review gate arch PASS, security PASS (4 LOW fixed), plan-verify 220 PASS/0 FAIL; left: AC301 + Phase 1 AC97 UI walkthroughs — see docs/migration/STATUS.md
 - 2026-10-22 — security LOW #1/#2 fixed (Host port validation, ALLOWED_HOSTS fail-closed) and AC95/AC96 passed on a throwaway compose project; only AC97 (needs GitHub token) left before Phase 2 — see docs/migration/STATUS.md
