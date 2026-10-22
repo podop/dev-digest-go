@@ -34,28 +34,28 @@ const sampleSchema = `{
 
 func TestStrictSchema(t *testing.T) {
 	t.Parallel()
-	got, err := strictSchema(json.RawMessage(sampleSchema))
+	got, err := StrictSchema(json.RawMessage(sampleSchema))
 	if err != nil {
-		t.Fatalf("strictSchema() error = %v", err)
+		t.Fatalf("StrictSchema() error = %v", err)
 	}
 	s := string(got)
 	for _, bad := range []string{"minItems", "maxItems"} {
 		if strings.Contains(s, bad) {
-			t.Errorf("strictSchema() = %s, want no %s", s, bad)
+			t.Errorf("StrictSchema() = %s, want no %s", s, bad)
 		}
 	}
 	for _, want := range []string{`"description":"rules"`, `"additionalProperties":false`, `"required":["candidates"]`,
 		`"required":["rule","category","confidence","line","note"]`, `"minLength":2`} {
 		if !strings.Contains(s, want) {
-			t.Errorf("strictSchema() = %s, want it to contain %s", s, want)
+			t.Errorf("StrictSchema() = %s, want it to contain %s", s, want)
 		}
 	}
 	// Property order is the caller's, not alphabetical.
 	if i, j := strings.Index(s, `"rule":`), strings.Index(s, `"category":`); i < 0 || j < i {
-		t.Errorf("strictSchema() = %s, want rule before category", s)
+		t.Errorf("StrictSchema() = %s, want rule before category", s)
 	}
-	if _, err := strictSchema(json.RawMessage(`[1]`)); err == nil {
-		t.Error("strictSchema([1]) error = nil, want not-an-object error")
+	if _, err := StrictSchema(json.RawMessage(`[1]`)); err == nil {
+		t.Error("StrictSchema([1]) error = nil, want not-an-object error")
 	}
 }
 
@@ -112,5 +112,57 @@ func TestValidator_ref(t *testing.T) {
 	got := v.validate(`{"a":""}`)
 	if len(got) != 1 || got[0].String() != "- a: String must contain at least 1 character(s)" {
 		t.Errorf("validate(empty) = %v, want the minLength issue", got)
+	}
+}
+
+func TestValidator_nullable(t *testing.T) {
+	t.Parallel()
+	v, err := newValidator(json.RawMessage(`{"type":"object","properties":{
+	  "s":{"type":"string","nullable":true},
+	  "n":{"type":"number","nullable":true,"minimum":0},
+	  "b":{"type":"boolean","nullable":true},
+	  "e":{"type":"string","enum":["a","b"],"nullable":true},
+	  "off":{"type":"string","nullable":false},
+	  "plain":{"type":"string"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		in   string
+		want []string
+	}{
+		{"nullable string, number, boolean and enum accept null", `{"s":null,"n":null,"b":null,"e":null}`, nil},
+		{"nullable keeps checking other values", `{"s":"x","n":2,"b":true,"e":"a"}`, nil},
+		{"nullable still checks the type", `{"s":1,"b":"x"}`, []string{
+			"- s: Expected string, received number",
+			"- b: Expected boolean, received string",
+		}},
+		{"nullable still checks limits", `{"n":-1}`, []string{"- n: Number must be greater than or equal to 0"}},
+		{"nullable still checks the enum", `{"e":"z"}`, []string{"- e: Invalid enum value. Expected 'a' | 'b', received 'z'"}},
+		{"plain string rejects null", `{"plain":null}`, []string{"- plain: Expected string, received null"}},
+		{"nullable false rejects null", `{"off":null}`, []string{"- off: Expected string, received null"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			for _, is := range v.validate(tc.in) {
+				got = append(got, is.String())
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("validate(%s) mismatch (-want +got):\n%s", tc.in, diff)
+			}
+		})
+	}
+}
+
+func TestStrictSchema_keepsNullable(t *testing.T) {
+	t.Parallel()
+	got, err := StrictSchema(json.RawMessage(`{"type":"object","properties":{"s":{"type":"string","nullable":true}}}`))
+	if err != nil {
+		t.Fatalf("StrictSchema() error = %v", err)
+	}
+	if want := `{"type":"object","properties":{"s":{"type":"string","nullable":true}},"required":["s"],"additionalProperties":false}`; string(got) != want {
+		t.Errorf("StrictSchema() = %s, want %s", got, want)
 	}
 }

@@ -1,0 +1,116 @@
+{
+  "note": "groundFindings + groundingSummary over diffs parsed with parseUnifiedDiff. Findings use the shorthand of corpus/engine (f s e sev cat t k ...). `diff` is lines/text.",
+  "diffs": {
+    "two_files": {
+      "lines": [
+        "diff --git a/src/a.ts b/src/a.ts", "--- a/src/a.ts", "+++ b/src/a.ts",
+        "@@ -1,4 +1,5 @@", " one", "-two", "+TWO", "+two and a half", " three", " four",
+        "@@ -20,3 +21,3 @@", " twenty", "-x", "+y", " z",
+        "diff --git a/src/b.ts b/src/b.ts", "--- a/src/b.ts", "+++ b/src/b.ts", "@@ -0,0 +1,3 @@", "+b1", "+b2", "+b3"
+      ]
+    },
+    "pure_deletion": {
+      "lines": [
+        "diff --git a/src/d.ts b/src/d.ts", "--- a/src/d.ts", "+++ b/src/d.ts", "@@ -5,2 +5,0 @@", "-gone", "-gone too",
+        "diff --git a/src/e.ts b/src/e.ts", "--- a/src/e.ts", "+++ b/src/e.ts", "@@ -3,3 +3,0 @@", "-a", "-b", "-c"
+      ]
+    },
+    "empty": { "text": "" }
+  },
+  "cases": [
+    {
+      "name": "lines_inside_and_outside_hunks",
+      "diff": "two_files",
+      "findings": [
+        { "f": "src/a.ts", "s": 2, "e": 3, "t": "inside the first hunk" },
+        { "f": "src/a.ts", "s": 6, "e": 20, "t": "gap between hunks only touches nothing" },
+        { "f": "src/a.ts", "s": 6, "e": 21, "t": "reaches into the second hunk" },
+        { "f": "src/a.ts", "s": 24, "e": 30, "t": "after the second hunk" },
+        { "f": "src/a.ts", "s": 1, "e": 1, "t": "first line" },
+        { "f": "src/a.ts", "s": 5, "e": 5, "t": "last context line of the hunk" },
+        { "f": "src/b.ts", "s": 3, "e": 3, "t": "last added line" },
+        { "f": "src/b.ts", "s": 4, "e": 4, "t": "one past the end" },
+        { "f": "src/c.ts", "s": 1, "e": 1, "t": "file not in the diff" }
+      ]
+    },
+    {
+      "name": "reversed_negative_zero_and_huge_ranges",
+      "diff": "two_files",
+      "findings": [
+        { "f": "src/a.ts", "s": 3, "e": 2, "t": "reversed inside" },
+        { "f": "src/a.ts", "s": 40, "e": 2, "t": "reversed, reaching back into the hunk" },
+        { "f": "src/a.ts", "s": -10, "e": 2, "t": "negative start, end inside" },
+        { "f": "src/a.ts", "s": -10, "e": -1, "t": "both negative" },
+        { "f": "src/a.ts", "s": 0, "e": 0, "t": "both zero" },
+        { "f": "src/a.ts", "s": 0, "e": 1, "t": "zero to first line" },
+        { "f": "src/a.ts", "s": 2, "e": 1000000000000, "t": "huge end, starts inside" },
+        { "f": "src/a.ts", "s": 1000000000000, "e": 2, "t": "huge start, end inside" },
+        { "f": "src/a.ts", "s": 100, "e": 1000000000000, "t": "huge end beyond" },
+        { "f": "src/a.ts", "s": -1000000000000, "e": 1000000000000, "t": "everything" }
+      ]
+    },
+    {
+      "name": "full_file_kinds_only_need_the_file",
+      "diff": "two_files",
+      "findings": [
+        { "f": "src/a.ts", "s": 500, "e": 600, "k": "secret_leak", "t": "secret outside hunks" },
+        { "f": "src/a.ts", "s": 500, "e": 600, "k": "lethal_trifecta", "t": "trifecta outside hunks" },
+        { "f": "src/a.ts", "s": 500, "e": 600, "k": "phantom", "t": "phantom outside hunks" },
+        { "f": "src/a.ts", "s": 500, "e": 600, "k": "hook", "t": "hook outside hunks" },
+        { "f": "src/a.ts", "s": 500, "e": 600, "k": "finding", "t": "plain finding outside hunks" },
+        { "f": "src/z.ts", "s": 1, "e": 1, "k": "secret_leak", "t": "secret in a file that is not in the diff" },
+        { "f": "src/a.ts", "s": 500, "e": 600, "k": null, "t": "null kind outside hunks" }
+      ]
+    },
+    {
+      "name": "pure_deletion_hunks_fall_back_to_the_declared_new_range",
+      "diff": "pure_deletion",
+      "findings": [
+        { "f": "src/d.ts", "s": 5, "e": 5, "t": "on the declared line" },
+        { "f": "src/d.ts", "s": 4, "e": 4, "t": "before it" },
+        { "f": "src/d.ts", "s": 6, "e": 6, "t": "after it" },
+        { "f": "src/e.ts", "s": 3, "e": 3, "t": "second file on its declared line" },
+        { "f": "src/e.ts", "s": 3, "e": 5, "t": "second file, range over three lines" }
+      ]
+    },
+    {
+      "name": "empty_diff_drops_everything",
+      "diff": "empty",
+      "findings": [
+        { "f": "src/a.ts", "s": 1, "e": 1, "t": "any" },
+        { "f": "src/a.ts", "s": 1, "e": 1, "k": "secret_leak", "t": "even secrets" }
+      ]
+    },
+    {
+      "name": "no_findings",
+      "diff": "two_files",
+      "findings": []
+    },
+    {
+      "name": "titles_with_quotes_and_unicode_in_reasons",
+      "diff": "two_files",
+      "findings": [
+        { "f": "src/ü/ñ.ts", "s": 1, "e": 1, "t": "title with \"quotes\" and ünïcode ✓" },
+        { "f": "src/a.ts", "s": 99, "e": 100, "t": "it's a 'quoted' title" }
+      ]
+    }
+  ],
+  "scope": [
+    { "name": "no_intent_forces_null", "intent": null, "findings": [
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "CRITICAL", "oos": true },
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "WARNING", "oos": false },
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "SUGGESTION", "oos": null },
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "SUGGESTION" }
+    ] },
+    { "name": "intent_coerces_to_boolean_and_counts", "intent": {
+        "intent": "Add rate limiting to webhooks.", "change_type": "feature", "confidence": "high", "derived_from": "description",
+        "in_scope": ["rate limiter"], "out_of_scope": ["refactors"]
+      }, "findings": [
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "CRITICAL", "oos": true },
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "WARNING", "oos": true },
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "WARNING", "oos": false },
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "SUGGESTION", "oos": null },
+      { "f": "a.ts", "s": 1, "e": 1, "sev": "SUGGESTION" }
+    ] }
+  ]
+}

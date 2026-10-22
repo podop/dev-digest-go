@@ -17,8 +17,8 @@ const (
 )
 
 // RateLimit configures the in-memory fixed-window limiter, per client IP (socket address).
-// Windows start at the client's first request. /health, /health/ready, preflights and
-// unmatched routes are never counted. State is per process (single backend instance).
+// Windows start at the client's first request. /health, /health/ready, preflights, unmatched
+// routes and the routes in Exempt are never counted. State is per process (single backend instance).
 type RateLimit struct {
 	// Enabled turns limiting on; the zero value leaves every route unlimited.
 	Enabled bool
@@ -28,6 +28,15 @@ type RateLimit struct {
 	Window time.Duration
 	// Buckets give single routes their own budget instead of the global one.
 	Buckets []Bucket
+	// Exempt lists routes that are never counted, neither against the global budget nor a bucket
+	// (long-lived streams such as the run-events SSE). /health* and preflights are always exempt.
+	Exempt []Route
+}
+
+// Route names one registered route.
+type Route struct {
+	Method string // HTTP method, e.g. "GET"
+	Path   string // registered route path, e.g. "/runs/:id/events"
 }
 
 // Bucket is a separate budget for one registered route.
@@ -50,12 +59,19 @@ func rateLimit(cfg RateLimit, now func() time.Time) echo.MiddlewareFunc {
 	for _, b := range cfg.Buckets {
 		buckets[b.Method+" "+b.Path] = b
 	}
+	exempt := make(map[string]struct{}, len(cfg.Exempt))
+	for _, r := range cfg.Exempt {
+		exempt[r.Method+" "+r.Path] = struct{}{}
+	}
 	l := &limiter{now: now, window: cfg.Window, entries: make(map[string]*windowState)}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			ri := c.RouteInfo()
 			if ri.Path == "" || ri.Path == "/health" || ri.Path == "/health/ready" {
+				return next(c)
+			}
+			if _, ok := exempt[ri.Method+" "+ri.Path]; ok {
 				return next(c)
 			}
 			name, limit := "global", cfg.Limit

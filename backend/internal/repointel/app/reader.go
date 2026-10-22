@@ -25,11 +25,17 @@ type readerSource interface {
 type Reader struct {
 	src     readerSource
 	enabled bool
+	scan    *CallerScan
 }
 
-// NewReader builds the read port; enabled is REPO_INTEL_ENABLED.
-func NewReader(src readerSource, enabled bool) *Reader {
-	return &Reader{src: src, enabled: enabled}
+// NewReader builds the read port; enabled is REPO_INTEL_ENABLED. Options add the operations that
+// read the clone (WithCallerScan).
+func NewReader(src readerSource, enabled bool, opts ...ReaderOption) *Reader {
+	r := &Reader{src: src, enabled: enabled}
+	for _, o := range opts {
+		o(r)
+	}
+	return r
 }
 
 // RepoMap returns the cached repo map of the last indexed commit for the token budget (zero or

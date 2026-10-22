@@ -1,0 +1,8383 @@
+[
+ {
+  "content": "class Bar <Bar />\nfunction foo( bar(  foo ( ) function* foo function foo é(",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "function * foo   export { foo } from \"m\" <Bar.x *",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "`éé(.a$b(\n$a$b(\nfoo.bar(\"unterminated foo(\nconst foo = <Bar> function * foo } export * from \"m\" $a$b(",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "/* foo( */* foo(x=>\nxfoo(éé(foo(foo\n`x(` ",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "x.foo( foo (\nfunction foo   foo (export { foo } from \"m\"\t\r\n<Bar /> new  Bar()\ntype x =foo\\)new foo",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": ".bar(x.foo(useFoo(x}new  Bar()\nfoo.bar(await function foo\treturn 'it\\'s' x(} from\n<Bar.xconst foo =9x(\n(",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "useFoo( type x = ( 'foo(' foo2( return  foo\nxfoo(x.foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\t _x( $a$b( foo2(\nfunction * foo\"function foo(x* foo(<Bar />foo\nx.foo(\"function foo(\nfoo.bar(//enum Barxéé(",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "};éé(<Bar />'type x =;\n)function foo(const foo =type x =x.foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */ é(   <Bar> } from ' function foo\nclass Bar\néé( \"foo(\" * foo( type x = 'it\\'s' x( /",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"\nenum Bar /* foo( */ class Bar new  Bar()\n`x(`foo(type x =foo2(export {",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"import \né( foo.bar( 'foo('\nenum BaruseFoo(.bar(`export * from \"m\"function* foofunction foo(\n; new  Bar() <Bar /> } export {",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "éé( await  Bar x await   // c\n;const foo =await é(\r\n<Bar>\rclass Bar=>\"a\\\"b\" foo(}\n<Bar />export { foo } from \"m\"é({",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "\"unterminated foo(foo)<Bar\timport x﻿\n'\"unterminated foo( foo (",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "let x ==>} from}<Bar>\n\"unterminated foo(\nfunction foo(foo.bar(\\\"unterminated foo(class Barfoo2(type x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " foo ( new  Bar() function foo enum Bar \" type x = class Bar\nenum BarBar\n import  /* foo( */\\enum Bar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ".a$b(\nexport * from \"m\"} from  x.foo(<Bar\tnew  Bar()\n\téé($a$b(const foo =.bar( \n$a$b(export {<Bar />",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "'\n) await  <Bar.x } from a$b(\nenum Barnew foo <Bar>\t\nnew  Bar()* foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(type x =.bar( // c} from\t$a$b(\n( foo `x(` \r export { foo } from \"m\" export { ;\n.bar(export { foo2((",
+  "symbol": "foo.bar",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": " foo (\"foo(\"function* fooéé(\nfoofoo(`x(`\n'foo('",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "  ({) .a$b(\n_x( 'it\\'s' x( new  Bar() .a$b( } from x ﻿\ninterface x\nbar(const foo =\"xfoo(",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "Barfunction * foo\n<Bar\txclass Bar;useFoo({\n \nxfunction * foofoofoo(* foo(function foo(",
+  "symbol": "useFoo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "import    é(\nfunction * fooexport * from \"m\"(=>foo.bar(bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\rvar  x`x(`new foo/",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "  \"unterminated foo(a$b(enum Bar;",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(interface x foo ( =>`x(`function* foo",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "/export {export * from \"m\")\n}<Bar />'\t_x(\n\\    foo(    x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export {foofoo( \n<Bar.xlet x =\nfunction * foo\"foo(\"\\\na$b( / \" <Bar />",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "  enum Bar \"a\\\"b\" foo(  foo ( let x = var  x  ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " // c`x(`<Bar />class Bar\n9x(/Bar )\n; import    function foo( *",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ";foo(await foo(export * from \"m\")foo(\n/* foo( */ <Bar> ` export { foo } from \"m\" ' useFoo(\n('_x(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "useFoo( 9x( ) \t type x =\nfoo2(  foo ( useFoo(\n﻿const foo =<Bar\t$a$b(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "`x(`'foo('`xxfoo(interface x\n} from /* foo( */ \t \" foo await \nfunction* fooclass Barlet x =xfoo(`x(`",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "return *_x(\n'\"\nfooéé(9x(foo2(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\r\nenum Bar await  enum Bar .bar( `x(` function foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t\nexport { // c",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function foo\t",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo2( foo(\n\t // c$a$b(export {'foo('\n // c \t  foo ( } \"a\\\"b\" foo( a$b(\n\té(const foo =\"a\\\"b\" foo(foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " export { foo } from \"m\"foofoo(const foo =foo(\n\\'it\\'s' x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "* ) await  \r",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "'foo('   export { Bar `\nnew  Bar()bar(<Bar>* foo(\n//a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo2(xinterface xBar",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "{",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`new foo{function* foo<Bar\t<Bar />export {\n_x( // c",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "_x(({\nxfoo(é( ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "function foo( * foo( (    foo.bar( \t\n'function foo;foofoo('foo('`\nBar\ninterface x.bar(<Bar />é(.bar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'//}  <Bar />\nx.foo(export {",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "﻿\néé(class Bar'é( // cnew foo  \nexport { foo } from \"m\"const foo =function foo(foo2(foo.bar(foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "_x(éé(// \nfoo.bar(bar(await \n  type x =\"foo(\"é(return {",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "return éé(x\n<Bar.x.a$b(new  Bar()return * foo(\nexport { foo } from \"m\" 9x( foo2( * foo( .bar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"type x =*export * from \"m\"function * foo\nnew foo 'foo('\nawait <Bar><Bar.x﻿x.foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */\n export { foo } from \"m\"function * foo\\\n\"a\\\"b\" foo(const foo =9x(\tfoo2(\n\"a\\\"b\" foo(var  x`x(`enum Barexport { foo } from \"m\"export * from \"m\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "`x(`class Bar",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\" ) new foo new  Bar() `x(` interface x\n`x(` x \" \"unterminated foo(\n const foo =<Bar />//",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "let x =* foo(export { foo } from \"m\"import \"unterminated foo(foo2(/\nexport { foo } from \"m\" x ' é(\na$b(let x =$a$b(\n'it\\'s' x(éé(.bar(é(﻿Bar",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "`x(` import export * from \"m\"const foo =<Bar\t\n.bar((function foo\rfunction* fooexport {enum Bar\nenum Bar",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "éé('it\\'s' x(<Bar>\n* foo( *\n'it\\'s' x(\n.bar( 'it\\'s' x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "a$b(enum Bar* foo(`new foo\nlet x =//* foo( */<Bar.x\"unterminated foo(interface x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "'foo({ // c\nnew foo ﻿ 9x( export * from \"m\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".a$b(const foo =`x(`* foo(x.foo(\r\nvar  x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\t'\ntype x = éé( const foo = function * foo  // c }\nexport { foo } from \"m\"xfoo(function foo(\nfunction * foo'it\\'s' x(a$b(",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "`x(`",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "( Bar 'it\\'s' x(\nawait ﻿xfoo(é()\nexport * from \"m\"xfoo(\nawait  / function * foo const foo =",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(﻿ foo2(\nfunction foo)\"",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": ") class Bar } const foo = enum Bar export * from \"m\" a$b(\n`",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "  .a$b(x.foo(class Barfoo(\n<Bar />\\`x(`'it\\'s' x(",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "let x =`x(`(xfoo(_x(\nawait  _x( *\nfunction foo\t/* foo( */$a$b(type x =",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "''\"a\\\"b\" foo(return   .a$b(\n\t\nfoo2(\t<Bar.x`x(`function * foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "9x( ; => ; <Bar /> `x(` interface x\n'export { foo } from \"m\"$a$b(const foo ='export * from \"m\"/",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "`x(`\"foo(\" {'it\\'s' x(let x =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"type x =9x(<Bar\tvar  x  return \n\"unterminated foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "xreturn new foo(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "foo.bar(\ninterface x",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "class Bar* foo(foo.bar(foo.bar(a$b(\n<Bar.x\nfoo( var  x new  Bar() await  bar( .bar( *\n{ éé( function* foo    {",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "type x =.bar(\nfoo(return ('var  x\n.a$b(`export {await foo.bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "new foo var  x\n//",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "enum Bar\nawait foofoo(<Bar />foo(function fooconst foo =\n\t(function foo(interface ximport \n﻿ /* foo( */ \"foo(\"  foo ( return  xfoo(",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "await } // c)\nfoo.bar('function foo(\n foo (}.a$b(\nnew foo\"<Bar>",
+  "symbol": "foo",
+  "lines": [
+   3,
+   4
+  ]
+ },
+ {
+  "content": "$a$b(\r} fromtype x =\"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/foo(<Bar.x/new fooexport {interface x\nexport { foo } from \"m\".a$b(foo\nfoo((",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "let x =const foo =éé( \"unterminated foo(* foo(x.foo(\n\\",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " new foo`x(`=>\nvar  x foo.bar( * foo( <Bar />",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'foo('foo.bar(<Bar> \"foo(\"_x(\nfoo.bar(xBar\nvar  x ` foo2( export { foo } from \"m\"",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "éé(\nexport * from \"m\" /* foo( */ x.foo( / *\nimport $a$b(éé()export {\nxfoo( ) foo.bar( \"foo(\" .a$b( ; {",
+  "symbol": "a$b",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "new  Bar()\n\"unterminated foo(\n_x(bar(`'foo('** foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "class Bar a$b(\n<Bar.x $a$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "return  \"a\\\"b\" foo( new  Bar() bar( const foo = import \n // c export { / <Bar.x function foo( 'foo('\nexport { foo } from \"m\"9x(<Bar>",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar> é( xfoo( <Bar /> import    function* foo\n<Bar />;x.foo(9x(function foo\nclass Bar let x =\nx﻿type x =/* foo( */} fromawait x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\" \" // cuseFoo(\\foo2(\nbar(function * foo*<Bar.x)foo.bar(function foo(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function foo;import \nuseFoo(.a$b(\nlet x =_x(new  Bar()export * from \"m\"class Bar<Bar>\nlet x =bar('éé(return ;foo(",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": ".a$b(\"",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\\  // c new foo\n<Bar />function* foo<Bar.xconst foo ='foo('\r foo (\n\"a\\\"b\" foo( xfoo(\n9x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "﻿'foo('foo\\9x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "function* foo} frominterface x//é(.bar(import ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "class Bar=>\tawait class Bar<Bar />\nuseFoo(`é(<Bar\t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\t  const foo =\ninterface x $a$b( xfoo( $a$b( /\ntype x =",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */foo.bar(\n\"a\\\"b\" foo($a$b(\nx\"foo.bar(foofunction * foo\n'bar(<Bar>'foo('foo2(/return ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "var  x {<Bar\t * foo(\n{ / * return  \"",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "} \t}await ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'foo('    ( } é(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(foo.bar(* foo(\\foofoo(/\n'foo('/\n<Bar /> ( foo2( export * from \"m\" .a$b( enum Bar\n_x(.bar(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "await */* foo( */ // c<Bar\t\"a\\\"b\" foo(class Bar\n'it\\'s' x(// \\{\nfoo(return \"a\\\"b\" foo( foo (<Bar\t",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "x.foo( enum Bar /* foo( */ é(  \ntype x =<Bar />'\nfoofoo( export * from \"m\"",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "var  x_x($a$b(new footype x =*\nnew  Bar() export { _x( $a$b(\nfoo<Bar\t)",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "await 'function * foo\nx.a$b('it\\'s' x(",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "export { foo } from \"m\"x`x(`await =>Barnew  Bar()\nnew foofoo/* foo( */\n\" <Bar.x Bar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "9x(var  xfunction foo(//  \n  ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " foo (;x.foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */ / return  foo( .bar(   function* foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " (\n} from\tx.foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "=>await ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t ` 9x( type x = / foofoo(\na$b(export { foo } from \"m\"x.foo('foo('",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "const foo = ; \"\nfoonew  Bar()<Bar.x<Bar /> foo (<Bar.x\n // c;type x =\"foo(\"'it\\'s' x(foo*",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\" x * foo( type x = <Bar.x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "*_x(\nfoofoo( var  x .a$b( function * foo",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": " bar(\ntype x =\\foo()enum Barfoo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo( .bar( éé( `\nimport const foo =\n.bar(import  foo ({a$b(.a$b(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "new  Bar() => .bar( await \nx.foo( <Bar.x const foo = \"a\\\"b\" foo( useFoo( x.foo( a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'foo(' =>\n* foo(\nenum Bar.bar(<Bar\t;export { foo } from \"m\"'foo('\nbar(\"unterminated foo(\"a\\\"b\" foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(\n`export * from \"m\"return ;\"a\\\"b\" foo(\nfunction* foo\tfunction fooawait ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x \"a\\\"b\" foo( foofoo( 'it\\'s' x( { export {\n \\\\function* foo_x( foo (class Bar\n'",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "}function* foofunction* fooawait \n`\n'foo('\n\"unterminated foo( /* foo( */ => \"unterminated foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "await xxfoo2(} fromnew  Bar()(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar />return 9x(bar(x<Bar>new  Bar()\ntype x =\n\"foo(\" foo ('foo('\"a\\\"b\" foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t\n<Bar />.bar(﻿'",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "import class Bar\"unterminated foo(\\let x =$a$b(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function foo let x =\n'foo('\nvar  x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\t'it\\'s' x(foo.bar(\\.a$b(\n // c xfoo(  \nnew  Bar() } from ﻿ .a$b(\na$b( \"unterminated foo( <Bar\t <Bar\t",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "; enum Bar /* foo( */ export { 'foo(' (\n9x( .a$b( `x(` function foo $a$b( } <Bar />\nfoo2( éé( ' let x = xfoo( \"foo(\"",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\t class Bar foo( var  x enum Bar (",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "enum Barlet x =const foo =export {\"unterminated foo(  \n  interface x a$b(\n;return ﻿} from<Bar\t",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "x.foo( Bar \"unterminated foo(\n'foo('foo2(/* foo( */'it\\'s' x(\nexport { foo } from \"m\"} from\n/ let x =   \"foo(\" \r 'it\\'s' x( let x =",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": " foo (\n\"\nawait  * foo( Bar useFoo(\nexport * from \"m\"=> // cfoo(",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "\rxfoo(('foo('/* foo( */",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "* \\ .a$b( Bar foo(\n<Bar\tinterface xfoo.bar(\n{x\\} from",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "xfoo(//\"foo(\"\"foo(\"}\nimport  // céé(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function foo // cfoo'it\\'s' x(\\",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": ")function foo(new foo\n\"unterminated foo( \\\n/",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "  .bar(await interface xnew  Bar()//export { foo } from \"m\"\ninterface x a$b( function foo    foo2( 'it\\'s' x( function foo\n\t interface x function* foo 'it\\'s' x(\n.bar(type x =interface xfunction foo",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar>\té(=>\r=>\nfunction fooexport * from \"m\"import ",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function * foo\n.a$b( foo(",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\"\n.bar(   enum Bar { 'foo(' ; const foo =\n\"a\\\"b\" foo( \"unterminated foo( } from export { foo } from \"m\" => const foo =\n(//* foo( */",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "x .bar( <Bar\t\nexport * from \"m\" } from foo( type x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "  \n=>export {' type x =export * from \"m\"\n}Barimport \"a\\\"b\" foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(\nexport { foo } from \"m\" => `x(` <Bar /> \t // let x =\n\"foo(\" éé( \\ éé(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ") class Bar return \nx.foo( useFoo( class Bar \\\n  /* foo( */\"a\\\"b\" foo(\t)﻿\"foo(\"\nfoo function foo export * from \"m\" `x(` // <Bar.x éé(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */}var  x=>new foo\n)function* fooxfoo('\nconst foo = enum Bar =>",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "Barfoofoo(new foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": " var  x (\n  enum Bar'function foo(xfoo(await ",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "xfoo(}`x(`enum Bar\"unterminated foo(\n//",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar>\"<Bar />*function foo\nnew  Bar()﻿export {9x( // c\nfoofoo(foofoo(\n'foo('foo(foo(bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "x.foo(<Bar.x$a$b(const foo =\t'\n} from éé( .a$b(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "class Barfoo(9x(\\;<Bar.x\r\n\\)useFoo(.a$b(const foo =return ",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "/\"a\\\"b\" foo(await \nimport  ` \"unterminated foo( x.foo(\n* foo( new  Bar() 'it\\'s' x( 'foo(' =>",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "foo2( ( _x( foo.bar(\nclass Bar ) `x(`\n\r\"foo(\"  'it\\'s' x(\t/* foo( */",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "  =>import enum Barawait \nexport { foo } from \"m\".a$b(xfoo(type x =import class Bar<Bar />\nconst foo = * export { foo } from \"m\" export * from \"m\"\nexport {",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "}enum Barlet x =import <Bar><Bar />var  x\néé( / interface x",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\"a\\\"b\" foo(`function foo\t\n\tawait function* foofoo(* foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "éé( éé( class Bar let x = ( x\na$b(_x(*function * foo\\éé(a$b(\ninterface xa$b(\"a\\\"b\" foo($a$b(\nfoo=>",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "Bar return  \t <Bar\t .a$b( ;\n'it\\'s' x( Bar class Bar /     // c\nxfoo( 'it\\'s' x(\nawait `x(`",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "interface x`.bar(`x(`é( \n( function* foo _x( import     ﻿ a$b(\n<Bar\t.bar(function foo(} fromfunction foofunction foo<Bar>",
+  "symbol": "foo.bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\"unterminated foo( await ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "éé('foo('//useFoo(xfoo('foo('",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "var  x const foo = let x =\n\"foo(\" let x = \\ 'it\\'s' x(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"\n;export { foo } from \"m\"\"a\\\"b\" foo(function * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "export {'<Bar\tawait x\nnew  Bar()<Bar>*/`enum Bar foo (\nfunction * foo\n=>\\foofoo(<Bar />",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " foo (    * foo( enum Bar\n_x(function foo( foo (function * foo\nfunction foo(_x(\n'foo('",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "return  xfoo( {\n' `x(` 9x(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\" } interface x 'foo(' <Bar> 9x(\n(x<Bar\t\nx_x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(type x =type x =9x('foo('foo2(\n\" \r foo.bar( bar( \"a\\\"b\" foo( interface x",
+  "symbol": "foo.bar",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "`x(`=><Bar.xuseFoo( foo (import =>",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "'foo(' \t\n/ function* foo { bar( `",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"éé(foo2(_x(function * foo9x(\néé( \t /* foo( */ //",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "enum Barfunction* foofoo.bar(\nfoofoo(bar(`x(`export {export {\nexport { foo } from \"m\"éé(/\"unterminated foo(function * foofoo\n  foofoo( export { foo } from \"m\" 'it\\'s' x( <Bar\t import  \"a\\\"b\" foo(",
+  "symbol": "x",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "é( .bar( var  x { \r '\n=> let x =const foo =<Bar />\nnew  Bar() interface x\n<Bar />return new foo\"a\\\"b\" foo(\"foo(\"_x(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "} type x = function * foo .a$b( type x = <Bar> )\nnew foo foo2( ' * foo( foo.bar( function foo( \\\n''it\\'s' x(",
+  "symbol": "x",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "9x(\"unterminated foo(\n{}\"\n( ",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function foo($a$b(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "x.foo(.bar(enum Barfoofoo(let x =\n' var  x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "`x(`_x(`;\nfunction* foo return  function* foo new foo  // c foo2(\n\"Barexport * from \"m\"x.foo(\n} fromuseFoo('it\\'s' x(.bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\" // c foo (﻿await /foo.bar(\nexport { foo } from \"m\"const foo =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "fooexport { foo } from \"m\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "a$b( foofoo( export { foo } from \"m\" éé( <Bar> foo( .a$b(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "` useFoo( } var  x x.foo(\né(* foo(\nfoox$a$b(new  Bar()function foo(\n$a$b( function* foo export * from \"m\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x\n_x(* foo(foofoo('it\\'s' x(} fromfoofoo(foofoo(\nfunction foo( // cfoo2(new foo<Bar.x\nexport { 'foo('",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(`x(`foo.bar(bar(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "$a$b()new foo\\\\//function foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "* foo( é( 'it\\'s' x(  // c ` ; ﻿",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\\}`x(`\n\"foo(\"'export { foo } from \"m\"export { foo } from \"m\"//foofoo(\néé(class Bar`x(`//}'foo(';",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " // c 9x( export * from \"m\" ` <Bar>\nfoofoo( function * foo bar(\n foo (\n`",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "x Bar   interface x function * foo\n\r//\nexport { <Bar\t ﻿ .bar( bar( type x = \"unterminated foo(\nfoofoo(`  ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "* foo(new foo\t\n<Bar> export { foo } from \"m\" \"a\\\"b\" foo( _x( var  x",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "return  new  Bar() $a$b( é( import \n* import  / export { var  x\né(\tenum Bar<Bar\txfoo(xfoo(\n`9x(﻿",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "await new  Bar()",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\tfunction foo(//export * from \"m\"interface xfunction* foo\n=>\nexport { foo } from \"m\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar.xawait <Bar.x\"unterminated foo(\n_x(function foo(bar(é(\t\nawait  // c{new  Bar().a$b({\"foo(\"\nfunction* foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " // c\n//x\n`let x =éé(function foo(await ﻿",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "a$b(9x(function foo(\nfunction foo(useFoo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "type x = 'it\\'s' x(\n \nexport { \"unterminated foo( 'foo(' <Bar.x\nfunction * foo * é( enum Bar <Bar>",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo('it\\'s' x(x.foo(\tBar\n=> new  Bar()\n// function* foo /* foo( */",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "﻿export { foo } from \"m\"\"foo(\"new foo\n( const foo = \"a\\\"b\" foo( await  * foo2( let x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ".bar('it\\'s' x(new  Bar()let x =\n;\\await xexport { foo } from \"m\"\né(",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "  /* foo( */$a$b(}\n)bar(\"foo\n`x(`function * foo<Bar.x(export {",
+  "symbol": "x",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "await  => function foo( xfoo( ( \"foo(\" )\nreturn 'it\\'s' x(;.a$b(var  x\\\n<Bar>\nfunction * foo let x = ' Bar",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\\.a$b(`export {export {<Bar\tx.foo(\n.bar(new fooawait export * from \"m\"await \n'it\\'s' x(/} from$a$b(export {\n9x( .bar( ' import  import  'it\\'s' x( useFoo(",
+  "symbol": "x",
+  "lines": [
+   3,
+   4
+  ]
+ },
+ {
+  "content": "function * foo => // enum Bar foo\n* foo( bar( * foo( <Bar> (\nbar(new foo<Bar>",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\"a\\\"b\" foo(type x =type x =(éé(;export {\nreturn  * _x( ;\nfoo( //\n\"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\\ new  Bar() => { function* foo '\n* foo(`x(`import } from\"foo(\"new  Bar()new foo\nfunction* foo foofoo( new  Bar() function foo( .a$b( import  return ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\t x\n   function foo => class Bar foo2( ` foo.bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " // cexport {)\n_x(\n;`x(` xfoo(x*`x(`",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "  useFoo(foo(* foo(  foo2(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "xfoo(Bar\nfoofoo( foo.bar( \t } from type x = enum Bar \"a\\\"b\" foo(\n foo.bar(\t//{",
+  "symbol": "foo.bar",
+  "lines": [
+   2,
+   3
+  ]
+ },
+ {
+  "content": ".a$b(xconst foo =;\"unterminated foo(\nfoofoo(\"unterminated foo('foo('function foofoointerface x \n/ <Bar\t _x( `x(` 9x( useFoo( new  Bar()",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(* foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foofoo(useFoo(\tfoofoo(<Bar\t\"a\\\"b\" foo(\n9x(  foo (\n<Bar.x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "é( new  Bar() \\ return  \"\n} from`x(`foo2(",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "new  Bar() const foo = foo.bar( /* foo( */ _x(\nfoo2(foo(type x =bar(interface x\n'it\\'s' x(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": ";foo()//",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar />function foo( 'foo('xfoo()const foo =",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar>`x(`foo2(<Bar>new foo)\n{`/\t // c{\"\nfoo2( (\n\"foo(\" export { foo } from \"m\" foofoo( //    ;  ",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "export { foo } from \"m\" ' ﻿ import  bar( `\nuseFoo( <Bar.x* foo(export {",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo( ) //\nlet x =Barfunction * foo // cfunction * foo9x(\"",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "interface xnew foouseFoo()function foo(return //\nclass Bar<Bar\t\n;`'it\\'s' x(}/interface x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "await _x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "9x((let x ='it\\'s' x('it\\'s' x(_x(new  Bar()\n'it\\'s' x(export { foo } from \"m\"\"unterminated foo($a$b(\"unterminated foo('it\\'s' x(\n{\"unterminated foo(class Bar\nx { 9x( \" await  9x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo(\nlet x =function foo(<Bar\t\n  \"foo(\" xfoo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "} from new foo export { * foo( .a$b(\nBarfoo(<Bar />.bar(<Bar>",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ") \t\nxfoo( <Bar.x _x(\n\\return \r//* foo(x*",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "é( class Bar export { foo } from \"m\" *\nx.foo( foofoo(\n foo (\tx.foo(interface xnew foo\n\"unterminated foo(.a$b(﻿a$b(bar(}",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo( /* foo( */",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(let x =foo.bar(;",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "useFoo(  \n\r\nfunction * foo<Bar.x foo (const foo =<Bar\t",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "//*let x =\rfunction foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(\nfoo2(let x =foo2(_x(\"unterminated foo(enum Bar\nreturn type x =Bar_x(*`;",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "var  x(\"foo(\"')\n()<Bar>await \nfoolet x =x/export * from \"m\"\"a\\\"b\" foo(function * foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo; \nawait \n($a$b(Barfunction * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "﻿xfoo(const foo =\" import ",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "/ /* foo( */ foo2( function* foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "const foo =foo\\a$b(\n<Bar>",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "=>\"} from\"a\\\"b\" foo(function * foo // c\nfunction foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "export {function * foo)foofoo(\n.a$b('foo('",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function* foo$a$b(new foofoo.bar(x.bar(é(\n<Bar.x9x(let x =\n\\ x\n foo ( xfoo( function* foo import  .bar( \\",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "type x =\n.bar({=> 9x(\n{ foo2( <Bar /> bar(   ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar />useFoo( \n=>=>*<Bar.x* foo(class Bar.a$b(\nfunction* foo*\n﻿return bar(return .bar(*",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function * foo <Bar\t ' ' new  Bar()\nclass Bar(new  Bar() foo (new  Bar()\n( export * from \"m\" var  x  // c var  x\n\"a\\\"b\" foo(class Barconst foo =const foo =﻿/* foo( */",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "_x('xenum Baréé(function foo\n foo2(<Bar />\n  ;/'it\\'s' x(const foo =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/ \"unterminated foo( $a$b( \r interface x function foo foo.bar(\n9x(\nimport var  xnew foo \t_x(return \n var  x\"foo(\"export {new  Bar()",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "// {",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "import } froma$b(;` foo (_x(\n<Bar\t interface x Bar\n﻿export { foo } from \"m\"'foo('",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "  \n} from",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "`x(` a$b( await  } function foo useFoo(\n'Bar\n/* foo( */ ; Bar _x(\n$a$b( <Bar.x `x(`",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": " )* foo(\néé(foo(\r;'foo('export * from \"m\"\n\"return ",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "é( => => interface x (\nawait  bar( {   'it\\'s' x( useFoo(\n_x(bar(export {\n  \"a\\\"b\" foo( } from `x(`",
+  "symbol": "useFoo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "function foonew foo\tbar(/\n* foo($a$b(\" Bar foo (",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function * foo \"    await  x.foo( export * from \"m\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ")foofoo(new footype x =\rx.foo(interface x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "Bar<Bar>\n*",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo(function * foo<Bar.x\n) ( function* foo await  foo { //\nclass Bar﻿function* foofoo'foo('.bar(\n=>",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "é(foo2(function* fooéé(function foo(_x(\nfunction foo \\ type x =\nBar <Bar\t export { foo } from \"m\" $a$b( .a$b(",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "await \rreturn foo\\} fromconst foo =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "interface x `x(`   useFoo( $a$b( '",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function* foo new  Bar() foofoo( \"a\\\"b\" foo( foo(\nreturn  éé( x.foo( // (  // c class Bar",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "type x = foo.bar( return \ninterface xBar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(<Bar /> // c`foo2(function foo(\"a\\\"b\" foo(\n'foo(' enum Bar <Bar.x =>",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar />/* foo( */function foofunction * foo\n\"unterminated foo( function foo x.foo( `x(` \"foo(\" * foo\n // c \"a\\\"b\" foo( <Bar> <Bar.x \"a\\\"b\" foo( x",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "type x =\nimport \nfunction foo( \t} fromfoofoo(let x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "type x = 'foo(' x.foo( .bar( } return  \"\n/* foo( */\"foo(\"{function* foo.bar(class Bar{\n)<Bar\t",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "bar()'\tfunction foo\n{ <Bar /> export * from \"m\"\nawait function* footype x =var  xfoofoo(\"unterminated foo(* foo(\nlet x ='var  xreturn xfoo($a$b(interface x",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "*\n\"{\nfunction * foo class Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "type x =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "('it\\'s' x(const foo =<Bar\tfunction foo\nexport * from \"m\" \" type x = 9x( ﻿\n} fromclass Bar=>",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function* foo\"foo(\"function foo\"foo(\"const foo =function foo\n'foo(' function* foo } <Bar>   `x(` foofoo(\néé(=>﻿\n\"foo(\" function foo => new foo x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "export {_x(* foo(\n\"foo(\"`.a$b(``x(`",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "import  ) ' const foo =\n'\"unterminated foo(function * foo/* foo( */﻿function * foo.bar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "Barclass BarBar/",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/* foo( *///function* foo{éé(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "useFoo(//foo(\"unterminated foo(=>\nconst foo = foo <Bar /> \"a\\\"b\" foo( 'it\\'s' x(\n\"unterminated foo( useFoo(\nfoo2(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "import  xfoo( \"a\\\"b\" foo(\na$b(\"unterminated foo(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "enum Bar foo.bar( { ﻿ bar( let x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "/=>\n} fromx.foo(\"a\\\"b\" foo(foo﻿",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "9x(//\n<Bar.x\n{foo2(\"﻿",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "} from type x = $a$b( bar( export * from \"m\"\na$b(  /} fromfoo2(\nawait Bar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum Bar*\t",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "new foo;)<Bar /> foo (\nawait  useFoo(    <Bar.x éé(\n.bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "`x(`<Bar />return  interface x\n\"a\\\"b\" foo( interface x    ' function * foo foofoo( _x(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()/é(\"new  Bar()\n{function * foo$a$b( // cawait foo\n/ bar( \r { 9x( .a$b(",
+  "symbol": "foo.bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\t var  x function foo\nuseFoo(<Bar\tlet x =\n\"\t\nbar(function* foofunction foo(const foo =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ";function fooawait 9x(\n.bar( \" \"unterminated foo( foo(   \n\" * foo( .a$b( xfoo( éé( function foo ;",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "foofoo(function* foo$a$b(\n\"interface xexport {class Bar{éé(\n  useFoo(foofoo(<Bar\ta$b(const foo =",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "new  Bar().bar(}\n=> <Bar />\nconst foo =9x(/* foo( */`<Bar />useFoo( foo (\nawait foofoo(new  Bar()",
+  "symbol": "Bar",
+  "lines": [
+   1,
+   2,
+   3,
+   4
+  ]
+ },
+ {
+  "content": "\"a\\\"b\" foo(function foo(  /\n'it\\'s' x(\n;//\n<Bar>",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "foo.bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "_x(class Bar foo (\"=>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "enum Bar\nBarfoo(export * from \"m\"interface x\"\nnew  Bar()bar(9x(\n   ; \"unterminated foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ") \\\n=>new  Bar().bar( */* foo( */\n(foo.bar('it\\'s' x(function foo(",
+  "symbol": "foo.bar",
+  "lines": [
+   2,
+   3
+  ]
+ },
+ {
+  "content": ")\n\"a\\\"b\" foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "}* foo(.bar(var  x\nfoo<Bar\tawait Bar;\"unterminated foo(\nfooBar  foo (éé(type x =",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "content": "\"unterminated foo(éé(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "type x =foofoo(}a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "return //$a$b(let x =<Bar.x\n\"foo(\"*'foo('\r'it\\'s' x(9x(foofoo(\nBarexport {type x =type x =} from foo (\n// let x = é( foofoo( } from é(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "let x =foo.bar(\r<Bar\t'it\\'s' x(\nimport ",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "'foo(' .a$b( ( /\n\"foo(\\`x(`Bar  xfoo(\n  $a$b( * x function foo `  foo (",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\r\n  9x( `x(`",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ".a$b( // c",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'function foo(Bar\"class Bar<Bar />\nfunction foo( // \"foo(\"\n} from return  .a$b(    function foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "footype x =/.bar(xfoo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "=>\nexport { foo } from \"m\" \"a\\\"b\" foo( { function foo(    function * foo enum Bar\n}* foo('foo('\"unterminated foo(function fooBar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "éé( * foo(   * foofoo( éé( .bar(\nexport * from \"m\" 'it\\'s' x( class Bar return  return  x.foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "}.bar(useFoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": " foo (let x ='/* foo( */  var  x\nBar a$b( ) type x = export { `x(` } from",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "x\"foo(\"*export * from \"m\"useFoo(foofoo(",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "new  Bar()x\nfunction foofunction fooé(foofoo(/* foo( */\nxfoo(=>function * foofunction* foobar(<Bar.x* foo(\n* \"unterminated foo( \\ foo2( bar(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ";foo2(\"return a$b()\nBar<Bar.xbar(a$b(\n;interface x \n* <Bar.x ; bar( / export { interface x",
+  "symbol": "a$b",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "''it\\'s' x(;function * foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ".bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": " // c useFoo(\n'<Bar\texport * from \"m\"bar(foo(function * fooreturn \nexport * from \"m\" } _x( foofoo( ( ﻿ import ",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "import xenum Bar\"foo(\"{await .a$b(\n<Bar\t <Bar\t let x =\n  xfoo( xfoo( \"a\\\"b\" foo( new  Bar() { .a$b(\n* foo( function * foo _x( foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ".bar(    foofoo(\nimport ) foo (<Bar />\né(﻿\n\t/* foo( */\timport <Bar />",
+  "symbol": "é",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "return  enum Bar\nconst foo =}'it\\'s' x(* foo( foo (.bar(export { foo } from \"m\"\n.a$b(/}xreturn useFoo(`",
+  "symbol": "x",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "}.a$b(* foo(\néé(.bar(;export * from \"m\"new foox",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foofoo(Bar\n\r return  bar( foo2( =>\nexport * from \"m\" foo.bar( export {   var  x <Bar /> function * foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"'it\\'s' x(﻿foo2(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function * foo'it\\'s' x(*\nexport { foo } from \"m\"  ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x( <Bar.x",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "new foointerface xreturn ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\\=>export * from \"m\"}}\n\r} from\n` foo.bar( var  x =>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "=> 'it\\'s' x(  // c a$b( //\nx.foo(function * foofoofoo(\t",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "* type x = .a$b( \t",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": ".bar(\n\"unterminated foo(\"_x(/* foo( */$a$b(\n  foo.bar(function foofunction foo//enum Bar\n9x( ﻿ export { foo } from \"m\"",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "import } from*",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " /\nx<Bar\t﻿\n<Bar>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar />\n\r\"unterminated foo(let x =\nfunction foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "é({  \n<Bar\tconst foo =.a$b(=>return ;",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"foo2(}'\nbar( enum Bar a$b( xfoo( let x =",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\t\nexport { foo } from \"m\"/\\import function foo(interface x/* foo( */",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "' new  Bar() ﻿ `x(` .a$b( /* foo( */ Bar\n<Bar />var  x<Bar\t",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "=><Bar.x\nimport   // c await \n$a$b( export { \t => new foo ﻿  foo (\nenum Bar 'foo(' export { foo } from \"m\" a$b( \t \t =>",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " \nxfoo( new foo function * foo 'foo('",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "await bar(\nfoo.bar( \"unterminated foo( bar( } from x *",
+  "symbol": "foo.bar",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "bar( $a$b('_x(\n<Bar>`",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "` ) <Bar.x {\nfoofoo( function * foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "* foo(\n} from'",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "  ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ")function * foo\n.a$b( { useFoo( Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "<Bar /><Bar\t;function * foo﻿\ntype x =\n.bar( type x = foo.bar(\nfoo ( export * from \"m\" éé( <Bar> //",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(`x(`var  x<Bar />/<Bar>return \n.a$b(\nenum Bar\"a\\\"b\" foo(foo'it\\'s' x(\n\" function * foo  foo ( éé(",
+  "symbol": "é",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "\" <Bar> export { foo } from \"m\" export { foo } from \"m\" \"foo(\"\n ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "await ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foofoo(\"a\\\"b\" foo(a$b(.a$b(interface x",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": ")await const foo =*\tinterface x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"function* foo\n{ /* foo( */\nx.foo( let x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export { foo (éé(\n<Bar.x ( function foo(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "interface x\nexport { foo } from \"m\" / const foo = function foo é( interface x\n// \" 'foo(' .a$b( import  ( x.foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo type x = $a$b( \"a\\\"b\" foo(\nxfoo(<Bar\t`=>\n   foo.bar( useFoo( ; \"unterminated foo(",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "Bar`x(`\n/* foo(\nnew  Bar()<Bar>",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "xxfoo(.bar(x.foo(interface x\n(foofoo(xfoo(éé(export { foo } from \"m\"'it\\'s' x(`x(`\n<Bar\t foofoo(\n=>useFoo(éé(export { foo } from \"m\"'it\\'s' x(export * from \"m\"",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "=> \"a\\\"b\" foo( 'foo('",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "( foo( <Bar> ﻿ ` ; '\né( foo.bar( ` var  x é(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "é( new foo type x =\n9x( \" .bar( /\né(} fromconst foo = ﻿\\\nfoo2(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "export {await =>",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "x.foo(class Barreturn \n9x(var  x \n <Bar\t\"foo(\"(x.foo( .a$b(\n/* foo( */ foo2( `x(` foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " \n<Bar\t\\`x(`\t\n(import $a$b(interface x \r9x(\n// let x = Bar <Bar />",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "foo.bar(<Bar\t'it\\'s' x(function foo\n_x(}new foo\"foo(\"\ntype x =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": " // c \\ export * from \"m\" function * foo let x = \r\n\"unterminated foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */let x =<Bar>$a$b( foo (\n{ ; \\ '\n=>function * foonew  Bar()class Bar{",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "a$b( / * let x = <Bar.x\nfoo.bar( \" } from foo( await     foo\nnew  Bar()9x(function foo(éé(/* foo( */;xfoo(",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "type x =\nexport { foo } from \"m\" .a$b( \t Bar\n`x(`<Bar>{x.foo(\"unterminated foo(\n\t \" {",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "bar( <Bar> function foo( <Bar> \r var  x\n()\"a\\\"b\" foo(foo.bar(interface xé(_x(\n* foo( foo (x.foo(x\"function foo(\n\"unterminated foo( enum Bar * foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()}",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "new foo\"foo(\"<Bar.x)'it\\'s' x(//class Bar\nfoo.bar(import new foo éé(function* foo\nconst foo = class Bar * foo( function * foo \"foo(\" await ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "xfoo(`x(`foofoo(}<Bar\t // c\n{//x=>} fromnew  Bar().bar(\n.bar(   type x =\nfoofoo(foo//$a$b(<Bar>",
+  "symbol": "foo.bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function * foo <Bar\t _x(\n<Bar />    //éé(éé(\nawait =>return function * foouseFoo(a$b(;",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "export { foo } from \"m\" foo( $a$b( foo.bar( /* foo( */ Bar\n'import /\n // cfunction * foo\"foo(\"<Bar.x'foo('",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"export * from \"m\"import function foo(\n$a$b( //\n<Bar> useFoo( foo.bar( var  x a$b(\nxfoo(",
+  "symbol": "useFoo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function foo(<Bar\t type x =\n $a$b(9x(_x(\\\"unterminated foo(function foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " \n}let x =new foo)`",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x( // c{.bar(return =>\nbar(\n foo (type x =",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function * foolet x =  9x(\n)éé(.bar(foofoo(<Bar>foo2(\n\"foo(\" x new foo const foo = /* foo( */",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(xfoo(* foo(/\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "_x(éé(interface x\r\"unterminated foo('it\\'s' x(\ninterface x class Bar\nfunction* foo<Bar />* foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar>/interface x xfoo('foo('",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "a$b(new  Bar()<Bar />interface x\nx<Bar.x//.bar(.bar('it\\'s' x(let x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "const foo =\"\nuseFoo( *\n\"foo(\"\n'it\\'s' x(\"unterminated foo( useFoo(`$a$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function foo(Bar/import type x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar.xnew foo foo (_x(/\nfoofoo(foo2(interface xinterface x\n\r\n\"a\\\"b\" foo(export {﻿<Bar />*.bar(",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "return  \r 'foo(' type x = var  x enum Bar \"a\\\"b\" foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "await  foo(  foo ( 'foo('",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "await const foo =x.foo('﻿export * from \"m\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "x.foo( bar( .a$b( \"foo(\" /\n\"a\\\"b\" foo( foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'\nbar(export { foo } from \"m\"\n`x(` a$b( export { foo } from \"m\" \t éé( } from * foo(",
+  "symbol": "é",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": " // c export * from \"m\" import   foo ( <Bar.x new foo class Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo2(foo.bar(let x =;\n;\"\n.a$b(\rvar  x\nx.foo(xfoo(\"a\\\"b\" foo(\t",
+  "symbol": "foo",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "export * from \"m\"type x =enum Barnew foo\n/9x(let x =useFoo(let x =<Bar\t\nnew foo",
+  "symbol": "useFoo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "<Bar> 9x( const foo = { var  x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"var  xx<Bar>export {\nfunction foo()new foo // cBarconst foo =\n}foox.foo(import ",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function* foox`foofoo(new foo/* foo( */\nbar(function foo(useFoo($a$b( * foo(\n<Bar\t",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": ") } \"unterminated foo( xfoo( <Bar.x\nxfoo2(function foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\rx.foo(\né(`x(`  $a$b(\n'it\\'s' x(* foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "`x(`return (<Bar />interface x//var  x\nBar .bar( <Bar\t <Bar\t\n/'foo('class Bar<Bar.xlet x =a$b(\n\"unterminated foo(/* foo( *///",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "export {\nbar( foofoo(\n\"unterminated foo( new  Bar() *\n\r\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo('it\\'s' x( new foo ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "export { a$b( foo( .a$b( await ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(type x =const foo =export * from \"m\"interface x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar>//\n\" foo( `x(` 9x( function* foo <Bar /> \r",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "enum Bar.bar(\"unterminated foo(<Bar\t\r foo\nuseFoo(export {let x =\"a\\\"b\" foo(",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": " // c/* foo( */\n'  foo (   * function* foo let x = useFoo(\nawait \r}\".bar(return  // c",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "*\\export * from \"m\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(\nfoo.bar(bar('it\\'s' x(a$b(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "var  xconst foo =`",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x \r => new  Bar() useFoo( {\n  /* foo( */\n\"foo(\"éé(function foo($a$b(foofoo({foo.bar(",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "x.foo( new  Bar()(* foo(\nlet x = \\ foo x xfoo( )\nxfoo(\n // c<Bar\t",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "Bar => <Bar /> new  Bar()\n`x(`",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "}\n//<Bar.xé('it\\'s' x(\n<Bar\t'foo('new foo",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function foo(import foo*",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "bar( / 9x(    \"foo(\" let x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "var  x <Bar\t * //  foo ( await  /\néé(foo.bar((enum Barexport { foo } from \"m\"useFoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo2(xfoo(\nfunction foo(return let x =\"a\\\"b\" foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */ \"a\\\"b\" foo( return  <Bar.x enum Bar  \n9x(x.foo(useFoo(\nxfoo( \r `x(`",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "const foo = ﻿\nnew foo interface x \t\nconst foo = /* foo( */\"  $a$b(function foo\n* foo( <Bar\t /* foo( */ useFoo( ' x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "é($a$b(;foofoo(\n=>\nfunction * foo﻿",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "import useFoo(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\r function* foo\n<Bar />a$b(const foo =* foo({foo(import \n//xfoo(type x =let x =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"\nawait  new foo 'foo(' class Bar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\réé(  await é(let x =\nvar  x'it\\'s' x(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "new foonew foo\r\"foo(\"//\nfoofoo(*x.foo('",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'foo('* foo(\rclass Bar\n) return  type x = ) \\\n'foo(' ( new foo export { Bar let x = new foo",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "foo2(\n<Bar\tfunction foo(\"a\\\"b\" foo(foo{",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "var  x//Barx.foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */)\t\n'foo('  foo (",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "a$b( ﻿ await  ( _x(\n(\"function* foo(_x(\nawait \\{",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "return ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function* foo* foo(function foo type x =function foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "function foo\rawait <Bar />'foo('\n.a$b( <Bar> ` ( `x(`",
+  "symbol": "x",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "foonew fooa$b('it\\'s' x(import x\na$b(éé('foo('\n* foo(_x(new foo\"foo(\"export {Barawait ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\r<Bar.x\nfunction* foo`x(`\tfoo(﻿\nfunction foo( return  x xfoo( foo.bar( enum Bar useFoo(",
+  "symbol": "useFoo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "a$b(",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "'it\\'s' x( foo2( a$b( \\ 9x(\n)foo foo (<Bar\t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(     bar(\n // cfunction* foofoo(\nexport { foo } from \"m\"=>new foofunction * foo'﻿import \nconst foo = \"foo(\" foo `x(` /",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": " foo (\n   export {",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(/9x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function foo( foo2( x ; $a$b(\ntype x =bar(\n }=>_x(export { foo } from \"m\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"foo.bar(enum Bar`x(`{foo.bar(foo(\n`x(`foofoo(new fooreturn bar(<Bar\t\"a\\\"b\" foo(\n<Bar>Barbar($a$b(",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "return  \\ \r export * from \"m\"\nfunction fooéé(`x(`",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "xfoo( _x( function* foo _x( \" (\n\t\"foo(\"`\"unterminated foo(foofoo(a$b(function* foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "class Bar\nx.foo(é(bar( $a$b(x.foo(`",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\\ x //\n\r} fromtype x =  export {\n=> { foo( export { foo } from \"m\" <Bar\t Bar\né(enum Bar.bar( _x(",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "/* foo( */var  x\n/* foo( */'",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "a$b(\n<Bar /> import  new foo \\ await  import \nexport { <Bar.x type x = ;\nclass Bar <Bar\t} from",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "}\nexport { foo } from \"m\"xfoo(}\n\rfunction foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "let x = \t useFoo( $a$b( bar( }  foo (\n foo (\"new  Bar()Bar<Bar>\nuseFoo(useFoo(`x(`\nfoo2(} from`x(`import `}",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function* foonew  Bar()foo2($a$b(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "  foo2( $a$b(  \nfoo export * from \"m\" enum Bar let x = / import \n( \"unterminated foo( ` x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "bar(\n(} from\"a\\\"b\" foo( // c\nconst foo =;await ",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "'await \n* foo(bar(const foo =x\nxfoo(function* foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x'\"unterminated foo(<Bar />/ ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "let x =let x =import \nnew  Bar()new footype x =interface xreturn \nBar useFoo(    xfoo(\n;9x(} fromfunction foo(xfoo(\"",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "﻿\nnew fooimport export * from \"m\"_x(.bar(\n*x.foo((.bar(await foo)",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x( function * foo function foo( ` foo2( \"unterminated foo( export {",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "const foo =\nBar\nenum Bar / <Bar>\n\\ \t",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function * foo ( export { foo } from \"m\" import  type x = 'foo(' function * foo\nbar(\nnew foo;function* foo .bar(export {xfoo(\n=> 'it\\'s' x( /* foo( */ /",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "'<Bar\t\rfoofoo(bar(\n﻿foo2(\"foo(\"//interface xbar(new foo",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "'it\\'s' x(enum Baré(\"a\\\"b\" foo(return \"unterminated foo(\né( ' foo.bar( class Bar \" \"a\\\"b\" foo(\n` const foo = ` class Bar\n/foofoo(<Bar\t* foo(\r`x(`﻿",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foofoo(éé('foo('`x(`\nfunction * foo'it\\'s' x(9x(export {)<Bar>\nuseFoo(Bar<Bar.x\rfoo2(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(\t\"foo(\"import =>class Bar\n_x( interface x\nBar /* foo( */\nfoo( foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "* foo(new  Bar()useFoo(\n // c foo( => $a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'foo('é(﻿foo.bar(function* foo\"\n  <Bar>",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "=>`x(`await \n}9x(\n/* foo( */}",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "x.foo(  foo ( import  interface x\n.bar( foo\nnew foo export * from \"m\" enum Bar $a$b( ( <Bar.x \"a\\\"b\" foo(",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "await x.foo(var  xé(\nfunction foo <Bar.x <Bar.x function foo(\n9x( \"foo(\"",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function foo( foo2(\n'foo(' foo export { .bar( Bar\n(/* foo( */\n_x( // cx",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "function foo( <Bar.x Bar a$b( / // function * foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "class Bar \"unterminated foo( *   \nexport {function * foo'foo('useFoo({foo(\n\"a\\\"b\" foo(export { foo } from \"m\"function foo/x.foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "enum Bar<Bar />} from'it\\'s' x('a$b(\n$a$b(function foo(function* foofunction foo(=>_x(interface x\n.a$b(\\class Barfoo(*<Bar>\n.a$b( // c }export { foo } from \"m\"",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(function foo/* foo( */let x =class Bar \n  const foo = foo (/$a$b(\nnew foo foo \t <Bar.x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "  class Bar foo( foo useFoo( é( } from",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x await  bar( export { foo interface x\nenum Barimport ﻿function foofoo2(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "=><Bar.xfoo(\t foo (foo  \nclass Bar$a$b(const foo =\t* foo(export {\nexport {function foo(var  xéé($a$b(\n\"'} fromfoo(/enum Bar`x(`",
+  "symbol": "é",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\\ * foo( ; * * new  Bar()\nclass Baréé(",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "export {  // c * foo(\n return \n* foo(export { foo } from \"m\"}x}return return ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "  function* foovar  x}enum Bar\n\"a\\\"b\" foo(\nclass Bar=> \r<Bar\t",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "9x(<Bar />(\n foo (`x(`foo.bar(`x(`Bar//\nfoo { /* foo( */ Bar bar( function* foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`x(`export * from \"m\"bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "const foo =new foo<Bar />interface x\t\n<Bar> export { é( <Bar\t let x = `x(`\nfoofoo( return  \"unterminated foo( foo( export { export { foo } from \"m\" $a$b(",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "function * foofunction* foo<Bar.x.bar(xfoo(Bar\nimport } from\nlet x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "await .a$b(\"unterminated foo(\n` function foo( => .bar( é( enum Bar",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "foo( interface x\nfoo(Bar",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { new foo 'foo('\nimport x\ninterface x \t * foo( / \"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " // c.bar(\n9x(\n // cfoo( x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "enum Bar_x(\r}",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\\/* foo( */<Bar\tfunction footype x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "} fromreturn \nfoo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\tnew  Bar()export * from \"m\"}\nfoofoo( foofoo( '  // c\n(\rfoofoo(<Bar>export {//",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo.bar( x.foo(\n\"a\\\"b\" foo(class Bar\"foo(\" // cxnew foo\nfoofoo( new foo x.foo( * foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "type x =\n\t <Bar.x\n_x(function foofunction* foo\"a\\\"b\" foo('it\\'s' x(import ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\" _x( => type x =\n\"unterminated foo(//enum Bar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ".bar( 'it\\'s' x(",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "let x = \"foo(\" let x = import    interface x foo\n\"a\\\"b\" foo(  // c <Bar /> x 'foo(' useFoo(\nfoofoo('it\\'s' x(bar(import ('foo('",
+  "symbol": "x",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "let x =foo.bar(  \n/* foo( */* \né(foo2(﻿xfoo( \n; )    import  //",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "﻿ class Bar 'it\\'s' x( return \n\"unterminated foo(\nx\nuseFoo(`x(`\\interface x",
+  "symbol": "useFoo",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "a$b(bar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\" \"foo(\" await   foo ( let x =\nreturn function foo(\nfoo  // c",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "'\t/* foo( */﻿\n$a$b( } ) bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar>",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo=>.a$b(`x(`* foo(useFoo(function * foo\n( {",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(xlet x =new foofoo(\nfoo.bar(import useFoo(<Bar.xfooexport * from \"m\"\nfoo=>.a$b(a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`const foo =\nexport { foo } from \"m\"    foo.bar( _x( ( \\ <Bar\t",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()await \nawait  $a$b( xfoo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "class Barnew  Bar()\nclass Bar /* foo( */ => // \"unterminated foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function foo\n_x( let x = bar( let x = } class Bar \t",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "interface x ) bar(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\\/* foo( */=>",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "{﻿new  Bar()'it\\'s' x(é( foo (`x(`\n  \r\nimport \nBar <Bar /> éé( useFoo( 'foo('",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "interface x<Bar />",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar />_x(foo(\nconst foo =\n`foo2( // c(let x =/",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"interface x{\nlet x =*new  Bar()x.foo((\n9x( \"foo(\" foo.bar(\n/* foo( */ export {",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'type x =let x =//.a$b(\n*class Bar.bar(foo/* foo( */\n.bar(function foo(<Bar />'it\\'s' x(\n<Bar\t class Barawait '.bar(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\" } \t foo.bar( $a$b( bar(\n`x(`'/* foo( */\ninterface x/* foo( */ foo ('it\\'s' x(\n;export {  let x =foolet x =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "var  x/function foo(`x(`9x(await export {\nconst foo =",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "return \n=>await ",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "xfoo()$a$b(function fooéé(\nxfoo( export { foo } from \"m\"\n\"a\\\"b\" foo(* foo('it\\'s' x(class Barfoo(return /",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "import export {new fooa$b(/* foo( */'\n} from <Bar />\n' ﻿ } }",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\\return import type x =interface xtype x =\nx.foo( => new foo <Bar>\n`<Bar.xfunction foo( \\\nfunction foo(\"foo(\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "(bar('foo('bar(await /xfoo(\n}useFoo(foo(export * from \"m\"interface x<Bar\txfoo(\n'foo('",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\r  \nexport {.a$b(foofoo(enum Barimport \n foo (",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "class Bar<Bar />foofoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "import \"a\\\"b\" foo(\nxfoo(﻿export { foo } from \"m\"  ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "class Bar*}\nxfoo(x.foo( foo (* foo(const foo =new fooconst foo =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "enum Bar)bar('it\\'s' x(a$b(\nlet x = type x = 9x( <Bar.x await  var  x {\n`x(`",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "return (_x(9x(/foo.bar('\nreturn <Bar\t`<Bar.xéé(\n.a$b(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "  ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\r \"unterminated foo( _x( * foo(  \n(bar()<Bar.x",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": " foo ( function foo(\nnew foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ".bar(\n\"{",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "'/* foo( */\"unterminated foo(.bar(\nenum Bar <Bar> éé( function* foo var  x éé(\n.a$b(function foo\nfoo2(new foo`xfoo(.a$b(\"foo(\"﻿",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "*xfoo('it\\'s' x(import function fooenum Bar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ".a$b(type x =await class Barxfoo(\nimport  ( <Bar\t x.foo(    enum Bar function * foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "xfoo(\"é(//)function foo<Bar />\n'foo('\na$b( export { foo } from \"m\" a$b(",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "foo((* foo($a$b(=>\n`x(`useFoo(;.a$b(class Bar'",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "new  Bar()\"foo(\"é(_x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\t foofoo( foo <Bar.x\ntype x =x.foo(let x =foo.bar(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "foo( (",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"\t}/* foo( */<Bar\t\n `x(`\nvar  x\"x.foo(new  Bar()\nnew  Bar()",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "var  x\nfunction foo'useFoo(* foo(\n'it\\'s' x(.a$b(export * from \"m\"\néé(x.foo(x.foo(foo(function foo",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ".bar(\n\t.a$b({let x =\\.a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "x.foo(9x(export {useFoo(foofoo(*bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": ";\nx.foo( \" ` interface x x.foo(\nlet x =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo foo ('it\\'s' x(import \n) function* foo \"a\\\"b\" foo( 'it\\'s' x( éé(\nfunction fooé(xx.foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "=>\n//new foofunction* foo<Bar.x` ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'foo(' \"unterminated foo( .bar( 9x( foo.bar(\n<Bar />useFoo(\n foo (}enum Bar/",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "'foo('foofoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "return * foo(interface x\n  * foo( import \n function * foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "useFoo( a$b( useFoo(   \nclass Barexport {'it\\'s' x(foo(﻿\né(éé(* foo(/new  Bar()",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "//export * from \"m\"éé(\rfunction foo(\nlet x =const foo =function* foo$a$b(\n\r await  export * from \"m\" function foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "* foo((* foo(let x =  import \n; _x( \"foo(\" .a$b( let x = \" type x =\n\"x.a$b( // c\n﻿ bar(\"foo(\"import xfunction foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\")const foo =foo2(<Bar>﻿\nnew  Bar() enum Bar .a$b( } } )\n) new foo .bar( $a$b(   function* foo Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo( /\ntype x =).bar(/* foo( */bar(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "=>=>_x(xfoo(bar(foo<Bar>\nclass Bar;",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": ")\n*new  Bar()\ruseFoo(\n* foo($a$b( import function foo('it\\'s' x(\n* a$b(* foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "export {é(function * foofoo(\nnew foo=>foo( x<Bar />useFoo(\nfoo(",
+  "symbol": "useFoo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": ")foofoo(useFoo(\nfoo( ; é( class Bar\n\"a\\\"b\" foo(new foo'foo('\n\\$a$b(} fromexport { *_x(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "﻿await export {} from`x(`<Bar\t;\n  xfoo(}import \n.bar(export * from \"m\"let x =\nuseFoo( export * from \"m\" bar( new  Bar() .bar( import  '",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "}   return  } from\nBarfunction foo\n﻿<Bar\t // cbar(x.foo(\n<Bar.x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "`foofunction foo({var  xfoo2(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo(return .a$b(\"a\\\"b\" foo(/* foo( */<Bar.xfunction foo",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "﻿///;*.bar(\nexport { foo } from \"m\"\n<Bar\t a$b( <Bar /> 'it\\'s' x( import ",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "$a$b( /* foo( */ function foo foofoo( => /\n foo ( export * from \"m\"",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "interface x ) \" function * foo xfoo( * foo(\nfoo.bar( xfoo(function foo(export {function foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\t )   ) foo( export { <Bar />",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t )\n.bar(*\r",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "$a$b( \t  // c * foo( foofoo( await ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\t.a$b(foofoo(\r\nclass Bar`_x(<Bar\tbar(  \né(*\n`x(`éé(foo.bar(.a$b(xfoo(await <Bar>",
+  "symbol": "é",
+  "lines": [
+   3,
+   4
+  ]
+ },
+ {
+  "content": "\té(_x(=>_x(<Bar>\nnew  Bar() * foo(\"foo(\"<Bar\t\"unterminated foo(\n* foo( interface x ` return  export * from \"m\" \t \"a\\\"b\" foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar />\n(\"a\\\"b\" foo( \ntype x =new foo`xfoo(\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar> bar( é( foo2(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "﻿\na$b( export {  // c \r \t foofoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export {class Bar<Bar.x_x(/function * foo*\nvar  x _x(/a$b(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "var  xfoo(\nexport { foo } from \"m\"a$b(;\n<Bar\t",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "﻿enum Barfoo2(<Bar.x\n9x(await x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "'foo('`x(`\n\"a\\\"b\" foo( return  \"unterminated foo( \\ foo2( éé(\n // c  // c foo /* foo( */\n\\foo2(}  new  Bar()",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "/\n* foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\\import <Bar.xnew fooclass Bar\n.a$b('it\\'s' x(",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "(\\{Bara$b(_x(\n<Bar\t<Bar\t}function foo()* foo(\"foo(\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ")await \"a\\\"b\" foo(}xexport {\n`x(` foo(\n'",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "await ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo \"unterminated foo(\nconst foo =a$b(* foo(` // c  \n \timport var  xBar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar\tlet x =`x(`function* foofoo.bar('it\\'s' x(*\né(function * fooa$b(a$b(x.foo(/* foo( */\n{",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "foo2( \"a\\\"b\" foo( 'foo('\ninterface xfunction foo(;* foo(\"foo(\"\rfoo\n} new  Bar() foo.bar(    useFoo(\n // cawait ;(function * foo.bar(useFoo(",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\"''\n.a$b(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "return 9x(\"a\\\"b\" foo(.a$b(\n\"\n}\n/* foo( */éé('foo('class Baréé(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\t \\\nconst foo = /* foo( */ =>\nimport export { foo } from \"m\"export {",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'foo(' useFoo(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "interface x<Bar>export { foo } from \"m\"await let x =.bar(foo(\n<Bar>*﻿// \nimport 'foo('function* foo.a$b(*\nfunction foo{é('foo('  a$b(new  Bar()",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\" `\nlet x = 9x( foo.bar(\ninterface x* foo(_x(éé(",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function* foo*a$b(foo.bar(class Bar",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "//* foo(* foo(/* foo( */BarBarx\nfunction foo(é(}<Bar.x'foo('class Bar  \nfunction * foo(function foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "let x =_x(''foo('enum Bar\"interface x\n\"foo(\" //",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()\nnew  Bar()'it\\'s' x(foo.bar(let x =$a$b(* foo(new foo\nbar(<Bar>\n=> x.foo( foo( <Bar /> function foo( enum Bar",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "xfoo2(new foo\"foo(\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "x.foo( new foo foo2(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "  'foo(' / * foo( enum Bar\nbar(\n.bar()await new  Bar()export { foo } from \"m\"}<Bar />\nreturn  'it\\'s' x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "=> new  Bar() /* foo( */ ) <Bar /> await  (\nbar(new  Bar()",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "} from} from",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "{ export { foo } from \"m\" foo( foo( //\n<Bar> <Bar.x ( foofoo( $a$b(\nx.foo(//\nfoofoo({`x(`",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foofoo(﻿return function foo(new foointerface x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "xfoo('\"a\\\"b\" foo('it\\'s' x(\nfunction* foo<Bar.x)x\nfoo.bar( * foo(",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "var  x\nfoofoo(\treturn /\"xfoo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "{",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "new foo\nbar( _x( enum Bar",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": ".a$b(9x(new  Bar()\n // c; }.bar(export * from \"m\"\nclass Bar enum Bar <Bar> var  x .a$b( useFoo(\nbar( é( function * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "a$b( // cawait await \"foo(\" // c\n  // c<Bar>; \nconst foo =(await _x(\"Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function * foo* foo(////\n''foo('﻿﻿'",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo'\n<Bar>Barexport {export {<Bar.xinterface xnew foo\né(\nexport * from \"m\"function foo(function foo `const foo =type x =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ".a$b('{'enum Bar<Bar />foo(\né(9x(let x =* foo(import \n\\<Bar />)\nxfoofoo((await ",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "useFoo( // c//\t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "// ( import  <Bar.x\n   é( .a$b( const foo = new foo export { foo } from \"m\" }",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "   \" * foo( function * foo \"a\\\"b\" foo( 9x(\n<Bar.x{'it\\'s' x(\"export {useFoo(\n \n<Bar.x * import  * foo( interface x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "type x = \\ ﻿\n9x(useFoo(  foofoo( (return \n{`\t\n<Bar />",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "x.foo(\"foo(\"useFoo(\r.bar(*",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`x(`\n<Bar />function foo(function* foo} fromawait const foo =<Bar />\n\"unterminated foo(﻿\nx _x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function * foo   ) bar( bar(  foo ( foo2(\nconst foo =.a$b(class Bar  foo`type x =\n/* foo( */ /* foo( */ new foo ( 'foo(' function * foo function foo\nfoofoo(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "/ .a$b( export * from \"m\" ` éé(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "*\"foo(\"/xtype x =foofoo(}",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo2(\n<Bar />$a$b('foo('a$b(//await function foo\n﻿ 'it\\'s' x( let x = a$b( ( return  foo",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "`<Bar\t(bar(export {_x(\n\"foo(\"var  x\nfunction * foofoo.bar(",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar />class Bar9x(\n}\nbar(Bar`x(`interface x<Bar />class Bar\nconst foo =<Bar.xfoo",
+  "symbol": "foo.bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function* foo<Bar\timport export * from \"m\"\nfunction foo\rx\n* foo(import \n\"foo(\" function foo new  Bar() * useFoo( _x(",
+  "symbol": "Bar",
+  "lines": [
+   1,
+   4
+  ]
+ },
+ {
+  "content": "éé(interface x\na$b(foo.bar(\n\t   a$b(",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": ".bar({type x =<Bar>{}\n<Bar />    / foo2( return \n\"type x =import  foo (\nimport  * interface x { export {",
+  "symbol": "Bar",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "const foo =import new  Bar();`x(`new  Bar()",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "a$b(\"a\\\"b\" foo(foofoo(﻿  let x =\na$b( var  x /* foo( */\n) \"\nenum Baré(useFoo(",
+  "symbol": "useFoo",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "( x.foo(\n{ x.foo(`/foo2(foo.bar(\ninterface xclass Barexport * from \"m\"=>\n.a$b( foo (",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"9x(\n\"foo(\"`x(`(import \n/* foo( */}function foo(﻿\nxfoo(\"a\\\"b\" foo(  {",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\t'foo('=>\nnew  Bar()'foo('`.a$b(new  Bar()$a$b(foo(\nvar  x.bar(\n\\''it\\'s' x(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "* foo(\r'it\\'s' x(\na$b(\"foo(\"foo(<Bar>\nfunction foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"{<Bar.x\nfoofoo(* foo(.bar(﻿",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"}enum Bar foo (interface x `x(`",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t useFoo( a$b( \r \"unterminated foo( ;\nconst foo =$a$b(export * from \"m\"interface x",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "`x(` new foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "`x(`\"foo(\"bar(class Bar\n<Bar />\"unterminated foo(export * from \"m\"<Bar.xenum Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "<Bar />export {import 9x(<Bar />\n//\n\"unterminated foo(\nxfoo(a$b(xfoo(",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": " // cfunction * foo \n.a$b(a$b(Bar`x(`",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "$a$b(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "éé(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo(xfoo(<Bar.xfoo(\n9x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "await new  Bar() .bar(.bar(/* foo( */new foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "class Bar*}.bar(class BarBar\n'foo('await import function foo(é(/* foo( */}",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar.xfunction foo(export {\nfoo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar>x'it\\'s' x(;new foo\n/* foo( */var  x",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "new foofunction foo.a$b(xfoo(_x(\nenum Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export {'it\\'s' x(type x =\rexport * from \"m\"<Bar\txfoo(\nfoo.bar(  foo ( new foo ﻿\n<Bar\t/' // c\n(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "return \né(foo.bar(<Bar />\\éé(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "useFoo(return new  Bar()_x(\t\"a\\\"b\" foo(é(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function foo( foo( \r foo2(\nxfoo(foo.bar(<Bar\t=>\nfoofunction foo(\n﻿\\{bar(interface xbar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "x useFoo( foo( useFoo(   foo2( interface x\n﻿",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "' ' .a$b( var  x x.foo( new  Bar()",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "* foo( foofoo( interface x function foo\n(useFoo(\n_x(﻿ ",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function foo('it\\'s' x(//\"_x(\n} from<Bar />\n'it\\'s' x(type x =`foo2( foo (\n//*;foo2(<Bar /> foo ('it\\'s' x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "let x =<Bar>function foo\nfunction foo(a$b(enum Barxfoo(\n'it\\'s' x(﻿\"unterminated foo(\n<Bar />var  x",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\tfunction* foovar  x<Bar\t(\nxfoo(<Bar\t}\nuseFoo('foo(';\tfoo2(\r\n'it\\'s' x(<Bar><Bar.x//export * from \"m\"x",
+  "symbol": "x",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "export { foo } from \"m\"export * from \"m\"foo(\nreturn function * foovar  x\"/function * foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "}\nfunction foo)`x(`await await a$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ";x.foo(x.foo(\n( 'foo('",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "var  x \"foo(\" function* foo\nfunction foo(export {const foo =<Bar\t",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "( export { } from `x(` 'it\\'s' x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "_x( } export { Bar foofoo( _x( foo(\n\"foo(\"x<Bar.x'it\\'s' x(\"a\\\"b\" foo(<Bar\ta$b(\nfunction* foo)return //'foo('var  x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "{ <Bar> <Bar\t function* foo  // c *\nlet x =new foo*",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function foo(\n$a$b( ) var  x \"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "new foointerface x\nfunction foo(foo({export {foo(\n<Bar />",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "'/* foo( */<Bar.x \nvar  x '  foo ( é( <Bar\t x.foo( \"unterminated foo(\nlet x = function foo( \\ \"a\\\"b\" foo(",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "foo(} from _x(  <Bar>",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "import \"unterminated foo(<Bar />type x =function * foofoo2(\n} from\na$b(foo(class Bar'foo('Bar\n﻿<Bar>'foo(''} from",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "'it\\'s' x( xfoo( function foo $a$b( foo  foo (",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "a$b(\ninterface x\nexport * from \"m\"import 'foo('",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function * foo _x( // xfoo( foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(\nfoofoo(interface x\n<Bar.xconst foo =foo\né( enum Bar    `x(` \"foo(\" enum Bar foo2(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "return \n// \t import  \r interface x Bar\n foo (class Barreturn /foo(} from",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " // c \" ( <Bar>\n \n\txfoo(foo(} fromreturn `x(`\t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "interface xbar(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function* foo\nbar(bar(}.bar(<Bar\tfunction * foo",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "<Bar\t } from\n} fromfunction * foo\"foo(\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "var  x9x(function fooxfoo(enum Bar;\n ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\t<Bar.x // cconst foo =function foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\t const foo = xfoo(\n  class Bar foo.bar( 'foo(' }\n\t)interface x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "bar(foo.bar(\"*;//",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "xfoo( } from .bar( \\ foo.bar(\n  ; =>\nbar(foo(\\/x.foo(\n'",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function* foo﻿`\n import x\nenum Bar\\",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "é((foo(\"unterminated foo(é('\nawait  export {export * from \"m\"/.bar(\n'",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "let x = await  await  foo( \"foo(\" Bar\nimport ''foo('_x(\nfoofoo(Barawait bar(/\"\nfunction foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(foofoo(;enum Bar\n\"unterminated foo( ` interface x\n` return  bar( export { interface x function foo( =>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "$a$b(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ";\r'foo('}$a$b(import \n/* foo( */ foo (/\"a\\\"b\" foo(interface x<Bar\t$a$b(\nfoo( function foo(    return  class Bar\n<Bar>export * from \"m\"",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "{ //",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(* foo(xfoo(\"a\\\"b\" foo(a$b(\n\"a\\\"b\" foo( // 'it\\'s' x( 'it\\'s' x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "} from_x(}* foo(\n'éé(* foo()(* foo(\nBar // _x( \"unterminated foo(  // c\n<Bar.x",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "\r $a$b( / foo2( x _x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "type x =\n* $a$b( } ' \"unterminated foo( var  x .bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "enum Barvar  xreturn \n9x(const foo =<Bar>\"\"unterminated foo(\n<Bar>\\\"a\\\"b\" foo(\"_x(xfunction foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x let x =\n\"unterminated foo(`function fooxfoo('await enum Bar\nnew  Bar()é(}\t﻿=>const foo =",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "var  xenum Bar foo (\n﻿\n\"//\nfoofoo( import  } from foo new foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "$a$b(} frombar(\n<Bar /> }(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "  a$b(}$a$b(;\nclass Barvar  x\n\\import 'it\\'s' x(x.foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "; function foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "﻿\nimport let x =new  Bar()new fooxexport * from \"m\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "﻿\n<Bar> foo (\t'foo(')\n'it\\'s' x( // `x(` return  'foo('",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'foo(' foo2( <Bar /> xfoo( Bar )  // c",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "(class Barvar  x<Bar>éé((\nfoo2(\n\"foo(\"('it\\'s' x(export {'it\\'s' x(`x(`",
+  "symbol": "x",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "<Bar\t var  x \\\n   // c new  Bar()  // c new  Bar()",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "﻿é(x9x(foo(<Bar />",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\"foo2(export { foo (\nfunction* foo // foo( interface x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "  var  xfoo(é(\nfoo<Bar.xé(\n'it\\'s' x(<Bar.xfoo(\nx.foo(export { foo } from \"m\"<Bar.x\"a\\\"b\" foo( foo ('it\\'s' x(class Bar",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "(class Bar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "'foo(' interface x\texport { foo } from \"m\"\n* foo( Bar function foo  // c Bar type x = <Bar>\nexport {",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "'bar(/* foo( */_x(function fooexport { foo } from \"m\"  \nBar<Bar.xnew foo\nBar foo ` \"foo(\" return  /\n//foo.bar(return ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */ foofoo(\nfoo2(new foofoo(export * from \"m\"const foo =class Barexport { foo } from \"m\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "/<Bar\t\né(\"unterminated foo(`x(`",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "return  let x = 'foo(' new  Bar() return \nfunction foo(  // ctype x =} fromvar  x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".a$b(} from",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar>  // c  \nfoofoo(\nnew  Bar()'it\\'s' x( <Bar\tfunction foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "class Bar .bar( * foo(\n;enum Bar/* foo( */function foo(await ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\"\nfunction * foo .bar( .bar( ) bar( foofoo(\nexport { foo } from \"m\" const foo = 'it\\'s' x( \\ (\n_x( => a$b(",
+  "symbol": "a$b",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "interface x\"\na$b( export { foo } from \"m\" ﻿ function * foo function* foo enum Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "'\nfunction foo\"unterminated foo(9x(\\* foo(let x =*",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "new  Bar() // function foo ; \t   function foo(\n{'foo('\"a$b(9x(foo(\nbar(`{<Bar>\n foo ( // export * from \"m\" await ",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "export {\n // c ;\nfunction* foo<Bar>function* foo\nreturn  \\ * foo( } /",
+  "symbol": "foo",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "type x =\nBar foo (<Bar>a$b(\"=>$a$b(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "'\n'foo('é(\nlet x =\"foo(\"class Bar",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "x\n` export { foo } from \"m\" \r\nfoofoo(   x\n // cawait ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "a$b( bar( useFoo( `",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar />'function foox\néé(9x(useFoo(  \nfunction* foobar(foofoo(`x(`function * foo  ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(\nexport { foo } from \"m\" let x =\n<Bar\txfoo(function foo<Bar>",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "import \nlet x =xx.foo(/* foo( */x'it\\'s' x(Bar\n<Bar>`",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo( foo (\\=>éé(\n{enum Bar{<Bar /> foo (new foo\n<Bar />é(* foo(xfoo(} froma$b(=>",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "enum Bar\nenum Bar\nBar function foo( <Bar>\n'é(;",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\tfoo\r  \"unterminated foo(\n'foo('/* foo( */return import new foo\nxfoo( function* fooimport ** foo(\t\n\"unterminated foo(éé(//const foo =foo(export {type x =",
+  "symbol": "é",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "` foo foo \"unterminated foo( interface x\nfoo2(\nfoo2(<Bar />foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "bar(useFoo(  foo (\"unterminated foo(\n* ﻿ <Bar\t",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "Barinterface ximport ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " /* foo( */* foo(.a$b(class Bar",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(Bar\"foo(\"x\nx import  export {   \n=>* x.foo({new  Bar()await \n\"foo(\"a$b(\"'",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "foo.bar(new fooawait x\n/* foo( */xfoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(\n.a$b( foo2( <Bar.x \\",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\r<Bar.x\"export * from \"m\"enum Bar\n( useFoo( * bar( await  (   \n<Bar /> function* foo\\",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum Barconst foo =useFoo(\nfoo.bar( x.foo( foo(",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "/* foo( */`x(` foo ( foo (}function * fooBar\nfoo($a$b(export * from \"m\")foo.bar(_x( // c\nnew  Bar()foo2(\néé(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo( import \ninterface x<Bar.x\n'\ntype x ='foo('",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ".bar( await  foo( bar( 'foo(' {",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar>/* foo( */=>'it\\'s' x( <Bar\tx.foo(\n\\",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "}function foo(export {<Bar />\r{a$b(\n foo (enum Barreturn \n(",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "export { foo } from \"m\" x a$b( ﻿ useFoo( => function* foo\nnew foo﻿foo.bar(export * from \"m\"éé(foo2(\ntype x =\nfunction * foo foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\t\n\t'it\\'s' x(new foo(*\n(* foo(return \nfunction* foo} from'it\\'s' x(foofoo(",
+  "symbol": "x",
+  "lines": [
+   2,
+   4
+  ]
+ },
+ {
+  "content": "foo { / _x( éé(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "interface x\n)type x =\n\t<Bar>\n* useFoo( a$b( foo( \" import ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " (",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`x(`=>\n}foo2(interface x'\nx await  x \t bar(  \nfoo(\"* foo( \"(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\" `  foo ( x } from interface x\n'  type x =new foo\n xfoo(} fromexport { foo (\n  9x(class Bar ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "{﻿x.foo(\n' => class Bar new foo ' }\n foo ( 9x( enum Bar { .bar( $a$b(\n`x(`foo{ foo (} from",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\\const foo =\"fooé(<Bar />\n\\ ) new foo useFoo( <Bar.x / x.foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "await  éé( function foo foo( await  export {",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "(;é(///* foo( */foo\n\\foofoo(<Bar\ttype x =function foo(<Bar />new  Bar()\nfooa$b( // cconst foo =interface x)bar(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "const foo = ﻿ \"foo(\" \"foo(\"\nfunction* foo\t} fromexport { foo } from \"m\"xfoo(\n9x( export { foo } from \"m\" 'foo(' foo2(\nexport * from \"m\"x.foo(await ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "new  Bar() export * from \"m\" await  <Bar> .bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "_x(é(é('foo('\nx a$b( ( \r foo( <Bar\t }\n\t\"foo(\"useFoo(\rfunction foobar(\nvar  x \"a\\\"b\" foo( foo(",
+  "symbol": "foo",
+  "lines": [
+   2,
+   4
+  ]
+ },
+ {
+  "content": "let x =})new  Bar()foo.bar(*",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "useFoo(var  xvar  x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "return export {<Bar\tfunction * foo\nx.foo( ` ; 9x(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x\nexport { \r _x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "éé(foo((enum BarBar\nfunction * foo=>\"foo(\"} // c9x(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`x(` <Bar\t `\nexport * from \"m\" const foo = return ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "x<Bar\tinterface x\nnew foo \t  \nfunction foo* foo(`x(`.bar(function foo\"useFoo(\n  \r <Bar.x var  x )",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "return ''it\\'s' x({\nconst foo =foo/* foo( */<Bar>foo.bar(\n  foo2( x.foo(\nnew foo",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "_x(  =>interface xfoovar  x\n`x(`\"foo(\"let x =export {\nfunction* foonew foouseFoo(} from\nx // c foo (* foo(export * from \"m\"\\",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo.bar( <Bar> =>",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "/* foo( */`\"foo(\"éé(new foo\nfoo(\n}/* foo( */new  Bar()'it\\'s' x(}x'",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "interface x .a$b( import \nfoo2( \" é(   é( }",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "`x(`)=>} from\nBar function * foo export { foo } from \"m\" foofoo(  // c export { ;",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar />'it\\'s' x(function* foo\né( 'foo(' } a$b( Bar ;\n9x( 9x( foo /* foo( */ await  a$b(",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "function foo 9x( * \"a\\\"b\" foo( (   <Bar.x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */﻿class Barfoo.bar(éé(\nfunction * foo new  Bar() * interface x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "interface x export * from \"m\"\n/* foo( */export {foofoo(\"foo(\"* foo(\nawait \r\"foo(\"function foo(function foo(type x =export { foo } from \"m\"\n$a$b(xfoo(a$b(\"unterminated foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " // c /* foo( */  // c <Bar.x \"unterminated foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "/interface xbar()bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "bar(\"a\\\"b\" foo(\"unterminated foo(const foo =export * from \"m\"﻿<Bar />",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */<Bar />;function* foo\"a\\\"b\" foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "=>type x =\nfoo2(bar(﻿\n﻿ ( useFoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function * foofunction * foo\"a\\\"b\" foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " // cé({function foo(_x(.a$b(var  x\na$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "useFoo(\nvar  x\\useFoo(`x(`\n<Bar />xfoo(<Bar.xbar(é(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "bar( function * foo '",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "`useFoo(\"a\\\"b\" foo(\n\"unterminated foo(`x(`éé(\tfoofoo(\n\r éé( function foo(",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "class Bar\rBar}/* foo( *//xfoo(\nfunction * foo foo2( <Bar.x _x( \t `",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "(const foo =a$b({\n<Bar\t  foo ( a$b( / \\\nfoo.bar( export { interface x 9x( .bar( .a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x.a$b(  function foofoo(9x(\n\"foo.bar()/* foo( */foo.bar(await return ",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "type x =\nfunction foo(_x(//} from)export * from \"m\"",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "'    type x = x x\nfoo2( foofoo( '\nenum Barx.foo(new foo",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "<Bar.x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " foo.bar(let x =return ;export * from \"m\"\ninterface xnew  Bar()let x =function * foofunction foo\n* foofoo( ; foo x.foo( \" \r\n*",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "$a$b(;type x =var  xfunction foo((",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "/<Bar />'} from",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "   foo( xfoo(\ninterface x(;var  x<Bar\t\n\"unterminated foo(/* foo( */",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "export * from \"m\" new  Bar() function foo( /* foo( */\nclass Bar}class Bar\r foo (\n\"unterminated foo( useFoo( /* foo( */ .a$b( }",
+  "symbol": "foo",
+  "lines": [
+   2,
+   3
+  ]
+ },
+ {
+  "content": "foo2(/* foo( */\"foo(\"  'foo('\ntype x = function foo 'it\\'s' x( \"unterminated foo( x.foo( \"a\\\"b\" foo( await \nx.foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "9x( ' \\ / é( function foo\n$a$b(* foo(<Bar />a$b(foo2(\n/* foo( */ 'foo(' $a$b( interface x  foo (\n(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar>('foo(''foo('éé({\n{export { foo } from \"m\"<Bar.x\r=>export { foo } from \"m\"\\\n\t/* foo( */let x =",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar /> \"a\\\"b\" foo( function foo( } from useFoo( \"a\\\"b\" foo(\n})new foo\"'var  x\nfoo2(}new foo\r\n'foo('",
+  "symbol": "foo",
+  "lines": [
+   2,
+   3
+  ]
+ },
+ {
+  "content": "useFoo(bar(\n.a$b( a$b(\n=>\\\"function* footype x =.a$b(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "x;\né(\nxfoo( new foo _x( \" ; \"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "=> <Bar> bar( \"unterminated foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ".bar(return a$b(interface x\n\"a\\\"b\" foo(﻿\tnew  Bar()function * foo foo (a$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "} } from function foo( // new  Bar() \t",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo2(new  Bar()x.foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(x.foo(const foo =<Bar>function foo(\n(\"unterminated foo(\n) a$b(   xfoo(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": ".a$b( var  x } from 'foo('",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "//{a$b(/\nfoo2( foo.bar(   function foo( \"unterminated foo( var  x\nnew foofunction* foo\"a\\\"b\" foo(enum Bar\n<Bar><Bar />)",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "'function foo) \"foo(\"\nnew foo.bar(\n9x(.bar(return foo(<Bar\tvar  xenum Bar\n // c * foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "type x =\"a\\\"b\" foo(} from\r\nfunction* foo  // c",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "await })/function * foofunction foo('foo('",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "* foo(export * from \"m\"xxfoo(bar(\nfunction foo( foo2( x.foo( function * foo foofoo( $a$b(\n.a$b(\n\"foo(\" ` \"foo(\" interface x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "*foo2(\n\"a\\\"b\" foo( ﻿ `  foo ( foo2( //",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "interface xawait /\"unterminated foo(foo(\n\"foofoo(fooexport { 'foo('x\nenum Bar => export { foo } from \"m\"\n\r﻿var  xinterface x9x(await x.foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "useFoo(//",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "type x =var  x* foo(enum Barx.foo(export { foo } from \"m\"\néé(x.foo(=>interface xexport * from \"m\"}\n} fromfoo.bar(foo(bar(\nexport * from \"m\"'class Barfoo(`x(`",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "`x(`import 'it\\'s' x(/* foo( */\"unterminated foo(;\n'\nenum Bar/",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": " // cvar  xfoofoo(interface x/* foo( */foo2(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "{ \r <Bar /> //  foo (  foo ( ﻿\nenum Bar =>(var  x9x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'$a$b(  `x(`",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\t{",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " // c\n$a$b(type x =.bar(\n/* foo( */x} from{function foo(\nclass Bar function* foo `x(` x * foo( type x =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'foofunction foo",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "type x =var  x.a$b(\n*const foo =foo({\nfunction foo\nconst foo =.a$b(;//",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "await  ) \"unterminated foo( .bar( await ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "class Bar interface x .bar( éé(  foo ( enum Bar a$b(\nfoo2(\nfoo(<Bar />export { foo } from \"m\"new fooa$b(<Bar />\"foo(\"\n foo ( return  `",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "; \"a\\\"b\" foo( _x( \"foo(\" (\n\"* foo('\nfoo.bar(\nxé(class Bar9x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { let x =  // c return  `x(`\nnew  Bar() useFoo( class Bar \r => enum Bar _x(\nbar(class Bar}(} from\\\n.a$b(é(export { foo } from \"m\"bar(*",
+  "symbol": "é",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "foo new foo class Bar 9x( import  x.foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum Barnew fooéé(export * from \"m\"\n\t\nreturn  /* foo( */ type x = .a$b( .a$b( \t <Bar\t\nx.foo( export * from \"m\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "class Barx.foo(foofoo(function* fooexport { foo } from \"m\"\n\"a\\\"b\" foo(\rlet x =/* foo( *///\n\"foo(\"é('it\\'s' x(} frombar(`x(`$a$b(\n=> '  foo ( é( export * from \"m\" ' \"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ";export * from \"m\"\nclass Bar﻿let x =foo2(=>\n // c{\n;(<Bar />\"unterminated foo( // cconst foo =new  Bar()",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "const foo =)",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "} from ( 'foo(' xfoo(\n'it\\'s' x( // cfunction foo\"a\\\"b\" foo(",
+  "symbol": "x",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "'it\\'s' x(_x(xfoo(<Bar>9x(\nfoo\né((.a$b(\\foo2(\n/`x(`*",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "useFoo( xfoo(  // c interface x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "bar( é( `x(` \\ x.foo(\n.bar(\nfunction* fooimport enum Bar foo (\réé(\n\ré(*\"a\\\"b\" foo(",
+  "symbol": "é",
+  "lines": [
+   1,
+   3,
+   4
+  ]
+ },
+ {
+  "content": "* foo(var  x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foo(export * from \"m\"\nexport * from \"m\"return foo.bar(\nBar",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ";)function * foo﻿/_x(\r\ntype x =<Bar>\nbar(\\ foo (\néé( 'it\\'s' x(",
+  "symbol": "é",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "foofoo(=>/return return \n<Bar>\nfoofoo(/foo2(*function* foox.foo(\nbar(function * fooclass Bar<Bar />",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "} 'foo(' .bar( { var  x\ntype x = export { foo } from \"m\" \r\n(éé(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo} fromclass Bar\"foo(\"\n﻿*$a$b(function * foo<Bar>'it\\'s' x(var  x\nfunction foo('foo('\n<Bar\t \\ <Bar\t  ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "_x( function foo class Bar const foo = let x = new foo class Bar\nconst foo =/;interface x.a$b(foo2(\t\n_x(export {\\import /* foo( */foo(`\nbar('await ",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "foofoo( * { 'it\\'s' x( \" export {",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "x﻿\tnew foo*class Barx\nawait \"unterminated foo(=>",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "  \"a\\\"b\" foo(  // c type x = \"a\\\"b\" foo( foo2( class Bar\nx.foo(foo.bar( type x =a$b(function foo",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\" { type x = function* foo <Bar.x var  x\n // c var  x 9x( .a$b(\nfoo2( function foo( _x( import  /\nconst foo =function* foo//'it\\'s' x(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\" } \t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ")",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "'.bar(_x(} from 9x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "import }var  x}<Bar>éé(;\n}export * from \"m\"<Bar.x\r",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "x ﻿ \"a\\\"b\" foo( export { foo } from \"m\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x\"unterminated foo(xfoo(export { foo } from \"m\"useFoo(}\"foo(\"\n$a$b(\n=>function* foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "let x =import  \nexport { foo } from \"m\"type x =\n )xfoo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "$a$b(var  x$a$b(\"\n/    foo.bar( foo function foo \" function foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo<Bar.x'foo.bar(<Bar.x\"a\\\"b\" foo(return \n`",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "export * from \"m\"éé(éé(.bar( $a$b(* foo(\n\"foo(\"\n﻿",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "`\n'it\\'s' x(let x =﻿foo2(function * fooBarvar  x\nfoo.bar(\"foo(\"\nxfoo(éé({\r",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t éé( function foo( let x =\nfoo let x = export { foo } from \"m\"  foo ( x.foo( bar( } from\n//)\n//.a$b(/* foo( */bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "=> } enum Bar (\na$b(;\ninterface x * await  type x =\nfunction* foo  foo ( 9x( var  x \t",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */}foofunction* foo\"\nfunction * foo ; function foo( var  x new foo 'it\\'s' x( function* foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ".bar('it\\'s' x(\"foo(\"new  Bar()bar(export { foo } from \"m\".a$b(\né( function foo  // c  // c\n( `\nreturn   const foo ='it\\'s' x(`x(`\"a\\\"b\" foo(new foo",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "/ await    \"a\\\"b\" foo(   function foo `x(`\nvar  x(  \\\n9x(class Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo * enum Bar\n<Bar\t * var  x enum Bar interface x foo( * foo(\nfoo( class Bar bar( function* foo   ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo2( \r let x =\n  export {}<Bar\tfoo(\n`    <Bar> } export { foo } from \"m\" $a$b(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"function foo(<Bar.x} from<Bar\t\n<Bar /><Bar /><Bar>** foo(*é(\nvar  xéé(const foo =\n<Bar /><Bar\ttype x =éé(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "'\nfunction * foo} fromfoo`x(`\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " /\n.bar( a$b( .a$b( export { function * foo\nx x 9x( ; type x = $a$b( await ",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "useFoo(\"",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(\"a\\\"b\" foo(/function* foolet x =import useFoo(\nBar`x(` xfoo(.a$b(*\nclass Bar\n\rlet x =function foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "xexport {;\\ \"a\\\"b\" foo(function * foo\n\t\nuseFoo( foo (",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "} from\nimport \n'//_x(a$b(enum Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "var  x\n9x(.a$b(export * from \"m\"} fromfoofoo\"unterminated foo(\n\\)\n* $a$b( 9x( \"unterminated foo( / foo2(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar>.bar(await \n_x(\"foo(\"await x\nuseFoo(;xfoo(x.foo(a$b(type x =\"foo(\"",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "import  // cfoofoo(x<Bar>\n\\\n} from;",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "  type x = export { foo } from \"m\" \"unterminated foo(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "`x(`Barx // c);",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "const foo = foo (\nawait \n<Bar>return foo.bar(`x(``.a$b(foo.bar(\n} from",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function foo(/* foo( */\"foo(\"\"})\n<Bar />* foo(é(\"a\\\"b\" foo(foo(;\nexport {=>'",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\r // c\n\r / function* foo type x =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "x\nbar(export { foo } from \"m\"export { foo } from \"m\"* =>\n'foo(' <Bar />",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "xfoofoo( // c\n;<Bar\t\"a\\\"b\" foo(export * from \"m\"new  Bar()*interface x\n﻿{\n/",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function fooexport * from \"m\"=>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": " // c / interface x\n \né(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "`Bar* foo(function * foo)} from\nfoofoo( éé(   export * from \"m\"\n<Bar> function foo( xfoo(\nfunction* foo new  Bar()  foo ( ` ; } from",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar /> enum Bar export { foo } from \"m\" ' foo.bar(\n)\\`new  Bar()x.foo(\nxfoo(export {)('",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "*\nuseFoo( new  Bar() let x = \"a\\\"b\" foo( <Bar.x\n9x(`x(`'interface x<Bar\t  \nexport { foo } from \"m\"Barawait a$b(\"foo(\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\t\n`x(` x \"unterminated foo( \t\n<Bar />function* foo<Bar.ximport  foo (*\néé( ; // `x(`",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "await export { foo } from \"m\"(é(.bar(import \nawait \nnew  Bar()foo(await interface xfoo(await `",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"function foo(\"unterminated foo(export {.a$b(9x(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "`x(`<Bar>export { foo } from \"m\"foo.bar($a$b(﻿return ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foonew  Bar() é(function foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "enum Bar\né(",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "<Bar.x\n'foo('\nx.foo( foo ('it\\'s' x(* foo( <Bar />é(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "* foo(<Bar /><Bar />\"unterminated foo(Bar_x((",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "new fooxuseFoo(  \na$b(export { foo } from \"m\"\n<Bar.x   interface x _x(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "9x(`x(`let x =}﻿\nclass Bar x.foo(\n\"unterminated foo( x * _x(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "$a$b(foo(import \n_x(_x(useFoo(x<Bar />\nvar  xexport { // cBarBar.a$b(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "bar( 'foo(' / ﻿",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\" var  x <Bar\t  \nfunction foo('it\\'s' x(new foo  function foo\nawait  $a$b( //\nenum Bar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "xfoo( }\n$a$b(   ' ) function* foo\nuseFoo( \n* foo(é('it\\'s' x(bar(function * foo/",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "é(\"foo(\"//} from<Bar>bar(var  x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(type x =`x(`/* foo( */\n.a$b(export { foo } from \"m\" foo (\n   xfoo( xfoo( export * from \"m\" } from ) \"\nfoo(foo.bar(var  x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()\n<Bar\tfunction foointerface xenum Bar\r\n<Bar\t",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "useFoo( =>\n<Bar\txvar  x//function * foo // c\nawait  \t new  Bar() éé( foo <Bar.x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo(é({'`\nfunction foofunction * fooimport \n$a$b(\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ".a$b( Bar function foo( \"foo(\" ' <Bar\t\n<Bar> $a$b( .bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\"a\\\"b\" foo(<Bar /> // cnew  Bar()\n_x( * foo( function* foo useFoo( interface x\ntype x = /\n)\"foo2(type x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "const foo =type x =foo\n\" // c\"foofunction foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foo( `x(` var  x\n.a$b(\n'it\\'s' x(//* foo(enum Barx.foo(import ",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "class Bar 'foo('.a$b(} fromnew foo\n$a$b( type x = \"a\\\"b\" foo( => ' <Bar> \"foo(\"\nfoofoo(a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function* footype x =\nclass Bar function foo\nenum Barexport * from \"m\"let x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "x.foo(<Bar>9x(function foo(\n`x(`const foo =\rimport 'foo('.bar(\nfunction foo( Bar .bar( /\nxfoo(*interface x$a$b(﻿function foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar />'it\\'s' x(}class Bar\"unterminated foo(export { foo } from \"m\"\"",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "$a$b(a$b(x\ninterface x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(\"a\\\"b\" foo((} from // c$a$b('\n'foo('function* foofoo.bar(let x ='it\\'s' x(.a$b('foo('\n/* foo( */interface x} from",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "$a$b( foo(\nawait useFoo(new  Bar()",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "/ ; ` ) function foo( <Bar />\nfoo2(new foo\n\\ / function foo * foo( ` var  x bar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function* foofoo(let x ='it\\'s' x(function foo('",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar>interface x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(*foofoo(Barfoo2(\"a\\\"b\" foo(\n foo ( <Bar /> \"foo(\" => a$b(\nbar( 'it\\'s' x( 'foo(' foo( function foo",
+  "symbol": "foo.bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": ".bar(*<Bar>$a$b(\"a\\\"b\" foo(é(\n﻿ return  var  x\n9x(<Bar />)var  xbar(_x(const foo =\n<Bar> export {  foo ( \" ; ﻿",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo;\"foo(\"} from // cconst foo =.a$b(\na$b(\"\nawait /* foo( */a$b(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function * foo`'it\\'s' x(a$b(interface x\\\n.bar(_x(\r\n} from<Bar>useFoo(enum Bar\"foo(\"class Bar\n` <Bar /> x.foo( \"foo(\" x.foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "* foo( useFoo( ( { $a$b(\n`x(`\n.bar( foo.bar( <Bar /> `x(` .bar( $a$b(\nawait ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ";$a$b(\r* foo(enum Bar\nfunction* fooxfoo(\nreturn  foo.bar( x let x =",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(const foo =\\a$b(\n* foo(foo(class Bar\"foo(\"/* foo( */new  Bar()\n_x(class Bar'foo('await <Bar /><Bar />\t\nbar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "} from\nfunction foo ( <Bar> {\n`x(`interface xfunction * foofoo<Bar\t\n/bar(let x =$a$b(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "const foo =9x( \nawait é( foo.bar(\n9x(let x =* foo(class Baré(x.foo(",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function foo\n'it\\'s' x( <Bar\t // return  \" * foo( const foo =\nexport { foo } from \"m\"  foo ( * foo(",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "function* fooxfoo(x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "_x(\nfoo.bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "`x(`",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "{<Bar.x\nimport  function* foo'foo('function foo(\nfoo foo.bar(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function foo } from /",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo( éé( <Bar\t function foo } from <Bar.x  \nexport * from \"m\"'foo('",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "(﻿\\ let x =)} from\n=>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "enum Barx.foo(  \nclass Bar foo (}new  Bar()\n\\Barfoo.bar(type x =xfunction foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "é( foo (/* foo( */<Bar />foo bar(\nexport {",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "interface x a$b(   => await  \r }",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "{//let x =xfoo(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo } from é( * const foo = enum Bar class Bar",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\t'it\\'s' x(\nbar(enum Barfunction* foo 'foo('\tclass Bar\nenum Bar await ",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": " function* foo\n; useFoo( \"a\\\"b\" foo( foo2( \"unterminated foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " \t<Bar.x\n\"a\\\"b\" foo(\nexport {  foo ( foo.bar( 'it\\'s' x( } from }",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "import  => xfoo( function foo x.foo( return \nuseFoo(class Bar x.foo(9x(/=>\nexport { foo } from \"m\"9x((﻿",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".bar(foo(const foo =\\\n\\ ` class Bar    export { interface x }",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "$a$b(x.foo(foo(} from)\r\ntype x = var  x import  'foo(' export {\n} frombar(   ('",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "enum Barnew foo\"foo(\"\\function foo // c<Bar.x\ninterface x9x(.bar(.bar(.bar(return (\n.a$b('﻿x\n<Bar.x export {",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "const foo ==>\\",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "`x.foo((function* foo'useFoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "//let x =)`x(`\n) enum Bar function * foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "$a$b(function* foofunction foobar(x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "éé(  // c \\ \\ function* foo \"unterminated foo(\n).a$b()const foo =x.foo(\na$b(} from",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\"a\\\"b\" foo( const foo = class Bar \"\n;",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function foo } from .a$b( *\n=>interface x'foo(function foovar  x} from\n\\{\n\"bar(new fooclass Bar<Bar />\\",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\" a$b( new  Bar() 9x( interface x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "* 'foo(' foo.bar( import  var  x new  Bar() foo2(\nfunction* foo﻿\nfoo2(\n.a$b( function * foo \" await  interface x foo",
+  "symbol": "a$b",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "////} from\n'new  Bar()'foo('=>useFoo(<Bar />",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "';(_x(\"\n foo (<Bar\téé(\\let x =function* foofoo(\nenum Bar await \n<Bar> let x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "  bar( \"unterminated foo( <Bar> foo.bar(\nnew foo\nxfoo(é(export {const foo =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo(\"unterminated foo(a$b(foo( foo (\n* foo(;/* foo( */\nfunction foo9x(a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x( foo (// // c)\tnew  Bar()",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "$a$b(;.a$b(class Barfoo2(\nexport {",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "{foo.bar(foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"xfoo(function * foo}/* foo( */",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo( function foo(   export {\nawait new  Bar()é(9x(type x =\n' =>   9x( foo(  ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "enum Bar   * x.foo( => .bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo /* foo( */ <Bar\t ) _x( new  Bar()\nvar  xexport { foo } from \"m\"=>foo2(  \nfoo2( `x(` 9x( export * from \"m\"   {\nfunction foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " foo (=>export * from \"m\"function foo(\n\\\n\"foo(\" new foo ` } from new  Bar() foo( \r\n_x( * import  x é(  foo (",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x$a$b(<Bar>﻿//\né(foo  \"foo(\"\n enum Barfunction* foovar  x.a$b(\\_x(\nfoo.bar( foo ()export {",
+  "symbol": "foo.bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "* foo( ( \" import  // 9x( `x(`\n foo ({é((useFoo(function * fooimport \n'(é(await =>`x(`\nexport * from \"m\"",
+  "symbol": "é",
+  "lines": [
+   2,
+   3
+  ]
+ },
+ {
+  "content": "return  function foo( 'it\\'s' x( \r bar(\n/* foo( */'it\\'s' x(<Bar.x/éé($a$b(\nvar  x ( => / * foo(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar> (\nconst foo =<Bar\t`bar(interface x\nenum Bar*\nvar  x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()foofoo(export * from \"m\"\t)\n<Bar> await  useFoo( var  x é( 'it\\'s' x(  // c",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"await \n* foo( { {  foo (\nxx\nexport {9x( 'it\\'s' x(\txfoo(} from",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "9x(class Bar\"enum Bar9x(\"a\\\"b\" foo(\ninterface x* foo(﻿class Bar\nfunction* foofoo2(export * from \"m\"9x(<Bar\tbar(",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": ".bar( await  \\ interface x éé( function foo( export { foo } from \"m\"",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\t _x( function* foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "   bar(\n'_x(﻿* foo(* foo(a$b(x.foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\\ <Bar.x `x(`\n$a$b(.a$b(function * foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "Bar foo (\r<Bar\t\n/'x.foo(interface x/<Bar>$a$b(\nvar  x} from<Bar.ximport ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\" xfoo( interface x } from\n.a$b( await  \" => { function foo foo.bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "* foo(foofoo(foo.bar(import export * from \"m\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "$a$b(new  Bar()\"unterminated foo(  x.foo(\n( * foo( é(\n{ const foo = \" foo(\nnew fooxexport { foo } from \"m\"Bar foo (  }",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "`x(`a$b(}new foo* foo(\n.bar(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "9x(useFoo(a$b(new foo\nenum Bar * new  Bar()\n'foo('` foo ( ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(   => class Bar new foo enum Bar\n'foo('",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ".bar(\nnew  Bar()",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum BaruseFoo(_x(function foo} fromfoofoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "fooxfoo( ﻿",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "Bara$b(\néé( /* foo( */ function foo( /* foo( */\n\"a\\\"b\" foo('foo('x.foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "enum Barfoofoo(<Bar>\nBar foofoo(  // c <Bar /> export * from \"m\" =>\n( foo (Bar",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "a$b(\n\\\nx foo( ) * Bar =>\nfunction foo//\"unterminated foo(\r",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "* foo(new foo foo (éé(export {x`x(`\nvar  x\n//var  xBar*\"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'foo('\ntype x = 'foo(' ﻿ $a$b(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "bar(<Bar.xx.foo(\\\n useFoo(`x(`'foo('foo2(\nfunction foofoo(x.foo(﻿",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum Bar",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "function foo( é(    ' new foo <Bar>\n_x(bar(const foo =(xfoo(\néé( function foo( foo.bar( <Bar\t",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": " x\nfunction foo\nfunction foo( await  \"unterminated foo( Bar é(\na$b(",
+  "symbol": "é",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\tfoo2(new foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function * foo foo class Bar return  const foo = <Bar /> } from\nnew foo x.foo( \\ const foo =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\t",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "* foo( function foo / x.foo( class Bar \t <Bar>\n=>;)new  Bar()return  // c'it\\'s' x(\n/ ( interface x \"a\\\"b\" foo( { ﻿",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "Bar\nfunction* foointerface xinterface x\"`x\nclass Barfoo.bar(export { foo } from \"m\"<Bar.xexport * from \"m\"\nfunction* foo `x(` export * from \"m\" _x( \\ * foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "//9x(} from\\ // c\ninterface x/foo2(\n9x(function * foo // c* foo(useFoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".bar(function* foofunction foo(useFoo(.a$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": ".bar(\"\néé(foofoo('foo('new  Bar()new  Bar()\nxfunction* foo9x({\n`x(` const foo = class Bar <Bar />",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "var  x\n// \"foo(\" ; const foo = `\nlet x =\n(foo(﻿foo",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\\'it\\'s' x( new  Bar()foo2(\n<Bar />;",
+  "symbol": "Bar",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "'} from'it\\'s' x( foo (",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar>interface xnew  Bar().bar(\"foo(\"{export { foo } from \"m\"\n{ foo( 9x( `x(` <Bar>",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ")enum Barx<Bar />",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "(//<Bar>function * foo\n<Bar>(new  Bar()9x(\n\"a\\\"b\" foo(var  xvar  xawait \"foo(\"$a$b(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\\{<Bar.x\n\t return  foo2( const foo = 9x( 9x(\n_x(class Bar_x(} foo (",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */(import \n\"a\\\"b\" foo(_x(import class Barfoo.bar(\nfunction* foo'it\\'s' x(\n\\<Bar>x.foo(`",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "$a$b(var  x * foo( \nuseFoo(  foo ( interface x const foo =  foo (",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "éé(foo.bar(interface x﻿foo\n\r\nawait function* fooimport foo.bar(const foo =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "Bar9x(\nexport {\n('it\\'s' x(foo_x('function* foo\ninterface x",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar> x return  new  Bar() new  Bar()\néé('foo(';\rimport } from\n'foo('export {(éé(\nfunction* foo <Bar.x",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "* foo( function * foo  // c",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export {;var  x // cexport { foo } from \"m\"foo.bar( ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "bar(}\n9x( Bar function* foo function* foo enum Bar \t foo(\n(foo2(export * from \"m\"(//*",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\\ \t\nBar)foo(\n﻿/* foo( */ é(<Bar.x ",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo(   import \nnew  Bar()foo//function foo* foo(=>\n\\ bar( $a$b(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function* foo* foo(/function foofoo(new foofoo\n`x(` { \t a$b(  \n<Bar>foofoo(foo(/\nenum Bar\r\t.a$b(export {é(function * foo",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "Baréé(await useFoo(} from\nxfoo( xreturn class Bar\n<Bar /> /\nfunction foo( \\ x { ) bar( é(",
+  "symbol": "é",
+  "lines": [
+   1,
+   4
+  ]
+ },
+ {
+  "content": "}function foo(  \n'it\\'s' x(<Bar />﻿\\bar(var  x`\n.a$b( `x(` 9x( 'it\\'s' x(\nfoo(foo2(let x =foo",
+  "symbol": "foo",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "' 'it\\'s' x( foo2( \\ bar( \t new foo\n﻿function* fooimport '\n\t export { foo } from \"m\" / foo2( <Bar.x\nfunction foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "} from \"a\\\"b\" foo( bar(\n\"a\\\"b\" foo(\nexport { foo } from \"m\" ) } from",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "}return class Bar<Bar />export {type x =bar(\n$a$b(\"foo(\"  .a$b(} fromfoo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'foo('\n{\n* foo(éé(type x =interface x\nfunction foo(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo2( <Bar> 'it\\'s' x( foofoo(  // c  foo ( return \nfoo.bar( new foo foo(      class Bar interface x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'foo('  function * foo'\nlet x =\né(9x(* foo(new  Bar()=>* foo(\n.a$b( foo.bar( type x = é(",
+  "symbol": "foo.bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "éé( interface x \"foo(\" .a$b( Bar 'foo('",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(new  Bar()\t<Bar>.a$b(/* foo( */const foo =\ntype x = import  ;\n.bar(x.foo('foo('",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "new foofunction foo(\"a\\\"b\" foo(function foofoofoo(function foo<Bar>\n  \n/* foo( */let x =\"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "return {\n' ﻿ éé( } ) function * foo a$b(\nx.foo(=>function* foox.foo(foo2(",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "Bar xfoo( 'foo(' ' ﻿\nx.foo( foo.bar( } from export * from \"m\" foofoo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "Bar foo( 'foo('\ninterface xlet x = // c x.foo('foo('\nfunction foofoo2(\nfoo2( function foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "import  ` éé( function foo Bar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "export {\nenum Bartype x =\"unterminated foo(* foo(\nx.foo( ; ﻿ function foo a$b( var  x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "$a$b( useFoo( xfoo( function foo(\nfunction foo(<Bar /> foo (function* fooconst foo =\n<Bar\t * foo( export * from \"m\" function foo( / ; type x =\n)_x(class Bar\t",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "bar(BarBar",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar />function foo  \n) } from\nxfoo('interface xéé(.a$b(foo.bar(\"unterminated foo(\n'foo('",
+  "symbol": "é",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "class Barconst foo =foofoo(x.foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "; xfoo( .bar( bar( new foo return \n<Bar\t\"a\\\"b\" foo(await useFoo(enum Barimport `",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": ".bar( foo (\nfunction * foo\"`x(`foo foo (/",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " foo ( useFoo( // ` bar( foo2(\n<Bar\t/",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "import export {$a$b({function foofoofoo(<Bar.x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foofoo(\nexport {é(new foo\nfunction * foo var  x function foo( interface x\nfoo2( foo éé( await    ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "_x( * foo( \\ a$b(  foo ( export * from \"m\" \"\n const foo =const foo =* foo(\n/ \t export * from \"m\" } from type x = /* foo( */\nexport * from \"m\"\\'it\\'s' x(}`x(`",
+  "symbol": "foo",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "class Barawait var  x`x(`\nfooawait _x(﻿\nxfoo(xfoo(interface x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "'foo('bar(\"`x(`xfoo(} from'",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"*Bar\nfoo(\\var  x\"a\\\"b\" foo(xfoo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "} fromfoofoo2(\n* foo(\nvar  x/interface x",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo(bar(\n*{foo2( <Bar />function* foo\n} \"foo(\"<Bar />\nvar  x",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function* foo ( _x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "return \nexport {class Barexport * from \"m\"export * from \"m\"﻿new  Bar()/",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "  é( 'foo(' \" foo( \"\nnew foo enum Bar\nexport * from \"m\"function foofoo2(a$b(\nfoo(Bar\"foo(\"\"unterminated foo(/<Bar.x",
+  "symbol": "foo",
+  "lines": [
+   2,
+   4
+  ]
+ },
+ {
+  "content": "export { foo } from \"m\"\nxfoo( \"unterminated foo( bar( <Bar\t }\n$a$b( export { /* foo( */",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar> } from await  import  interface x * _x(\na$b(\n;import new  Bar()x.foo(\"xfoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`é(foo\"\n/* foo( */",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " foo ( export { _x(\n.a$b( éé(\n<Bar.xexport {﻿export {<Bar>\nuseFoo(var  x'foo.bar(<Bar />",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "$a$b(\nimport  foo (",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "} froma$b(<Bar>'foo('new  Bar()(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\t\n\"foo(\"{foo(\ninterface xexport * from \"m\"class Bar*",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ".bar(}\nuseFoo( export * from \"m\" new foo // 9x( function foo( {\n\rfoo//export * from \"m\"\rfoo.bar(\n﻿function * foo} from",
+  "symbol": "foo.bar",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "'foo('\r\rawait )\n} (\nenum Bar éé( x.foo( export { foo } from \"m\" class Bar",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "export { foo (.bar(<Bar>foo(xfoo('foo('\n ;new  Bar()'\n'it\\'s' x( new  Bar() 'foo(' <Bar\t",
+  "symbol": "Bar",
+  "lines": [
+   1,
+   2,
+   3
+  ]
+ },
+ {
+  "content": "$a$b( <Bar>",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "Bar\n{new  Bar()",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "new foouseFoo(import éé(<Bar.x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(\n'it\\'s' x(\nnew  Bar()Barfunction * foo\n}",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "﻿ \n* <Bar.x function foo( 'foo(' ` function foo( export { foo } from \"m\"\n} <Bar> a$b( foo( function foo\n`foo(.bar(x.foo(",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "export * from \"m\"var  xnew  Bar()",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "export {<Bar\t$a$b(.bar((export { foo } from \"m\"\nx.foo( foo.bar( new foo x return \nfoo2(* foo(﻿a$b( foo (.bar(\n.bar(x} fromé(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": " // c$a$b(.a$b(type x =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'foo.bar(\"<Bar />} from\n\t/\r\nvar  xa$b(.bar('a$b($a$b(\n{ export { foo } from \"m\" var  x",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "xfoo(   const foo = Bar  foo (",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "new foo\n_x( new  Bar()foo2(\nexport * from \"m\"_x(.bar(export { foo } from \"m\")function* foofoo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "éé( enum Bar export { foo } from \"m\"\n foo (import '\\*export * from \"m\"type x =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "\t.bar(<Bar>`x(`",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function foo;function foobar(useFoo(foofoo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "type x =",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "xfoo(\n* foo(.bar(\n}}\\<Bar.x`x(`",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'){bar(await new  Bar()\n;_x()=>enum Bar\nfoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "$a$b(\"unterminated foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "return //\n/* foo( */   // cfunction foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"(\r}\nfoo2(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo()Bar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function * foo*{.a$b(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(<Bar\ta$b(foo.bar(\né(",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "return \n/await éé(",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "x.foo( \\ // foofoo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": ";'foo('$a$b(\nimport \rxfoo(return 9x(x.foo(foo2(\nxfoo(enum Bar} fromconst foo =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "$a$b(function* foo\n * foo( foo (} fromtype x =\"unterminated foo(\n  .a$b( new foo",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "await class Barfoofoo(\r\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "} fromimport x.foo(é({ foo (function * foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".bar(Bar\nx ﻿\n_x(  foo (",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "return <Bar\t`x(``xclass Bar",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "=>'foo($a$b(\n{ // c.bar(_x(/* foo( */\"foo(\"'foo('\n`﻿} from_x(\nvar  x.a$b(\"foo(\"type x =function* fooéé(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo.bar( * foo( } from\nfunction foo( foo (\"\"a\\\"b\" foo(\n\"foo(\"bar($a$b(\nfoo( <Bar />",
+  "symbol": "foo.bar",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": "bar(\\ // cfoo2('it\\'s' x(\nfoo(xfoo(;.bar(<Bar.x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\t\n*  foo ( let x =   \"foo(\" xfoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "useFoo( .a$b( var  x\n\"a\\\"b\" foo(`x(`class Bar\n=> \"foo(\"/`",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "`",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "new foo \r useFoo( export { foo } from \"m\"\nBar foo.bar( x",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " foo (\t9x(\\",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "let x =\nexport { foo } from \"m\"\"foo(\"function * fooclass Bar\nreturn interface xvar  x/* foo( */export * from \"m\".a$b(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "interface x*/* foo( */function foo((function* foo\n(xfoo(a$b(export { foo } from \"m\"\nfoo.bar( interface x _x( function foo \"\na$b( \"foo(\" new foo ) function foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "let x = /* foo( */ export { foo } from \"m\" export { Bar  ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "//`export {<Bar\t\nnew foo return  function* foo new foo const foo = '",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "interface x\"\nfoo2( * $a$b(\n'foo('\n<Bar>'foo('",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t﻿/* foo( */",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "interface x function * foo var  x await \nlet x =useFoo(\\\n$a$b(foo} from﻿\texport * from \"m\"",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t ﻿ foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\" bar( export * from \"m\" class Bar function foo new  Bar()\nfoo await  function foo '\n<Bar><Bar>let x =éé(/* foo( */<Bar\t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " new  Bar()=>return class Bar<Bar>\nclass Bar \"unterminated foo( foofoo( _x( function* foo\nnew foo﻿foo.bar(enum Bar\nfunction foo( export { function * foo   export * from \"m\" `x(`",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "interface x$a$b(\nexport {\n.bar(function * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "$a$b(return \n﻿ foofoo( export * from \"m\"\n \"9x(\rexport * from \"m\"foo.bar(enum Bar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo('\t\n // c  /* foo( */\n} from.bar(=>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */)\"unterminated foo(\rexport * from \"m\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function foo\n_x(   \t    \"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\" const foo = `x(` const foo =",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"x.foo( \"a\\\"b\" foo(Bar'xfoo(\nfoo   é( '      export { foo } from \"m\"",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\"unterminated foo( } foo\n<Bar /> \t await  Bar function foo( _x( 'it\\'s' x(\nnew foo a$b((",
+  "symbol": "a$b",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "\"unterminated foo(export {\"a\\\"b\" foo(<Bar\t",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\"unterminated foo(xfoo(type x =x.foo(\texport { foo } from \"m\"`x(`\n`x(`\"foo(\"\n) ` } from 'it\\'s' x( * foo( 'foo(' foofoo(",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "=>.bar(<Bar>new  Bar() foo (`useFoo(\n // cvar  x\nfoox.foo(}* foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": " // c var  x ` export { foo } from \"m\" => éé( ;\n  \nclass Barfunction foofoo\nreturn ;<Bar />",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo \" <Bar />   \nfoo.bar( bar( \"a\\\"b\" foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "//xfoo(* foo(} \n* foo( import  Bar let x = interface x type x = function * foo\n<Bar\t foo2( _x( <Bar\t",
+  "symbol": "Bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "'it\\'s' x('_x(a$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "* foo(\n\r} foo (interface xawait \n* $a$b( 9x( let x =\n*",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "new foo=>xfunction* foo\n éé(\"unterminated foo(\n // c    function foo } from xfoo( é(\nenum Bar function foo type x = foo.bar(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "**.a$b('foo('  function foo(\n=>;foofoo(=>\"foo(\"\nfoo.bar(export { foo } from \"m\"é(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "'foo('\nexport {enum Barvar  xfunction foo\n$a$b(\n\r new foo    x    foofoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(éé(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "_x(/* foo( */function foo(_x(\n* foo(function* foo'foo('.a$b(_x(\ntype x =\nclass Bar",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "import  ' _x( \"foo(\" <Bar.x\n'type x =$a$b(_x(\n.a$b(Barfoo.bar(function* foobar({  ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\\\nexport { foo } from \"m\"bar(9x(\"foo(\"*Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\" 9x( '\n﻿foo2(new foofunction * foo}foofoo()\nBar .a$b(\n} frombar(<Bar />",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar.xé( foo ((\n;\n'function * foouseFoo(;'*`\nfoo2( // cimport ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ".a$b( é( class Bar `x(`",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar />Barinterface x // cx.foo(export * from \"m\"`\nfoo.bar(\nxfunction foovar  xéé(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */.a$b(enum Bar$a$b(.a$b(bar( ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "await foo`\tfoo.bar(\r\nfoofoo( * bar( <Bar>",
+  "symbol": "foo.bar",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": " foo (function * foo/* foo( */export {\".a$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "return ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function foo(export {* foo({x.foo(\n//.bar(/* foo( */",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo( useFoo(\nexport { foo } from \"m\"\"foo(\"function foo/* foo( *//* foo( */",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "type x = new foo'foo('/",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */export { foo } from \"m\"foofoo(function * footype x =\"unterminated foo(\n.a$b(enum Bar  * foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " // c",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "x\nexport { } from useFoo(\nfoo2(}/export { foo } from \"m\"  foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "( <Bar\t  foo ( \t * foo( )\n`x(`\"a\\\"b\" foo(\"a\\\"b\" foo(bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "var  xnew  Bar()} from.a$b(`\nexport { foo } from \"m\" `x(` <Bar>\n﻿} fromuseFoo(foo( ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "x* foo()function foofunction* foo=>\n`  ﻿`new  Bar()\nfoo(  xfoo(  \n<Bar.xclass Bar}return ",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "' await   foo ( x.foo( bar(\n=>var  xfunction fooexport {\nfoo2(`",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " *new  Bar()class Bar",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "}'foo('\n<Bar /> type x = * \t\n'$a$b(foo} from/* foo( */.bar(\nexport { foo } from \"m\"Bar\\`x(`} fromuseFoo(",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "<Bar />",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "  \nfunction* footype x ={",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "xfoo(x.foo(//foofoo(﻿\nlet x =foo2(\nx new foo * new  Bar() ﻿ / \"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "Bar useFoo( export { foo } from \"m\" é( /* foo( */ é(\n\rtype x =\\export { foo } from \"m\"new  Bar() a$b(\n\"$a$b(\n\\",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "function* foo éé( <Bar.x / <Bar> => =>\n // c9x(Bar`x.foo(é(",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "foo( * $a$b( / interface x\n=>new foo.a$b(\"unterminated foo(\n} from",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "* foo(function * foo foo (\nenum Bar}foo2(\\",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "﻿ * foo( $a$b(\nawait  foo2( \"unterminated foo(    x new  Bar() class Bar\n\r=>new foo.a$b({\nlet x =\\(  \r//bar(",
+  "symbol": "foo",
+  "lines": [
+   2,
+   3
+  ]
+ },
+ {
+  "content": "9x(`x(`foo2(éé(\n\"foo(\" { \"foo(\" foo.bar( export * from \"m\" 'foo('\nreturn  /* foo( */",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": ".bar( é(  foo ( <Bar\t function* foo   _x(\n; foo( }",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "_x(_x(`\nnew  Bar()\\} from$a$b(;Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "`x(`function* foo`x(`",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".bar(\na$b(`x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "new foo const foo = foo2( } from",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "_x(\"a\\\"b\" foo(interface x//type x =\n_x(interface xfoo.bar(\n; ( .bar( * foo( \"foo(\" \"foo(\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\" \"a\\\"b\" foo( export { foo } from \"m\" éé( bar(\néé( 9x(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */<Bar>new foofoo.bar(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " foo (/return x foo (let x =Bar\nx function* foo export { foo2( foo.bar( export { type x =\n<Bar> \"unterminated foo( var  x await  \"unterminated foo(  foo (",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "* foo( let x =",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\"foo(\"é(/foofoo(*",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\".a$b(  \nbar(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "/type x =.a$b(﻿éé(",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "  export { foo } from \"m\" foo (Bar\\9x(\nfunction* foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "let x = \" return  foo(    foo2(\n ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar>useFoo(xfoo(foo2( foo (\n`\"unterminated foo(* foo(} fromconst foo =`x(`enum Bar\nfunction* foo﻿\\const foo =return }\n* foo(\" foo ( <Bar.xexport { foo } from \"m\"",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "éé(`x(`_x(/* foo( */.a$b(return 9x(\n//x.foo(class Bar﻿\nclass Bar'.a$b(function* foo*\"<Bar.x",
+  "symbol": "a$b",
+  "lines": [
+   1,
+   3
+  ]
+ },
+ {
+  "content": " foo ( var  x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "export * from \"m\"new foo;9x(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "﻿export {\n\"foo(\"xfoo(let x =const foo =\"foo(\"foo.bar(new  Bar()\n=>\nclass Bar)é(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "type x =type x =export * from \"m\".bar(var  xfoo.bar(\nnew  Bar() _x( export { foo } from \"m\"\n // c\n9x(\"unterminated foo(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "éé(  \n\tfoo.bar(\n* foo( return     await  .bar( {",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { class Bar é( xfoo(\n$a$b( foo.bar( xfoo(\n`x(`\"unterminated foo(a$b(\n﻿export { foo } from \"m\"éé(fooconst foo = ",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "interface x \r\n\\",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar />var  xuseFoo(﻿x.foo(new  Bar()\n)export * from \"m\"class Bar//export { foo } from \"m\"<Bar />\n* foo(<Bar.x\n/( foo (.bar(\"unterminated foo(  *",
+  "symbol": "foo.bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "bar( foo (<Bar.xreturn  \nexport { foo } from \"m\"\n.bar(\n'foo('",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "'it\\'s' x( \r * <Bar\t function foo(\nclass Bar .a$b( import  \"a\\\"b\" foo( foofoo( function foo \"a\\\"b\" foo(\n﻿{\n'foo('\ra$b('it\\'s' x(let x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function * foo\n* foo($a$b('foo('  <Bar\t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "é( } from é( export * from \"m\"",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "x.foo(  // c `\n   .a$b((// \néé(type x =<Bar\t",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "var  xfunction * foofunction * foo'foo('}éé(\n;function * foo;\n // c type x = \"unterminated foo( `x(`",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'foo('\nx.foo('foo('éé(enum Bartype x ==>\n\"foo(\"interface xa$b(éé(/* foo( */\n\\ ; éé( éé( var  x _x( x",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "enum Barx<Bar\t\n<Bar />foo(}foo.bar(\nxBar\r//xfoo(\n<Bar>'it\\'s' x(export {{export * from \"m\"{",
+  "symbol": "Bar",
+  "lines": [
+   1,
+   2,
+   4
+  ]
+ },
+ {
+  "content": "export * from \"m\"\n/(Bar))foofoo(<Bar\t\nfunction foo(\t",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "'foo('class Bar*",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "new foo x.foo( bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\"\"unterminated foo(_x(\nuseFoo( <Bar /> export { `x(` / .bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ")}\n`'$a$b(\n<Bar>'.bar(foo2(;\n<Bar\t var  x",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "  type x = \t \\ ( * foo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "`function fooa$b(foo.bar(/* foo( */ \nexport {",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo.a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "é(let x = ($a$b(`x(` // c\n' export { foo } from \"m\" foo.bar(\n\" let x = }\n;import class Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".bar(* foo.bar(\nnew  Bar()=>bar(const foo =} from\nuseFoo(`x(`function foo(\nnew fooclass Barnew foo; .bar(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "function * foo\nfunction* foofoo.bar()\"foo(\"xfoo2(await \na$b(Bar 'it\\'s' x(foo2(\n\" \\ 'it\\'s' x( .bar( <Bar.x",
+  "symbol": "foo.bar",
+  "lines": [
+   2,
+   4
+  ]
+ },
+ {
+  "content": "} é( ( $a$b(",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\t <Bar /> `x(` import  ) xfoo(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "x \t Bar\n{foo.bar(<Bar.xtype x =export { foo } from \"m\"\n* foo(foovar  xéé(\rexport * from \"m\"\n\\/* foo( */ // c'foo('* foo(foo.bar(*",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "/foo.bar(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "bar(export { foo } from \"m\"=>",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t\néé('foo('=>/new footype x =useFoo(\nbar(\n foo (enum Bar*}",
+  "symbol": "foo.bar",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "$a$b( <Bar.x _x( let x = import ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum Baré(useFoo(class Bar.a$b(var  x\nnew footype x =\n{ \\\nreturn  new  Bar()",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": ".a$b(\nimport \"function fooenum Barfunction* foo\nnew foo   \ntype x =} from\"foo(\"",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".a$b( é( foo2( 'foo(' {",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "foo/* foo( */\nexport * from \"m\"enum Bar'foo('foo(}.a$b(x",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "await  let x = /* foo( */ type x = /* foo( */\n\t * foo( 'foo(' //\n\t\rx.foo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "/* foo( */ 9x( new  Bar() import \nxfoo( \\ (\"a\\\"b\" foo(\n_x(Barexport * from \"m\"\n('it\\'s' x(\"unterminated foo(function * fooenum Bar",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/ \r * foo( function foo( function * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": ".a$b(new foo 9x(  _x(=>\n*foo('x'it\\'s' x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\\`\"foo(\"* foo(xfoo( ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "var  x_x(new foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": ";$a$b(\n.bar(}\n' // cfoo.bar(",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "return {\\*\néé(x.foo(é(\nx\nconst foo ==>new fooexport {",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "﻿xfoo(﻿\n'foo('x.foo(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "* foo(var  x*`function* foo  )\nexport {\"unterminated foo(a$b(x.foo(export {Bar\nfunction foo( const foo =",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "xfoo('function* fooxfoo(enum Barfoo\ninterface x  foo (\n\r",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "  // // c'foo('function foo(enum Bar\nenum Bar xfoo( 9x( foo2( /* foo( */ let x = x.foo(\n{/foofoo(enum Bar<Bar.xclass Bar\ninterface x",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\" bar( foo(\n(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo/* foo( */   var  x'foo('\n/await * foo(\t\"foo(\"\nx.foo(*\n' \r \r ﻿ `x(`",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "interface x ` class Bar é( class Bar await \n}*function * foofoo.bar(function foo(<Bar />\n\"unterminated foo(`x(`.a$b(<Bar.x\n foo (9x(\"enum Bar",
+  "symbol": "foo",
+  "lines": [
+   3,
+   4
+  ]
+ },
+ {
+  "content": "export {;} fromreturn Bar* foo(\né(  foo ( $a$b( <Bar /> new  Bar() useFoo(\n'foo(' } '\nBar\t_x(var  x",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "export { const foo = let x = foo( // )",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "  \"foo(\"export {new foofunction foofunction foo\nfoo2( foo( new foo <Bar\t bar( x  // c\nexport * from \"m\"9x(type x =foo.bar(export { foo } from \"m\"\rnew  Bar()",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": " // cx.foo(\n   _x( .bar( useFoo( ) /* foo( */ await \n/* foo( */xfoo(﻿foo(a$b()\n.a$b(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "﻿interface x\"a\\\"b\" foo(xfoo(\n // c foo x.foo( new foo import ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "a$b(\nconst foo ={let x =\n let x =} fromenum Bar\n\"a\\\"b\" foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ";\néé( xfoo( useFoo(  // c Bar <Bar\t * foo(\n\"//",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "xfoo(foo.bar(\nbar(  function foo9x(xuseFoo(\nexport {foo\t\n // c",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "import  <Bar\t } from ﻿ export { .bar( 9x(\n<Bar\tbar(\"foo(\"=>xfoo()}\nreturn  \"a\\\"b\" foo( } from function foo  // c",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "`x(`/ // c_x(\nimport  Bar   let x = * foo( /* foo( */ <Bar.x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x(\n\"foo(\" function* foo 9x( export { class Bar * foo( enum Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "( function foo $a$b( function foo( _x( éé( '\na$b(function * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "; a$b(\n new foofoofoo(foofoo(;let x =function * foo\n<Bar\t ' export { foo } from \"m\" foo\n\r const foo = type x = return  export { foo } from \"m\"  foo ( é(",
+  "symbol": "é",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "\"var  xfunction* foobar(\n( \"unterminated foo( function foo( éé( new foo\na$b(\nx.foo(\rexport * from \"m\"\\function foo(bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"foofoo(\n{return \nx} from;foo(\nnew  Bar()Bar ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "Bar`\\`/\nbar(* foo(bar(\n} from type x =   => new  Bar() \"unterminated foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "*useFoo(interface x\n\r'=>`x(`",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function foo\nnew footype x =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\" class Bar <Bar\t x function* foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar /> \"* foo(a$b(\nfoofoo(new foo\nfoofoo(\n\"unterminated foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "é(\n\t**\n* let x = var  x $a$b( *",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/bar(import new  Bar()/function foo(<Bar.x",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "9x(  \"a\\\"b\" foo(\"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "(useFoo(\" // c\nx.foo( foo (foo(export * from \"m\"{",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "foo2(\n// \n foo (`x(`class Bar",
+  "symbol": "foo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": "function* foo* foo(//return \n<Bar>\"a\\\"b\" foo(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "/* foo( */function fooexport * from \"m\"\ttype x =\n} from 'foo(' .a$b( function * foo bar(\n\"a\\\"b\" foo(foo",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "import .bar(* foo(<Bar />\nBar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "}function* foo\"foo(\"\n`x(`xfoo(\nlet x =interface ximport interface x'{",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "éé(BarBarnew foobar(\nxfoo(\"unterminated foo(`{",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "x.foo(fooexport { foo } from \"m\"\"a\\\"b\" foo(//\t\n'it\\'s' x('/var  xexport * from \"m\"foofoo(\nfoofoo( useFoo( 'foo(' $a$b( export {\nawait new foox foo (\\new  Bar()<Bar>",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "a$b(éé(export { foo } from \"m\"class Bar\nBar _x( import \nclass Barreturn \"a\\\"b\" foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "é( \"a\\\"b\" foo( } export * from \"m\"",
+  "symbol": "é",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "a$b(\r\nconst foo = function foo(\n`\n\renum Bar<Bar\tfoofoo(\\foofoo(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "xfoo(\n\t interface x export {\n* foo( \"foo(\"  // c \"a\\\"b\" foo( const foo = await \n\"new  Bar()<Bar>foo.bar( foo (await ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "(foo2(<Bar>} fromfunction* foo",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar />",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "' // ﻿ .a$b( function foo \t\nuseFoo(\"foo(\"foo2(\t",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "// foo ﻿\nnew  Bar() _x( export { } from const foo =\nfunction* foo xfoo( var  x function * foo function foo * 'foo('\n\"\\foo.bar(\tfunction* foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/function * fooéé(* foo(\néé(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": " \"unterminated foo(`x(`\n}type x =class Barexport {﻿\n//\"unterminated foo(type x ='foo('`/foo\ntype x =import * foo(foo(export { foo } from \"m\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "var  x  // c function* foo    }",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo\nfunction foo new  Bar() function * foo x\n}(return bar(function* foo\n/* foo( */export {function foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "'foo('\n}export * from \"m\"//\\<Bar /> // c} from\n\" ( `x(` `",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(return function foox=> \n' bar( éé(  foo ( \"unterminated foo( import  function foo\n`x(`useFoo(//$a$b(export { foo } from \"m\"\"a\\\"b\" foo(* foo(\nexport { foo } from \"m\"  ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "/",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "enum Barlet x =foofoo(interface x\n{\ntype x = * interface x foofoo( var  x return  function foo\n // c",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo.bar( function * foo foo( foo.bar( foo return  }\n<Bar> \"a\\\"b\" foo( \t * 9x( {",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": ".a$b(\nexport * from \"m\"\nvar  x bar(\nxfoo( foo( export { foo } from \"m\" foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " foo (\"foo(\"var  x//function foo(\n`\nfunction foo(foo/) _x(return ",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\\ .a$b( 'foo('\n<Bar />=>{type x =* foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "// interface x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "}\nexport * from \"m\"x.foo(<Bar />\"a\\\"b\" foo(export { foo } from \"m\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "enum Barfunction* foo`a$b(\nuseFoo( é( return  bar( bar( let x = await \n\"a\\\"b\" foo( .a$b( foo.bar( (",
+  "symbol": "useFoo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "x.foo(éé(bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "*",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"let x =type x =export * from \"m\"\n)'foo('a$b(\ntype x =function foo(//`x(`\\xinterface x\n  interface x function * foo //",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "function foo return  \"foo(\" <Bar\t function foo( \"a\\\"b\" foo(",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "'foo('type x = export {x\ntype x =;function* foo\nconst foo =\n'it\\'s' x(<Bar\t \"foo(\"foo\\}",
+  "symbol": "Bar",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "new foo /* foo( */ <Bar> * bar( \" export * from \"m\"\né(`\t}Bar\n  //import =>//'it\\'s' x((",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "=> foo (\n\r\nnew foofoo(new  Bar()const foo =return \n'  \"new foo).a$b(\t",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "x.foo(_x(\rxfoo((foo(\n'foo('$a$b(\n}\t.a$b(﻿function foo_x(import \n\"foo(\"*=> function foo'",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "<Bar> <Bar.x function foo foo(\n\t\"a\\\"b\" foo(enum Bar\"foo(\"} fromfunction foo\n<Bar\téé((\rBarx.foo(\n// <Bar.x 'it\\'s' x( \"foo(\"",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "'foo(' foo ( _x(type x =export { foo } from \"m\"\nexport { foo } from \"m\" bar( =>\nnew  Bar()\n=>(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "﻿export { foo } from \"m\"function * foouseFoo(function foo(\"\nlet x =\r.a$b(new foo//let x =  ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "useFoo( * foo(new  Bar()}new foo\n_x(class Barfoo2(`x(`xfoo(\n}///",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "class BaruseFoo((\n.a$b($a$b(}\nexport {'new foonew  Bar()",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "function foo(\"foo(\"new  Bar()\rxnew foo\n\t.a$b(return 'foo('function* foofunction foo/* foo( */\n\"a\\\"b\" foo(} from\"export * from \"m\"/\nreturn function * fooclass Bar}",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "=> interface x\nfoofoo( 'foo(' (\nvar  x // const foo = new  Bar()\n // c ' export { foo } from \"m\" <Bar> bar( let x =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": " foo ( import  import  foo await  \r\nfunction* foo.bar('it\\'s' x(\néé({enum Barclass Barfunction* foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " foo (enum Bar\\foo2( \nimport function foo(interface x;* foo(9x(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\tlet x =<Bar\t\n  <Bar.x\n\"unterminated foo(\n* foo( foofoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "function* foo function foo(  foo ( export { new foo \\\nxfoo(function foofunction * foo*}var  x'foo('\n( * <Bar\t new foo Bar 9x( `",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function* foo ) class Bar export * from \"m\" type x = } from new foo\n)\n* foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " ;export {xfoo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "'\nexport * from \"m\" { / <Bar /> await  \"a\\\"b\" foo( function* foo\nnew  Bar()(enum Barreturn Bar<Bar.xx",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": " x.foo(function foo\n\"a\\\"b\" foo( / a$b( xfoo(\nBar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum Barreturn x\nfoonew  Bar()} fromtype x =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/ xfoo(      foo (\n'function foo(.a$b(useFoo(éé(.bar(\n( foo( x.foo( =>",
+  "symbol": "useFoo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "bar(foo.bar(import <Bar>.bar(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "﻿return =>.bar(<Bar.x\nreturn Bar\rfunction foo(bar(function foo\n'it\\'s' x(foofoo(type x =_x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "xfoo(<Bar>new  Bar()useFoo( // cimport ",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "  ﻿ foo.bar( * foo(\n.a$b( é(\n//",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo.bar( // c(Bar.bar( foo (<Bar\t\nexport { foo } from \"m\"`",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": ".bar(\tBarconst foo =import \texport {\n\"éé(\\return const foo =\t\n\r9x(} from'it\\'s' x(\n<Bar />const foo =)//foo2(await ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": " foo ( foo (type x =$a$b('it\\'s' x(\n\"//export * from \"m\"return * foo(new  Bar()",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foofoo(\nclass Barinterface x\nexport { foo } from \"m\"\n // c .bar( \"a\\\"b\" foo( export { ( export { foo } from \"m\" useFoo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar />`function foo(=>\n<Bar> Bar é(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "x.foo(}new  Bar().a$b(\nbar(`}class Barfoo.bar(\n_x(\"foofoo(* foo(\nfunction * foo$a$b(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "class Barexport {export { foo } from \"m\"} fromBarfunction * foo\na$b( { * foo(  \n$a$b(\"foo(\"await foo.bar( useFoo(\nfoovar  x(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " // c foo ({'it\\'s' x(foo.bar(\n\rx.foo(useFoo(\n$a$b(foo\nimport \"\"foo(\"}new foo<Bar\tfoo.bar(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\" Bar foo.bar( x await \n/{*",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x( _x( /* foo( */\nreturn \"unterminated foo(foo(* foo(<Bar>",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "'foo(' new  Bar() 'foo(' a$b(\nawait xfoo(",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "{\"foo(.a$b(* foo(foo.bar(\ninterface x.bar(//{foo.bar(\néé( xfoo( 9x( class Bar } from a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "const foo = <Bar> export { foo.bar(\nfunction foo( } éé( export { foo } from \"m\" let x = *",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\"foo(\"function foo`_x(\n\r",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foofoo( return  x.foo( let x = new foo foo\n foo ()\"a\\\"b\" foo(bar(\n/",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "=> function foo/9x(\ntype x =a$b(enum Bar\rbar(type x =\\\nfoo(new  Bar()* foo(x)return //\n'it\\'s' x(/ $a$b(}",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "var  x // cfoofoo(function* foofoo.bar(foo(\n=>}\nbar(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "=> // cenum Barinterface xfoo\nconst foo =$a$b(type x =/\n<Bar />xfoo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()import ;\nreturn \"foo(\"const foo =x.foo(foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "enum Barfoo(enum Bar.a$b(\\await ",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "enum Bar;.a$b(* foo('foo('",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "enum Bar",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "'foo('return await \n.a$b(export { foo } from \"m\"function* foo\"  \n{ _x(",
+  "symbol": "a$b",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "interface x\n'foo(' \"unterminated foo( é( .bar( éé(\n.a$b(export * from \"m\"const foo =} from\n foo (\"a\\\"b\" foo(new  Bar()",
+  "symbol": "foo",
+  "lines": [
+   2,
+   4
+  ]
+ },
+ {
+  "content": " foo ('foo('foo(<Bar\tbar(.a$b(x.foo(\nfoo foo (",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "(`export { foo } from \"m\"/foo.bar(\nfunction foo\"unterminated foo(export { foo } from \"m\"\n* foo(",
+  "symbol": "foo.bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "interface x\\\n'return \"foo(\"\n} from/* foo( *//",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "* foo( <Bar\t ) class Bar } from function * foo\n' 'foo('    \r\n*éé({\nnew  Bar() } from",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "} $a$b( '   foo2( (  // c\n9x( é( éé( \" interface x\n<Bar> ` ( let x = (",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "a$b(} foo ({* foo(_x(<Bar.x\n}import useFoo(function* foo.a$b(enum Bar\n'foo('class Bar 'foo('var  x\n\"foo(\"//new  Bar()function foo(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": ";\r  var  xconst foo =export {function * foo\n) x ( <Bar /> foo2(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "} export { * \r /* foo( */ foo2( .a$b(\n﻿\"a\\\"b\" foo(\\ é(\t\nreturn let x =\"Bar/* foo( */\n{",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "  <Bar> => \"a\\\"b\" foo( function foo( x.foo( foofoo(\n\"a\\\"b\" foo( let x = foo (\n\"enum Barfoo2(foofoo(\n'it\\'s' x(",
+  "symbol": "x",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": ";\r//function foo(\nfoo2( ` class Bar\nuseFoo( \"a\\\"b\" foo( / var  x useFoo(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo\"unterminated foo(} from\nbar('foo('var  xenum Bar\nimport new  Bar()xfoo(\n(/* foo( */éé(x.foo(}new  Bar()",
+  "symbol": "é",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "const foo =* foo(.bar( // c}foofoo(<Bar.x",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "bar(.a$b(class Barconst foo =return bar(=>\n\"a\\\"b\" foo(  export {éé(\ntype x = 9x( enum Bar } new foo (\nexport {.bar(",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "//<Bar.x* foo($a$b()\nuseFoo(\nfunction * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "var  xvar  x=>\r\r\n\"unterminated foo( <Bar>* foo(.bar(\nbar({await .a$b(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "é( \r '    _x( `\nfoo.bar( ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "await ",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(`Bar}",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "9x(x.foo(var  x",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "export { foo } from \"m\" import  foo( <Bar.x type x = enum Bar é(\n`x(`* foo (;éé(9x(\n\t`",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "/ \\ ( ) function * foo\nfoo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "import foo.bar(function foobar(=>;const foo =\nenum Bar\r<Bar.x<Bar>var  xfunction * foo  \ntype x =\nfoo(enum Baréé(=>",
+  "symbol": "foo",
+  "lines": [
+   4
+  ]
+ },
+ {
+  "content": "\t \"unterminated foo(\nBar interface x  // c export { foo } from \"m\" foo( function foo( \"a\\\"b\" foo(\né(class Bar",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "9x(export { foo } from \"m\"<Bar>var  xenum Bar\n<Bar\t\"unterminated foo(function foo // c( <Bar\t\nx.foo(\n\"unterminated foo(",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "type x =\n\" => function foo(\n'it\\'s' x( xfoo( export * from \"m\" => <Bar>\n/",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foofoo(/* foo( */  9x(   foofoo(\nuseFoo( new  Bar() .bar(",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "9x(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(\nexport { foo } from \"m\"  foo ( (\n'it\\'s' x(\na$b( { useFoo( return  //",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "éé(export * from \"m\")await .a$b({`\n     } from 'foo(' é(\nx.foo(/* foo( */\n=>",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "\rimport x.foo(\\new foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "new foobar(\renum Barenum Bar*\n﻿ Bar \\ new foo x.foo(\ninterface x / import  enum Bar \"unterminated foo(\nfoo foo <Bar /> \"unterminated foo(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "é(function foo \t\ninterface x<Bar.xé(éé(<Bar\t\n\"a\\\"b\" foo(type x =  ",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "foo2(\nexport { \"`x(`_x(9x(\nexport { foo } from \"m\"'foo('\"foo(\"type x =\nxfoo`)foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "export { foo } from \"m\"* foo(class Bar﻿export * from \"m\"",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\"\t\na$b(export { foo } from \"m\"}//function foo(await export {\nfunction foo(\n$a$b( //",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "export { // .a$b(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foofoo('it\\'s' x(new foo} from\n* foo(\"foo(\"/* foo( */type x =\nlet x =",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "export {\"a\\\"b\" foo(<Bar\tlet x =}<Bar.x\n\r",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "<Bar.x'it\\'s' x(foo.bar(* foo(",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": " <Bar\t",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "var  x`x(`\"unterminated foo(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "$a$b( Bar  foo ( } from  // c new foo \"foo(\"\nfunction foo x.foo(   // ` 9x( export {\n9x( 'it\\'s' x( ` var  x\nfoo2(",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "<Bar> \\* foo(\t\nconst foo = ) foo ; (",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ") function* foo .a$b( function foo\nfunction* foo\nfunction foo'foo('{//\n9x(﻿",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "9x((\"foo(\"\"a\\\"b\" foo(function foo(import enum Bar",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": ") `x(` <Bar /> await  class Bar await ",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "\t ` ; const foo = export {\n'\nBarclass Bar",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "`x(` `x(`\n\" $a$b( \" <Bar.x let x =",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " foo (\nconst foo =\"export * from \"m\"=>'",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "; éé( foo2( } from function foo } from\n'it\\'s' x(foo.bar(\n//﻿",
+  "symbol": "foo.bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "export * from \"m\"=>*",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(\n/* foo( */let x = class Bar\n\rfunction * foo/} from\ntype x =",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "bar(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "* foo(\n<Bar.x // let x = \"foo(\" a$b( \"unterminated foo(\n/ ) '\n // c foo (",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "var  x} from\n\" export * from \"m\" Bar \"a\\\"b\" foo( <Bar.x ` new foo\nx.foo(\n\"a\\\"b\" foo(<Bar>  foo (\"\" foo (",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": " foo.bar(a$b(\n<Bar\t export { `\nreturn  useFoo( ) _x(\n`",
+  "symbol": "useFoo",
+  "lines": [
+   3
+  ]
+ },
+ {
+  "content": ".bar(foo(<Bar />enum Bar\r{",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "new  Bar() `x(`;\tclass Bar\néé(\"unterminated foo(* foo(é(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "interface xawait *",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar\t<Bar>\n\r bar( ( export * from \"m\" new foo `",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": ".bar( ( foo2( 'it\\'s' x( $a$b( foo(\nxxfunction* foo",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "bar(foo.bar(//function foo(foo(bar(enum Bar\n{\n \"foo(\"éé(9x(=>bar(\n`x(` } from   bar( _x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "function* foo<Bar\t",
+  "symbol": "Bar",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": " \n<Bar />'",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "<Bar.x<Bar\tnew  Bar()let x =* foo(foo\nx.bar( import 'it\\'s' x(\nfunction foo(bar()let x =\n* foo(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "<Bar />useFoo(<Bar.x\n<Bar.x <Bar />    bar( ( ) foo2(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "useFoo(/* foo( */class Bar.bar(}x<Bar />",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "(\n`;)function foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " foo (\n\"unterminated foo(\nfunction * foofoofoo(type x =",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "x new  Bar() var  x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ".bar(\tfunction * foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "'it\\'s' x( 'foo('  \nimport var  x'it\\'s' x(;\n\"return é(export {\n//xfoo(=>",
+  "symbol": "x",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "var  x\nfunction fooconst foo =",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "export { useFoo( import  } * * foo(\nxfoo( ( foo new  Bar()\n$a$b(import foo(export {éé(<Bar>\\\n\timport interface xx<Bar>export * from \"m\"foo",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "<Bar />`\n\"foo(\"'\n'$a$b(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "type x =9x(\n<Bar><Bar.xvar  x\ninterface xfunction * foo/\ninterface x\"var  xinterface xexport {",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "\"unterminated foo(a$b(useFoo('foo('a$b(é(\n( // c)",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "await foo.bar( await let x =  foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\r* foo(class Bar // c\nfoofoo(x.foo(export {\n\"unterminated foo(\n.bar(_x(\r",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foo.bar( ;  foo ( x\n_x(\n // cimport éé(.a$b(\n'it\\'s' x( foo.bar( class Bar .bar( \t _x(",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": " foo (\\﻿let x =new foo\n;\na$b(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "\\foofoo(class Bar\n$a$b(\"=>",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "{function * foo'\"a\\\"b\" foo(\r\n foo ( function foo(  foo ( * foo( xfoo( foo.bar(\nconst foo =9x(var  xclass Barconst foo = // cnew foo\n} fromfoo.bar(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function foo(import new foo\n{\t`\t\n\t xfoo( function foo( <Bar>",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "x Bar <Bar\t <Bar />\nclass Bar * foo( a$b( } _x(\n{",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(    return \n* foo($a$b(/ const foo =_x(enum Bar",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "*'foo('} from",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo.bar(export { foo } from \"m\"<Bar>\\é(.a$b(\n'foo('Bar\"unterminated foo(\n}",
+  "symbol": "a$b",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "\\return foo2(\n foo (\nvar  x 9x(",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": " foo (function * foo foo (\n   ; Bar enum Bar }",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "new  Bar()let x =\n//export { foo } from \"m\"",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "* foo(;;}Bar*",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "/let x =enum Bar  \néé( foo (import ",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": ";foofoo(\"export * from \"m\"foo;function * foo",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo2(\n)} from/* foo( */ enum Bar\"unterminated foo(\nclass Bar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "  interface xfoofoo(9x(await foo(_x(\nnew foo/* foo( */xfoo(const foo =foofoo(\nnew  Bar()var  xfoo(}`x(`\"\"foo(\"",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "/\nexport {_x(\nexport { foo } from \"m\"=>xenum Bar.a$b(\n foo.bar(export * from \"m\"'it\\'s' x(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "9x(type x =\n_x(await return await }.a$b(interface x\n) 'foo(' new foo x.foo( export { let x =\n.bar(new foo",
+  "symbol": "foo",
+  "lines": [
+   3,
+   4
+  ]
+ },
+ {
+  "content": "function foo( const foo = } from\n\\}<Bar>.a$b(é(x.foo(\n//type x =export * from \"m\" \"foo(\"<Bar>\nnew  Bar()",
+  "symbol": "é",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "let x = {\né(return \nconst foo = `x(` var  x x.foo( .bar(\n é(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(\n=>$a$b(foo",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "import bar(foofoo(<Bar.xé(\"a\\\"b\" foo(\n`x(` _x( 'it\\'s' x( ) <Bar\t",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "export {=>",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "const foo =}useFoo(9x(﻿<Bar>\nlet x = function foo( (   foo xfoo(",
+  "symbol": "useFoo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "9x(import var  x\ninterface x \\ <Bar> .a$b( a$b( 'foo(' 9x(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "return \n foo ()*/\nvar  x*new foo\nbar( new  Bar() { xfoo( class Bar export { foo } from \"m\" const foo =",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "class Bar'a$b(\"a\\\"b\" foo(export * from \"m\" // c\n foo ( x.foo( ' * foo( \"a\\\"b\" foo(\n9x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "Barinterface x} from`x(`\nfoofoo(type x =function* foo'foo('function foointerface x;",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "function foo",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": ".a$b( foo (éé(\\type x =",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "($a$b(class Bar  fooBar",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "useFoo(<Bar>\ntype x = <Bar /> new foo",
+  "symbol": "foo",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "}interface xBar/",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "x.foo( const foo = function* foo\n<Bar.xfoofoo(﻿",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo2(\"﻿)await \nreturn  xfoo( await  9x( ' bar(",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "function * foo function foo( return  x /* foo( */\n<Bar>.bar(.bar(﻿\n)",
+  "symbol": "Bar",
+  "lines": [
+   2
+  ]
+ },
+ {
+  "content": "\"a\\\"b\" foo( \"unterminated foo( x.foo( await  return  export * from \"m\"\n'$a$b(=>﻿\"foo(\";import \na$b(fooreturn *.a$b(/'it\\'s' x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "éé(//var  xé(\n'it\\'s' x(export {\r<Bar />/{/* foo( */\n( => function* foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": " foo(\n foo (import export * from \"m\")//<Bar.x//\n{",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "enum Bar* foo('it\\'s' x(function* foo\n\"\n\\",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "type x = éé( 'foo('\n﻿x",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": ";foo2(type x =const foo =\ninterface xawait //)$a$b('it\\'s' x(foo\n)/",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "function* foo;\n* foo(\"éé(enum Bar\"foo(\"//} from",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "_x(foo.bar(Bar\n\"a\\\"b\" foo(9x(",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "\"a\\\"b\" foo(\nlet x =\nfunction * foo\n<Bar\t",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "`let x =enum Barfoo\n // c<Bar.x<Bar>x.foo({function * foo \nnew  Bar()   \"foo(\" <Bar>",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "} from // céé(",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "Bar\né(\rnew  Bar()\n﻿function foo",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": ".bar(new foofoo2('_x('foo('class Bar\n\t function foo",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "`x(` <Bar\t function * foo $a$b(\né(.a$b(\"foo(\"9x(} from\nxfoo(new  Bar()function * foo(a$b(x.foo(é(",
+  "symbol": "foo.bar",
+  "lines": []
+ },
+ {
+  "content": "class Bar export { type x = export { foo } from \"m\" type x =\n=>éé(return  foo (\nfoo.bar((} from(import foo(\n\"foo(\".a$b(interface x} from",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "{\nexport { foo } from \"m\"\n//\"var  x\\`{ ",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "é(<Bar />",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "import { foo } from \"x\";\nfoo();\n  // foo()\n * foo()\n/* foo() */\nfunction foo() {}\nconst r = foo();\n",
+  "symbol": "foo",
+  "lines": [
+   2,
+   7
+  ]
+ },
+ {
+  "content": "a(); // foo()\r\nb(foo());\r\n",
+  "symbol": "foo",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "",
+  "symbol": "foo",
+  "lines": []
+ },
+ {
+  "content": "foo(\n",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "x = new Bar();\r\n<Bar />\n",
+  "symbol": "Bar",
+  "lines": [
+   1,
+   2
+  ]
+ },
+ {
+  "content": "foo( Bar x a$b useFoo é",
+  "symbol": "foo",
+  "lines": [
+   1
+  ]
+ },
+ {
+  "content": "foo( Bar x a$b useFoo é",
+  "symbol": "Bar",
+  "lines": []
+ },
+ {
+  "content": "foo( Bar x a$b useFoo é",
+  "symbol": "a$b",
+  "lines": []
+ },
+ {
+  "content": "foo( Bar x a$b useFoo é",
+  "symbol": "x",
+  "lines": []
+ },
+ {
+  "content": "foo( Bar x a$b useFoo é",
+  "symbol": "useFoo",
+  "lines": []
+ },
+ {
+  "content": "foo( Bar x a$b useFoo é",
+  "symbol": "é",
+  "lines": []
+ },
+ {
+  "content": "foo( Bar x a$b useFoo é",
+  "symbol": "foo.bar",
+  "lines": []
+ }
+]

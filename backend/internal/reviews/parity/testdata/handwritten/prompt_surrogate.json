@@ -1,0 +1,17 @@
+{
+  "handWritten": true,
+  "spec": "EC4015 (FR4030)",
+  "why": "Node cuts the PR description with String.prototype.slice(0, 4000) (UTF-16 units). When the cut falls inside a surrogate pair the prompt keeps a lone high surrogate, which JSON and Go strings cannot carry. Go drops the dangling half and still reports truncated=true. goldens/prompt.json (nodeSurrogate) records what Node does; the generator checks that this file's nodeBehaviour matches it.",
+  "source": "reviewer-core/src/prompt.ts: prDescription.slice(0, MAX_PR_DESCRIPTION_CHARS), truncated = original.length > 4000",
+  "input": { "prefix": { "$repeat": ["a", 3999] }, "astral": "😀", "suffix": "tail" },
+  "inputUnits": 4005,
+  "nodeBehaviour": { "descriptionUnits": 4000, "lastUnitIsHighSurrogate": true, "truncatedFlag": true },
+  "goExpected": {
+    "description": { "$repeat": ["a", 3999] },
+    "descriptionUnits": 3999,
+    "truncatedFlag": true,
+    "sectionChars": 4066,
+    "sectionTokens": 1017,
+    "sectionText": "## PR description\n<untrusted source=\"pr-description\">\n{description}\n</untrusted>"
+  }
+}

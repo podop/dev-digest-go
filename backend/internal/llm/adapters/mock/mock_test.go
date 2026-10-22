@@ -135,9 +135,9 @@ func TestStructured_noSampleStillYieldsTheOtherRule(t *testing.T) {
 func TestStructured_unknownSchema(t *testing.T) {
 	t.Parallel()
 	req := request("x")
-	req.SchemaName = "Review"
+	req.SchemaName = "IntentClassification"
 	_, err := newClient(t, 0).Structured(t.Context(), req)
-	if err == nil || err.Error() != "Mock LLM provider has no fixture for structured output 'Review'" {
+	if err == nil || err.Error() != "Mock LLM provider has no fixture for structured output 'IntentClassification'" {
 		t.Errorf("Structured() error = %v, want the no-fixture text", err)
 	}
 }

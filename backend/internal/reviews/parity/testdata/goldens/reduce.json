@@ -1,0 +1,580 @@
+{
+  "note": "reduce: reduceReviews(partials). score: scoreFromFindings (100 − 35/12/3 per CRITICAL/WARNING/SUGGESTION, clamped to 0..100). blockers: countBlockers(findings, failOn) for every gate. mapOrdered: ordered map with a concurrency limit, driven by released deferreds (script order); `started` lists item indexes in the order their function began; on failure no new item starts, in-flight items are awaited and the first error (by time) is rethrown.",
+  "reduce": [
+    {
+      "name": "single_partial_is_returned_as_is",
+      "partials": [
+        {
+          "verdict": "comment",
+          "summary": "only",
+          "score": 55,
+          "findings": [
+            {
+              "id": "f1",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "Finding",
+              "file": "a.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "confidence": 0.8
+            }
+          ]
+        }
+      ],
+      "merged": {
+        "verdict": "comment",
+        "summary": "only",
+        "score": 55,
+        "findings": [
+          {
+            "id": "f1",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8
+          }
+        ]
+      }
+    },
+    {
+      "name": "worst_verdict_wins_request_changes",
+      "partials": [
+        {
+          "verdict": "approve",
+          "summary": "one",
+          "score": 90,
+          "findings": []
+        },
+        {
+          "verdict": "request_changes",
+          "summary": "two",
+          "score": 40,
+          "findings": [
+            {
+              "id": "f2",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "Finding",
+              "file": "b.ts",
+              "start_line": 2,
+              "end_line": 2,
+              "rationale": "Because.",
+              "confidence": 0.8
+            }
+          ]
+        },
+        {
+          "verdict": "comment",
+          "summary": "three",
+          "score": 70,
+          "findings": [
+            {
+              "id": "f3",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "Finding",
+              "file": "c.ts",
+              "start_line": 3,
+              "end_line": 3,
+              "rationale": "Because.",
+              "confidence": 0.8
+            }
+          ]
+        }
+      ],
+      "merged": {
+        "verdict": "request_changes",
+        "score": 67,
+        "summary": "one two three",
+        "findings": [
+          {
+            "id": "f2",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "Finding",
+            "file": "b.ts",
+            "start_line": 2,
+            "end_line": 2,
+            "rationale": "Because.",
+            "confidence": 0.8
+          },
+          {
+            "id": "f3",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "Finding",
+            "file": "c.ts",
+            "start_line": 3,
+            "end_line": 3,
+            "rationale": "Because.",
+            "confidence": 0.8
+          }
+        ]
+      }
+    },
+    {
+      "name": "comment_beats_approve",
+      "partials": [
+        {
+          "verdict": "approve",
+          "summary": "one",
+          "score": 100,
+          "findings": []
+        },
+        {
+          "verdict": "comment",
+          "summary": "two",
+          "score": 100,
+          "findings": []
+        }
+      ],
+      "merged": {
+        "verdict": "comment",
+        "score": 100,
+        "summary": "one two",
+        "findings": []
+      }
+    },
+    {
+      "name": "all_approve",
+      "partials": [
+        {
+          "verdict": "approve",
+          "summary": "one",
+          "score": 100,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "two",
+          "score": 100,
+          "findings": []
+        }
+      ],
+      "merged": {
+        "verdict": "approve",
+        "score": 100,
+        "summary": "one two",
+        "findings": []
+      }
+    },
+    {
+      "name": "mean_score_rounds_half_up",
+      "partials": [
+        {
+          "verdict": "approve",
+          "summary": "a",
+          "score": 70,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "b",
+          "score": 81,
+          "findings": []
+        }
+      ],
+      "merged": {
+        "verdict": "approve",
+        "score": 76,
+        "summary": "a b",
+        "findings": []
+      }
+    },
+    {
+      "name": "mean_score_of_three_rounds_down",
+      "partials": [
+        {
+          "verdict": "approve",
+          "summary": "a",
+          "score": 70,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "b",
+          "score": 70,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "c",
+          "score": 71,
+          "findings": []
+        }
+      ],
+      "merged": {
+        "verdict": "approve",
+        "score": 70,
+        "summary": "a b c",
+        "findings": []
+      }
+    },
+    {
+      "name": "mean_score_of_three_rounds_up",
+      "partials": [
+        {
+          "verdict": "approve",
+          "summary": "a",
+          "score": 70,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "b",
+          "score": 71,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "c",
+          "score": 71,
+          "findings": []
+        }
+      ],
+      "merged": {
+        "verdict": "approve",
+        "score": 71,
+        "summary": "a b c",
+        "findings": []
+      }
+    },
+    {
+      "name": "summaries_skip_empty_ones_and_join_with_a_space",
+      "partials": [
+        {
+          "verdict": "approve",
+          "summary": "first.",
+          "score": 10,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "",
+          "score": 10,
+          "findings": []
+        },
+        {
+          "verdict": "approve",
+          "summary": "third.",
+          "score": 11,
+          "findings": []
+        }
+      ],
+      "merged": {
+        "verdict": "approve",
+        "score": 10,
+        "summary": "first. third.",
+        "findings": []
+      }
+    },
+    {
+      "name": "findings_keep_chunk_order",
+      "partials": [
+        {
+          "verdict": "comment",
+          "summary": "x",
+          "score": 50,
+          "findings": [
+            {
+              "id": "f4",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "z",
+              "file": "z.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "confidence": 0.8
+            },
+            {
+              "id": "f5",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "a",
+              "file": "a.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "confidence": 0.8
+            }
+          ]
+        },
+        {
+          "verdict": "comment",
+          "summary": "y",
+          "score": 50,
+          "findings": [
+            {
+              "id": "f6",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "m",
+              "file": "m.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "confidence": 0.8
+            }
+          ]
+        }
+      ],
+      "merged": {
+        "verdict": "comment",
+        "score": 50,
+        "summary": "x y",
+        "findings": [
+          {
+            "id": "f4",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "z",
+            "file": "z.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8
+          },
+          {
+            "id": "f5",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "a",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8
+          },
+          {
+            "id": "f6",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "m",
+            "file": "m.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8
+          }
+        ]
+      }
+    },
+    {
+      "name": "no_partials",
+      "partials": [],
+      "merged": {
+        "verdict": "approve",
+        "score": 0,
+        "summary": "",
+        "findings": []
+      }
+    }
+  ],
+  "score": [
+    {
+      "name": "no_findings",
+      "severities": [],
+      "score": 100
+    },
+    {
+      "name": "one_suggestion",
+      "severities": ["SUGGESTION"],
+      "score": 97
+    },
+    {
+      "name": "one_warning",
+      "severities": ["WARNING"],
+      "score": 88
+    },
+    {
+      "name": "one_critical",
+      "severities": ["CRITICAL"],
+      "score": 65
+    },
+    {
+      "name": "critical_plus_warning_plus_suggestion",
+      "severities": ["CRITICAL", "WARNING", "SUGGESTION"],
+      "score": 50
+    },
+    {
+      "name": "two_criticals",
+      "severities": ["CRITICAL", "CRITICAL"],
+      "score": 30
+    },
+    {
+      "name": "three_criticals_clamp_to_zero",
+      "severities": ["CRITICAL", "CRITICAL", "CRITICAL"],
+      "score": 0
+    },
+    {
+      "name": "many_suggestions",
+      "severities": ["SUGGESTION", "SUGGESTION", "SUGGESTION", "SUGGESTION", "SUGGESTION", "SUGGESTION", "SUGGESTION", "SUGGESTION", "SUGGESTION", "SUGGESTION"],
+      "score": 70
+    },
+    {
+      "name": "thirty_four_suggestions_clamp",
+      "repeat": {"severity": "SUGGESTION", "count": 34},
+      "score": 0
+    },
+    {
+      "name": "thirty_three_suggestions",
+      "repeat": {"severity": "SUGGESTION", "count": 33},
+      "score": 1
+    }
+  ],
+  "blockers": [
+    {
+      "name": "mixed",
+      "severities": ["CRITICAL", "WARNING", "SUGGESTION", "WARNING"],
+      "counts": {"never": 0, "critical": 1, "warning": 3, "any": 4}
+    },
+    {
+      "name": "only_suggestions",
+      "severities": ["SUGGESTION", "SUGGESTION"],
+      "counts": {"never": 0, "critical": 0, "warning": 0, "any": 2}
+    },
+    {
+      "name": "none",
+      "severities": [],
+      "counts": {"never": 0, "critical": 0, "warning": 0, "any": 0}
+    }
+  ],
+  "mapOrdered": [
+    {
+      "name": "all_succeed_results_keep_item_order",
+      "n": 4,
+      "limit": 2,
+      "initialStarted": [0, 1],
+      "steps": [
+        {
+          "release": 1,
+          "ok": "r1",
+          "startedAfter": [0, 1, 2]
+        },
+        {
+          "release": 0,
+          "ok": "r0",
+          "startedAfter": [0, 1, 2, 3]
+        },
+        {
+          "release": 3,
+          "ok": "r3",
+          "startedAfter": [0, 1, 2, 3]
+        },
+        {
+          "release": 2,
+          "ok": "r2",
+          "startedAfter": [0, 1, 2, 3]
+        }
+      ],
+      "started": [0, 1, 2, 3],
+      "results": ["r0", "r1", "r2", "r3"]
+    },
+    {
+      "name": "limit_one_runs_one_at_a_time",
+      "n": 3,
+      "limit": 1,
+      "initialStarted": [0],
+      "steps": [
+        {
+          "release": 0,
+          "ok": "r0",
+          "startedAfter": [0, 1]
+        },
+        {
+          "release": 1,
+          "ok": "r1",
+          "startedAfter": [0, 1, 2]
+        },
+        {
+          "release": 2,
+          "ok": "r2",
+          "startedAfter": [0, 1, 2]
+        }
+      ],
+      "started": [0, 1, 2],
+      "results": ["r0", "r1", "r2"]
+    },
+    {
+      "name": "limit_larger_than_items",
+      "n": 2,
+      "limit": 9,
+      "initialStarted": [0, 1],
+      "steps": [
+        {
+          "release": 1,
+          "ok": "r1",
+          "startedAfter": [0, 1]
+        },
+        {
+          "release": 0,
+          "ok": "r0",
+          "startedAfter": [0, 1]
+        }
+      ],
+      "started": [0, 1],
+      "results": ["r0", "r1"]
+    },
+    {
+      "name": "first_failure_stops_new_items_and_waits_for_in_flight",
+      "n": 5,
+      "limit": 2,
+      "initialStarted": [0, 1],
+      "steps": [
+        {
+          "release": 0,
+          "fail": "boom 0",
+          "startedAfter": [0, 1]
+        },
+        {
+          "release": 1,
+          "ok": "r1",
+          "startedAfter": [0, 1]
+        }
+      ],
+      "started": [0, 1],
+      "error": "boom 0"
+    },
+    {
+      "name": "first_error_wins_over_a_later_one",
+      "n": 3,
+      "limit": 3,
+      "initialStarted": [0, 1, 2],
+      "steps": [
+        {
+          "release": 2,
+          "fail": "boom 2",
+          "startedAfter": [0, 1, 2]
+        },
+        {
+          "release": 0,
+          "fail": "boom 0",
+          "startedAfter": [0, 1, 2]
+        },
+        {
+          "release": 1,
+          "ok": "r1",
+          "startedAfter": [0, 1, 2]
+        }
+      ],
+      "started": [0, 1, 2],
+      "error": "boom 2"
+    },
+    {
+      "name": "no_items",
+      "n": 0,
+      "limit": 3,
+      "initialStarted": [],
+      "steps": [],
+      "started": [],
+      "results": []
+    }
+  ]
+}

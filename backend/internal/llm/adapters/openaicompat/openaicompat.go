@@ -95,6 +95,7 @@ type chatRequest struct {
 	MaxTokens           int            `json:"max_tokens,omitempty"`
 	MaxCompletionTokens int            `json:"max_completion_tokens,omitempty"`
 	Usage               *usageRequest  `json:"usage,omitempty"`
+	SessionID           string         `json:"session_id,omitempty"`
 }
 
 type usageRequest struct {
@@ -157,6 +158,7 @@ func (a *Adapter) buildRequest(at llm.Attempt) chatRequest {
 	}
 	if a.provider == llm.OpenRouter {
 		req.Usage = &usageRequest{Include: true}
+		req.SessionID = at.SessionID
 		if at.Temperature != nil && supportsTemperature(at.Model) {
 			req.Temperature = at.Temperature
 		}

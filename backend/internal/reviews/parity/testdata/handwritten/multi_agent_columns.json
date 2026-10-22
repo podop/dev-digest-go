@@ -1,0 +1,51 @@
+{
+  "handWritten": true,
+  "spec": "FR4011, EC4029, D4013",
+  "why": "columnsForMultiAgentRun joins agent_runs, agents, reviews, findings, eval cases and memory with SQL; the generator cannot run it. These cases pin the row → AgentColumn mapping written in multi-agent.repo.ts (the ordering/grouping on top of the columns is generated: goldens/multiagent.json).",
+  "source": "server/src/modules/reviews/repository/multi-agent.repo.ts columnsForMultiAgentRun",
+  "cases": [
+    {
+      "name": "deleted_agent_and_null_status",
+      "run": { "id": "run-1", "agentId": null, "agentName": null, "status": null, "error": "x", "provider": "openrouter", "model": "m", "score": 40, "durationMs": 900, "costUsd": 0.002 },
+      "review": null,
+      "expected": { "run_id": "run-1", "agent_id": "", "agent_name": "", "provider": "openrouter", "model": "m", "status": "failed", "error": "x", "verdict": null, "score": 40, "summary": null, "duration_ms": 900, "cost_usd": 0.002, "findings": [] }
+    },
+    {
+      "name": "review_score_wins_over_the_run_score",
+      "run": { "id": "run-2", "agentId": "agent-2", "agentName": "Beta", "status": "done", "error": null, "provider": "openrouter", "model": "m", "score": 40, "durationMs": 10, "costUsd": null },
+      "review": { "id": "rev-2", "verdict": "comment", "score": 77, "summary": "S", "createdAt": "2026-01-01T00:00:00.000Z" },
+      "expected": { "run_id": "run-2", "agent_id": "agent-2", "agent_name": "Beta", "provider": "openrouter", "model": "m", "status": "done", "error": null, "verdict": "comment", "score": 77, "summary": "S", "duration_ms": 10, "cost_usd": null, "findings": [] }
+    },
+    {
+      "name": "review_with_null_score_falls_back_to_the_run_score",
+      "run": { "id": "run-3", "agentId": "agent-3", "agentName": "Gamma", "status": "done", "error": null, "provider": "p", "model": "m", "score": 61, "durationMs": 1, "costUsd": 0.1 },
+      "review": { "id": "rev-3", "verdict": null, "score": null, "summary": null, "createdAt": "2026-01-01T00:00:00.000Z" },
+      "expected": { "run_id": "run-3", "agent_id": "agent-3", "agent_name": "Gamma", "provider": "p", "model": "m", "status": "done", "error": null, "verdict": null, "score": 61, "summary": null, "duration_ms": 1, "cost_usd": 0.1, "findings": [] }
+    },
+    {
+      "name": "the_newest_kind_review_row_of_a_run_wins",
+      "run": { "id": "run-4", "agentId": "agent-4", "agentName": "Delta", "status": "done", "error": null, "provider": "p", "model": "m", "score": 1, "durationMs": 1, "costUsd": 0.1 },
+      "reviews": [
+        { "id": "rev-old", "kind": "review", "verdict": "approve", "score": 90, "summary": "old", "createdAt": "2026-01-01T00:00:00.000Z" },
+        { "id": "rev-new", "kind": "review", "verdict": "request_changes", "score": 20, "summary": "new", "createdAt": "2026-01-02T00:00:00.000Z" },
+        { "id": "rev-sum", "kind": "summary", "verdict": "comment", "score": 50, "summary": "summary row", "createdAt": "2026-01-03T00:00:00.000Z" }
+      ],
+      "expected": { "run_id": "run-4", "agent_id": "agent-4", "agent_name": "Delta", "provider": "p", "model": "m", "status": "done", "error": null, "verdict": "request_changes", "score": 20, "summary": "new", "duration_ms": 1, "cost_usd": 0.1, "findings": [] }
+    },
+    {
+      "name": "findings_come_from_that_review_ordered_by_file_utf16_start_line_id",
+      "run": { "id": "run-5", "agentId": "agent-5", "agentName": "Eps", "status": "done", "error": null, "provider": "p", "model": "m", "score": 1, "durationMs": 1, "costUsd": 0.1 },
+      "review": { "id": "rev-5", "verdict": "comment", "score": 50, "summary": "S", "createdAt": "2026-01-01T00:00:00.000Z" },
+      "findingRows": [
+        { "id": "f-3", "file": "b.ts", "startLine": 1 },
+        { "id": "f-2", "file": "a.ts", "startLine": 9 },
+        { "id": "f-1", "file": "a.ts", "startLine": 9 },
+        { "id": "f-4", "file": "a.ts", "startLine": 2 },
+        { "id": "f-other", "file": "a.ts", "startLine": 1, "reviewId": "rev-elsewhere" }
+      ],
+      "expectedFindingIds": ["f-4", "f-1", "f-2", "f-3"],
+      "memoryIds": { "f-1": "mem-1" },
+      "expectedMemoryIds": { "f-4": null, "f-1": "mem-1", "f-2": null, "f-3": null }
+    }
+  ]
+}

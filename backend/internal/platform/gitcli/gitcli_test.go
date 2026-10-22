@@ -614,3 +614,256 @@ exec git "$@"`
 		t.Errorf("DiffNames(output of 1 MiB + 1) = %d names, %v, want nil, ErrOutputTooLarge", len(names), err)
 	}
 }
+
+// branchRemote builds a remote whose main moved on after feature branched off, clones it fully
+// and returns the client, the merge base, the main tip and the feature head.
+func branchRemote(t *testing.T, opts gitcli.Options) (c *gitcli.Client, base, mainTip, featureHead string) {
+	t.Helper()
+	hermeticGit(t)
+	r := newRemote(t)
+	base = r.commit("b.txt", "base")
+	git(t, r.work, "checkout", "-q", "-b", "feature")
+	featureHead = r.write("f.txt", "feature")
+	git(t, r.work, "push", "-q", "origin", "feature")
+	git(t, r.work, "checkout", "-q", "main")
+	mainTip = r.commit("m.txt", "main moved on")
+	opts.CloneRoot = t.TempDir()
+	c = newClient(t, opts)
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{}); err != nil {
+		t.Fatalf("Clone() error: %v", err)
+	}
+	return c, base, mainTip, featureHead
+}
+
+func TestBaseCommit_Resolution(t *testing.T) {
+	c, base, mainTip, featureHead := branchRemote(t, gitcli.Options{})
+	clone, err := c.ClonePath("o", "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	git(t, clone, "branch", "local-only", base) // exists without an origin/ counterpart
+
+	tests := []struct {
+		name, ref, head, want string
+	}{
+		{"merge base of origin/<ref> and head", "main", featureHead, base},
+		{"abbreviated head sha", "main", featureHead[:7], base},
+		{"head unknown to the clone falls back to the ref tip", "main", strings.Repeat("1", 40), mainTip},
+		{"local branch without origin counterpart", "local-only", featureHead, base},
+		{"unknown ref", "no-such-branch", featureHead, ""},
+		{"empty ref", "", featureHead, ""},
+		{"option-like ref", "--output=x", featureHead, ""},
+		{"range in ref", "main..feature", featureHead, ""},
+		{"revision expression in ref", "main@{1}", featureHead, ""},
+		{"ref with space", "main feature", featureHead, ""},
+		{"head not hex", "main", "HEAD", ""},
+		{"head too short", "main", "abcdef", ""},
+		{"head too long", "main", strings.Repeat("a", 41), ""},
+		{"head upper case", "main", strings.ToUpper(featureHead), ""},
+		{"option-like head", "main", "--all", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := c.BaseCommit(t.Context(), "o", "r", tc.ref, tc.head)
+			if err != nil {
+				t.Fatalf("BaseCommit(%q, %q) error: %v", tc.ref, tc.head, err)
+			}
+			if got != tc.want {
+				t.Errorf("BaseCommit(%q, %q) = %q, want %q", tc.ref, tc.head, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBaseCommit_UnsafeInputNeverReachesGit(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	bin, log := wrapper(t, `exec git "$@"`)
+	c := newClient(t, gitcli.Options{Binary: bin, CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	head := git(t, r.work, "rev-parse", "HEAD")
+	before := readFile(t, log)
+	for _, ref := range []string{"", "-x", "a..b", "a b", "a:b", "a^{commit}", "a\nb"} {
+		if got, err := c.BaseCommit(t.Context(), "o", "r", ref, head); got != "" || err != nil {
+			t.Errorf("BaseCommit(ref=%q) = %q, %v, want \"\", nil", ref, got, err)
+		}
+	}
+	if after := readFile(t, log); after != before {
+		t.Errorf("git ran for an unsafe ref:\n%s", strings.TrimPrefix(after, before))
+	}
+	if got, err := c.BaseCommit(t.Context(), "o", "r", "main", head); err != nil || got != head {
+		t.Fatalf("BaseCommit(main, head) = %q, %v, want %q, nil", got, err, head)
+	}
+	wantArgv := "[merge-base] [origin/main] [" + head + "]"
+	if got := readFile(t, log); !strings.Contains(got, wantArgv+"\n") {
+		t.Errorf("git argv missing %q in:\n%s", wantArgv, got)
+	}
+}
+
+func TestBaseCommit_NoCloneAndBadTarget(t *testing.T) {
+	hermeticGit(t)
+	c := newClient(t, gitcli.Options{CloneRoot: t.TempDir()})
+	head := strings.Repeat("a", 40)
+	if got, err := c.BaseCommit(t.Context(), "o", "never-cloned", "main", head); got != "" || err != nil {
+		t.Errorf("BaseCommit(never cloned) = %q, %v, want \"\", nil", got, err)
+	}
+	if _, err := c.BaseCommit(t.Context(), "..", "r", "main", head); !errors.Is(err, gitcli.ErrInvalidSegment) {
+		t.Errorf("BaseCommit(owner=..) error = %v, want ErrInvalidSegment", err)
+	}
+}
+
+func TestBaseCommit_CancelledContextIsAnError(t *testing.T) {
+	c, _, _, featureHead := branchRemote(t, gitcli.Options{})
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if got, err := c.BaseCommit(ctx, "o", "r", "main", featureHead); err == nil {
+		t.Errorf("BaseCommit(cancelled ctx) = %q, nil, want an error", got)
+	}
+}
+
+func TestBlobAt_ReadsFileAtCommit(t *testing.T) {
+	c, base, mainTip, featureHead := branchRemote(t, gitcli.Options{})
+	tests := []struct {
+		name, commit, path, want string
+	}{
+		{"file at the base", base, "b.txt", "base"},
+		{"file added by the feature", featureHead, "f.txt", "feature"},
+		{"file of main's tip", mainTip, "m.txt", "main moved on"},
+		{"abbreviated commit", base[:8], "a.txt", "one"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := c.BlobAt(t.Context(), "o", "r", tc.commit, tc.path, 1024)
+			if err != nil {
+				t.Fatalf("BlobAt(%.7s, %q) error: %v", tc.commit, tc.path, err)
+			}
+			if string(got) != tc.want {
+				t.Errorf("BlobAt(%.7s, %q) = %q, want %q", tc.commit, tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBlobAt_Errors(t *testing.T) {
+	c, base, mainTip, featureHead := branchRemote(t, gitcli.Options{})
+	clone, err := c.ClonePath("o", "r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A directory and a symlink in the tree, the symlink pointing outside the clone.
+	if err := os.MkdirAll(filepath.Join(clone, "dir"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(clone, "dir", "x.txt"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("/etc/passwd", filepath.Join(clone, "link")); err != nil {
+		t.Fatal(err)
+	}
+	git(t, clone, "add", "-A")
+	git(t, clone, "commit", "-q", "-m", "dir and link")
+	tip := git(t, clone, "rev-parse", "HEAD")
+
+	tests := []struct {
+		name, commit, path string
+		max                int64
+		wantErr            error
+	}{
+		{"path absent at that commit", base, "m.txt", 1024, gitcli.ErrBlobMissing},
+		{"path never existed", tip, "nope/nothing.txt", 1024, gitcli.ErrBlobMissing},
+		{"path under a file", tip, "b.txt/inner", 1024, gitcli.ErrBlobMissing},
+		{"commit unknown to the clone", strings.Repeat("1", 40), "a.txt", 1024, gitcli.ErrBlobMissing},
+		{"commit hex but a tree-ish absent", "deadbeef", "a.txt", 1024, gitcli.ErrBlobMissing},
+		{"file over the limit", featureHead, "f.txt", 6, gitcli.ErrBlobTooLarge},
+		{"directory", tip, "dir", 1024, gitcli.ErrNotBlob},
+		{"commit not hex", "HEAD", "a.txt", 1024, gitcli.ErrInvalidSHA},
+		{"commit is an option", "--help", "a.txt", 1024, gitcli.ErrInvalidSHA},
+		{"empty path", mainTip, "", 1024, gitcli.ErrInvalidBlobPath},
+		{"absolute path", mainTip, "/etc/passwd", 1024, gitcli.ErrInvalidBlobPath},
+		{"parent segment", mainTip, "../a.txt", 1024, gitcli.ErrInvalidBlobPath},
+		{"inner parent segment", mainTip, "dir/../a.txt", 1024, gitcli.ErrInvalidBlobPath},
+		{"dot segment", mainTip, "./a.txt", 1024, gitcli.ErrInvalidBlobPath},
+		{"empty segment", mainTip, "dir//x.txt", 1024, gitcli.ErrInvalidBlobPath},
+		{"trailing slash", mainTip, "dir/", 1024, gitcli.ErrInvalidBlobPath},
+		{"backslash", mainTip, `dir\x.txt`, 1024, gitcli.ErrInvalidBlobPath},
+		{"newline injects a second query", mainTip, "a.txt\n" + mainTip + ":b.txt", 1024, gitcli.ErrInvalidBlobPath},
+		{"NUL", mainTip, "a.txt\x00", 1024, gitcli.ErrInvalidBlobPath},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := c.BlobAt(t.Context(), "o", "r", tc.commit, tc.path, tc.max)
+			if !errors.Is(err, tc.wantErr) || got != nil {
+				t.Errorf("BlobAt(%.7s, %q, %d) = %q, %v, want nil, %v", tc.commit, tc.path, tc.max, got, err, tc.wantErr)
+			}
+		})
+	}
+
+	t.Run("symlink blob yields its target text, never the file it points at", func(t *testing.T) {
+		got, err := c.BlobAt(t.Context(), "o", "r", tip, "link", 1024)
+		if err != nil {
+			t.Fatalf("BlobAt(link) error: %v", err)
+		}
+		if string(got) != "/etc/passwd" {
+			t.Errorf("BlobAt(link) = %q, want the link target text", got)
+		}
+	})
+	t.Run("non-positive limit", func(t *testing.T) {
+		if _, err := c.BlobAt(t.Context(), "o", "r", tip, "a.txt", 0); err == nil {
+			t.Error("BlobAt(max=0) error = nil, want an error")
+		}
+	})
+	t.Run("clone never made", func(t *testing.T) {
+		if _, err := c.BlobAt(t.Context(), "o", "never-cloned", tip, "a.txt", 1024); !errors.Is(err, gitcli.ErrBlobMissing) {
+			t.Errorf("BlobAt(no clone) error = %v, want ErrBlobMissing", err)
+		}
+	})
+	t.Run("bad owner", func(t *testing.T) {
+		if _, err := c.BlobAt(t.Context(), "../x", "r", tip, "a.txt", 1024); !errors.Is(err, gitcli.ErrInvalidSegment) {
+			t.Errorf("BlobAt(owner=../x) error = %v, want ErrInvalidSegment", err)
+		}
+	})
+}
+
+func TestBlobAt_SizeCheckedBeforeReading(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	bin, log := wrapper(t, `exec git "$@"`)
+	c := newClient(t, gitcli.Options{Binary: bin, CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	head := r.commit("big.txt", strings.Repeat("x", 100))
+	if _, err := c.Sync(t.Context(), "o", "r", "main"); err != nil {
+		t.Fatal(err)
+	}
+	before := readFile(t, log)
+	if _, err := c.BlobAt(t.Context(), "o", "r", head, "big.txt", 99); !errors.Is(err, gitcli.ErrBlobTooLarge) {
+		t.Fatalf("BlobAt(100 bytes, max 99) error = %v, want ErrBlobTooLarge", err)
+	}
+	calls := strings.TrimPrefix(readFile(t, log), before)
+	if strings.Contains(calls, "[blob]") {
+		t.Errorf("blob content was read for an oversized file:\n%s", calls)
+	}
+	if strings.Contains(calls, "big.txt") {
+		t.Errorf("path reached git's argv:\n%s", calls)
+	}
+	if got, err := c.BlobAt(t.Context(), "o", "r", head, "big.txt", 100); err != nil || len(got) != 100 {
+		t.Errorf("BlobAt(100 bytes, max 100) = %d bytes, %v, want 100, nil", len(got), err)
+	}
+}
+
+func TestBlobAt_OutputAboveTheStdoutCapIsTooLarge(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	head := r.commit("huge.bin", strings.Repeat("y", 1<<20+10))
+	c := newClient(t, gitcli.Options{CloneRoot: t.TempDir()})
+	if _, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.BlobAt(t.Context(), "o", "r", head, "huge.bin", 8<<20)
+	if !errors.Is(err, gitcli.ErrBlobTooLarge) || got != nil {
+		t.Errorf("BlobAt(1 MiB + 10 B, max 8 MiB) = %d bytes, %v, want nil, ErrBlobTooLarge", len(got), err)
+	}
+}

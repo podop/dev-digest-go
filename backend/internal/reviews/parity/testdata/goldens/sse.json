@@ -1,0 +1,570 @@
+{
+  "note": "SSE responses recorded from Fastify + fastify-sse-v2 4.2.2 over a real socket (GET /runs/:id/events). `body` is the exact byte stream decoded as UTF-8; `t` values come from the logical clock (compare with `\"t\":\"HH:MM:SS\"` replaced). Headers exclude `date`. `streams` replay or follow the scenarios of runs.json; `synthetic` publishes hand-picked events on a bus; `finalStatus` are runs the bus no longer holds; `errors` are rejections before streaming.",
+  "streams": [
+    {
+      "scenario": "single_agent_done_with_every_context_section",
+      "runId": "7e1d0000-0000-4000-8000-000000000001",
+      "mode": "live",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000001/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":5,\"kind\":\"info\",\"msg\":\"skills: 2 attached (pr-quality-rubric v5, secrets-scan v2) · ~40 tokens\",\"t\":\"12:00:00\",\"data\":{\"skills\":[{\"id\":\"5c1d0000-0000-4000-8000-000000000001\",\"name\":\"pr-quality-rubric\",\"version\":5},{\"id\":\"5c1d0000-0000-4000-8000-000000000002\",\"name\":\"secrets-scan\",\"version\":2}]}}\n\nid: 6\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":6,\"kind\":\"info\",\"msg\":\"project context: 2 included, 1 skipped · ~20 tokens\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":7,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":8,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 9\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":9,\"kind\":\"info\",\"msg\":\"callers digest: 3 caller signature(s) attached\",\"t\":\"12:00:00\"}\n\nid: 10\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":10,\"kind\":\"info\",\"msg\":\"repo map: 31 token(s) attached (cached=true)\",\"t\":\"12:00:00\"}\n\nid: 11\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":11,\"kind\":\"info\",\"msg\":\"file rank: 1/4 changed file(s) in top 5%\",\"t\":\"12:00:00\"}\n\nid: 12\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":12,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 13\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":13,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:00\",\"data\":{\"file\":\"all files\"}}\n\nid: 14\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":14,\"kind\":\"result\",\"msg\":\"all files: 5 candidate finding(s)\",\"t\":\"12:00:01\"}\n\nid: 15\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":15,\"kind\":\"result\",\"msg\":\"Reduced to 5 finding(s); verdict=request_changes, score=20\",\"t\":\"12:00:01\"}\n\nid: 16\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":16,\"kind\":\"info\",\"msg\":\"grounding dropped \\\"Beyond the hunk\\\": lines 60-70 do not intersect any diff hunk in 'src/api/users.ts'\",\"t\":\"12:00:01\"}\n\nid: 17\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":17,\"kind\":\"info\",\"msg\":\"grounding dropped \\\"File that is not in the diff\\\": file 'src/ghost.ts' not present in diff\",\"t\":\"12:00:01\"}\n\nid: 18\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":18,\"kind\":\"result\",\"msg\":\"Citation grounding: 3/5 passed\",\"t\":\"12:00:01\"}\n\nid: 19\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":19,\"kind\":\"result\",\"msg\":\"Persisted review 11111111-1111-4111-8111-111111111111 with 3 finding(s)\",\"t\":\"12:00:01\"}\n\nid: 20\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":20,\"kind\":\"info\",\"msg\":\"Run complete; trace persisted\",\"t\":\"12:00:01\"}\n\n"
+      }
+    },
+    {
+      "scenario": "single_agent_done_with_every_context_section",
+      "runId": "7e1d0000-0000-4000-8000-000000000001",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000001/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":5,\"kind\":\"info\",\"msg\":\"skills: 2 attached (pr-quality-rubric v5, secrets-scan v2) · ~40 tokens\",\"t\":\"12:00:00\",\"data\":{\"skills\":[{\"id\":\"5c1d0000-0000-4000-8000-000000000001\",\"name\":\"pr-quality-rubric\",\"version\":5},{\"id\":\"5c1d0000-0000-4000-8000-000000000002\",\"name\":\"secrets-scan\",\"version\":2}]}}\n\nid: 6\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":6,\"kind\":\"info\",\"msg\":\"project context: 2 included, 1 skipped · ~20 tokens\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":7,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":8,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 9\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":9,\"kind\":\"info\",\"msg\":\"callers digest: 3 caller signature(s) attached\",\"t\":\"12:00:00\"}\n\nid: 10\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":10,\"kind\":\"info\",\"msg\":\"repo map: 31 token(s) attached (cached=true)\",\"t\":\"12:00:00\"}\n\nid: 11\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":11,\"kind\":\"info\",\"msg\":\"file rank: 1/4 changed file(s) in top 5%\",\"t\":\"12:00:00\"}\n\nid: 12\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":12,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 13\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":13,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:00\",\"data\":{\"file\":\"all files\"}}\n\nid: 14\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":14,\"kind\":\"result\",\"msg\":\"all files: 5 candidate finding(s)\",\"t\":\"12:00:01\"}\n\nid: 15\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":15,\"kind\":\"result\",\"msg\":\"Reduced to 5 finding(s); verdict=request_changes, score=20\",\"t\":\"12:00:01\"}\n\nid: 16\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":16,\"kind\":\"info\",\"msg\":\"grounding dropped \\\"Beyond the hunk\\\": lines 60-70 do not intersect any diff hunk in 'src/api/users.ts'\",\"t\":\"12:00:01\"}\n\nid: 17\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":17,\"kind\":\"info\",\"msg\":\"grounding dropped \\\"File that is not in the diff\\\": file 'src/ghost.ts' not present in diff\",\"t\":\"12:00:01\"}\n\nid: 18\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":18,\"kind\":\"result\",\"msg\":\"Citation grounding: 3/5 passed\",\"t\":\"12:00:01\"}\n\nid: 19\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":19,\"kind\":\"result\",\"msg\":\"Persisted review 11111111-1111-4111-8111-111111111111 with 3 finding(s)\",\"t\":\"12:00:01\"}\n\nid: 20\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000001\",\"seq\":20,\"kind\":\"info\",\"msg\":\"Run complete; trace persisted\",\"t\":\"12:00:01\"}\n\n"
+      }
+    },
+    {
+      "scenario": "single_agent_minimal",
+      "runId": "7e1d0000-0000-4000-8000-000000000002",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000002/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"General Reviewer\\\" (openrouter/anthropic/claude-sonnet-4)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":5,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 6\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":6,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":7,\"kind\":\"info\",\"msg\":\"Repo intel disabled for this agent — skipping context enrichment\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":8,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 9\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":9,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:00\",\"data\":{\"file\":\"all files\"}}\n\nid: 10\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":10,\"kind\":\"result\",\"msg\":\"all files: 0 candidate finding(s)\",\"t\":\"12:00:01\"}\n\nid: 11\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":11,\"kind\":\"result\",\"msg\":\"Reduced to 0 finding(s); verdict=approve, score=95\",\"t\":\"12:00:01\"}\n\nid: 12\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":12,\"kind\":\"result\",\"msg\":\"Citation grounding: 0/0 passed\",\"t\":\"12:00:01\"}\n\nid: 13\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":13,\"kind\":\"result\",\"msg\":\"Persisted review 11111111-1111-4111-8111-111111111111 with 0 finding(s)\",\"t\":\"12:00:01\"}\n\nid: 14\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000002\",\"seq\":14,\"kind\":\"info\",\"msg\":\"Run complete; trace persisted\",\"t\":\"12:00:01\"}\n\n"
+      }
+    },
+    {
+      "scenario": "provider_key_missing_fails_without_a_call",
+      "runId": "7e1d0000-0000-4000-8000-000000000007",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000007/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000007\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000007\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000007\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000007\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000007\",\"seq\":5,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 6\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000007\",\"seq\":6,\"kind\":\"error\",\"msg\":\"Resolving openrouter provider failed (1ms): OPENROUTER_API_KEY is not configured\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000007\",\"seq\":7,\"kind\":\"error\",\"msg\":\"Run failed: OPENROUTER_API_KEY is not configured\",\"t\":\"12:00:00\"}\n\n"
+      }
+    },
+    {
+      "scenario": "map_reduce_done",
+      "runId": "7e1d0000-0000-4000-8000-00000000000b",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-00000000000b/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 3 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Map Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":5,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 6\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":6,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":7,\"kind\":\"info\",\"msg\":\"Repo intel disabled for this agent — skipping context enrichment\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":8,\"kind\":\"info\",\"msg\":\"Large diff → map-reduce over 3 files\",\"t\":\"12:00:00\"}\n\nid: 9\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":9,\"kind\":\"tool\",\"msg\":\"map: reviewing src/invoice/queue.ts\",\"t\":\"12:00:00\",\"data\":{\"file\":\"src/invoice/queue.ts\"}}\n\nid: 10\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":10,\"kind\":\"result\",\"msg\":\"src/invoice/queue.ts: 1 candidate finding(s)\",\"t\":\"12:00:01\"}\n\nid: 11\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":11,\"kind\":\"tool\",\"msg\":\"map: reviewing src/invoice/worker.ts\",\"t\":\"12:00:01\",\"data\":{\"file\":\"src/invoice/worker.ts\"}}\n\nid: 12\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":12,\"kind\":\"result\",\"msg\":\"src/invoice/worker.ts: 1 candidate finding(s)\",\"t\":\"12:00:03\"}\n\nid: 13\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":13,\"kind\":\"tool\",\"msg\":\"map: reviewing test/worker.test.ts\",\"t\":\"12:00:03\",\"data\":{\"file\":\"test/worker.test.ts\"}}\n\nid: 14\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":14,\"kind\":\"result\",\"msg\":\"test/worker.test.ts: 0 candidate finding(s)\",\"t\":\"12:00:04\"}\n\nid: 15\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":15,\"kind\":\"result\",\"msg\":\"Reduced to 2 finding(s); verdict=request_changes, score=80\",\"t\":\"12:00:04\"}\n\nid: 16\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":16,\"kind\":\"result\",\"msg\":\"Citation grounding: 2/2 passed\",\"t\":\"12:00:04\"}\n\nid: 17\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":17,\"kind\":\"result\",\"msg\":\"Persisted review 11111111-1111-4111-8111-111111111111 with 2 finding(s)\",\"t\":\"12:00:04\"}\n\nid: 18\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000b\",\"seq\":18,\"kind\":\"info\",\"msg\":\"Run complete; trace persisted\",\"t\":\"12:00:04\"}\n\n"
+      }
+    },
+    {
+      "scenario": "diff_load_fails_for_every_queued_run",
+      "runId": "7e1d0000-0000-4000-8000-00000000000c",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-00000000000c/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000c\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000c\",\"seq\":2,\"kind\":\"error\",\"msg\":\"Loading PR diff failed (20ms): connection terminated unexpectedly\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000000c\",\"seq\":3,\"kind\":\"error\",\"msg\":\"Failed to load PR diff: connection terminated unexpectedly\",\"t\":\"12:00:00\"}\n\n"
+      }
+    },
+    {
+      "scenario": "cancel_during_the_llm_call",
+      "runId": "7e1d0000-0000-4000-8000-000000000010",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000010/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":5,\"kind\":\"info\",\"msg\":\"skills: 1 attached (pr-quality-rubric v5) · ~27 tokens\",\"t\":\"12:00:00\",\"data\":{\"skills\":[{\"id\":\"5c1d0000-0000-4000-8000-000000000001\",\"name\":\"pr-quality-rubric\",\"version\":5}]}}\n\nid: 6\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":6,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":7,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":8,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 9\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":9,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:00\",\"data\":{\"file\":\"all files\"}}\n\nid: 10\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":10,\"kind\":\"info\",\"msg\":\"Cancellation requested — stopping…\",\"t\":\"12:00:01\"}\n\nid: 11\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000010\",\"seq\":11,\"kind\":\"error\",\"msg\":\"Run cancelled by user\",\"t\":\"12:00:01\"}\n\n"
+      }
+    },
+    {
+      "scenario": "cancel_lands_during_the_persist",
+      "runId": "7e1d0000-0000-4000-8000-000000000011",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000011/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":5,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 6\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":6,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":7,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":8,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:00\",\"data\":{\"file\":\"all files\"}}\n\nid: 9\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":9,\"kind\":\"result\",\"msg\":\"all files: 5 candidate finding(s)\",\"t\":\"12:00:01\"}\n\nid: 10\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":10,\"kind\":\"result\",\"msg\":\"Reduced to 5 finding(s); verdict=request_changes, score=20\",\"t\":\"12:00:01\"}\n\nid: 11\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":11,\"kind\":\"info\",\"msg\":\"grounding dropped \\\"Beyond the hunk\\\": lines 60-70 do not intersect any diff hunk in 'src/api/users.ts'\",\"t\":\"12:00:01\"}\n\nid: 12\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":12,\"kind\":\"info\",\"msg\":\"grounding dropped \\\"File that is not in the diff\\\": file 'src/ghost.ts' not present in diff\",\"t\":\"12:00:01\"}\n\nid: 13\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":13,\"kind\":\"result\",\"msg\":\"Citation grounding: 3/5 passed\",\"t\":\"12:00:01\"}\n\nid: 14\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000011\",\"seq\":14,\"kind\":\"error\",\"msg\":\"Run cancelled by user\",\"t\":\"12:00:01\"}\n\n"
+      }
+    },
+    {
+      "scenario": "cancel_during_the_diff_load",
+      "runId": "7e1d0000-0000-4000-8000-000000000012",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000012/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":2,\"kind\":\"info\",\"msg\":\"Cancellation requested — stopping…\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":3,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (25ms)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":5,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 6\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":6,\"kind\":\"info\",\"msg\":\"skills: 2 attached (pr-quality-rubric v5, secrets-scan v2) · ~40 tokens\",\"t\":\"12:00:00\",\"data\":{\"skills\":[{\"id\":\"5c1d0000-0000-4000-8000-000000000001\",\"name\":\"pr-quality-rubric\",\"version\":5},{\"id\":\"5c1d0000-0000-4000-8000-000000000002\",\"name\":\"secrets-scan\",\"version\":2}]}}\n\nid: 7\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":7,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":8,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 9\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":9,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 10\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000012\",\"seq\":10,\"kind\":\"error\",\"msg\":\"Run cancelled by user\",\"t\":\"12:00:00\"}\n\n"
+      }
+    },
+    {
+      "scenario": "mock_provider_review_of_pr482",
+      "runId": "7e1d0000-0000-4000-8000-000000000018",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-000000000018/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":5,\"kind\":\"info\",\"msg\":\"skills: 2 attached (pr-quality-rubric v5, secrets-scan v2) · ~40 tokens\",\"t\":\"12:00:00\",\"data\":{\"skills\":[{\"id\":\"5c1d0000-0000-4000-8000-000000000001\",\"name\":\"pr-quality-rubric\",\"version\":5},{\"id\":\"5c1d0000-0000-4000-8000-000000000002\",\"name\":\"secrets-scan\",\"version\":2}]}}\n\nid: 6\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":6,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":7,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":8,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 9\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":9,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:00\",\"data\":{\"file\":\"all files\"}}\n\nid: 10\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":10,\"kind\":\"result\",\"msg\":\"all files: 2 candidate finding(s)\",\"t\":\"12:00:01\"}\n\nid: 11\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":11,\"kind\":\"result\",\"msg\":\"Reduced to 2 finding(s); verdict=comment, score=70\",\"t\":\"12:00:01\"}\n\nid: 12\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":12,\"kind\":\"result\",\"msg\":\"Citation grounding: 2/2 passed\",\"t\":\"12:00:01\"}\n\nid: 13\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":13,\"kind\":\"result\",\"msg\":\"Persisted review 11111111-1111-4111-8111-111111111111 with 2 finding(s)\",\"t\":\"12:00:01\"}\n\nid: 14\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000018\",\"seq\":14,\"kind\":\"info\",\"msg\":\"Run complete; trace persisted\",\"t\":\"12:00:01\"}\n\n"
+      }
+    },
+    {
+      "scenario": "provider_fails_after_persist_prerequisites",
+      "runId": "7e1d0000-0000-4000-8000-00000000001a",
+      "mode": "replay",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-00000000001a/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":1,\"kind\":\"tool\",\"msg\":\"Loading PR diff…\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Loading PR diff done (20ms)\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":3,\"kind\":\"info\",\"msg\":\"Diff ready — 4 changed file(s); starting 1 agent run(s)\",\"t\":\"12:00:00\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":4,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 5\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":5,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 6\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":6,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider done (1ms)\",\"t\":\"12:00:00\"}\n\nid: 7\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":7,\"kind\":\"info\",\"msg\":\"Reviewing 4 changed file(s) in one pass\",\"t\":\"12:00:00\"}\n\nid: 8\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":8,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:00\",\"data\":{\"file\":\"all files\"}}\n\nid: 9\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-00000000001a\",\"seq\":9,\"kind\":\"error\",\"msg\":\"Run failed: OpenRouter returned no choices for Review: moderation\",\"t\":\"12:00:01\"}\n\n"
+      }
+    }
+  ],
+  "synthetic": [
+    {
+      "name": "every_kind_with_data",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b1",
+      "connectFirst": false,
+      "events": [
+        {"kind": "info", "msg": "Starting review with agent \"Security Reviewer\" (openrouter/deepseek/deepseek-v4-flash)"},
+        {"kind": "tool", "msg": "Resolving openrouter provider…"},
+        {
+          "kind": "tool",
+          "msg": "Reviewing all files in one pass",
+          "data": {"file": "all files"}
+        },
+        {"kind": "result", "msg": "all files: 2 candidate finding(s)"},
+        {
+          "kind": "info",
+          "msg": "skills: 2 attached (a v1, b v2) · ~12 tokens",
+          "data": {
+            "skills": [
+              {"id": "s1", "name": "a", "version": 1},
+              {"id": "s2", "name": "b", "version": 2}
+            ]
+          }
+        },
+        {
+          "kind": "info",
+          "msg": "warning: x diff (250000 chars) exceeds maxDiffChars=200000 → split into 2 part(s); oversize hunk(s) truncated",
+          "data": {"warning": "diff_oversize", "file": "x", "parts": 2, "truncated": true}
+        },
+        {"kind": "error", "msg": "Run failed: boom"}
+      ],
+      "escapingSensitive": false,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000b1/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b1\",\"seq\":1,\"kind\":\"info\",\"msg\":\"Starting review with agent \\\"Security Reviewer\\\" (openrouter/deepseek/deepseek-v4-flash)\",\"t\":\"12:00:00\"}\n\nid: 2\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b1\",\"seq\":2,\"kind\":\"tool\",\"msg\":\"Resolving openrouter provider…\",\"t\":\"12:00:00\"}\n\nid: 3\nevent: tool\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b1\",\"seq\":3,\"kind\":\"tool\",\"msg\":\"Reviewing all files in one pass\",\"t\":\"12:00:01\",\"data\":{\"file\":\"all files\"}}\n\nid: 4\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b1\",\"seq\":4,\"kind\":\"result\",\"msg\":\"all files: 2 candidate finding(s)\",\"t\":\"12:00:01\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b1\",\"seq\":5,\"kind\":\"info\",\"msg\":\"skills: 2 attached (a v1, b v2) · ~12 tokens\",\"t\":\"12:00:02\",\"data\":{\"skills\":[{\"id\":\"s1\",\"name\":\"a\",\"version\":1},{\"id\":\"s2\",\"name\":\"b\",\"version\":2}]}}\n\nid: 6\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b1\",\"seq\":6,\"kind\":\"info\",\"msg\":\"warning: x diff (250000 chars) exceeds maxDiffChars=200000 → split into 2 part(s); oversize hunk(s) truncated\",\"t\":\"12:00:02\",\"data\":{\"warning\":\"diff_oversize\",\"file\":\"x\",\"parts\":2,\"truncated\":true}}\n\nid: 7\nevent: error\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b1\",\"seq\":7,\"kind\":\"error\",\"msg\":\"Run failed: boom\",\"t\":\"12:00:02\"}\n\n"
+      }
+    },
+    {
+      "name": "live_stream_connected_before_the_first_event",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b2",
+      "connectFirst": true,
+      "events": [
+        {"kind": "info", "msg": "first"},
+        {
+          "kind": "info",
+          "msg": "second",
+          "data": {
+            "n": 2,
+            "ok": true,
+            "none": null,
+            "list": [1, 2.5, "three"],
+            "nested": {"b": 1, "a": 2}
+          }
+        },
+        {"kind": "result", "msg": "third"}
+      ],
+      "escapingSensitive": false,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000b2/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b2\",\"seq\":1,\"kind\":\"info\",\"msg\":\"first\",\"t\":\"12:00:03\"}\n\nid: 2\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b2\",\"seq\":2,\"kind\":\"info\",\"msg\":\"second\",\"t\":\"12:00:03\",\"data\":{\"n\":2,\"ok\":true,\"none\":null,\"list\":[1,2.5,\"three\"],\"nested\":{\"b\":1,\"a\":2}}}\n\nid: 3\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b2\",\"seq\":3,\"kind\":\"result\",\"msg\":\"third\",\"t\":\"12:00:04\"}\n\n"
+      }
+    },
+    {
+      "name": "json_escaping_of_the_message",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b3",
+      "connectFirst": false,
+      "events": [
+        {"kind": "info", "msg": "quotes \" and backslash \\ and slash / and tab \t and newline \n and cr \r"},
+        {"kind": "info", "msg": "html <script>alert(1)</script> & \"amp\" 'single'"},
+        {"kind": "info", "msg": "unicode café — 日本語 · ✓ …"},
+        {"kind": "info", "msg": "astral 😀 and control \u0001 \u001f and del \u007f"},
+        {
+          "kind": "info",
+          "msg": "",
+          "data": {"empty": ""}
+        }
+      ],
+      "escapingSensitive": false,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000b3/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b3\",\"seq\":1,\"kind\":\"info\",\"msg\":\"quotes \\\" and backslash \\\\ and slash / and tab \\t and newline \\n and cr \\r\",\"t\":\"12:00:04\"}\n\nid: 2\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b3\",\"seq\":2,\"kind\":\"info\",\"msg\":\"html <script>alert(1)</script> & \\\"amp\\\" 'single'\",\"t\":\"12:00:04\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b3\",\"seq\":3,\"kind\":\"info\",\"msg\":\"unicode café — 日本語 · ✓ …\",\"t\":\"12:00:05\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b3\",\"seq\":4,\"kind\":\"info\",\"msg\":\"astral 😀 and control \\u0001 \\u001f and del \u007f\",\"t\":\"12:00:05\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b3\",\"seq\":5,\"kind\":\"info\",\"msg\":\"\",\"t\":\"12:00:06\",\"data\":{\"empty\":\"\"}}\n\n"
+      }
+    },
+    {
+      "name": "line_separators_are_not_escaped_by_node",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b4",
+      "connectFirst": false,
+      "events": [
+        {"kind": "info", "msg": "ls \u2028 ps \u2029 end"}
+      ],
+      "escapingSensitive": true,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000b4/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b4\",\"seq\":1,\"kind\":\"info\",\"msg\":\"ls \u2028 ps \u2029 end\",\"t\":\"12:00:06\"}\n\n"
+      }
+    },
+    {
+      "name": "long_message",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b5",
+      "connectFirst": false,
+      "events": [
+        {
+          "kind": "info",
+          "msg": {
+            "$repeat": ["0123456789", 3000]
+          }
+        }
+      ],
+      "escapingSensitive": false,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000b5/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": {
+          "$blob": true,
+          "len": 30133,
+          "sha256": "9363430bf0ae5a17037fbf55c735556cfe2d6fa6b202b602f8e94198ea3437fb",
+          "head": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-000000000",
+          "tail": "9012345678901234567890123456789012345678901234567890123456789\",\"t\":\"12:00:06\"}\n\n"
+        }
+      }
+    },
+    {
+      "name": "no_events_completed_run",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b6",
+      "connectFirst": false,
+      "events": [],
+      "escapingSensitive": false,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000b6/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\n"
+      }
+    },
+    {
+      "name": "many_events",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b7",
+      "connectFirst": false,
+      "events": [
+        {"kind": "info", "msg": "e1"},
+        {"kind": "info", "msg": "e2"},
+        {"kind": "info", "msg": "e3"},
+        {"kind": "info", "msg": "e4"},
+        {"kind": "info", "msg": "e5"},
+        {"kind": "info", "msg": "e6"},
+        {"kind": "info", "msg": "e7"},
+        {"kind": "info", "msg": "e8"},
+        {"kind": "info", "msg": "e9"},
+        {"kind": "info", "msg": "e10"},
+        {"kind": "info", "msg": "e11"},
+        {"kind": "result", "msg": "e12"}
+      ],
+      "escapingSensitive": false,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000b7/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":1,\"kind\":\"info\",\"msg\":\"e1\",\"t\":\"12:00:07\"}\n\nid: 2\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":2,\"kind\":\"info\",\"msg\":\"e2\",\"t\":\"12:00:07\"}\n\nid: 3\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":3,\"kind\":\"info\",\"msg\":\"e3\",\"t\":\"12:00:08\"}\n\nid: 4\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":4,\"kind\":\"info\",\"msg\":\"e4\",\"t\":\"12:00:08\"}\n\nid: 5\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":5,\"kind\":\"info\",\"msg\":\"e5\",\"t\":\"12:00:08\"}\n\nid: 6\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":6,\"kind\":\"info\",\"msg\":\"e6\",\"t\":\"12:00:09\"}\n\nid: 7\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":7,\"kind\":\"info\",\"msg\":\"e7\",\"t\":\"12:00:09\"}\n\nid: 8\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":8,\"kind\":\"info\",\"msg\":\"e8\",\"t\":\"12:00:10\"}\n\nid: 9\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":9,\"kind\":\"info\",\"msg\":\"e9\",\"t\":\"12:00:10\"}\n\nid: 10\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":10,\"kind\":\"info\",\"msg\":\"e10\",\"t\":\"12:00:10\"}\n\nid: 11\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":11,\"kind\":\"info\",\"msg\":\"e11\",\"t\":\"12:00:11\"}\n\nid: 12\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000b7\",\"seq\":12,\"kind\":\"result\",\"msg\":\"e12\",\"t\":\"12:00:11\"}\n\n"
+      }
+    }
+  ],
+  "finalStatus": [
+    {
+      "name": "done",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c1",
+      "dbStatus": "done",
+      "dbError": null,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c1/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c1\",\"seq\":1,\"kind\":\"result\",\"msg\":\"Run finished\",\"t\":\"12:00:12\",\"data\":{\"status\":\"done\",\"error\":null}}\n\n"
+      }
+    },
+    {
+      "name": "done_with_a_stale_error_text",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c2",
+      "dbStatus": "done",
+      "dbError": "ignored",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c2/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: result\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c2\",\"seq\":1,\"kind\":\"result\",\"msg\":\"Run finished\",\"t\":\"12:00:13\",\"data\":{\"status\":\"done\",\"error\":\"ignored\"}}\n\n"
+      }
+    },
+    {
+      "name": "failed_with_a_note",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c3",
+      "dbStatus": "failed",
+      "dbError": "OPENROUTER_API_KEY is not configured",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c3/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c3\",\"seq\":1,\"kind\":\"info\",\"msg\":\"Run failed: OPENROUTER_API_KEY is not configured\",\"t\":\"12:00:14\",\"data\":{\"status\":\"failed\",\"error\":\"OPENROUTER_API_KEY is not configured\"}}\n\n"
+      }
+    },
+    {
+      "name": "failed_without_a_note_after_a_reap",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c4",
+      "dbStatus": "failed",
+      "dbError": null,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c4/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c4\",\"seq\":1,\"kind\":\"info\",\"msg\":\"Run failed\",\"t\":\"12:00:15\",\"data\":{\"status\":\"failed\",\"error\":null}}\n\n"
+      }
+    },
+    {
+      "name": "cancelled",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c5",
+      "dbStatus": "cancelled",
+      "dbError": "Cancelled by user",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c5/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c5\",\"seq\":1,\"kind\":\"info\",\"msg\":\"Run cancelled: Cancelled by user\",\"t\":\"12:00:16\",\"data\":{\"status\":\"cancelled\",\"error\":\"Cancelled by user\"}}\n\n"
+      }
+    },
+    {
+      "name": "null_status_null_error",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c6",
+      "dbStatus": null,
+      "dbError": null,
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c6/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c6\",\"seq\":1,\"kind\":\"info\",\"msg\":\"Run ended\",\"t\":\"12:00:17\",\"data\":{\"status\":null,\"error\":null}}\n\n"
+      }
+    },
+    {
+      "name": "null_status_with_error",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c7",
+      "dbStatus": null,
+      "dbError": "legacy",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c7/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c7\",\"seq\":1,\"kind\":\"info\",\"msg\":\"Run ended: legacy\",\"t\":\"12:00:18\",\"data\":{\"status\":null,\"error\":\"legacy\"}}\n\n"
+      }
+    },
+    {
+      "name": "failed_with_unicode_and_quotes",
+      "runId": "7e1d0000-0000-4000-8000-0000000000c8",
+      "dbStatus": "failed",
+      "dbError": "bad \"thing\" — café <x>",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000c8/events"},
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8",
+          "connection": "keep-alive",
+          "cache-control": "no-cache,no-transform",
+          "x-no-compression": "1",
+          "transfer-encoding": "chunked"
+        },
+        "body": "retry: 3000\n\nid: 1\nevent: info\ndata: {\"runId\":\"7e1d0000-0000-4000-8000-0000000000c8\",\"seq\":1,\"kind\":\"info\",\"msg\":\"Run failed: bad \\\"thing\\\" — café <x>\",\"t\":\"12:00:19\",\"data\":{\"status\":\"failed\",\"error\":\"bad \\\"thing\\\" — café <x>\"}}\n\n"
+      }
+    }
+  ],
+  "errors": [
+    {
+      "name": "unknown_run_is_404_before_streaming",
+      "request": {"method": "GET", "path": "/runs/7e1d0000-0000-4000-8000-0000000000ff/events"},
+      "response": {
+        "status": 404,
+        "headers": {"content-type": "application/json; charset=utf-8", "content-length": "56", "connection": "close"},
+        "body": "{\"error\":{\"code\":\"not_found\",\"message\":\"Run not found\"}}"
+      }
+    },
+    {
+      "name": "non_uuid_id_is_422",
+      "request": {"method": "GET", "path": "/runs/not-a-uuid/events"},
+      "response": {
+        "status": 422,
+        "headers": {"content-type": "application/json; charset=utf-8", "content-length": "301", "connection": "close"},
+        "body": "{\"error\":{\"code\":\"validation_error\",\"message\":\"Request validation failed\",\"details\":[{\"keyword\":\"invalid_string\",\"instancePath\":\"/id\",\"schemaPath\":\"#/id/invalid_string\",\"params\":{\"issue\":{\"validation\":\"uuid\",\"code\":\"invalid_string\",\"message\":\"Invalid uuid\",\"path\":[\"id\"]}},\"message\":\"Invalid uuid\"}]}}"
+      }
+    }
+  ]
+}

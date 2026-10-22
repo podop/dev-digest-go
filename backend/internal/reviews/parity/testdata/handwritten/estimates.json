@@ -1,0 +1,303 @@
+{
+  "handWritten": true,
+  "spec": "FR4012, AC4064-AC4066 (GET /runs/estimates)",
+  "why": "agentRunEstimates is a window-function query (row_number() over (partition by agent_id order by ran_at desc, id)); it cannot run without a database, so the expected rows are computed by hand from the SQL.",
+  "source": "server/src/modules/reviews/repository/multi-agent.repo.ts agentRunEstimates; constants ESTIMATE_SAMPLE_SIZE = 10",
+  "rule": "Per agent: take its done runs of the workspace with agent_id not null and (duration_ms not null or cost_usd not null), newest first by ran_at then id; keep the first 10; sample_size = how many were kept; avg_duration_ms = avg(duration_ms) and avg_cost_usd = avg(cost_usd) over the kept runs (nulls ignored by avg; null when every value is null). Agents without such a run are absent. The route returns the rows as {agent_id, sample_size, avg_duration_ms, avg_cost_usd}.",
+  "cases": [
+    {
+      "name": "only_the_newest_ten_runs_count",
+      "runs": [
+        {
+          "id": "r01",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:01Z",
+          "duration_ms": 100,
+          "cost_usd": 0.001
+        },
+        {
+          "id": "r02",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:02Z",
+          "duration_ms": 200,
+          "cost_usd": 0.002
+        },
+        {
+          "id": "r03",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:03Z",
+          "duration_ms": 300,
+          "cost_usd": 0.003
+        },
+        {
+          "id": "r04",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:04Z",
+          "duration_ms": 400,
+          "cost_usd": 0.004
+        },
+        {
+          "id": "r05",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:05Z",
+          "duration_ms": 500,
+          "cost_usd": 0.005
+        },
+        {
+          "id": "r06",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:06Z",
+          "duration_ms": 600,
+          "cost_usd": 0.006
+        },
+        {
+          "id": "r07",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:07Z",
+          "duration_ms": 700,
+          "cost_usd": 0.007
+        },
+        {
+          "id": "r08",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:08Z",
+          "duration_ms": 800,
+          "cost_usd": 0.008
+        },
+        {
+          "id": "r09",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:09Z",
+          "duration_ms": 900,
+          "cost_usd": 0.009
+        },
+        {
+          "id": "r10",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:10Z",
+          "duration_ms": 1000,
+          "cost_usd": 0.01
+        },
+        {
+          "id": "r11",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:11Z",
+          "duration_ms": 1100,
+          "cost_usd": 0.011
+        },
+        {
+          "id": "r12",
+          "agent": "agent-1",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:12Z",
+          "duration_ms": 1200,
+          "cost_usd": 0.012
+        }
+      ],
+      "expected": [
+        {
+          "agent_id": "agent-1",
+          "sample_size": 10,
+          "avg_duration_ms": 750,
+          "avg_cost_usd": 0.0075
+        }
+      ]
+    },
+    {
+      "name": "nulls_are_ignored_and_empty_runs_excluded",
+      "runs": [
+        {
+          "id": "r1",
+          "agent": "agent-2",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:01Z",
+          "duration_ms": 100,
+          "cost_usd": null
+        },
+        {
+          "id": "r2",
+          "agent": "agent-2",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:02Z",
+          "duration_ms": null,
+          "cost_usd": 0.5
+        },
+        {
+          "id": "r3",
+          "agent": "agent-2",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:03Z",
+          "duration_ms": null,
+          "cost_usd": null
+        },
+        {
+          "id": "r4",
+          "agent": "agent-2",
+          "status": "failed",
+          "ran_at": "2026-01-01T00:00:04Z",
+          "duration_ms": 999,
+          "cost_usd": 9
+        },
+        {
+          "id": "r5",
+          "agent": null,
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:05Z",
+          "duration_ms": 5,
+          "cost_usd": 5
+        }
+      ],
+      "expected": [
+        {
+          "agent_id": "agent-2",
+          "sample_size": 2,
+          "avg_duration_ms": 100,
+          "avg_cost_usd": 0.5
+        }
+      ]
+    },
+    {
+      "name": "agents_without_a_done_run_are_absent",
+      "runs": [
+        {
+          "id": "r1",
+          "agent": "agent-3",
+          "status": "failed",
+          "ran_at": "2026-01-01T00:00:01Z",
+          "duration_ms": 1,
+          "cost_usd": 1
+        },
+        {
+          "id": "r2",
+          "agent": "agent-3",
+          "status": "running",
+          "ran_at": "2026-01-01T00:00:02Z",
+          "duration_ms": null,
+          "cost_usd": null
+        },
+        {
+          "id": "r3",
+          "agent": "agent-3",
+          "status": "cancelled",
+          "ran_at": "2026-01-01T00:00:03Z",
+          "duration_ms": 2,
+          "cost_usd": 2
+        }
+      ],
+      "expected": []
+    },
+    {
+      "name": "equal_ran_at_is_broken_by_id",
+      "runs": [
+        {
+          "id": "a01",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 10,
+          "cost_usd": null
+        },
+        {
+          "id": "a02",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 20,
+          "cost_usd": null
+        },
+        {
+          "id": "a03",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 30,
+          "cost_usd": null
+        },
+        {
+          "id": "a04",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 40,
+          "cost_usd": null
+        },
+        {
+          "id": "a05",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 50,
+          "cost_usd": null
+        },
+        {
+          "id": "a06",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 60,
+          "cost_usd": null
+        },
+        {
+          "id": "a07",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 70,
+          "cost_usd": null
+        },
+        {
+          "id": "a08",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 80,
+          "cost_usd": null
+        },
+        {
+          "id": "a09",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 90,
+          "cost_usd": null
+        },
+        {
+          "id": "a10",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 100,
+          "cost_usd": null
+        },
+        {
+          "id": "a11",
+          "agent": "agent-4",
+          "status": "done",
+          "ran_at": "2026-01-01T00:00:00Z",
+          "duration_ms": 110,
+          "cost_usd": null
+        }
+      ],
+      "expected": [
+        {
+          "agent_id": "agent-4",
+          "sample_size": 10,
+          "avg_duration_ms": 55,
+          "avg_cost_usd": null
+        }
+      ],
+      "note": "the 10 runs with the smallest ids (a01..a10) are kept: durations 10..100, mean 55"
+    }
+  ]
+}

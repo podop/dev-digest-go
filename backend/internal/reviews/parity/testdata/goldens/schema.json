@@ -1,0 +1,675 @@
+{
+  "note": "strict: toJsonSchema(Review, \"Review\") — the schema sent as response_format.json_schema.schema (D4010, P7). parse: parseWithRepair(Review, raw): on success the Zod-parsed data (unknown keys stripped, absent optional keys stay absent), else the issue list and the reprompt message. Invalid-JSON error texts are V8 messages (Go compares only the \"Output was not valid JSON: \" prefix and the reprompt tail). extractJson: the fallback extraction.",
+  "strict": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": ["request_changes", "approve", "comment"]
+        },
+        "summary": {"type": "string"},
+        "score": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Overall PR quality from 0 to 100, where HIGHER is better. 90–100 = no or only trivial issues (approve); 60–89 = minor suggestions; 30–59 = warnings worth addressing; 0–29 = critical problems. Must be consistent with `findings`: if there are no findings, the score is 90 or above."
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {"type": "string"},
+              "severity": {
+                "type": "string",
+                "enum": ["CRITICAL", "WARNING", "SUGGESTION"]
+              },
+              "category": {
+                "type": "string",
+                "enum": ["bug", "security", "perf", "style", "test"]
+              },
+              "title": {"type": "string"},
+              "file": {"type": "string"},
+              "start_line": {"type": "integer"},
+              "end_line": {"type": "integer"},
+              "rationale": {"type": "string"},
+              "suggestion": {"type": "string", "nullable": true},
+              "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+              "kind": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": ["finding", "secret_leak", "lethal_trifecta", "phantom", "hook"]
+                  },
+                  {"type": "null"}
+                ]
+              },
+              "trifecta_components": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["private_data_access", "untrusted_input", "exfil_path"]
+                    }
+                  },
+                  {"type": "null"}
+                ]
+              },
+              "evidence": {
+                "anyOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "component": {"$ref": "#/definitions/Review_properties_findings_items_properties_trifecta_components_anyOf_0_items"},
+                        "file": {"type": "string"},
+                        "line": {"type": "integer"}
+                      },
+                      "required": ["component", "file", "line"],
+                      "additionalProperties": false
+                    }
+                  },
+                  {"type": "null"}
+                ]
+              },
+              "skill": {
+                "type": "string",
+                "nullable": true,
+                "description": "If this finding enforces a rule from a skill listed under \"## Skills / rules\", the exact name from that skill's ### heading; otherwise null."
+              },
+              "out_of_scope": {
+                "type": "boolean",
+                "nullable": true,
+                "description": "true when this finding is outside the \"## PR intent\" section's stated in-scope changes (only meaningful when that section is present in this prompt — otherwise leave unset). Flagging a finding this way NEVER means omitting it, downgrading its severity, or softening its rationale: always report every real defect at its true severity regardless of stated scope."
+              }
+            },
+            "required": [
+              "id",
+              "severity",
+              "category",
+              "title",
+              "file",
+              "start_line",
+              "end_line",
+              "rationale",
+              "suggestion",
+              "confidence",
+              "kind",
+              "trifecta_components",
+              "evidence",
+              "skill",
+              "out_of_scope"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["verdict", "summary", "score", "findings"],
+      "additionalProperties": false,
+      "definitions": {
+        "Review_properties_findings_items_properties_trifecta_components_anyOf_0_items": {
+          "type": "string",
+          "enum": ["private_data_access", "untrusted_input", "exfil_path"]
+        },
+        "Review": {
+          "type": "object",
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "enum": ["request_changes", "approve", "comment"]
+            },
+            "summary": {"type": "string"},
+            "score": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "Overall PR quality from 0 to 100, where HIGHER is better. 90–100 = no or only trivial issues (approve); 60–89 = minor suggestions; 30–59 = warnings worth addressing; 0–29 = critical problems. Must be consistent with `findings`: if there are no findings, the score is 90 or above."
+            },
+            "findings": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {"type": "string"},
+                  "severity": {
+                    "type": "string",
+                    "enum": ["CRITICAL", "WARNING", "SUGGESTION"]
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["bug", "security", "perf", "style", "test"]
+                  },
+                  "title": {"type": "string"},
+                  "file": {"type": "string"},
+                  "start_line": {"type": "integer"},
+                  "end_line": {"type": "integer"},
+                  "rationale": {"type": "string"},
+                  "suggestion": {"type": "string", "nullable": true},
+                  "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                  "kind": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": ["finding", "secret_leak", "lethal_trifecta", "phantom", "hook"]
+                      },
+                      {"type": "null"}
+                    ]
+                  },
+                  "trifecta_components": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "enum": ["private_data_access", "untrusted_input", "exfil_path"]
+                        }
+                      },
+                      {"type": "null"}
+                    ]
+                  },
+                  "evidence": {
+                    "anyOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "component": {"$ref": "#/definitions/Review_properties_findings_items_properties_trifecta_components_anyOf_0_items"},
+                            "file": {"type": "string"},
+                            "line": {"type": "integer"}
+                          },
+                          "required": ["component", "file", "line"],
+                          "additionalProperties": false
+                        }
+                      },
+                      {"type": "null"}
+                    ]
+                  },
+                  "skill": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "If this finding enforces a rule from a skill listed under \"## Skills / rules\", the exact name from that skill's ### heading; otherwise null."
+                  },
+                  "out_of_scope": {
+                    "type": "boolean",
+                    "nullable": true,
+                    "description": "true when this finding is outside the \"## PR intent\" section's stated in-scope changes (only meaningful when that section is present in this prompt — otherwise leave unset). Flagging a finding this way NEVER means omitting it, downgrading its severity, or softening its rationale: always report every real defect at its true severity regardless of stated scope."
+                  }
+                },
+                "required": [
+                  "id",
+                  "severity",
+                  "category",
+                  "title",
+                  "file",
+                  "start_line",
+                  "end_line",
+                  "rationale",
+                  "suggestion",
+                  "confidence",
+                  "kind",
+                  "trifecta_components",
+                  "evidence",
+                  "skill",
+                  "out_of_scope"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["verdict", "summary", "score", "findings"],
+          "additionalProperties": false
+        }
+      },
+      "$schema": "http://json-schema.org/draft-07/schema#"
+    },
+    "name": "Review"
+  },
+  "parse": [
+    {
+      "name": "valid_minimal",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": []
+      }
+    },
+    {
+      "name": "valid_with_all_finding_fields",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": \"fix\", \"confidence\": 0.5, \"kind\": \"secret_leak\", \"trifecta_components\": [\"untrusted_input\"], \"evidence\": [{\"component\": \"untrusted_input\", \"file\": \"a.ts\", \"line\": 3}], \"skill\": \"x\", \"out_of_scope\": true}]}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": [
+          {
+            "id": "f1",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "T",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 2,
+            "rationale": "R",
+            "suggestion": "fix",
+            "confidence": 0.5,
+            "kind": "secret_leak",
+            "trifecta_components": ["untrusted_input"],
+            "evidence": [
+              {"component": "untrusted_input", "file": "a.ts", "line": 3}
+            ],
+            "skill": "x",
+            "out_of_scope": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "valid_with_optional_fields_absent",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"CRITICAL\", \"category\": \"security\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 1, \"rationale\": \"R\", \"confidence\": 1}]}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": [
+          {
+            "id": "f1",
+            "severity": "CRITICAL",
+            "category": "security",
+            "title": "T",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "R",
+            "confidence": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "unknown_keys_are_stripped",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null, \"unknown_key\": 1}], \"extra\": \"x\"}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": [
+          {
+            "id": "f1",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "T",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 2,
+            "rationale": "R",
+            "suggestion": null,
+            "confidence": 0.5,
+            "kind": null,
+            "trifecta_components": null,
+            "evidence": null,
+            "skill": null,
+            "out_of_scope": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "surrounding_whitespace",
+      "raw": "\n  {\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}  \n",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": []
+      }
+    },
+    {
+      "name": "fenced_json",
+      "raw": "```json\n{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}\n```",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": []
+      }
+    },
+    {
+      "name": "fenced_without_language",
+      "raw": "```\n{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}\n```",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": []
+      }
+    },
+    {
+      "name": "prose_around_the_object",
+      "raw": "Here is the review: {\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []} Hope it helps.",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": []
+      }
+    },
+    {
+      "name": "invalid_json_plain_text",
+      "raw": "oops",
+      "ok": false,
+      "error": "Output was not valid JSON: Unexpected token 'o', \"oops\" is not valid JSON",
+      "repromptMessage": "Output was not valid JSON: Unexpected token 'o', \"oops\" is not valid JSON\nReturn ONLY a single valid JSON object matching the schema, no prose."
+    },
+    {
+      "name": "invalid_json_trailing_comma",
+      "raw": "{\"verdict\":\"comment\",\"summary\":\"S\",\"score\":50,\"findings\":[],}",
+      "ok": false,
+      "error": "Output was not valid JSON: Expected double-quoted property name in JSON at position 60 (line 1 column 61)",
+      "repromptMessage": "Output was not valid JSON: Expected double-quoted property name in JSON at position 60 (line 1 column 61)\nReturn ONLY a single valid JSON object matching the schema, no prose."
+    },
+    {
+      "name": "invalid_json_truncated",
+      "raw": "{\"verdict\":\"comment\",\"summary\":\"S\",\"score\":50,\"findin",
+      "ok": false,
+      "error": "Output was not valid JSON: Unterminated string in JSON at position 53 (line 1 column 54)",
+      "repromptMessage": "Output was not valid JSON: Unterminated string in JSON at position 53 (line 1 column 54)\nReturn ONLY a single valid JSON object matching the schema, no prose."
+    },
+    {
+      "name": "empty_output",
+      "raw": "",
+      "ok": false,
+      "error": "Output was not valid JSON: Unexpected end of JSON input",
+      "repromptMessage": "Output was not valid JSON: Unexpected end of JSON input\nReturn ONLY a single valid JSON object matching the schema, no prose."
+    },
+    {
+      "name": "whitespace_output",
+      "raw": "   \n",
+      "ok": false,
+      "error": "Output was not valid JSON: Unexpected end of JSON input",
+      "repromptMessage": "Output was not valid JSON: Unexpected end of JSON input\nReturn ONLY a single valid JSON object matching the schema, no prose."
+    },
+    {
+      "name": "json_null",
+      "raw": "null",
+      "ok": false,
+      "error": "- (root): Expected object, received null",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received null"
+    },
+    {
+      "name": "json_array_root",
+      "raw": "[]",
+      "ok": false,
+      "error": "- (root): Expected object, received array",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received array"
+    },
+    {
+      "name": "json_string_root",
+      "raw": "\"review\"",
+      "ok": false,
+      "error": "- (root): Expected object, received string",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received string"
+    },
+    {
+      "name": "json_number_root",
+      "raw": "7",
+      "ok": false,
+      "error": "- (root): Expected object, received number",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- (root): Expected object, received number"
+    },
+    {
+      "name": "empty_object",
+      "raw": "{}",
+      "ok": false,
+      "error": "- verdict: Required\n- summary: Required\n- score: Required\n- findings: Required",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- verdict: Required\n- summary: Required\n- score: Required\n- findings: Required"
+    },
+    {
+      "name": "bad_verdict",
+      "raw": "{\"verdict\": \"maybe\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+      "ok": false,
+      "error": "- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'maybe'",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'maybe'"
+    },
+    {
+      "name": "summary_wrong_type",
+      "raw": "{\"verdict\": \"comment\", \"summary\": 5, \"score\": 50, \"findings\": []}",
+      "ok": false,
+      "error": "- summary: Expected string, received number",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- summary: Expected string, received number"
+    },
+    {
+      "name": "score_above_100",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 101, \"findings\": []}",
+      "ok": false,
+      "error": "- score: Number must be less than or equal to 100",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- score: Number must be less than or equal to 100"
+    },
+    {
+      "name": "score_negative",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": -1, \"findings\": []}",
+      "ok": false,
+      "error": "- score: Number must be greater than or equal to 0",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- score: Number must be greater than or equal to 0"
+    },
+    {
+      "name": "score_fractional",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 7.5, \"findings\": []}",
+      "ok": false,
+      "error": "- score: Expected integer, received float",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- score: Expected integer, received float"
+    },
+    {
+      "name": "score_string",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": \"70\", \"findings\": []}",
+      "ok": false,
+      "error": "- score: Expected number, received string",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- score: Expected number, received string"
+    },
+    {
+      "name": "score_null",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": null, \"findings\": []}",
+      "ok": false,
+      "error": "- score: Expected number, received null",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- score: Expected number, received null"
+    },
+    {
+      "name": "findings_not_an_array",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": {}}",
+      "ok": false,
+      "error": "- findings: Expected array, received object",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings: Expected array, received object"
+    },
+    {
+      "name": "findings_missing",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 1}",
+      "ok": false,
+      "error": "- findings: Required",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings: Required"
+    },
+    {
+      "name": "finding_bad_severity",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"HIGH\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.severity: Invalid enum value. Expected 'CRITICAL' | 'WARNING' | 'SUGGESTION', received 'HIGH'",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.severity: Invalid enum value. Expected 'CRITICAL' | 'WARNING' | 'SUGGESTION', received 'HIGH'"
+    },
+    {
+      "name": "finding_bad_category",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"docs\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.category: Invalid enum value. Expected 'bug' | 'security' | 'perf' | 'style' | 'test', received 'docs'",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.category: Invalid enum value. Expected 'bug' | 'security' | 'perf' | 'style' | 'test', received 'docs'"
+    },
+    {
+      "name": "finding_confidence_above_one",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 1.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.confidence: Number must be less than or equal to 1",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.confidence: Number must be less than or equal to 1"
+    },
+    {
+      "name": "finding_confidence_negative",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": -0.1, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.confidence: Number must be greater than or equal to 0",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.confidence: Number must be greater than or equal to 0"
+    },
+    {
+      "name": "finding_line_fractional",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1.5, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.start_line: Expected integer, received float",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.start_line: Expected integer, received float"
+    },
+    {
+      "name": "finding_line_as_string",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": \"2\", \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.end_line: Expected number, received string",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.end_line: Expected number, received string"
+    },
+    {
+      "name": "finding_missing_required_fields",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\"}]}",
+      "ok": false,
+      "error": "- findings.0.severity: Required\n- findings.0.category: Required\n- findings.0.title: Required\n- findings.0.file: Required\n- findings.0.start_line: Required\n- findings.0.end_line: Required\n- findings.0.rationale: Required\n- findings.0.confidence: Required",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.severity: Required\n- findings.0.category: Required\n- findings.0.title: Required\n- findings.0.file: Required\n- findings.0.start_line: Required\n- findings.0.end_line: Required\n- findings.0.rationale: Required\n- findings.0.confidence: Required"
+    },
+    {
+      "name": "finding_not_an_object",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [\"nope\", null, 3]}",
+      "ok": false,
+      "error": "- findings.0: Expected object, received string\n- findings.1: Expected object, received null\n- findings.2: Expected object, received number",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0: Expected object, received string\n- findings.1: Expected object, received null\n- findings.2: Expected object, received number"
+    },
+    {
+      "name": "finding_bad_kind",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": \"other\", \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.kind: Invalid enum value. Expected 'finding' | 'secret_leak' | 'lethal_trifecta' | 'phantom' | 'hook', received 'other'",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.kind: Invalid enum value. Expected 'finding' | 'secret_leak' | 'lethal_trifecta' | 'phantom' | 'hook', received 'other'"
+    },
+    {
+      "name": "finding_bad_trifecta_component",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": [\"private_data_access\", \"nope\"], \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.trifecta_components.1: Invalid enum value. Expected 'private_data_access' | 'untrusted_input' | 'exfil_path', received 'nope'",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.trifecta_components.1: Invalid enum value. Expected 'private_data_access' | 'untrusted_input' | 'exfil_path', received 'nope'"
+    },
+    {
+      "name": "finding_evidence_bad_item",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": [{\"component\": \"untrusted_input\", \"file\": \"a.ts\"}], \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.evidence.0.line: Required",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.evidence.0.line: Required"
+    },
+    {
+      "name": "finding_skill_wrong_type",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": 3, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- findings.0.skill: Expected string, received number",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.skill: Expected string, received number"
+    },
+    {
+      "name": "finding_out_of_scope_wrong_type",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": \"yes\"}]}",
+      "ok": false,
+      "error": "- findings.0.out_of_scope: Expected boolean, received string",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.out_of_scope: Expected boolean, received string"
+    },
+    {
+      "name": "many_issues_in_two_findings",
+      "raw": "{\"verdict\": \"x\", \"summary\": null, \"score\": 500, \"findings\": [{\"id\": \"f1\", \"severity\": \"bad\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 9, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}, {\"id\": \"f1\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": 5, \"file\": null, \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+      "ok": false,
+      "error": "- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'x'\n- summary: Expected string, received null\n- score: Number must be less than or equal to 100\n- findings.0.severity: Invalid enum value. Expected 'CRITICAL' | 'WARNING' | 'SUGGESTION', received 'bad'\n- findings.0.confidence: Number must be less than or equal to 1\n- findings.1.title: Expected string, received number\n- findings.1.file: Expected string, received null",
+      "repromptMessage": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'x'\n- summary: Expected string, received null\n- score: Number must be less than or equal to 100\n- findings.0.severity: Invalid enum value. Expected 'CRITICAL' | 'WARNING' | 'SUGGESTION', received 'bad'\n- findings.0.confidence: Number must be less than or equal to 1\n- findings.1.title: Expected string, received number\n- findings.1.file: Expected string, received null"
+    },
+    {
+      "name": "large_numbers",
+      "raw": "{\"verdict\":\"comment\",\"summary\":\"S\",\"score\":50,\"findings\":[{\"id\":\"f\",\"severity\":\"WARNING\",\"category\":\"bug\",\"title\":\"T\",\"file\":\"a\",\"start_line\":1e12,\"end_line\":-1e12,\"rationale\":\"R\",\"confidence\":0.5}]}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": [
+          {
+            "id": "f",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "T",
+            "file": "a",
+            "start_line": 1000000000000,
+            "end_line": -1000000000000,
+            "rationale": "R",
+            "confidence": 0.5
+          }
+        ]
+      }
+    },
+    {
+      "name": "unicode_strings",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"caf\\u00e9 \\u2713 \\ud83d\\ude00\", \"score\": 50, \"findings\": []}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "café ✓ 😀",
+        "score": 50,
+        "findings": []
+      }
+    },
+    {
+      "name": "duplicate_keys_last_wins",
+      "raw": "{\"verdict\":\"approve\",\"verdict\":\"comment\",\"summary\":\"S\",\"score\":50,\"findings\":[]}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "S",
+        "score": 50,
+        "findings": []
+      }
+    },
+    {
+      "name": "nested_fence_inside_a_string",
+      "raw": "{\"verdict\": \"comment\", \"summary\": \"use ```js code``` here\", \"score\": 50, \"findings\": []}",
+      "ok": true,
+      "data": {
+        "verdict": "comment",
+        "summary": "use ```js code``` here",
+        "score": 50,
+        "findings": []
+      }
+    }
+  ],
+  "extractJson": [
+    {"text": "{\"a\":1}", "out": "{\"a\":1}"},
+    {"text": "```json\n{\"a\":1}\n```", "out": "{\"a\":1}"},
+    {"text": "text {\"a\":{\"b\":2}} tail", "out": "{\"a\":{\"b\":2}}"},
+    {"text": "text [1,2,3] tail", "out": "[1,2,3]"},
+    {"text": "{\"a\":\"}\"} tail", "out": "{\"a\":\"}"},
+    {"text": "no json here", "out": "no json here"},
+    {"text": "", "out": ""},
+    {"text": "  \n{\"a\":1}\n", "out": "{\"a\":1}"},
+    {"text": "```\nnot json\n```", "out": "not json"},
+    {"text": "prefix ```json\n{\"x\":1}``` suffix", "out": "{\"x\":1}"},
+    {"text": "{\"unterminated\": {\"a\": 1}", "out": "{\"unterminated\": {\"a\": 1}"},
+    {"text": "[{\"a\":1}, {\"b\":2}] and {\"c\":3}", "out": "[{\"a\":1}, {\"b\":2}]"},
+    {"text": "{\"s\":\"a\\\"}\"}", "out": "{\"s\":\"a\\\"}"},
+    {"text": "``` ```", "out": "``` ```"},
+    {"text": "```json```", "out": "```json```"}
+  ]
+}

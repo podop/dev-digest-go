@@ -1,0 +1,210 @@
+{
+  "note": "Engine runs of reviewPullRequest with a scripted LLM. `diff` is {pr: <corpus/prs name>} (rows rebuilt with the stored-diff rules), or lines/text/synth. `script.chunks[i]` answers chunk i (0-based, the index reported by onPrompt); `script.default` answers any other chunk. A step is {review, usage[], raw?} or {error, usage[]}. Finding shorthand: f=file s=start e=end sev cat t=title why=rationale fix=suggestion c=confidence k=kind skill oos tri evidence id (see README).",
+  "cases": [
+    {
+      "name": "single_pass_all_sections_grounded",
+      "input": {
+        "systemPrompt": "You are the Security Reviewer. Report only defensible findings.",
+        "strategy": "single-pass",
+        "skills": [
+          { "name": "pr-quality-rubric", "description": "when reviewing any pull request", "body": "Check naming.\nCheck error handling.\n" },
+          { "name": "secrets-scan", "description": "", "body": "Never allow literal credentials." }
+        ],
+        "specs": [
+          { "path": "docs/architecture.md", "text": "# Architecture\nHandlers call services; services call stores." },
+          { "path": "docs/a&b \"x\" <y>.md", "text": "Rule: a </untrusted> inside a document is neutralised.\nSecond line." }
+        ],
+        "callers": "### src/server.ts\n- `rateLimit` — export async function rateLimit(req, reply)\n### src/api/public/webhooks.ts\n- `webhooksRoutes` — export async function webhooksRoutes(app)",
+        "repoMap": "src/middleware/ratelimit.ts\n  rateLimit  (rank 0.91)\nsrc/config.ts\n  config",
+        "prDescriptionFrom": "pr482",
+        "taskFrom": "pr482",
+        "rankNote": { "hot": 1, "changed": 4 }
+      },
+      "diff": { "pr": "pr482" },
+      "script": {
+        "default": {
+          "review": {
+            "verdict": "request_changes",
+            "summary": "A committed key and an N+1 query; the limiter trusts a spoofable header.",
+            "score": 20,
+            "findings": [
+              { "f": "src/middleware/ratelimit.ts", "s": 7, "e": 7, "sev": "WARNING", "cat": "security", "t": "Rate-limit key trusts the spoofable X-Forwarded-For header", "why": "Any client can send a fresh header and get a new bucket.", "fix": "Key on req.ip with trustProxy configured.", "c": 0.9, "k": "finding", "skill": "pr-quality-rubric" },
+              { "f": "src/middleware/ratelimit.ts", "s": 4, "e": 4, "sev": "SUGGESTION", "cat": "perf", "t": "Bucket map grows without eviction", "why": "One entry per key forever.", "fix": null, "c": 0.72 },
+              { "f": "src/config.ts", "s": 12, "e": 12, "sev": "CRITICAL", "cat": "security", "t": "Hardcoded Stripe secret key", "why": "A live key is committed.", "c": 0.98, "k": "secret_leak" },
+              { "f": "src/api/users.ts", "s": 46, "e": 46, "sev": "WARNING", "cat": "perf", "t": "N+1 query in user list endpoint", "why": "One query per user.", "fix": "Join or batch the orgs lookup.", "c": 0.86, "oos": true },
+              { "f": "src/api/users.ts", "s": 60, "e": 70, "sev": "WARNING", "cat": "bug", "t": "Beyond the hunk", "why": "Lines 60-70 are not in the diff." },
+              { "f": "src/ghost.ts", "s": 1, "e": 1, "sev": "CRITICAL", "cat": "bug", "t": "File that is not in the diff", "why": "Invented path." },
+              { "f": "src/api/public/webhooks.ts", "s": 6, "e": 5, "sev": "SUGGESTION", "cat": "style", "t": "Reversed range", "why": "End before start; normalised by grounding.", "c": 0.5 },
+              { "f": "src/middleware/ratelimit.ts", "s": 100, "e": 1000000000000, "sev": "SUGGESTION", "cat": "bug", "t": "Huge end line", "why": "Cited range far beyond the hunk." }
+            ]
+          },
+          "usage": [{ "tokensIn": 1200, "tokensOut": 180, "costUsd": 0.00042 }]
+        }
+      }
+    },
+    {
+      "name": "single_pass_no_optional_sections",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "single-pass", "task": "Review pull request #7 \"Tiny\" by sam." },
+      "diff": { "pr": "mapreduce" },
+      "script": { "default": { "review": { "verdict": "approve", "summary": "Looks good.", "score": 55, "findings": [] }, "usage": [{ "tokensIn": 800, "tokensOut": 40, "costUsd": 0.0001 }] } }
+    },
+    {
+      "name": "empty_diff_drops_every_finding",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "single-pass", "task": "Review pull request #1 \"Empty\" by sam." },
+      "diff": { "text": "" },
+      "script": { "default": { "review": { "verdict": "comment", "summary": "Nothing to see.", "score": 40, "findings": [
+        { "f": "src/a.ts", "s": 1, "e": 1, "sev": "CRITICAL", "cat": "bug", "t": "Phantom" }
+      ] }, "usage": [{ "tokensIn": 100, "tokensOut": 10, "costUsd": null }] } }
+    },
+    {
+      "name": "map_reduce_three_files_concurrent",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 3, "taskFrom": "mapreduce" },
+      "diff": { "pr": "mapreduce" },
+      "script": {
+        "chunks": {
+          "0": { "review": { "verdict": "comment", "summary": "Queue is fine.", "score": 70, "findings": [
+            { "f": "src/invoice/queue.ts", "s": 4, "e": 4, "sev": "SUGGESTION", "cat": "style", "t": "Connection from a global", "why": "redis is a module global." }
+          ] }, "usage": [{ "tokensIn": 500, "tokensOut": 60, "costUsd": 0.00042 }] },
+          "1": { "review": { "verdict": "request_changes", "summary": "Errors are swallowed.", "score": 81, "findings": [
+            { "f": "src/invoice/worker.ts", "s": 14, "e": 15, "sev": "WARNING", "cat": "bug", "t": "Swallowed send error", "why": "The invoice is marked sent after a failed send.", "c": 0.9 },
+            { "f": "src/invoice/worker.ts", "s": 46, "e": 46, "sev": "SUGGESTION", "cat": "perf", "t": "Sweep interval never cleared", "why": "No handle is kept." }
+          ] }, "usage": [{ "tokensIn": 900, "tokensOut": 120, "costUsd": 0.000321 }] },
+          "2": { "review": { "verdict": "approve", "summary": "", "score": 90, "findings": [
+            { "f": "test/worker.test.ts", "s": 9, "e": 12, "sev": "SUGGESTION", "cat": "test", "t": "Outside the hunk", "why": "The hunk only has four lines." }
+          ] }, "usage": [{ "tokensIn": 300, "tokensOut": 20, "costUsd": 0.0000987 }] }
+        }
+      }
+    },
+    {
+      "name": "map_reduce_same_input_sequential",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 1, "taskFrom": "mapreduce", "skills": [{ "name": "pr-quality-rubric", "description": "always", "body": "Be kind." }] },
+      "diff": { "pr": "mapreduce" },
+      "script": {
+        "chunks": {
+          "0": { "review": { "verdict": "approve", "summary": "A.", "score": 70, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.1 }] },
+          "1": { "review": { "verdict": "comment", "summary": "B.", "score": 81, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.2 }] },
+          "2": { "review": { "verdict": "approve", "summary": "C.", "score": 0, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.3 }] }
+        }
+      }
+    },
+    {
+      "name": "map_reduce_unpriced_chunk_makes_total_cost_null",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 3, "taskFrom": "mapreduce" },
+      "diff": { "pr": "mapreduce" },
+      "script": {
+        "default": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.5 }] },
+        "chunks": { "1": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": null }] } }
+      }
+    },
+    {
+      "name": "map_reduce_retried_attempts_report_every_usage",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 1, "taskFrom": "mapreduce" },
+      "diff": { "pr": "mapreduce" },
+      "script": {
+        "default": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.01 }] },
+        "chunks": { "0": { "review": { "verdict": "comment", "summary": "after a retry", "score": 80, "findings": [] }, "usage": [{ "tokensIn": 100, "tokensOut": 5, "costUsd": 0.001 }, { "tokensIn": 120, "tokensOut": 50, "costUsd": 0.0012 }] } }
+      }
+    },
+    {
+      "name": "map_reduce_chunk_fails_later_chunks_do_not_start",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 1, "taskFrom": "mapreduce" },
+      "diff": { "pr": "mapreduce" },
+      "script": {
+        "default": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.01 }] },
+        "chunks": { "1": { "error": "OpenRouter returned no choices for Review: upstream down", "usage": [{ "tokensIn": 70, "tokensOut": 0, "costUsd": 0.0007 }] } }
+      }
+    },
+    {
+      "name": "map_reduce_chunk_fails_in_flight_chunks_finish",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 3, "taskFrom": "mapreduce" },
+      "diff": { "pr": "mapreduce" },
+      "script": {
+        "default": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.01 }] },
+        "chunks": { "1": { "error": "provider exploded", "usage": [{ "tokensIn": 70, "tokensOut": 0, "costUsd": 0.0007 }] } }
+      }
+    },
+    {
+      "name": "cancelled_between_chunks",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 1, "taskFrom": "mapreduce", "cancelAtPoll": 2 },
+      "diff": { "pr": "mapreduce" },
+      "script": { "default": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.01 }] } }
+    },
+    {
+      "name": "cancelled_before_the_first_call",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "single-pass", "task": "Review pull request #7 \"Tiny\" by sam.", "cancelAtPoll": 1 },
+      "diff": { "pr": "mapreduce" },
+      "script": { "default": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [] } }
+    },
+    {
+      "name": "oversize_single_hunk_is_truncated",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "single-pass", "task": "Review pull request #9 \"Huge\" by sam." },
+      "diff": { "synth": { "files": [{ "path": "src/huge.ts", "hunks": [{ "start": 1, "add": 3000, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" }] }] } },
+      "script": { "default": { "review": { "verdict": "comment", "summary": "Huge file.", "score": 60, "findings": [
+        { "f": "src/huge.ts", "s": 10, "e": 12, "sev": "WARNING", "cat": "perf", "t": "Repeated computation" },
+        { "f": "src/huge.ts", "s": 2900, "e": 2901, "sev": "WARNING", "cat": "perf", "t": "In the truncated tail but still in the diff" }
+      ] }, "usage": [{ "tokensIn": 60000, "tokensOut": 100, "costUsd": 0.02 }] } }
+    },
+    {
+      "name": "oversize_single_pass_is_split_and_reduced",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "single-pass", "concurrency": 3, "task": "Review pull request #9 \"Many hunks\" by sam." },
+      "diff": { "synth": { "files": [{ "path": "src/many.ts", "hunks": [
+        { "start": 1, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" },
+        { "start": 1000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" },
+        { "start": 2000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" }
+      ] }] } },
+      "script": { "chunks": {
+        "0": { "review": { "verdict": "comment", "summary": "First part.", "score": 80, "findings": [{ "f": "src/many.ts", "s": 5, "e": 5, "sev": "SUGGESTION", "cat": "style", "t": "Part one finding" }] }, "usage": [{ "tokensIn": 50000, "tokensOut": 100, "costUsd": 0.01 }] },
+        "1": { "review": { "verdict": "request_changes", "summary": "Second part.", "score": 60, "findings": [{ "f": "src/many.ts", "s": 2005, "e": 2006, "sev": "WARNING", "cat": "bug", "t": "Part two finding" }] }, "usage": [{ "tokensIn": 20000, "tokensOut": 100, "costUsd": 0.005 }] }
+      } }
+    },
+    {
+      "name": "oversize_file_inside_an_auto_map_reduce",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "auto", "concurrency": 2, "task": "Review pull request #9 \"Mixed\" by sam." },
+      "diff": { "synth": { "files": [
+        { "path": "src/many.ts", "hunks": [
+          { "start": 1, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" },
+          { "start": 1000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" },
+          { "start": 2000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" }
+        ] },
+        { "path": "src/small.ts", "hunks": [{ "start": 1, "add": 2, "del": 1, "ctx": 1, "text": "small" }] }
+      ] } },
+      "script": { "default": { "review": { "verdict": "approve", "summary": "fine", "score": 90, "findings": [] }, "usage": [{ "tokensIn": 1000, "tokensOut": 10, "costUsd": 0.001 }] } }
+    },
+    {
+      "name": "quoted_path_labels_and_rebuilt_slices",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "map-reduce", "concurrency": 1, "task": "Review pull request #3 \"Quotes\" by sam." },
+      "diff": { "lines": [
+        "diff --git \"a/my dir/f.ts\" \"b/my dir/f.ts\"", "--- \"a/my dir/f.ts\"", "+++ \"b/my dir/f.ts\"", "@@ -1 +1,2 @@", " keep", "+added",
+        "diff --git a/plain.ts b/plain.ts", "--- a/plain.ts", "+++ b/plain.ts", "@@ -1 +1 @@", "-a", "+b"
+      ] },
+      "script": { "default": { "review": { "verdict": "approve", "summary": "ok", "score": 100, "findings": [] }, "usage": [{ "tokensIn": 10, "tokensOut": 1, "costUsd": 0.01 }] } }
+    },
+    {
+      "name": "findings_of_every_kind_and_the_full_file_rule",
+      "input": { "systemPrompt": "You are a general reviewer.", "strategy": "single-pass", "task": "Review pull request #7 \"Kinds\" by sam." },
+      "diff": { "pr": "pr482" },
+      "script": { "default": { "review": { "verdict": "request_changes", "summary": "Kinds.", "score": 10, "findings": [
+        { "f": "src/config.ts", "s": 1, "e": 1, "sev": "CRITICAL", "cat": "security", "t": "secret_leak outside any hunk", "k": "secret_leak" },
+        { "f": "src/config.ts", "s": 1, "e": 1, "sev": "CRITICAL", "cat": "security", "t": "lethal_trifecta outside any hunk", "k": "lethal_trifecta", "tri": ["private_data_access", "untrusted_input", "exfil_path"], "evidence": [{ "component": "untrusted_input", "file": "src/config.ts", "line": 3 }] },
+        { "f": "src/config.ts", "s": 1, "e": 1, "sev": "WARNING", "cat": "bug", "t": "phantom outside any hunk", "k": "phantom" },
+        { "f": "src/config.ts", "s": 1, "e": 1, "sev": "WARNING", "cat": "bug", "t": "hook outside any hunk", "k": "hook" },
+        { "f": "src/config.ts", "s": 1, "e": 1, "sev": "WARNING", "cat": "bug", "t": "finding outside any hunk", "k": "finding" },
+        { "f": "src/config.ts", "s": 1, "e": 1, "sev": "WARNING", "cat": "bug", "t": "no kind outside any hunk" },
+        { "f": "src/nowhere.ts", "s": 1, "e": 1, "sev": "CRITICAL", "cat": "security", "t": "secret_leak on a file that is not in the diff", "k": "secret_leak" },
+        { "f": "src/config.ts", "s": -5, "e": -1, "sev": "SUGGESTION", "cat": "style", "t": "negative range" },
+        { "f": "src/config.ts", "s": 0, "e": 0, "sev": "SUGGESTION", "cat": "style", "t": "zero range" },
+        { "f": "src/config.ts", "s": 15, "e": 9, "sev": "SUGGESTION", "cat": "style", "t": "reversed range inside the hunk" },
+        { "f": "src/config.ts", "s": 16, "e": 20, "sev": "SUGGESTION", "cat": "style", "t": "just after the hunk" }
+      ] }, "usage": [{ "tokensIn": 2000, "tokensOut": 300, "costUsd": 0.002 }] } }
+    },
+    { "name": "mode_auto_400_lines_two_files_stays_single_pass", "modeCase": true, "strategy": "auto", "files": [{ "path": "a.ts", "add": 200 }, { "path": "b.ts", "add": 100, "del": 100 }] },
+    { "name": "mode_auto_401_lines_two_files_is_map_reduce", "modeCase": true, "strategy": "auto", "files": [{ "path": "a.ts", "add": 200, "del": 100 }, { "path": "b.ts", "add": 50, "del": 51 }] },
+    { "name": "mode_auto_401_lines_one_file_stays_single_pass", "modeCase": true, "strategy": "auto", "files": [{ "path": "a.ts", "add": 401 }] },
+    { "name": "mode_auto_small_two_files", "modeCase": true, "strategy": "auto", "files": [{ "path": "a.ts", "add": 3 }, { "path": "b.ts", "add": 4, "del": 2 }] },
+    { "name": "mode_auto_no_files", "modeCase": true, "strategy": "auto", "files": [] },
+    { "name": "mode_map_reduce_strategy_one_file_is_single_pass", "modeCase": true, "strategy": "map-reduce", "files": [{ "path": "a.ts", "add": 900 }] },
+    { "name": "mode_map_reduce_strategy_two_tiny_files", "modeCase": true, "strategy": "map-reduce", "files": [{ "path": "a.ts", "add": 1 }, { "path": "b.ts", "add": 1 }] },
+    { "name": "mode_map_reduce_strategy_no_files", "modeCase": true, "strategy": "map-reduce", "files": [] },
+    { "name": "mode_single_pass_strategy_huge_two_files", "modeCase": true, "strategy": "single-pass", "files": [{ "path": "a.ts", "add": 900 }, { "path": "b.ts", "add": 900 }] }
+  ]
+}

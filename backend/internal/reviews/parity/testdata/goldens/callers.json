@@ -1,0 +1,423 @@
+{
+  "note": "references: extractReferences(content, symbol) → 1-based line numbers (the Node rules the callers scan uses). signatures: getCallerSignatures over the fixture clone (corpus/callers/fixtures/<fixture> + extraFiles), references sorted by path bytes then line; rows are {file, symbol, signature, rank}. Node reads changed files without a size cap and follows symlinks while reading them; the Go port (spec 7.11) caps reads at 409600 bytes and never follows symlinks, so those two cases are not in the corpus.",
+  "references": [
+    {
+      "name": "plain_call",
+      "symbol": "add",
+      "content": "const x = add(1, 2);",
+      "lines": [1]
+    },
+    {
+      "name": "space_before_paren",
+      "symbol": "add",
+      "content": "const x = add (1, 2);\nadd\t(1)",
+      "lines": [1, 2]
+    },
+    {
+      "name": "member_call_and_optional_chain",
+      "symbol": "add",
+      "content": "obj.add(1);\nobj?.add(2);\na.b.add (3);",
+      "lines": [1, 2, 3]
+    },
+    {
+      "name": "not_part_of_a_longer_identifier",
+      "symbol": "add",
+      "content": "padd(1);\nadd1(2);\n$add(3);\n_add(4);\nadd_(5);\nxadd (6);",
+      "lines": []
+    },
+    {
+      "name": "non_ascii_neighbours_are_not_word_characters",
+      "symbol": "add",
+      "content": "éadd(1);\nΣadd(2);\naddé(3);",
+      "lines": [1, 2]
+    },
+    {
+      "name": "new_expression",
+      "symbol": "Widget",
+      "content": "const w = new Widget();\nconst v = new  Widget;\nconst u = new WidgetFactory();\nnew Widget",
+      "lines": [1, 2, 4]
+    },
+    {
+      "name": "jsx_usage",
+      "symbol": "Widget",
+      "content": "<Widget />\n<Widget>\n<Widget\n<Widget/>\n<WidgetBox />\nreturn (<Widget a={1} />);",
+      "lines": [1, 2, 4, 6]
+    },
+    {
+      "name": "declaration_lines_are_skipped",
+      "symbol": "add",
+      "content": "function add(a, b) { return a + b; }\nexport async function add() {}\nfunction* add() {}\nfunction  *add() {}\nconst add = (a) => a;\nlet add = 1; add(2);\nvar add;\nclass add {}\ninterface add {}\ntype add = number;\nenum add { A }\nfunction add(x) { return add(x - 1); }",
+      "lines": []
+    },
+    {
+      "name": "class_body_method_declaration_counts_as_a_call",
+      "symbol": "plus",
+      "content": "  plus(n) {\n  async plus(n) {\n  static plus(n) {",
+      "lines": [1, 2, 3]
+    },
+    {
+      "name": "comment_lines_are_skipped",
+      "symbol": "add",
+      "content": "// add(1)\n  // add(2)\n * add(3)\n/* add(4) */\n\t/** add(5) */\nx(); // add(6)\nx(); /* add(7) */\ny = add(8); // trailing",
+      "lines": [7, 8]
+    },
+    {
+      "name": "import_and_reexport_lines_are_skipped",
+      "symbol": "add",
+      "content": "import { add } from './m';\nimport add(1)\nexport { add } from './m';\nexport {add} from './m';\nexport * from './m';\nexport { a, add } from \"./m\"; add(1);\n  import x from 'y'; add(2)\nexport { add };",
+      "lines": []
+    },
+    {
+      "name": "string_contents_are_blanked_first",
+      "symbol": "add",
+      "content": "log('add(1)');\nlog(\"add(2)\");\nlog(`add(3)`);\nlog(\"add(\" + add(4));\nlog('it\\'s add(5)');\nlog(`a ${add(6)} b`);\nlog('add(7)\nx = 'a' + add(8) + 'b';",
+      "lines": [4, 7, 8]
+    },
+    {
+      "name": "line_comment_marker_inside_a_string",
+      "symbol": "add",
+      "content": "url = 'http://x'; add(1);\ns = \"// not a comment\"; add(2);",
+      "lines": []
+    },
+    {
+      "name": "several_matches_on_one_line_count_once",
+      "symbol": "add",
+      "content": "add(1) + add(2) + obj.add(3)",
+      "lines": [1]
+    },
+    {
+      "name": "qualified_symbol_matches_its_last_segment",
+      "symbol": "Calculator.plus",
+      "content": "c.plus(1);\nplus(2);\nCalculator.plus(3);",
+      "lines": [1, 2, 3]
+    },
+    {
+      "name": "regex_metacharacters_in_the_symbol_are_escaped",
+      "symbol": "$el",
+      "content": "$el(1);\nxel(2);\na.$el(3);\n($el)(4);",
+      "lines": [1, 3]
+    },
+    {
+      "name": "crlf_lines",
+      "symbol": "add",
+      "content": "const a = add(1);\r\nconst b = 2;\r\nadd(3)\r\n",
+      "lines": [1, 3]
+    },
+    {
+      "name": "empty_content",
+      "symbol": "add",
+      "content": "",
+      "lines": []
+    },
+    {
+      "name": "no_trailing_newline_and_blank_lines",
+      "symbol": "add",
+      "content": "\n\nadd(1)",
+      "lines": [3]
+    },
+    {
+      "name": "line_numbers_are_one_based",
+      "symbol": "go",
+      "content": "a\nb\ngo()\nc\ngo()",
+      "lines": [3, 5]
+    },
+    {
+      "name": "empty_symbol_edge",
+      "symbol": "",
+      "content": "foo(1)\n(2)",
+      "lines": [2]
+    },
+    {
+      "name": "template_literal_spanning_lines_is_not_joined",
+      "symbol": "add",
+      "content": "const t = `\nadd(1)\n`;",
+      "lines": [2]
+    }
+  ],
+  "signatures": [
+    {
+      "name": "basic_changed_math",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 10,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "limit_two_stops_early",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 2,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0}
+      ]
+    },
+    {
+      "name": "limit_one",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 1,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0}
+      ]
+    },
+    {
+      "name": "default_limit_is_twenty",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": null,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "ranks_sort_descending_and_stable",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 10,
+      "ranks": [
+        {"path": "src/util/helpers.ts", "percentile": 90},
+        {"path": "src/z/last.ts", "percentile": 99},
+        {"path": "src/app.ts", "percentile": 50}
+      ],
+      "rows": [
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 99},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 90},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 90},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 90},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 50},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 50},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 50},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 50},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0}
+      ]
+    },
+    {
+      "name": "ranks_partially_known_others_get_zero",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 10,
+      "ranks": [
+        {"path": "src/z/last.ts", "percentile": 10}
+      ],
+      "rows": [
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 10},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "ranks_empty_keeps_scan_order",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 10,
+      "ranks": [],
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "unsupported_and_missing_changed_files_are_skipped",
+      "fixture": "basic",
+      "changedFiles": ["README.md", "src/missing.ts", "src/lib/math.ts"],
+      "limit": 10,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "first_declaring_file_wins_for_a_name",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/other.ts", "src/lib/math.ts"],
+      "limit": 10,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/lib/math.ts", "symbol": "plus", "signature": "plus(n: number): Calculator", "rank": 0},
+        {"file": "src/lib/math.ts", "symbol": "internal", "signature": "function internal()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "onlyHereCaller", "signature": "function onlyHereCaller()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "changed_file_order_decides_collection_order",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts", "src/lib/other.ts"],
+      "limit": 4,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0}
+      ]
+    },
+    {
+      "name": "only_here_has_one_caller",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/other.ts"],
+      "limit": 10,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/lib/math.ts", "symbol": "plus", "signature": "plus(n: number): Calculator", "rank": 0},
+        {"file": "src/lib/math.ts", "symbol": "internal", "signature": "function internal()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "onlyHereCaller", "signature": "function onlyHereCaller()", "rank": 0}
+      ]
+    },
+    {
+      "name": "class_and_jsx_usage",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 20,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "no_changed_files",
+      "fixture": "basic",
+      "changedFiles": [],
+      "limit": 10,
+      "rows": []
+    },
+    {
+      "name": "flag_off",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 10,
+      "enabled": false,
+      "rows": []
+    },
+    {
+      "name": "repo_without_a_clone",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 10,
+      "noClone": true,
+      "rows": []
+    },
+    {
+      "name": "path_escaping_the_clone_is_skipped",
+      "fixture": "basic",
+      "changedFiles": ["../outside.ts", "/etc/passwd", "src/lib/math.ts"],
+      "limit": 10,
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "ignored_directories_and_size_bound",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 20,
+      "extraFiles": [
+        {"path": "node_modules/pkg/index.ts", "content": "export function viaNodeModules() { return add(1, 1); }\n"},
+        {"path": "dist/out.js", "content": "export function viaDist() { return add(1, 1); }\n"},
+        {"path": "build/out.js", "content": "export function viaBuild() { return add(1, 1); }\n"},
+        {"path": ".next/out.js", "content": "export function viaNext() { return add(1, 1); }\n"},
+        {"path": "coverage/out.js", "content": "export function viaCoverage() { return add(1, 1); }\n"},
+        {"path": ".git/hooks/x.ts", "content": "export function viaGit() { return add(1, 1); }\n"},
+        {"path": "src/nested/node_modules/deep.ts", "content": "export function viaNestedNodeModules() { return add(1, 1); }\n"},
+        {"path": "src/big_included.ts", "content": "export function bigIncluded() { return add(1, 1); }\n", "padTo": 1999999},
+        {"path": "src/big_excluded.ts", "content": "export function bigExcluded() { return add(1, 1); }\n", "padTo": 2000000},
+        {"path": "src/data.json", "content": "{ \"add\": \"add(1)\" }\n"},
+        {"path": "src/script.py", "content": "def py():\n    add(1)\n"}
+      ],
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/big_included.ts", "symbol": "bigIncluded", "signature": "function bigIncluded()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    },
+    {
+      "name": "symlinks_are_not_followed_by_the_scan",
+      "fixture": "basic",
+      "changedFiles": ["src/lib/math.ts"],
+      "limit": 20,
+      "extraFiles": [
+        {"path": "src/linked.ts", "link": "app.ts"},
+        {"path": "src/linkdir", "link": "util"}
+      ],
+      "rows": [
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/app.ts", "symbol": "again", "signature": "function again()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "compute", "signature": "const compute = (n: number)", "rank": 0},
+        {"file": "src/z/last.ts", "symbol": "zed", "signature": "function zed()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/page.jsx", "symbol": "Page", "signature": "function Page()", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0},
+        {"file": "src/app.ts", "symbol": "main", "signature": "function main(): number", "rank": 0},
+        {"file": "src/util/helpers.ts", "symbol": "run", "signature": "run()", "rank": 0}
+      ]
+    }
+  ]
+}

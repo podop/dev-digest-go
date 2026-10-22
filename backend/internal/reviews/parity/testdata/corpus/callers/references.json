@@ -1,0 +1,35 @@
+{
+  "note": "extractReferences(content, symbol) of server/src/adapters/codeindex/extract.ts: the line rules the Node callers scan applies. `lines` are joined with LF.",
+  "cases": [
+    { "name": "plain_call", "symbol": "add", "lines": ["const x = add(1, 2);"] },
+    { "name": "space_before_paren", "symbol": "add", "lines": ["const x = add (1, 2);", "add\t(1)"] },
+    { "name": "member_call_and_optional_chain", "symbol": "add", "lines": ["obj.add(1);", "obj?.add(2);", "a.b.add (3);"] },
+    { "name": "not_part_of_a_longer_identifier", "symbol": "add", "lines": ["padd(1);", "add1(2);", "$add(3);", "_add(4);", "add_(5);", "xadd (6);"] },
+    { "name": "non_ascii_neighbours_are_not_word_characters", "symbol": "add", "lines": ["éadd(1);", "Σadd(2);", "addé(3);"] },
+    { "name": "new_expression", "symbol": "Widget", "lines": ["const w = new Widget();", "const v = new  Widget;", "const u = new WidgetFactory();", "new Widget"] },
+    { "name": "jsx_usage", "symbol": "Widget", "lines": ["<Widget />", "<Widget>", "<Widget", "<Widget/>", "<WidgetBox />", "return (<Widget a={1} />);"] },
+    { "name": "declaration_lines_are_skipped", "symbol": "add", "lines": [
+      "function add(a, b) { return a + b; }", "export async function add() {}", "function* add() {}", "function  *add() {}",
+      "const add = (a) => a;", "let add = 1; add(2);", "var add;", "class add {}", "interface add {}", "type add = number;", "enum add { A }",
+      "function add(x) { return add(x - 1); }"
+    ] },
+    { "name": "class_body_method_declaration_counts_as_a_call", "symbol": "plus", "lines": ["  plus(n) {", "  async plus(n) {", "  static plus(n) {"] },
+    { "name": "comment_lines_are_skipped", "symbol": "add", "lines": ["// add(1)", "  // add(2)", " * add(3)", "/* add(4) */", "\t/** add(5) */", "x(); // add(6)", "x(); /* add(7) */", "y = add(8); // trailing"] },
+    { "name": "import_and_reexport_lines_are_skipped", "symbol": "add", "lines": [
+      "import { add } from './m';", "import add(1)", "export { add } from './m';", "export {add} from './m';", "export * from './m';", "export { a, add } from \"./m\"; add(1);", "  import x from 'y'; add(2)", "export { add };"
+    ] },
+    { "name": "string_contents_are_blanked_first", "symbol": "add", "lines": [
+      "log('add(1)');", "log(\"add(2)\");", "log(`add(3)`);", "log(\"add(\" + add(4));", "log('it\\'s add(5)');", "log(`a ${add(6)} b`);", "log('add(7)", "x = 'a' + add(8) + 'b';"
+    ] },
+    { "name": "line_comment_marker_inside_a_string", "symbol": "add", "lines": ["url = 'http://x'; add(1);", "s = \"// not a comment\"; add(2);"] },
+    { "name": "several_matches_on_one_line_count_once", "symbol": "add", "lines": ["add(1) + add(2) + obj.add(3)"] },
+    { "name": "qualified_symbol_matches_its_last_segment", "symbol": "Calculator.plus", "lines": ["c.plus(1);", "plus(2);", "Calculator.plus(3);"] },
+    { "name": "regex_metacharacters_in_the_symbol_are_escaped", "symbol": "$el", "lines": ["$el(1);", "xel(2);", "a.$el(3);", "($el)(4);"] },
+    { "name": "crlf_lines", "symbol": "add", "text": "const a = add(1);\r\nconst b = 2;\r\nadd(3)\r\n" },
+    { "name": "empty_content", "symbol": "add", "text": "" },
+    { "name": "no_trailing_newline_and_blank_lines", "symbol": "add", "text": "\n\nadd(1)" },
+    { "name": "line_numbers_are_one_based", "symbol": "go", "lines": ["a", "b", "go()", "c", "go()"] },
+    { "name": "empty_symbol_edge", "symbol": "", "lines": ["foo(1)", "(2)"] },
+    { "name": "template_literal_spanning_lines_is_not_joined", "symbol": "add", "lines": ["const t = `", "add(1)", "`;"] }
+  ]
+}

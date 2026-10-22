@@ -1,0 +1,760 @@
+{
+  "note": "parse: parseUnifiedDiff(raw) of server/src/adapters/git/diff-parser.ts. reconstruct: the stored-diff rebuild of pull.repo.ts (rows → raw → parse); rows are in path byte order, patch null/empty rows are skipped. `files` use the Node field names (path, additions, deletions, hunks[file, oldStart, oldLines, newStart, newLines, newLineNumbers]).",
+  "parse": [
+    {
+      "name": "basic_two_files",
+      "raw": "diff --git a/src/a.ts b/src/a.ts\nindex 1111111..2222222 100644\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,4 +1,5 @@\n import x from 'x';\n-const a = 1;\n+const a = 2;\n+const b = 3;\n export { a };\n \n@@ -20,3 +21,3 @@ function foo() {\n   return 1;\n-  // old\n+  // new\n }\ndiff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1,2 @@\n # Title\n+More text",
+      "diff": {
+        "raw": "diff --git a/src/a.ts b/src/a.ts\nindex 1111111..2222222 100644\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,4 +1,5 @@\n import x from 'x';\n-const a = 1;\n+const a = 2;\n+const b = 3;\n export { a };\n \n@@ -20,3 +21,3 @@ function foo() {\n   return 1;\n-  // old\n+  // new\n }\ndiff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1 +1,2 @@\n # Title\n+More text",
+        "files": [
+          {
+            "path": "src/a.ts",
+            "additions": 3,
+            "deletions": 2,
+            "hunks": [
+              {
+                "file": "src/a.ts",
+                "oldStart": 1,
+                "oldLines": 4,
+                "newStart": 1,
+                "newLines": 5,
+                "newLineNumbers": [1, 2, 3, 4, 5]
+              },
+              {
+                "file": "src/a.ts",
+                "oldStart": 20,
+                "oldLines": 3,
+                "newStart": 21,
+                "newLines": 3,
+                "newLineNumbers": [21, 22, 23]
+              }
+            ]
+          },
+          {
+            "path": "README.md",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "README.md",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "new_file",
+      "raw": "diff --git a/src/new.ts b/src/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/src/new.ts\n@@ -0,0 +1,3 @@\n+export const one = 1;\n+export const two = 2;\n+export const three = 3;",
+      "diff": {
+        "raw": "diff --git a/src/new.ts b/src/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/src/new.ts\n@@ -0,0 +1,3 @@\n+export const one = 1;\n+export const two = 2;\n+export const three = 3;",
+        "files": [
+          {
+            "path": "src/new.ts",
+            "additions": 3,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "src/new.ts",
+                "oldStart": 0,
+                "oldLines": 0,
+                "newStart": 1,
+                "newLines": 3,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "deleted_file_is_dropped",
+      "raw": "diff --git a/old.ts b/old.ts\ndeleted file mode 100644\n--- a/old.ts\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\ndiff --git a/keep.ts b/keep.ts\n--- a/keep.ts\n+++ b/keep.ts\n@@ -1 +1 @@\n-x\n+y",
+      "diff": {
+        "raw": "diff --git a/old.ts b/old.ts\ndeleted file mode 100644\n--- a/old.ts\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-a\n-b\ndiff --git a/keep.ts b/keep.ts\n--- a/keep.ts\n+++ b/keep.ts\n@@ -1 +1 @@\n-x\n+y",
+        "files": [
+          {
+            "path": "keep.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "keep.ts",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "rename_takes_new_path",
+      "raw": "diff --git a/old/name.ts b/new/name.ts\nsimilarity index 90%\nrename from old/name.ts\nrename to new/name.ts\n--- a/old/name.ts\n+++ b/new/name.ts\n@@ -3,2 +3,2 @@\n keep\n-before\n+after",
+      "diff": {
+        "raw": "diff --git a/old/name.ts b/new/name.ts\nsimilarity index 90%\nrename from old/name.ts\nrename to new/name.ts\n--- a/old/name.ts\n+++ b/new/name.ts\n@@ -3,2 +3,2 @@\n keep\n-before\n+after",
+        "files": [
+          {
+            "path": "new/name.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "new/name.ts",
+                "oldStart": 3,
+                "oldLines": 2,
+                "newStart": 3,
+                "newLines": 2,
+                "newLineNumbers": [3, 4]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "binary_and_mode_only_files_are_dropped",
+      "raw": "diff --git a/logo.png b/logo.png\nBinary files a/logo.png and b/logo.png differ\ndiff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\ndiff --git a/src/c.ts b/src/c.ts\n--- a/src/c.ts\n+++ b/src/c.ts\n@@ -1 +1 @@\n-1\n+2",
+      "diff": {
+        "raw": "diff --git a/logo.png b/logo.png\nBinary files a/logo.png and b/logo.png differ\ndiff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\ndiff --git a/src/c.ts b/src/c.ts\n--- a/src/c.ts\n+++ b/src/c.ts\n@@ -1 +1 @@\n-1\n+2",
+        "files": [
+          {
+            "path": "src/c.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "src/c.ts",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "no_newline_marker_counts_as_context",
+      "raw": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,2 @@\n first\n-last\n\\ No newline at end of file\n+last changed\n\\ No newline at end of file",
+      "diff": {
+        "raw": "diff --git a/f.txt b/f.txt\n--- a/f.txt\n+++ b/f.txt\n@@ -1,2 +1,2 @@\n first\n-last\n\\ No newline at end of file\n+last changed\n\\ No newline at end of file",
+        "files": [
+          {
+            "path": "f.txt",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "f.txt",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2, 3, 4]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "added_line_starting_with_two_pluses_is_read_as_a_file_line",
+      "raw": "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,4 @@\n keep\n+++ counter\n+after\n tail",
+      "diff": {
+        "raw": "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,4 @@\n keep\n+++ counter\n+after\n tail",
+        "files": [
+          {
+            "path": "counter",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "a.txt",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 4,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "added_line_starting_with_three_pluses_no_space_counts_as_context",
+      "raw": "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,3 @@\n keep\n+++x\n+after",
+      "diff": {
+        "raw": "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,1 +1,3 @@\n keep\n+++x\n+after",
+        "files": [
+          {
+            "path": "a.txt",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "a.txt",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 3,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "removed_line_starting_with_two_dashes_is_skipped",
+      "raw": "diff --git a/a.sql b/a.sql\n--- a/a.sql\n+++ b/a.sql\n@@ -1,3 +1,2 @@\n keep\n--- comment\n-gone\n+new",
+      "diff": {
+        "raw": "diff --git a/a.sql b/a.sql\n--- a/a.sql\n+++ b/a.sql\n@@ -1,3 +1,2 @@\n keep\n--- comment\n-gone\n+new",
+        "files": [
+          {
+            "path": "a.sql",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "a.sql",
+                "oldStart": 1,
+                "oldLines": 3,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "removed_line_starting_with_three_dashes_no_space_counts_as_context",
+      "raw": "diff --git a/a.sql b/a.sql\n--- a/a.sql\n+++ b/a.sql\n@@ -1,2 +1,2 @@\n---x\n+new",
+      "diff": {
+        "raw": "diff --git a/a.sql b/a.sql\n--- a/a.sql\n+++ b/a.sql\n@@ -1,2 +1,2 @@\n---x\n+new",
+        "files": [
+          {
+            "path": "a.sql",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "a.sql",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "hunk_headers_without_counts",
+      "raw": "diff --git a/c.ts b/c.ts\n--- a/c.ts\n+++ b/c.ts\n@@ -1 +1 @@\n-a\n+b\n@@ -5 +5,2 @@\n-c\n+d\n+e\n@@ -9,0 +10 @@\n+f",
+      "diff": {
+        "raw": "diff --git a/c.ts b/c.ts\n--- a/c.ts\n+++ b/c.ts\n@@ -1 +1 @@\n-a\n+b\n@@ -5 +5,2 @@\n-c\n+d\n+e\n@@ -9,0 +10 @@\n+f",
+        "files": [
+          {
+            "path": "c.ts",
+            "additions": 4,
+            "deletions": 2,
+            "hunks": [
+              {
+                "file": "c.ts",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              },
+              {
+                "file": "c.ts",
+                "oldStart": 5,
+                "oldLines": 1,
+                "newStart": 5,
+                "newLines": 2,
+                "newLineNumbers": [5, 6]
+              },
+              {
+                "file": "c.ts",
+                "oldStart": 9,
+                "oldLines": 0,
+                "newStart": 10,
+                "newLines": 1,
+                "newLineNumbers": [10]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "crlf_line_endings",
+      "raw": "diff --git a/win.ts b/win.ts\r\n--- a/win.ts\r\n+++ b/win.ts\r\n@@ -1,2 +1,3 @@\r\n one\r\n+two\r\n three",
+      "diff": {
+        "raw": "diff --git a/win.ts b/win.ts\r\n--- a/win.ts\r\n+++ b/win.ts\r\n@@ -1,2 +1,3 @@\r\n one\r\n+two\r\n three",
+        "files": [
+          {
+            "path": "win.ts",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "win.ts",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 3,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "quoted_path_keeps_its_quotes",
+      "raw": "diff --git \"a/my dir/f.ts\" \"b/my dir/f.ts\"\n--- \"a/my dir/f.ts\"\n+++ \"b/my dir/f.ts\"\n@@ -1 +1 @@\n-a\n+b",
+      "diff": {
+        "raw": "diff --git \"a/my dir/f.ts\" \"b/my dir/f.ts\"\n--- \"a/my dir/f.ts\"\n+++ \"b/my dir/f.ts\"\n@@ -1 +1 @@\n-a\n+b",
+        "files": [
+          {
+            "path": "\"b/my dir/f.ts\"",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "\"b/my dir/f.ts\"",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "pure_deletion_hunk_has_no_new_lines",
+      "raw": "diff --git a/d.ts b/d.ts\n--- a/d.ts\n+++ b/d.ts\n@@ -5,2 +5,0 @@\n-x\n-y",
+      "diff": {
+        "raw": "diff --git a/d.ts b/d.ts\n--- a/d.ts\n+++ b/d.ts\n@@ -5,2 +5,0 @@\n-x\n-y",
+        "files": [
+          {
+            "path": "d.ts",
+            "additions": 0,
+            "deletions": 2,
+            "hunks": [
+              {
+                "file": "d.ts",
+                "oldStart": 5,
+                "oldLines": 2,
+                "newStart": 5,
+                "newLines": 0,
+                "newLineNumbers": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "stray_hunk_before_any_file_is_ignored",
+      "raw": "@@ -1 +1 @@\n+orphan\ndiff --git a/e.ts b/e.ts\n--- a/e.ts\n+++ b/e.ts\n@@ -1 +1 @@\n-p\n+q",
+      "diff": {
+        "raw": "@@ -1 +1 @@\n+orphan\ndiff --git a/e.ts b/e.ts\n--- a/e.ts\n+++ b/e.ts\n@@ -1 +1 @@\n-p\n+q",
+        "files": [
+          {
+            "path": "e.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "e.ts",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "plus_plus_plus_line_without_diff_git_header",
+      "raw": "--- a/solo.ts\n+++ b/solo.ts\n@@ -1,2 +1,2 @@\n a\n-b\n+c",
+      "diff": {
+        "raw": "--- a/solo.ts\n+++ b/solo.ts\n@@ -1,2 +1,2 @@\n a\n-b\n+c",
+        "files": [
+          {
+            "path": "solo.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "solo.ts",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "trailing_newline_adds_a_context_line",
+      "raw": "diff --git a/t.ts b/t.ts\n--- a/t.ts\n+++ b/t.ts\n@@ -1,2 +1,2 @@\n a\n-b\n+c\n",
+      "diff": {
+        "raw": "diff --git a/t.ts b/t.ts\n--- a/t.ts\n+++ b/t.ts\n@@ -1,2 +1,2 @@\n a\n-b\n+c\n",
+        "files": [
+          {
+            "path": "t.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "t.ts",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "blank_line_inside_a_hunk_is_context",
+      "raw": "diff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1,4 +1,5 @@\n a\n\n+new\n c",
+      "diff": {
+        "raw": "diff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1,4 +1,5 @@\n a\n\n+new\n c",
+        "files": [
+          {
+            "path": "b.ts",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "b.ts",
+                "oldStart": 1,
+                "oldLines": 4,
+                "newStart": 1,
+                "newLines": 5,
+                "newLineNumbers": [1, 2, 3, 4]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "trailing_spaces_after_path_are_trimmed",
+      "raw": "diff --git a/s.ts b/s.ts\n--- a/s.ts\n+++ b/s.ts   \n@@ -1 +1 @@\n-a\n+b",
+      "diff": {
+        "raw": "diff --git a/s.ts b/s.ts\n--- a/s.ts\n+++ b/s.ts   \n@@ -1 +1 @@\n-a\n+b",
+        "files": [
+          {
+            "path": "s.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "s.ts",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "unicode_path_and_multiple_hunks",
+      "raw": "diff --git a/src/héllo/日本.ts b/src/héllo/日本.ts\n--- a/src/héllo/日本.ts\n+++ b/src/héllo/日本.ts\n@@ -1,2 +1,3 @@\n a\n+b\n c\n@@ -10,2 +11,2 @@\n d\n-e\n+f",
+      "diff": {
+        "raw": "diff --git a/src/héllo/日本.ts b/src/héllo/日本.ts\n--- a/src/héllo/日本.ts\n+++ b/src/héllo/日本.ts\n@@ -1,2 +1,3 @@\n a\n+b\n c\n@@ -10,2 +11,2 @@\n d\n-e\n+f",
+        "files": [
+          {
+            "path": "src/héllo/日本.ts",
+            "additions": 2,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "src/héllo/日本.ts",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 3,
+                "newLineNumbers": [1, 2, 3]
+              },
+              {
+                "file": "src/héllo/日本.ts",
+                "oldStart": 10,
+                "oldLines": 2,
+                "newStart": 11,
+                "newLines": 2,
+                "newLineNumbers": [11, 12]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "empty_input",
+      "raw": "",
+      "diff": {
+        "raw": "",
+        "files": []
+      }
+    },
+    {
+      "name": "text_that_is_not_a_diff",
+      "raw": "hello\nworld\n+not a diff\n@@ nope @@",
+      "diff": {
+        "raw": "hello\nworld\n+not a diff\n@@ nope @@",
+        "files": []
+      }
+    }
+  ],
+  "reconstruct": [
+    {
+      "name": "two_files_with_patches",
+      "rows": [
+        {
+          "path": "src/api/users.ts",
+          "patch": "@@ -43,5 +43,8 @@ export async function listUsers(req) {\n   const users = await db.select().limit(50);\n-  const out = [];\n+  const out = [];\n+  for (const u of users) out.push(u);\n   return out;\n }"
+        },
+        {"path": "src/config.ts", "patch": "@@ -9,4 +9,5 @@\n   port: 3000,\n+  burst: 20,\n };"}
+      ],
+      "raw": "diff --git a/src/api/users.ts b/src/api/users.ts\n--- a/src/api/users.ts\n+++ b/src/api/users.ts\n@@ -43,5 +43,8 @@ export async function listUsers(req) {\n   const users = await db.select().limit(50);\n-  const out = [];\n+  const out = [];\n+  for (const u of users) out.push(u);\n   return out;\n }\ndiff --git a/src/config.ts b/src/config.ts\n--- a/src/config.ts\n+++ b/src/config.ts\n@@ -9,4 +9,5 @@\n   port: 3000,\n+  burst: 20,\n };",
+      "diff": {
+        "raw": "diff --git a/src/api/users.ts b/src/api/users.ts\n--- a/src/api/users.ts\n+++ b/src/api/users.ts\n@@ -43,5 +43,8 @@ export async function listUsers(req) {\n   const users = await db.select().limit(50);\n-  const out = [];\n+  const out = [];\n+  for (const u of users) out.push(u);\n   return out;\n }\ndiff --git a/src/config.ts b/src/config.ts\n--- a/src/config.ts\n+++ b/src/config.ts\n@@ -9,4 +9,5 @@\n   port: 3000,\n+  burst: 20,\n };",
+        "files": [
+          {
+            "path": "src/api/users.ts",
+            "additions": 2,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "src/api/users.ts",
+                "oldStart": 43,
+                "oldLines": 5,
+                "newStart": 43,
+                "newLines": 8,
+                "newLineNumbers": [43, 44, 45, 46, 47]
+              }
+            ]
+          },
+          {
+            "path": "src/config.ts",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "src/config.ts",
+                "oldStart": 9,
+                "oldLines": 4,
+                "newStart": 9,
+                "newLines": 5,
+                "newLineNumbers": [9, 10, 11]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "null_and_empty_patches_are_skipped",
+      "rows": [
+        {"path": "a.bin", "patch": null},
+        {"path": "b.png", "patch": ""},
+        {"path": "c.ts", "patch": "@@ -1 +1 @@\n-x\n+y"},
+        {"path": "d.lock", "patch": null}
+      ],
+      "raw": "diff --git a/c.ts b/c.ts\n--- a/c.ts\n+++ b/c.ts\n@@ -1 +1 @@\n-x\n+y",
+      "diff": {
+        "raw": "diff --git a/c.ts b/c.ts\n--- a/c.ts\n+++ b/c.ts\n@@ -1 +1 @@\n-x\n+y",
+        "files": [
+          {
+            "path": "c.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "c.ts",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "no_rows_at_all",
+      "rows": [],
+      "raw": "",
+      "diff": {
+        "raw": "",
+        "files": []
+      }
+    },
+    {
+      "name": "only_patchless_files",
+      "rows": [
+        {"path": "a.bin", "patch": null},
+        {"path": "b.bin", "patch": null}
+      ],
+      "raw": "",
+      "diff": {
+        "raw": "",
+        "files": []
+      }
+    },
+    {
+      "name": "patch_ending_with_newline_adds_a_context_line",
+      "rows": [
+        {"path": "a.ts", "patch": "@@ -1,2 +1,2 @@\n k\n-a\n+b\n"},
+        {"path": "b.ts", "patch": "@@ -1 +1 @@\n-c\n+d"}
+      ],
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n k\n-a\n+b\n\ndiff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-c\n+d",
+      "diff": {
+        "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,2 @@\n k\n-a\n+b\n\ndiff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-c\n+d",
+        "files": [
+          {
+            "path": "a.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "a.ts",
+                "oldStart": 1,
+                "oldLines": 2,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          },
+          {
+            "path": "b.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "b.ts",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "path_with_spaces_and_unicode",
+      "rows": [
+        {"path": "docs/my notes.md", "patch": "@@ -1 +1,2 @@\n # Notes\n+more"},
+        {"path": "src/héllo.ts", "patch": "@@ -0,0 +1 @@\n+export const é = 1;"}
+      ],
+      "raw": "diff --git a/docs/my notes.md b/docs/my notes.md\n--- a/docs/my notes.md\n+++ b/docs/my notes.md\n@@ -1 +1,2 @@\n # Notes\n+more\ndiff --git a/src/héllo.ts b/src/héllo.ts\n--- a/src/héllo.ts\n+++ b/src/héllo.ts\n@@ -0,0 +1 @@\n+export const é = 1;",
+      "diff": {
+        "raw": "diff --git a/docs/my notes.md b/docs/my notes.md\n--- a/docs/my notes.md\n+++ b/docs/my notes.md\n@@ -1 +1,2 @@\n # Notes\n+more\ndiff --git a/src/héllo.ts b/src/héllo.ts\n--- a/src/héllo.ts\n+++ b/src/héllo.ts\n@@ -0,0 +1 @@\n+export const é = 1;",
+        "files": [
+          {
+            "path": "docs/my notes.md",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "docs/my notes.md",
+                "oldStart": 1,
+                "oldLines": 1,
+                "newStart": 1,
+                "newLines": 2,
+                "newLineNumbers": [1, 2]
+              }
+            ]
+          },
+          {
+            "path": "src/héllo.ts",
+            "additions": 1,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "src/héllo.ts",
+                "oldStart": 0,
+                "oldLines": 0,
+                "newStart": 1,
+                "newLines": 1,
+                "newLineNumbers": [1]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "single_file_with_deleted_line",
+      "rows": [
+        {"path": "moved.ts", "patch": "@@ -1,3 +1,3 @@\n a\n-b\n+B\n c"}
+      ],
+      "raw": "diff --git a/moved.ts b/moved.ts\n--- a/moved.ts\n+++ b/moved.ts\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c",
+      "diff": {
+        "raw": "diff --git a/moved.ts b/moved.ts\n--- a/moved.ts\n+++ b/moved.ts\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c",
+        "files": [
+          {
+            "path": "moved.ts",
+            "additions": 1,
+            "deletions": 1,
+            "hunks": [
+              {
+                "file": "moved.ts",
+                "oldStart": 1,
+                "oldLines": 3,
+                "newStart": 1,
+                "newLines": 3,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

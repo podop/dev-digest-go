@@ -40,6 +40,18 @@ func redactValue(s, secret string) string {
 // scrub removes the key used by a call (it may have been rotated since) and every stored key.
 func (c *Client) scrub(s, key string) string { return c.Redact(redactValue(s, key)) }
 
+// Ready reports whether a call to p can be made now: an adapter is wired and its key, when it
+// needs one, is stored. The error is the one Structured returns first, e.g. "OPENAI_API_KEY is
+// not configured". The key is read now, like every call does.
+func (c *Client) Ready(p Provider) error {
+	ad, err := c.adapter(p)
+	if err != nil {
+		return err
+	}
+	_, err = c.keyFor(p, ad)
+	return err
+}
+
 func (c *Client) adapter(p Provider) (Adapter, error) {
 	if !p.Valid() {
 		return nil, apperr.Internal(fmt.Sprintf("unknown LLM provider %q", string(p)))
@@ -89,7 +101,7 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 	if req.Model == "" || req.SchemaName == "" || len(req.Messages) == 0 {
 		return Result{}, apperr.Internal("structured request needs a model, a schema name and messages")
 	}
-	strict, err := strictSchema(req.Schema)
+	strict, err := StrictSchema(req.Schema)
 	if err != nil {
 		return Result{}, apperr.Internal(err.Error())
 	}
@@ -134,7 +146,7 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 		}
 		res, err := c.send(budgetCtx, ad, pol, key, name, reqTimeout, Attempt{
 			Model: req.Model, Messages: messages, SchemaName: req.SchemaName, Schema: strict,
-			Temperature: req.Temperature, MaxTokens: req.MaxTokens,
+			Temperature: req.Temperature, MaxTokens: req.MaxTokens, SessionID: req.SessionID,
 		}, req.SchemaName)
 		if err != nil {
 			return Result{}, c.fail(ctx, budgetCtx, label, key, err)
@@ -148,6 +160,7 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 		tokensIn += usage.TokensIn
 		tokensOut += usage.TokensOut
 		attempts = append(attempts, attemptRecord{reported: res.CostUSD, usage: *usage})
+		c.reportUsage(ctx, req, attempts[len(attempts)-1])
 
 		text, perr := extractJSON(res.Raw)
 		var reprompt string
@@ -243,6 +256,25 @@ func (c *Client) estimateUsage(req Request, messages []Message, output string) *
 	u := &Usage{TokensIn: ceilTokens(chars), TokensOut: ceilTokens(UTF16Len(output))}
 	c.log.Warn(fmt.Sprintf("%s (%s) returned no usage; estimated %d in / %d out tokens", req.Model, req.SchemaName, u.TokensIn, u.TokensOut))
 	return u
+}
+
+// reportUsage hands one response's usage to req.OnUsage: the provider's cost, else the price
+// book's estimate for that attempt (nil = unpriced). The hook only observes; a panic in it must
+// not fail the call it observes.
+func (c *Client) reportUsage(ctx context.Context, req Request, a attemptRecord) {
+	if req.OnUsage == nil {
+		return
+	}
+	cost := a.reported
+	if cost == nil {
+		cost = c.prices.Estimate(req.Model, a.usage.TokensIn, a.usage.TokensOut)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			c.log.WarnContext(ctx, "llm usage observer panicked", "schema", req.SchemaName, "panic", fmt.Sprint(r))
+		}
+	}()
+	req.OnUsage(AttemptUsage{TokensIn: a.usage.TokensIn, TokensOut: a.usage.TokensOut, CostUSD: cost})
 }
 
 // attemptRecord is what one attempt cost: the provider's own figure (nil = none) and its tokens.

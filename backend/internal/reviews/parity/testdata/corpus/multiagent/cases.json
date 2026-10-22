@@ -1,0 +1,921 @@
+{
+ "note": "Multi-agent read-model rules (domain/multi-agent.ts) and MultiAgentService mapping over a fake store. Column shorthand: run agent name status verdict score summary dur cost provider model error memory findings; finding shorthand as in corpus/engine plus id and mem.",
+ "columns": [
+  {
+   "name": "transitive_overlap_forms_one_group",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa",
+       "f": "src/x.ts",
+       "s": 10,
+       "e": 12,
+       "sev": "WARNING",
+       "t": "A"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb",
+       "f": "src/x.ts",
+       "s": 12,
+       "e": 20,
+       "sev": "CRITICAL",
+       "t": "B"
+      }
+     ]
+    },
+    {
+     "run": "run-c",
+     "agent": "agent-run-c",
+     "name": "Gamma",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fc",
+       "f": "src/x.ts",
+       "s": 19,
+       "e": 25,
+       "sev": "SUGGESTION",
+       "t": "C"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "touching_but_not_overlapping_ranges_are_two_groups",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa",
+       "f": "src/x.ts",
+       "s": 10,
+       "e": 12,
+       "sev": "WARNING",
+       "t": "A"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb",
+       "f": "src/x.ts",
+       "s": 13,
+       "e": 14,
+       "sev": "WARNING",
+       "t": "B"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "everyone_agrees_on_severity_is_not_a_conflict",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa",
+       "f": "src/x.ts",
+       "s": 5,
+       "e": 6,
+       "sev": "WARNING",
+       "t": "A"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb",
+       "f": "src/x.ts",
+       "s": 5,
+       "e": 5,
+       "sev": "WARNING",
+       "t": "B"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "a_column_that_ignored_the_location_is_a_conflict",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa",
+       "f": "src/x.ts",
+       "s": 5,
+       "e": 6,
+       "sev": "WARNING",
+       "t": "A"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": []
+    }
+   ]
+  },
+  {
+   "name": "best_finding_per_column_and_title_from_highest_severity",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa1",
+       "f": "src/x.ts",
+       "s": 5,
+       "e": 6,
+       "sev": "SUGGESTION",
+       "t": "A low"
+      },
+      {
+       "id": "fa2",
+       "f": "src/x.ts",
+       "s": 6,
+       "e": 7,
+       "sev": "WARNING",
+       "t": "A mid"
+      },
+      {
+       "id": "fa3",
+       "f": "src/x.ts",
+       "s": 6,
+       "e": 6,
+       "sev": "WARNING",
+       "t": "A mid later"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb1",
+       "f": "src/x.ts",
+       "s": 5,
+       "e": 5,
+       "sev": "CRITICAL",
+       "t": "B crit"
+      }
+     ]
+    },
+    {
+     "run": "run-c",
+     "agent": "agent-run-c",
+     "name": "Gamma",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fc1",
+       "f": "src/x.ts",
+       "s": 7,
+       "e": 8,
+       "sev": "CRITICAL",
+       "t": "C crit"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "title_tie_goes_to_the_earlier_column",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "from alpha"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "from beta"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "groups_sort_by_file_then_line_then_column",
+   "columns": [
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb1",
+       "f": "src/b.ts",
+       "s": 3,
+       "e": 3,
+       "sev": "WARNING",
+       "t": "b3"
+      },
+      {
+       "id": "fb2",
+       "f": "src/a.ts",
+       "s": 30,
+       "e": 31,
+       "sev": "WARNING",
+       "t": "a30"
+      }
+     ]
+    },
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa1",
+       "f": "src/a.ts",
+       "s": 30,
+       "e": 30,
+       "sev": "WARNING",
+       "t": "a30 alpha"
+      },
+      {
+       "id": "fa2",
+       "f": "src/a.ts",
+       "s": 2,
+       "e": 2,
+       "sev": "SUGGESTION",
+       "t": "a2"
+      },
+      {
+       "id": "fa3",
+       "f": "src/b.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "SUGGESTION",
+       "t": "b1"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "files_compare_in_utf16_order_not_byte_order",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "f1",
+       "f": "\uff5ea.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "bmp high"
+      },
+      {
+       "id": "f2",
+       "f": "\ud83d\ude00.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "astral"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "f3",
+       "f": "z.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "ascii"
+      },
+      {
+       "id": "f4",
+       "f": "\u00e9.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "accent"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "only_done_columns_form_groups",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "done"
+      }
+     ]
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "running",
+     "findings": [
+      {
+       "id": "fb",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "CRITICAL",
+       "t": "running"
+      }
+     ]
+    },
+    {
+     "run": "run-c",
+     "agent": "agent-run-c",
+     "name": "Gamma",
+     "status": "failed",
+     "findings": [
+      {
+       "id": "fc",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "CRITICAL",
+       "t": "failed"
+      }
+     ],
+     "error": "boom"
+    },
+    {
+     "run": "run-d",
+     "agent": "agent-run-d",
+     "name": "Delta",
+     "status": "cancelled",
+     "findings": [],
+     "error": "Cancelled by user"
+    }
+   ]
+  },
+  {
+   "name": "no_done_column_means_no_groups",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "running",
+     "findings": []
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "failed",
+     "findings": [],
+     "error": "x"
+    }
+   ]
+  },
+  {
+   "name": "deleted_agent_and_null_status",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "",
+     "name": "",
+     "status": "failed",
+     "findings": [],
+     "verdict": null,
+     "score": null,
+     "summary": null,
+     "dur": null,
+     "cost": null,
+     "error": "Cancelled by user"
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 1,
+       "sev": "WARNING",
+       "t": "kept"
+      }
+     ],
+     "memory": "mem-1"
+    }
+   ]
+  },
+  {
+   "name": "column_order_names_dashes_case_accents_and_ties",
+   "columns": [
+    {
+     "run": "run-9",
+     "agent": "agent-run-9",
+     "name": "no-then-chains",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-8",
+     "agent": "agent-run-8",
+     "name": "n-plus-one-gate",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-7",
+     "agent": "agent-run-7",
+     "name": "Security",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-6",
+     "agent": "agent-run-6",
+     "name": "security",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-5",
+     "agent": "agent-run-5",
+     "name": "\u00c9clair",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-4",
+     "agent": "agent-run-4",
+     "name": "Eclair",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-3",
+     "agent": "agent-run-3",
+     "name": "zeta",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-2",
+     "agent": "agent-run-2",
+     "name": "alpha 2",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-1",
+     "agent": "agent-run-1",
+     "name": "alpha-1",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-0",
+     "agent": "agent-run-0",
+     "name": "alpha 10",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-z",
+     "agent": "agent-run-z",
+     "name": "same",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-y",
+     "agent": "agent-run-y",
+     "name": "same",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-x",
+     "agent": "agent-run-x",
+     "name": "a",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-w",
+     "agent": "agent-run-w",
+     "name": "A",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-v",
+     "agent": "agent-run-v",
+     "name": "Zed",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-u",
+     "agent": "agent-run-u",
+     "name": "_underscore",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-t",
+     "agent": "agent-run-t",
+     "name": "1st",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-s",
+     "agent": "agent-run-s",
+     "name": "\u00fcber",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-r",
+     "agent": "agent-run-r",
+     "name": "uber",
+     "status": "done",
+     "findings": []
+    },
+    {
+     "run": "run-q",
+     "agent": "agent-run-q",
+     "name": "",
+     "status": "done",
+     "findings": []
+    }
+   ]
+  },
+  {
+   "name": "totals_max_duration_sum_cost_null_when_none",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [],
+     "dur": 1200,
+     "cost": 0.01
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [],
+     "dur": null,
+     "cost": null
+    },
+    {
+     "run": "run-c",
+     "agent": "agent-run-c",
+     "name": "Gamma",
+     "status": "done",
+     "findings": [],
+     "dur": 900,
+     "cost": 0.0004
+    }
+   ]
+  },
+  {
+   "name": "totals_all_null",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [],
+     "dur": null,
+     "cost": null
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [],
+     "dur": null,
+     "cost": null
+    }
+   ]
+  },
+  {
+   "name": "cost_sum_float_noise",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [],
+     "cost": 0.1
+    },
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [],
+     "cost": 0.2
+    },
+    {
+     "run": "run-c",
+     "agent": "agent-run-c",
+     "name": "Gamma",
+     "status": "done",
+     "findings": [],
+     "cost": 0.3
+    }
+   ]
+  },
+  {
+   "name": "single_column_no_group_with_two_findings_in_it",
+   "columns": [
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa1",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 5,
+       "sev": "WARNING",
+       "t": "one"
+      },
+      {
+       "id": "fa2",
+       "f": "src/x.ts",
+       "s": 3,
+       "e": 9,
+       "sev": "CRITICAL",
+       "t": "two"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "empty_columns",
+   "columns": []
+  }
+ ],
+ "learn": [
+  {
+   "title": "Title",
+   "rationale": "Because.",
+   "suggestion": null
+  },
+  {
+   "title": "Title",
+   "rationale": "Because.",
+   "suggestion": "Do it differently."
+  },
+  {
+   "title": "T",
+   "rationale": "line1\nline2",
+   "suggestion": ""
+  },
+  {
+   "title": "Quote \"x\" \u00fc\u00f1\u00ef",
+   "rationale": "R \u2713",
+   "suggestion": "S \ud83d\ude00"
+  }
+ ],
+ "learnContext": [
+  "f1",
+  "0b6f2d1a-7c34-4e0a-8a55-aaaaaaaaaaaa"
+ ],
+ "get": [
+  {
+   "name": "get_assembles_the_comparison",
+   "header": {
+    "id": "ma-1",
+    "prId": "pr-1",
+    "repoId": "repo-1",
+    "prNumber": 482,
+    "prTitle": "Add limiter",
+    "ranAt": "2026-01-02T03:04:05.678Z"
+   },
+   "columns": [
+    {
+     "run": "run-b",
+     "agent": "agent-run-b",
+     "name": "Beta",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fb",
+       "f": "src/x.ts",
+       "s": 1,
+       "e": 2,
+       "sev": "CRITICAL",
+       "t": "B"
+      }
+     ],
+     "dur": 500,
+     "cost": 0.001,
+     "verdict": "request_changes",
+     "score": 40,
+     "summary": "bad"
+    },
+    {
+     "run": "run-a",
+     "agent": "agent-run-a",
+     "name": "Alpha",
+     "status": "done",
+     "findings": [
+      {
+       "id": "fa",
+       "f": "src/x.ts",
+       "s": 2,
+       "e": 3,
+       "sev": "WARNING",
+       "t": "A"
+      }
+     ],
+     "dur": 900,
+     "cost": 0.002,
+     "verdict": "comment",
+     "score": 70,
+     "summary": "meh"
+    }
+   ]
+  },
+  {
+   "name": "get_with_no_runs",
+   "header": {
+    "id": "ma-2",
+    "prId": "pr-1",
+    "repoId": "repo-1",
+    "prNumber": null,
+    "prTitle": null,
+    "ranAt": "2026-01-02T03:04:05.000Z"
+   },
+   "columns": []
+  }
+ ],
+ "list": [
+  {
+   "name": "list_maps_rows",
+   "limit": null,
+   "rows": [
+    {
+     "id": "ma-1",
+     "prId": "pr-1",
+     "prNumber": 482,
+     "prTitle": "T",
+     "ranAt": "2026-01-02T03:04:05.678Z",
+     "agentCount": 3,
+     "runningCount": 1,
+     "totalCostUsd": 0.0123
+    },
+    {
+     "id": "ma-2",
+     "prId": "pr-2",
+     "prNumber": null,
+     "prTitle": null,
+     "ranAt": "2026-01-01T00:00:00.000Z",
+     "agentCount": 0,
+     "runningCount": 0,
+     "totalCostUsd": null
+    }
+   ]
+  },
+  {
+   "name": "limit_1_ok",
+   "limit": 1,
+   "rows": []
+  },
+  {
+   "name": "limit_20_ok",
+   "limit": 20,
+   "rows": []
+  },
+  {
+   "name": "limit_0_rejected",
+   "limit": 0,
+   "rows": []
+  },
+  {
+   "name": "limit_21_rejected",
+   "limit": 21,
+   "rows": []
+  },
+  {
+   "name": "limit_negative_rejected",
+   "limit": -1,
+   "rows": []
+  }
+ ],
+ "estimates": [
+  {
+   "agentId": "a1",
+   "sampleSize": 3,
+   "avgDurationMs": 1500.5,
+   "avgCostUsd": 0.0021
+  },
+  {
+   "agentId": "a2",
+   "sampleSize": 1,
+   "avgDurationMs": null,
+   "avgCostUsd": null
+  }
+ ]
+}

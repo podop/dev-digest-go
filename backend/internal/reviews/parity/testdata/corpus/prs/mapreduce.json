@@ -1,0 +1,62 @@
+{
+  "note": "A PR with three changed files for map-reduce runs (invented for this corpus).",
+  "pull": {
+    "id": "5a8e1c2f-0b7d-4f43-9c11-777000000002",
+    "workspaceId": "0b6f2d1a-7c34-4e0a-8a55-00000000w001",
+    "repoId": "9c0d7b2e-3f51-4a6b-b0aa-00000000r002",
+    "number": 77,
+    "title": "Split the invoice worker",
+    "author": "o.nilsen",
+    "branch": "refactor/invoice-worker",
+    "base": "main",
+    "headSha": "0f1e2d3c4b5a69788796a5b4c3d2e1f001122334",
+    "body": null
+  },
+  "repo": { "id": "9c0d7b2e-3f51-4a6b-b0aa-00000000r002", "owner": "acme", "name": "billing" },
+  "files": [
+    {
+      "path": "src/invoice/queue.ts",
+      "patchLines": [
+        "@@ -1,6 +1,9 @@",
+        " import { Queue } from 'bullmq';",
+        "+import { logger } from '../log';",
+        " ",
+        "-export const queue = new Queue('invoices');",
+        "+export const queue = new Queue('invoices', { connection: redis });",
+        "+",
+        "+logger.info('invoice queue ready');",
+        " export const name = 'invoices';"
+      ]
+    },
+    {
+      "path": "src/invoice/worker.ts",
+      "patchLines": [
+        "@@ -10,7 +10,12 @@ export async function run(job) {",
+        "   const invoice = await load(job.data.id);",
+        "-  await send(invoice);",
+        "+  if (!invoice.email) return;",
+        "+  try {",
+        "+    await send(invoice);",
+        "+  } catch (err) {",
+        "+    logger.error(err);",
+        "+  }",
+        "   await markSent(invoice.id);",
+        " }",
+        "@@ -40,3 +45,4 @@ export function schedule() {",
+        "   setInterval(tick, 1000);",
+        "+  setInterval(sweep, 60000);",
+        " }"
+      ]
+    },
+    {
+      "path": "test/worker.test.ts",
+      "patchLines": [
+        "@@ -0,0 +1,4 @@",
+        "+import { run } from '../src/invoice/worker';",
+        "+it('skips invoices without an email', async () => {",
+        "+  await run({ data: { id: 'x' } });",
+        "+});"
+      ]
+    }
+  ]
+}

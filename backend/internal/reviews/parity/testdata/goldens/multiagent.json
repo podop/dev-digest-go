@@ -1,0 +1,2974 @@
+{
+  "note": "columns: orderColumns (agent name localeCompare \"en\", then run id), runTotals and groupFindings (on the ordered columns, as MultiAgentService.get does). get/list/estimates: MultiAgentService over a fake store (expected response bodies). learn: learnedMemoryContent / learnContext, and the Learn use case with the real repository insert on a recording handle (statements = the INSERT values). findingRows/reviewRecords: the row→wire mappers. File names compare in UTF-16 order in groupFindings (a cited astral file sorts before U+FF5E).",
+  "columns": [
+    {
+      "name": "transitive_overlap_forms_one_group",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "A",
+              "file": "src/x.ts",
+              "start_line": 10,
+              "end_line": 12,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb",
+              "severity": "CRITICAL",
+              "category": "bug",
+              "title": "B",
+              "file": "src/x.ts",
+              "start_line": 12,
+              "end_line": 20,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-c",
+          "agent_id": "agent-run-c",
+          "agent_name": "Gamma",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fc",
+              "severity": "SUGGESTION",
+              "category": "bug",
+              "title": "C",
+              "file": "src/x.ts",
+              "start_line": 19,
+              "end_line": 25,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-c",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b", "run-c"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.003},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 10,
+          "end_line": 25,
+          "title": "B",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "A",
+              "finding_ids": ["fa"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "CRITICAL",
+              "note": "B",
+              "finding_ids": ["fb"]
+            },
+            {
+              "agent_id": "agent-run-c",
+              "persona": "Gamma",
+              "run_id": "run-c",
+              "verdict": "SUGGESTION",
+              "note": "C",
+              "finding_ids": ["fc"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "touching_but_not_overlapping_ranges_are_two_groups",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "A",
+              "file": "src/x.ts",
+              "start_line": 10,
+              "end_line": 12,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "B",
+              "file": "src/x.ts",
+              "start_line": 13,
+              "end_line": 14,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.002},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 10,
+          "end_line": 12,
+          "title": "A",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "A",
+              "finding_ids": ["fa"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            }
+          ]
+        },
+        {
+          "file": "src/x.ts",
+          "line": 13,
+          "end_line": 14,
+          "title": "B",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "B",
+              "finding_ids": ["fb"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "everyone_agrees_on_severity_is_not_a_conflict",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "A",
+              "file": "src/x.ts",
+              "start_line": 5,
+              "end_line": 6,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "B",
+              "file": "src/x.ts",
+              "start_line": 5,
+              "end_line": 5,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.002},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 5,
+          "end_line": 6,
+          "title": "A",
+          "is_conflict": false,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "A",
+              "finding_ids": ["fa"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "B",
+              "finding_ids": ["fb"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "a_column_that_ignored_the_location_is_a_conflict",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "A",
+              "file": "src/x.ts",
+              "start_line": 5,
+              "end_line": 6,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.002},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 5,
+          "end_line": 6,
+          "title": "A",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "A",
+              "finding_ids": ["fa"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "best_finding_per_column_and_title_from_highest_severity",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa1",
+              "severity": "SUGGESTION",
+              "category": "bug",
+              "title": "A low",
+              "file": "src/x.ts",
+              "start_line": 5,
+              "end_line": 6,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "fa2",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "A mid",
+              "file": "src/x.ts",
+              "start_line": 6,
+              "end_line": 7,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "fa3",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "A mid later",
+              "file": "src/x.ts",
+              "start_line": 6,
+              "end_line": 6,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb1",
+              "severity": "CRITICAL",
+              "category": "bug",
+              "title": "B crit",
+              "file": "src/x.ts",
+              "start_line": 5,
+              "end_line": 5,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-c",
+          "agent_id": "agent-run-c",
+          "agent_name": "Gamma",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fc1",
+              "severity": "CRITICAL",
+              "category": "bug",
+              "title": "C crit",
+              "file": "src/x.ts",
+              "start_line": 7,
+              "end_line": 8,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-c",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b", "run-c"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.003},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 5,
+          "end_line": 8,
+          "title": "B crit",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "A mid",
+              "finding_ids": ["fa1", "fa2", "fa3"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "CRITICAL",
+              "note": "B crit",
+              "finding_ids": ["fb1"]
+            },
+            {
+              "agent_id": "agent-run-c",
+              "persona": "Gamma",
+              "run_id": "run-c",
+              "verdict": "CRITICAL",
+              "note": "C crit",
+              "finding_ids": ["fc1"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "title_tie_goes_to_the_earlier_column",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "from alpha",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "from beta",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.002},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "from alpha",
+          "is_conflict": false,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "from alpha",
+              "finding_ids": ["fa"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "from beta",
+              "finding_ids": ["fb"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "groups_sort_by_file_then_line_then_column",
+      "columns": [
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb1",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "b3",
+              "file": "src/b.ts",
+              "start_line": 3,
+              "end_line": 3,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "fb2",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "a30",
+              "file": "src/a.ts",
+              "start_line": 30,
+              "end_line": 31,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa1",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "a30 alpha",
+              "file": "src/a.ts",
+              "start_line": 30,
+              "end_line": 30,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "fa2",
+              "severity": "SUGGESTION",
+              "category": "bug",
+              "title": "a2",
+              "file": "src/a.ts",
+              "start_line": 2,
+              "end_line": 2,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "fa3",
+              "severity": "SUGGESTION",
+              "category": "bug",
+              "title": "b1",
+              "file": "src/b.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.002},
+      "conflicts": [
+        {
+          "file": "src/a.ts",
+          "line": 2,
+          "end_line": 2,
+          "title": "a2",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "SUGGESTION",
+              "note": "a2",
+              "finding_ids": ["fa2"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            }
+          ]
+        },
+        {
+          "file": "src/a.ts",
+          "line": 30,
+          "end_line": 31,
+          "title": "a30 alpha",
+          "is_conflict": false,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "a30 alpha",
+              "finding_ids": ["fa1"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "a30",
+              "finding_ids": ["fb2"]
+            }
+          ]
+        },
+        {
+          "file": "src/b.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "b1",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "SUGGESTION",
+              "note": "b1",
+              "finding_ids": ["fa3"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            }
+          ]
+        },
+        {
+          "file": "src/b.ts",
+          "line": 3,
+          "end_line": 3,
+          "title": "b3",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "b3",
+              "finding_ids": ["fb1"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "files_compare_in_utf16_order_not_byte_order",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "f1",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "bmp high",
+              "file": "～a.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "f2",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "astral",
+              "file": "😀.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "f3",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "ascii",
+              "file": "z.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "f4",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "accent",
+              "file": "é.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.002},
+      "conflicts": [
+        {
+          "file": "z.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "ascii",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "ascii",
+              "finding_ids": ["f3"]
+            }
+          ]
+        },
+        {
+          "file": "é.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "accent",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "accent",
+              "finding_ids": ["f4"]
+            }
+          ]
+        },
+        {
+          "file": "😀.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "astral",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "astral",
+              "finding_ids": ["f2"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            }
+          ]
+        },
+        {
+          "file": "～a.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "bmp high",
+          "is_conflict": true,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "bmp high",
+              "finding_ids": ["f1"]
+            },
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "ignored",
+              "note": "",
+              "finding_ids": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "only_done_columns_form_groups",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "done",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "running",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb",
+              "severity": "CRITICAL",
+              "category": "bug",
+              "title": "running",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-c",
+          "agent_id": "agent-run-c",
+          "agent_name": "Gamma",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "failed",
+          "error": "boom",
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fc",
+              "severity": "CRITICAL",
+              "category": "bug",
+              "title": "failed",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-c",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-d",
+          "agent_id": "agent-run-d",
+          "agent_name": "Delta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "cancelled",
+          "error": "Cancelled by user",
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b", "run-d", "run-c"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.004},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "done",
+          "is_conflict": false,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "WARNING",
+              "note": "done",
+              "finding_ids": ["fa"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "no_done_column_means_no_groups",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "running",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "failed",
+          "error": "x",
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.002},
+      "conflicts": []
+    },
+    {
+      "name": "deleted_agent_and_null_status",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "",
+          "agent_name": "",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "failed",
+          "error": "Cancelled by user",
+          "verdict": null,
+          "score": null,
+          "summary": null,
+          "duration_ms": null,
+          "cost_usd": null,
+          "findings": []
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "kept",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 1,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": "mem-1"
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.001},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 1,
+          "end_line": 1,
+          "title": "kept",
+          "is_conflict": false,
+          "takes": [
+            {
+              "agent_id": "agent-run-b",
+              "persona": "Beta",
+              "run_id": "run-b",
+              "verdict": "WARNING",
+              "note": "kept",
+              "finding_ids": ["fb"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "column_order_names_dashes_case_accents_and_ties",
+      "columns": [
+        {
+          "run_id": "run-9",
+          "agent_id": "agent-run-9",
+          "agent_name": "no-then-chains",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-8",
+          "agent_id": "agent-run-8",
+          "agent_name": "n-plus-one-gate",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-7",
+          "agent_id": "agent-run-7",
+          "agent_name": "Security",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-6",
+          "agent_id": "agent-run-6",
+          "agent_name": "security",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-5",
+          "agent_id": "agent-run-5",
+          "agent_name": "Éclair",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-4",
+          "agent_id": "agent-run-4",
+          "agent_name": "Eclair",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-3",
+          "agent_id": "agent-run-3",
+          "agent_name": "zeta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-2",
+          "agent_id": "agent-run-2",
+          "agent_name": "alpha 2",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-1",
+          "agent_id": "agent-run-1",
+          "agent_name": "alpha-1",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-0",
+          "agent_id": "agent-run-0",
+          "agent_name": "alpha 10",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-z",
+          "agent_id": "agent-run-z",
+          "agent_name": "same",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-y",
+          "agent_id": "agent-run-y",
+          "agent_name": "same",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-x",
+          "agent_id": "agent-run-x",
+          "agent_name": "a",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-w",
+          "agent_id": "agent-run-w",
+          "agent_name": "A",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-v",
+          "agent_id": "agent-run-v",
+          "agent_name": "Zed",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-u",
+          "agent_id": "agent-run-u",
+          "agent_name": "_underscore",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-t",
+          "agent_id": "agent-run-t",
+          "agent_name": "1st",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-s",
+          "agent_id": "agent-run-s",
+          "agent_name": "über",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-r",
+          "agent_id": "agent-run-r",
+          "agent_name": "uber",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        },
+        {
+          "run_id": "run-q",
+          "agent_id": "agent-run-q",
+          "agent_name": "",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": []
+        }
+      ],
+      "orderedRunIds": [
+        "run-q",
+        "run-u",
+        "run-t",
+        "run-x",
+        "run-w",
+        "run-0",
+        "run-2",
+        "run-1",
+        "run-4",
+        "run-5",
+        "run-8",
+        "run-9",
+        "run-y",
+        "run-z",
+        "run-6",
+        "run-7",
+        "run-r",
+        "run-s",
+        "run-v",
+        "run-3"
+      ],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.02000000000000001},
+      "conflicts": []
+    },
+    {
+      "name": "totals_max_duration_sum_cost_null_when_none",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1200,
+          "cost_usd": 0.01,
+          "findings": []
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": null,
+          "cost_usd": null,
+          "findings": []
+        },
+        {
+          "run_id": "run-c",
+          "agent_id": "agent-run-c",
+          "agent_name": "Gamma",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 900,
+          "cost_usd": 0.0004,
+          "findings": []
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b", "run-c"],
+      "totals": {"total_duration_ms": 1200, "total_cost_usd": 0.0104},
+      "conflicts": []
+    },
+    {
+      "name": "totals_all_null",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": null,
+          "cost_usd": null,
+          "findings": []
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": null,
+          "cost_usd": null,
+          "findings": []
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b"],
+      "totals": {"total_duration_ms": 0, "total_cost_usd": null},
+      "conflicts": []
+    },
+    {
+      "name": "cost_sum_float_noise",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.1,
+          "findings": []
+        },
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.2,
+          "findings": []
+        },
+        {
+          "run_id": "run-c",
+          "agent_id": "agent-run-c",
+          "agent_name": "Gamma",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.3,
+          "findings": []
+        }
+      ],
+      "orderedRunIds": ["run-a", "run-b", "run-c"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.6000000000000001},
+      "conflicts": []
+    },
+    {
+      "name": "single_column_no_group_with_two_findings_in_it",
+      "columns": [
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "summary",
+          "duration_ms": 1000,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fa1",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "one",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 5,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            },
+            {
+              "id": "fa2",
+              "severity": "CRITICAL",
+              "category": "bug",
+              "title": "two",
+              "file": "src/x.ts",
+              "start_line": 3,
+              "end_line": 9,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "orderedRunIds": ["run-a"],
+      "totals": {"total_duration_ms": 1000, "total_cost_usd": 0.001},
+      "conflicts": [
+        {
+          "file": "src/x.ts",
+          "line": 1,
+          "end_line": 9,
+          "title": "two",
+          "is_conflict": false,
+          "takes": [
+            {
+              "agent_id": "agent-run-a",
+              "persona": "Alpha",
+              "run_id": "run-a",
+              "verdict": "CRITICAL",
+              "note": "two",
+              "finding_ids": ["fa1", "fa2"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "empty_columns",
+      "columns": [],
+      "orderedRunIds": [],
+      "totals": {"total_duration_ms": 0, "total_cost_usd": null},
+      "conflicts": []
+    }
+  ],
+  "learn": [
+    {
+      "finding": {"title": "Title", "rationale": "Because.", "suggestion": null},
+      "content": "Title\n\nBecause."
+    },
+    {
+      "finding": {"title": "Title", "rationale": "Because.", "suggestion": "Do it differently."},
+      "content": "Title\n\nBecause.\n\nSuggested fix: Do it differently."
+    },
+    {
+      "finding": {"title": "T", "rationale": "line1\nline2", "suggestion": ""},
+      "content": "T\n\nline1\nline2"
+    },
+    {
+      "finding": {"title": "Quote \"x\" üñï", "rationale": "R ✓", "suggestion": "S 😀"},
+      "content": "Quote \"x\" üñï\n\nR ✓\n\nSuggested fix: S 😀"
+    }
+  ],
+  "learnContext": [
+    {"findingId": "f1", "context": "finding:f1"},
+    {"findingId": "0b6f2d1a-7c34-4e0a-8a55-aaaaaaaaaaaa", "context": "finding:0b6f2d1a-7c34-4e0a-8a55-aaaaaaaaaaaa"}
+  ],
+  "get": [
+    {
+      "name": "get_assembles_the_comparison",
+      "header": {"id": "ma-1", "prId": "pr-1", "repoId": "repo-1", "prNumber": 482, "prTitle": "Add limiter", "ranAt": "2026-01-02T03:04:05.678Z"},
+      "columns": [
+        {
+          "run_id": "run-b",
+          "agent_id": "agent-run-b",
+          "agent_name": "Beta",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "request_changes",
+          "score": 40,
+          "summary": "bad",
+          "duration_ms": 500,
+          "cost_usd": 0.001,
+          "findings": [
+            {
+              "id": "fb",
+              "severity": "CRITICAL",
+              "category": "bug",
+              "title": "B",
+              "file": "src/x.ts",
+              "start_line": 1,
+              "end_line": 2,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-b",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        },
+        {
+          "run_id": "run-a",
+          "agent_id": "agent-run-a",
+          "agent_name": "Alpha",
+          "provider": "openrouter",
+          "model": "deepseek/deepseek-v4-flash",
+          "status": "done",
+          "error": null,
+          "verdict": "comment",
+          "score": 70,
+          "summary": "meh",
+          "duration_ms": 900,
+          "cost_usd": 0.002,
+          "findings": [
+            {
+              "id": "fa",
+              "severity": "WARNING",
+              "category": "bug",
+              "title": "A",
+              "file": "src/x.ts",
+              "start_line": 2,
+              "end_line": 3,
+              "rationale": "Because.",
+              "suggestion": null,
+              "confidence": 0.8,
+              "kind": "finding",
+              "trifecta_components": null,
+              "evidence": null,
+              "skill": null,
+              "out_of_scope": false,
+              "review_id": "review-run-a",
+              "accepted_at": null,
+              "dismissed_at": null,
+              "eval_case_id": null,
+              "memory_id": null
+            }
+          ]
+        }
+      ],
+      "response": {
+        "id": "ma-1",
+        "pr_id": "pr-1",
+        "repo_id": "repo-1",
+        "pr_number": 482,
+        "pr_title": "Add limiter",
+        "ran_at": "2026-01-02T03:04:05.678Z",
+        "agent_count": 2,
+        "total_duration_ms": 900,
+        "total_cost_usd": 0.003,
+        "columns": [
+          {
+            "run_id": "run-a",
+            "agent_id": "agent-run-a",
+            "agent_name": "Alpha",
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "status": "done",
+            "error": null,
+            "verdict": "comment",
+            "score": 70,
+            "summary": "meh",
+            "duration_ms": 900,
+            "cost_usd": 0.002,
+            "findings": [
+              {
+                "id": "fa",
+                "severity": "WARNING",
+                "category": "bug",
+                "title": "A",
+                "file": "src/x.ts",
+                "start_line": 2,
+                "end_line": 3,
+                "rationale": "Because.",
+                "suggestion": null,
+                "confidence": 0.8,
+                "kind": "finding",
+                "trifecta_components": null,
+                "evidence": null,
+                "skill": null,
+                "out_of_scope": false,
+                "review_id": "review-run-a",
+                "accepted_at": null,
+                "dismissed_at": null,
+                "eval_case_id": null,
+                "memory_id": null
+              }
+            ]
+          },
+          {
+            "run_id": "run-b",
+            "agent_id": "agent-run-b",
+            "agent_name": "Beta",
+            "provider": "openrouter",
+            "model": "deepseek/deepseek-v4-flash",
+            "status": "done",
+            "error": null,
+            "verdict": "request_changes",
+            "score": 40,
+            "summary": "bad",
+            "duration_ms": 500,
+            "cost_usd": 0.001,
+            "findings": [
+              {
+                "id": "fb",
+                "severity": "CRITICAL",
+                "category": "bug",
+                "title": "B",
+                "file": "src/x.ts",
+                "start_line": 1,
+                "end_line": 2,
+                "rationale": "Because.",
+                "suggestion": null,
+                "confidence": 0.8,
+                "kind": "finding",
+                "trifecta_components": null,
+                "evidence": null,
+                "skill": null,
+                "out_of_scope": false,
+                "review_id": "review-run-b",
+                "accepted_at": null,
+                "dismissed_at": null,
+                "eval_case_id": null,
+                "memory_id": null
+              }
+            ]
+          }
+        ],
+        "conflicts": [
+          {
+            "file": "src/x.ts",
+            "line": 1,
+            "end_line": 3,
+            "title": "B",
+            "is_conflict": true,
+            "takes": [
+              {
+                "agent_id": "agent-run-a",
+                "persona": "Alpha",
+                "run_id": "run-a",
+                "verdict": "WARNING",
+                "note": "A",
+                "finding_ids": ["fa"]
+              },
+              {
+                "agent_id": "agent-run-b",
+                "persona": "Beta",
+                "run_id": "run-b",
+                "verdict": "CRITICAL",
+                "note": "B",
+                "finding_ids": ["fb"]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "get_with_no_runs",
+      "header": {"id": "ma-2", "prId": "pr-1", "repoId": "repo-1", "prNumber": null, "prTitle": null, "ranAt": "2026-01-02T03:04:05.000Z"},
+      "columns": [],
+      "response": {
+        "id": "ma-2",
+        "pr_id": "pr-1",
+        "repo_id": "repo-1",
+        "pr_number": null,
+        "pr_title": null,
+        "ran_at": "2026-01-02T03:04:05.000Z",
+        "agent_count": 0,
+        "total_duration_ms": 0,
+        "total_cost_usd": null,
+        "columns": [],
+        "conflicts": []
+      }
+    },
+    {
+      "name": "get_unknown_run",
+      "error": {"kind": "not_found", "code": "multi_agent_run_not_found", "message": "Multi-agent run not found", "status": null}
+    }
+  ],
+  "list": [
+    {
+      "name": "list_maps_rows",
+      "limit": null,
+      "rows": [
+        {
+          "id": "ma-1",
+          "prId": "pr-1",
+          "prNumber": 482,
+          "prTitle": "T",
+          "ranAt": "2026-01-02T03:04:05.678Z",
+          "agentCount": 3,
+          "runningCount": 1,
+          "totalCostUsd": 0.0123
+        },
+        {
+          "id": "ma-2",
+          "prId": "pr-2",
+          "prNumber": null,
+          "prTitle": null,
+          "ranAt": "2026-01-01T00:00:00.000Z",
+          "agentCount": 0,
+          "runningCount": 0,
+          "totalCostUsd": null
+        }
+      ],
+      "response": [
+        {
+          "id": "ma-1",
+          "pr_id": "pr-1",
+          "pr_number": 482,
+          "pr_title": "T",
+          "ran_at": "2026-01-02T03:04:05.678Z",
+          "agent_count": 3,
+          "running_count": 1,
+          "total_cost_usd": 0.0123
+        },
+        {
+          "id": "ma-2",
+          "pr_id": "pr-2",
+          "pr_number": null,
+          "pr_title": null,
+          "ran_at": "2026-01-01T00:00:00.000Z",
+          "agent_count": 0,
+          "running_count": 0,
+          "total_cost_usd": null
+        }
+      ],
+      "limitPassedToStore": 20
+    },
+    {
+      "name": "limit_1_ok",
+      "limit": 1,
+      "rows": [],
+      "response": [],
+      "limitPassedToStore": 1
+    },
+    {
+      "name": "limit_20_ok",
+      "limit": 20,
+      "rows": [],
+      "response": [],
+      "limitPassedToStore": 20
+    },
+    {
+      "name": "limit_0_rejected",
+      "limit": 0,
+      "error": {"kind": "invalid_input", "code": "invalid_limit", "message": "limit must be between 1 and 20", "status": null}
+    },
+    {
+      "name": "limit_21_rejected",
+      "limit": 21,
+      "error": {"kind": "invalid_input", "code": "invalid_limit", "message": "limit must be between 1 and 20", "status": null}
+    },
+    {
+      "name": "limit_negative_rejected",
+      "limit": -1,
+      "error": {"kind": "invalid_input", "code": "invalid_limit", "message": "limit must be between 1 and 20", "status": null}
+    },
+    {
+      "name": "list_unknown_repo",
+      "error": {"kind": "not_found", "code": "not_found", "message": "Repo not found", "status": null}
+    }
+  ],
+  "estimates": {
+    "rows": [
+      {"agentId": "a1", "sampleSize": 3, "avgDurationMs": 1500.5, "avgCostUsd": 0.0021},
+      {"agentId": "a2", "sampleSize": 1, "avgDurationMs": null, "avgCostUsd": null}
+    ],
+    "response": [
+      {"agent_id": "a1", "sample_size": 3, "avg_duration_ms": 1500.5, "avg_cost_usd": 0.0021},
+      {"agent_id": "a2", "sample_size": 1, "avg_duration_ms": null, "avg_cost_usd": null}
+    ]
+  },
+  "learnUseCase": [
+    {
+      "name": "learn_new_entry",
+      "target": {
+        "finding": {
+          "id": "f-1",
+          "severity": "CRITICAL",
+          "category": "security",
+          "title": "Hardcoded key",
+          "file": "src/config.ts",
+          "start_line": 12,
+          "end_line": 12,
+          "rationale": "A live key.",
+          "suggestion": "Use an env var.",
+          "confidence": 0.98,
+          "kind": "finding",
+          "trifecta_components": null,
+          "evidence": null,
+          "skill": null,
+          "out_of_scope": false,
+          "review_id": "review-1",
+          "accepted_at": null,
+          "dismissed_at": null,
+          "eval_case_id": null
+        },
+        "workspaceId": "0b6f2d1a-7c34-4e0a-8a55-00000000w001",
+        "repoId": "repo-1",
+        "prNumber": 482
+      },
+      "existingMemoryId": null,
+      "response": {
+        "finding": {
+          "id": "f-1",
+          "severity": "CRITICAL",
+          "category": "security",
+          "title": "Hardcoded key",
+          "file": "src/config.ts",
+          "start_line": 12,
+          "end_line": 12,
+          "rationale": "A live key.",
+          "suggestion": "Use an env var.",
+          "confidence": 0.98,
+          "kind": "finding",
+          "trifecta_components": null,
+          "evidence": null,
+          "skill": null,
+          "out_of_scope": false,
+          "review_id": "review-1",
+          "accepted_at": null,
+          "dismissed_at": null,
+          "eval_case_id": null,
+          "memory_id": "mem-new"
+        },
+        "memoryId": "mem-new"
+      },
+      "statements": [
+        {"kind": "lock", "key": "learn:f-1"},
+        {
+          "kind": "insert",
+          "table": "memory",
+          "values": {
+            "workspaceId": "0b6f2d1a-7c34-4e0a-8a55-00000000w001",
+            "repoId": "repo-1",
+            "scope": "repo",
+            "kind": "learning",
+            "content": "Hardcoded key\n\nA live key.\n\nSuggested fix: Use an env var.",
+            "confidence": 0.98,
+            "sources": [
+              {"pr": 482, "context": "finding:f-1"}
+            ]
+          },
+          "returning": true
+        }
+      ]
+    },
+    {
+      "name": "learn_existing_entry_is_returned",
+      "target": {
+        "finding": {
+          "id": "f-1",
+          "severity": "CRITICAL",
+          "category": "security",
+          "title": "Hardcoded key",
+          "file": "src/config.ts",
+          "start_line": 12,
+          "end_line": 12,
+          "rationale": "A live key.",
+          "suggestion": "Use an env var.",
+          "confidence": 0.98,
+          "kind": "finding",
+          "trifecta_components": null,
+          "evidence": null,
+          "skill": null,
+          "out_of_scope": false,
+          "review_id": "review-1",
+          "accepted_at": null,
+          "dismissed_at": null,
+          "eval_case_id": null
+        },
+        "workspaceId": "0b6f2d1a-7c34-4e0a-8a55-00000000w001",
+        "repoId": "repo-1",
+        "prNumber": 482
+      },
+      "existingMemoryId": "mem-existing",
+      "response": {
+        "finding": {
+          "id": "f-1",
+          "severity": "CRITICAL",
+          "category": "security",
+          "title": "Hardcoded key",
+          "file": "src/config.ts",
+          "start_line": 12,
+          "end_line": 12,
+          "rationale": "A live key.",
+          "suggestion": "Use an env var.",
+          "confidence": 0.98,
+          "kind": "finding",
+          "trifecta_components": null,
+          "evidence": null,
+          "skill": null,
+          "out_of_scope": false,
+          "review_id": "review-1",
+          "accepted_at": null,
+          "dismissed_at": null,
+          "eval_case_id": null,
+          "memory_id": "mem-existing"
+        },
+        "memoryId": "mem-existing"
+      },
+      "statements": [
+        {"kind": "lock", "key": "learn:f-1"}
+      ]
+    },
+    {
+      "name": "learn_without_suggestion",
+      "target": {
+        "finding": {
+          "id": "f-1",
+          "severity": "CRITICAL",
+          "category": "security",
+          "title": "Hardcoded key",
+          "file": "src/config.ts",
+          "start_line": 12,
+          "end_line": 12,
+          "rationale": "A live key.",
+          "suggestion": null,
+          "confidence": 0.98,
+          "kind": "finding",
+          "trifecta_components": null,
+          "evidence": null,
+          "skill": null,
+          "out_of_scope": false,
+          "review_id": "review-1",
+          "accepted_at": null,
+          "dismissed_at": null,
+          "eval_case_id": null
+        },
+        "workspaceId": "0b6f2d1a-7c34-4e0a-8a55-00000000w001",
+        "repoId": "repo-1",
+        "prNumber": 482
+      },
+      "existingMemoryId": null,
+      "response": {
+        "finding": {
+          "id": "f-1",
+          "severity": "CRITICAL",
+          "category": "security",
+          "title": "Hardcoded key",
+          "file": "src/config.ts",
+          "start_line": 12,
+          "end_line": 12,
+          "rationale": "A live key.",
+          "suggestion": null,
+          "confidence": 0.98,
+          "kind": "finding",
+          "trifecta_components": null,
+          "evidence": null,
+          "skill": null,
+          "out_of_scope": false,
+          "review_id": "review-1",
+          "accepted_at": null,
+          "dismissed_at": null,
+          "eval_case_id": null,
+          "memory_id": "mem-new"
+        },
+        "memoryId": "mem-new"
+      },
+      "statements": [
+        {"kind": "lock", "key": "learn:f-1"},
+        {
+          "kind": "insert",
+          "table": "memory",
+          "values": {
+            "workspaceId": "0b6f2d1a-7c34-4e0a-8a55-00000000w001",
+            "repoId": "repo-1",
+            "scope": "repo",
+            "kind": "learning",
+            "content": "Hardcoded key\n\nA live key.",
+            "confidence": 0.98,
+            "sources": [
+              {"pr": 482, "context": "finding:f-1"}
+            ]
+          },
+          "returning": true
+        }
+      ]
+    },
+    {
+      "name": "learn_unknown_finding",
+      "target": null,
+      "error": {"kind": "not_found", "code": "not_found", "message": "Finding not found", "status": null},
+      "statements": []
+    },
+    {
+      "name": "learn_finding_of_another_workspace",
+      "target": {
+        "finding": {
+          "id": "f-1",
+          "severity": "CRITICAL",
+          "category": "security",
+          "title": "Hardcoded key",
+          "file": "src/config.ts",
+          "start_line": 12,
+          "end_line": 12,
+          "rationale": "A live key.",
+          "suggestion": "Use an env var.",
+          "confidence": 0.98,
+          "kind": "finding",
+          "trifecta_components": null,
+          "evidence": null,
+          "skill": null,
+          "out_of_scope": false,
+          "review_id": "review-1",
+          "accepted_at": null,
+          "dismissed_at": null,
+          "eval_case_id": null
+        },
+        "workspaceId": "other-workspace",
+        "repoId": "repo-1",
+        "prNumber": 482
+      },
+      "error": {"kind": "not_found", "code": "not_found", "message": "Finding not found", "status": null},
+      "statements": []
+    }
+  ],
+  "findingRows": [
+    {
+      "name": "defaults",
+      "row": {
+        "id": "f-1",
+        "reviewId": "rev-1",
+        "severity": "WARNING",
+        "category": "bug",
+        "title": "T",
+        "file": "a.ts",
+        "startLine": 1,
+        "endLine": 2,
+        "rationale": "R",
+        "suggestion": null,
+        "confidence": 0.5,
+        "kind": null,
+        "trifectaComponents": null,
+        "skillName": null,
+        "outOfScope": false,
+        "acceptedAt": null,
+        "dismissedAt": null
+      },
+      "evalCaseId": null,
+      "record": {
+        "id": "f-1",
+        "severity": "WARNING",
+        "category": "bug",
+        "title": "T",
+        "file": "a.ts",
+        "start_line": 1,
+        "end_line": 2,
+        "rationale": "R",
+        "suggestion": null,
+        "confidence": 0.5,
+        "kind": "finding",
+        "trifecta_components": null,
+        "evidence": null,
+        "skill": null,
+        "out_of_scope": false,
+        "review_id": "rev-1",
+        "accepted_at": null,
+        "dismissed_at": null,
+        "eval_case_id": null
+      }
+    },
+    {
+      "name": "all_optional_fields",
+      "row": {
+        "id": "f-1",
+        "reviewId": "rev-1",
+        "severity": "WARNING",
+        "category": "bug",
+        "title": "T",
+        "file": "a.ts",
+        "startLine": 1,
+        "endLine": 2,
+        "rationale": "R",
+        "suggestion": "fix",
+        "confidence": 0.5,
+        "kind": "secret_leak",
+        "trifectaComponents": ["untrusted_input"],
+        "skillName": "rubric",
+        "outOfScope": true,
+        "acceptedAt": "2026-01-02T03:04:05.678Z",
+        "dismissedAt": "2026-01-02T03:04:05.678Z"
+      },
+      "evalCaseId": "case-1",
+      "record": {
+        "id": "f-1",
+        "severity": "WARNING",
+        "category": "bug",
+        "title": "T",
+        "file": "a.ts",
+        "start_line": 1,
+        "end_line": 2,
+        "rationale": "R",
+        "suggestion": "fix",
+        "confidence": 0.5,
+        "kind": "secret_leak",
+        "trifecta_components": ["untrusted_input"],
+        "evidence": null,
+        "skill": "rubric",
+        "out_of_scope": true,
+        "review_id": "rev-1",
+        "accepted_at": "2026-01-02T03:04:05.678Z",
+        "dismissed_at": "2026-01-02T03:04:05.678Z",
+        "eval_case_id": "case-1"
+      }
+    }
+  ],
+  "reviewRecords": [
+    {
+      "name": "with_run_and_agent",
+      "stored": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": "agent-1",
+        "run_id": "run-1",
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "findings": [
+          {
+            "id": "f-1",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "T",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 2,
+            "rationale": "R",
+            "suggestion": null,
+            "confidence": 0.5,
+            "kind": "finding",
+            "trifecta_components": null,
+            "evidence": null,
+            "skill": null,
+            "out_of_scope": false,
+            "review_id": "rev-1",
+            "accepted_at": null,
+            "dismissed_at": null,
+            "eval_case_id": null
+          }
+        ]
+      },
+      "agentName": "Security",
+      "usage": {"tokensIn": 100, "tokensOut": 20, "costUsd": 0.01},
+      "record": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": "agent-1",
+        "run_id": "run-1",
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "agent_name": "Security",
+        "cost_usd": 0.01,
+        "tokens_in": 100,
+        "tokens_out": 20,
+        "findings": [
+          {
+            "id": "f-1",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "T",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 2,
+            "rationale": "R",
+            "suggestion": null,
+            "confidence": 0.5,
+            "kind": "finding",
+            "trifecta_components": null,
+            "evidence": null,
+            "skill": null,
+            "out_of_scope": false,
+            "review_id": "rev-1",
+            "accepted_at": null,
+            "dismissed_at": null,
+            "eval_case_id": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "run_without_usage_row_has_no_usage_keys",
+      "stored": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": "agent-1",
+        "run_id": "run-1",
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "findings": []
+      },
+      "agentName": "Security",
+      "usage": null,
+      "record": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": "agent-1",
+        "run_id": "run-1",
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "agent_name": "Security",
+        "findings": []
+      }
+    },
+    {
+      "name": "agent_deleted_run_null",
+      "stored": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": null,
+        "run_id": null,
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "findings": []
+      },
+      "agentName": null,
+      "usage": null,
+      "record": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": null,
+        "run_id": null,
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "agent_name": null,
+        "findings": []
+      }
+    },
+    {
+      "name": "usage_with_nulls",
+      "stored": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": "agent-1",
+        "run_id": "run-1",
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "findings": []
+      },
+      "agentName": "Security",
+      "usage": {"tokensIn": null, "tokensOut": null, "costUsd": null},
+      "record": {
+        "id": "rev-1",
+        "pr_id": "pr-1",
+        "agent_id": "agent-1",
+        "run_id": "run-1",
+        "kind": "review",
+        "verdict": "comment",
+        "summary": "S",
+        "score": 70,
+        "model": "m",
+        "created_at": "2026-01-02T03:04:05.678Z",
+        "agent_name": "Security",
+        "cost_usd": null,
+        "tokens_in": null,
+        "tokens_out": null,
+        "findings": []
+      }
+    }
+  ]
+}

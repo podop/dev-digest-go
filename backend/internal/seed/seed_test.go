@@ -39,6 +39,11 @@ type fakeTx struct {
 	occupied        bool // HasAgentsOrSkills result
 	agents, skills  map[string]string
 	links           map[string][]string // agent id -> skill ids
+
+	prUsed       bool // PullRequestHasReviewOrRun result
+	noGeneral    bool // FindAgentID reports no "General Reviewer"
+	demo         *DemoReview
+	demoRunCount int
 }
 
 func (f *fakeTx) record(name string) error {
@@ -101,6 +106,21 @@ func (f *fakeTx) LinkAgentSkills(_ context.Context, agentID string, skillIDs []s
 	return len(skillIDs), f.record("link:" + agentID)
 }
 
+func (f *fakeTx) PullRequestHasReviewOrRun(_ context.Context, prID string) (bool, error) {
+	return f.prUsed, f.record("has-review-or-run:" + prID)
+}
+func (f *fakeTx) FindAgentID(_ context.Context, ws, name string) (string, bool, error) {
+	if f.noGeneral {
+		return "", false, f.record("find-agent:" + name + "@" + ws)
+	}
+	return "agent:" + name, true, f.record("find-agent:" + name + "@" + ws)
+}
+func (f *fakeTx) InsertDemoReview(_ context.Context, d DemoReview) error {
+	f.demo = &d
+	f.demoRunCount++
+	return f.record("demo-review:" + d.PRID + "/" + d.AgentID)
+}
+
 type fakeStore struct{ tx *fakeTx }
 
 func (s fakeStore) InTx(ctx context.Context, fn func(context.Context, Tx) error) error {
@@ -126,11 +146,12 @@ func TestSeederRun(t *testing.T) {
 		"skill:corner-case-hunter",
 		"link:agent:General Reviewer", "link:agent:Security Reviewer", "link:agent:Performance Reviewer",
 		"link:agent:Test Quality Reviewer",
+		"has-review-or-run:pr", "find-agent:General Reviewer@ws", "demo-review:pr/agent:General Reviewer",
 	}
 	if diff := cmp.Diff(wantCalls, tx.calls); diff != "" {
 		t.Errorf("Run() calls mismatch (-want +got):\n%s", diff)
 	}
-	wantRes := Result{WorkspaceID: "ws", UserID: "user", Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 1, Files: 4, Commits: 1, Agents: 4, Skills: 9, AgentSkills: 9}
+	wantRes := Result{WorkspaceID: "ws", UserID: "user", Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 1, Files: 4, Commits: 1, Agents: 4, Skills: 9, AgentSkills: 9, Reviews: 1, Findings: 2, AgentRuns: 1}
 	if diff := cmp.Diff(wantRes, res); diff != "" {
 		t.Errorf("Run() result mismatch (-want +got):\n%s", diff)
 	}
@@ -207,5 +228,96 @@ func TestSeederRun_KnowledgeErrorNamesTheStep(t *testing.T) {
 	_, err := New(fakeStore{tx}, slog.New(slog.DiscardHandler)).Run(t.Context())
 	if err == nil || err.Error() != "seed: skill lethal-trifecta: boom" {
 		t.Errorf("Run() error = %v, want %q", err, "seed: skill lethal-trifecta: boom")
+	}
+}
+
+func TestSeederRun_DemoReviewContent(t *testing.T) {
+	tx := &fakeTx{patches: map[string]string{}}
+	if _, err := New(fakeStore{tx}, slog.New(slog.DiscardHandler)).Run(t.Context()); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	want := DemoReview{
+		WorkspaceID: "ws", PRID: "pr", AgentID: "agent:General Reviewer",
+		Kind: "review", Verdict: "request_changes", Score: 61, Model: "seed",
+		Summary: "Solid middleware approach, but a Stripe secret key is committed in plaintext and the user-list endpoint introduces an N+1 query under the new limiter.",
+		Findings: []DemoFinding{
+			{
+				File: "src/config.ts", StartLine: 12, EndLine: 12, Severity: "CRITICAL", Category: "security",
+				Title:      "Hardcoded Stripe secret key in commit",
+				Rationale:  "Line 12 contains a literal `sk_live_` Stripe secret key.",
+				Suggestion: "Move to env var and rotate the key immediately.",
+				Confidence: 0.98,
+			},
+			{
+				File: "src/api/users.ts", StartLine: 45, EndLine: 52, Severity: "WARNING", Category: "perf",
+				Title:      "N+1 query in user list endpoint",
+				Rationale:  "Loop issues one query per user → N+1.",
+				Suggestion: "Use a single IN query and group in memory.",
+				Confidence: 0.86,
+			},
+		},
+		Run: DemoRun{
+			Provider: "openrouter", Model: "deepseek/deepseek-v4-flash", DurationMs: 18420,
+			TokensIn: 6214, TokensOut: 842, CostUSD: 0.002135, Status: "done", Source: "local",
+			FindingsCount: 2, Grounding: "2/2 passed", Score: 61, Blockers: 1,
+		},
+	}
+	if diff := cmp.Diff(want, *tx.demo); diff != "" {
+		t.Errorf("demo review mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestSeederRun_DemoReviewGuard(t *testing.T) {
+	tests := []struct {
+		name          string
+		prUsed        bool
+		noGeneral     bool
+		wantWritten   bool
+		wantAgentID   string
+		wantLookedUp  bool
+		wantReviewRes int
+	}{
+		{name: "PR without review or run", wantWritten: true, wantAgentID: "agent:General Reviewer", wantLookedUp: true, wantReviewRes: 1},
+		{name: "PR with a review or run", prUsed: true},
+		{name: "General Reviewer deleted", noGeneral: true, wantWritten: true, wantAgentID: "", wantLookedUp: true, wantReviewRes: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tx := &fakeTx{patches: map[string]string{}, workspaceExists: true, occupied: true, prUsed: tc.prUsed, noGeneral: tc.noGeneral}
+			res, err := New(fakeStore{tx}, slog.New(slog.DiscardHandler)).Run(t.Context())
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			if got := tx.demoRunCount == 1; got != tc.wantWritten {
+				t.Fatalf("demo review written = %v, want %v", got, tc.wantWritten)
+			}
+			if got := slices.Contains(tx.calls, "find-agent:General Reviewer@ws"); got != tc.wantLookedUp {
+				t.Errorf("agent looked up = %v, want %v", got, tc.wantLookedUp)
+			}
+			if tc.wantWritten && tx.demo.AgentID != tc.wantAgentID {
+				t.Errorf("demo review agent id = %q, want %q", tx.demo.AgentID, tc.wantAgentID)
+			}
+			if res.Reviews != tc.wantReviewRes || res.Findings != 2*tc.wantReviewRes || res.AgentRuns != tc.wantReviewRes {
+				t.Errorf("Run() reviews/findings/runs = %d/%d/%d, want %d/%d/%d",
+					res.Reviews, res.Findings, res.AgentRuns, tc.wantReviewRes, 2*tc.wantReviewRes, tc.wantReviewRes)
+			}
+		})
+	}
+}
+
+func TestSeederRun_DemoReviewErrorNamesTheStep(t *testing.T) {
+	tests := []struct{ failOn, want string }{
+		{"has-review-or-run:pr", "seed: check demo review: boom"},
+		{"find-agent:General Reviewer@ws", "seed: find General Reviewer: boom"},
+		{"demo-review:pr/agent:General Reviewer", "seed: demo review: boom"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.failOn, func(t *testing.T) {
+			tx := &fakeTx{patches: map[string]string{}, failOn: tc.failOn}
+			_, err := New(fakeStore{tx}, slog.New(slog.DiscardHandler)).Run(t.Context())
+			if err == nil || err.Error() != tc.want {
+				t.Errorf("Run() error = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }

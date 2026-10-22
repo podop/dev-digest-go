@@ -1,0 +1,821 @@
+{
+  "note": "ground: groundFindings(findings, parseUnifiedDiff(diff)) → indexes into `findings` of the kept and dropped ones (dropped carry the reason text) and groundingSummary. A pure-deletion hunk grounds on its declared new range (newStart..newStart+max(newLines,1)-1). scope: applyScopePolicy(findings, intent) (Phase 4 has no intent: Go only needs the no-intent rows).",
+  "diffs": {
+    "two_files": {
+      "raw": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,4 +1,5 @@\n one\n-two\n+TWO\n+two and a half\n three\n four\n@@ -20,3 +21,3 @@\n twenty\n-x\n+y\n z\ndiff --git a/src/b.ts b/src/b.ts\n--- a/src/b.ts\n+++ b/src/b.ts\n@@ -0,0 +1,3 @@\n+b1\n+b2\n+b3",
+      "diff": {
+        "raw": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,4 +1,5 @@\n one\n-two\n+TWO\n+two and a half\n three\n four\n@@ -20,3 +21,3 @@\n twenty\n-x\n+y\n z\ndiff --git a/src/b.ts b/src/b.ts\n--- a/src/b.ts\n+++ b/src/b.ts\n@@ -0,0 +1,3 @@\n+b1\n+b2\n+b3",
+        "files": [
+          {
+            "path": "src/a.ts",
+            "additions": 3,
+            "deletions": 2,
+            "hunks": [
+              {
+                "file": "src/a.ts",
+                "oldStart": 1,
+                "oldLines": 4,
+                "newStart": 1,
+                "newLines": 5,
+                "newLineNumbers": [1, 2, 3, 4, 5]
+              },
+              {
+                "file": "src/a.ts",
+                "oldStart": 20,
+                "oldLines": 3,
+                "newStart": 21,
+                "newLines": 3,
+                "newLineNumbers": [21, 22, 23]
+              }
+            ]
+          },
+          {
+            "path": "src/b.ts",
+            "additions": 3,
+            "deletions": 0,
+            "hunks": [
+              {
+                "file": "src/b.ts",
+                "oldStart": 0,
+                "oldLines": 0,
+                "newStart": 1,
+                "newLines": 3,
+                "newLineNumbers": [1, 2, 3]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "pure_deletion": {
+      "raw": "diff --git a/src/d.ts b/src/d.ts\n--- a/src/d.ts\n+++ b/src/d.ts\n@@ -5,2 +5,0 @@\n-gone\n-gone too\ndiff --git a/src/e.ts b/src/e.ts\n--- a/src/e.ts\n+++ b/src/e.ts\n@@ -3,3 +3,0 @@\n-a\n-b\n-c",
+      "diff": {
+        "raw": "diff --git a/src/d.ts b/src/d.ts\n--- a/src/d.ts\n+++ b/src/d.ts\n@@ -5,2 +5,0 @@\n-gone\n-gone too\ndiff --git a/src/e.ts b/src/e.ts\n--- a/src/e.ts\n+++ b/src/e.ts\n@@ -3,3 +3,0 @@\n-a\n-b\n-c",
+        "files": [
+          {
+            "path": "src/d.ts",
+            "additions": 0,
+            "deletions": 2,
+            "hunks": [
+              {
+                "file": "src/d.ts",
+                "oldStart": 5,
+                "oldLines": 2,
+                "newStart": 5,
+                "newLines": 0,
+                "newLineNumbers": []
+              }
+            ]
+          },
+          {
+            "path": "src/e.ts",
+            "additions": 0,
+            "deletions": 3,
+            "hunks": [
+              {
+                "file": "src/e.ts",
+                "oldStart": 3,
+                "oldLines": 3,
+                "newStart": 3,
+                "newLines": 0,
+                "newLineNumbers": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "empty": {
+      "raw": "",
+      "diff": {
+        "raw": "",
+        "files": []
+      }
+    }
+  },
+  "ground": [
+    {
+      "name": "lines_inside_and_outside_hunks",
+      "diff": "two_files",
+      "findings": [
+        {
+          "id": "f1",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "inside the first hunk",
+          "file": "src/a.ts",
+          "start_line": 2,
+          "end_line": 3,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f2",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "gap between hunks only touches nothing",
+          "file": "src/a.ts",
+          "start_line": 6,
+          "end_line": 20,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f3",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "reaches into the second hunk",
+          "file": "src/a.ts",
+          "start_line": 6,
+          "end_line": 21,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f4",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "after the second hunk",
+          "file": "src/a.ts",
+          "start_line": 24,
+          "end_line": 30,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f5",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "first line",
+          "file": "src/a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f6",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "last context line of the hunk",
+          "file": "src/a.ts",
+          "start_line": 5,
+          "end_line": 5,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f7",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "last added line",
+          "file": "src/b.ts",
+          "start_line": 3,
+          "end_line": 3,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f8",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "one past the end",
+          "file": "src/b.ts",
+          "start_line": 4,
+          "end_line": 4,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f9",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "file not in the diff",
+          "file": "src/c.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        }
+      ],
+      "keptIndexes": [0, 2, 4, 5, 6],
+      "dropped": [
+        {"index": 1, "reason": "lines 6-20 do not intersect any diff hunk in 'src/a.ts'"},
+        {"index": 3, "reason": "lines 24-30 do not intersect any diff hunk in 'src/a.ts'"},
+        {"index": 7, "reason": "lines 4-4 do not intersect any diff hunk in 'src/b.ts'"},
+        {"index": 8, "reason": "file 'src/c.ts' not present in diff"}
+      ],
+      "summary": "5/9 passed"
+    },
+    {
+      "name": "reversed_negative_zero_and_huge_ranges",
+      "diff": "two_files",
+      "findings": [
+        {
+          "id": "f10",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "reversed inside",
+          "file": "src/a.ts",
+          "start_line": 3,
+          "end_line": 2,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f11",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "reversed, reaching back into the hunk",
+          "file": "src/a.ts",
+          "start_line": 40,
+          "end_line": 2,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f12",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "negative start, end inside",
+          "file": "src/a.ts",
+          "start_line": -10,
+          "end_line": 2,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f13",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "both negative",
+          "file": "src/a.ts",
+          "start_line": -10,
+          "end_line": -1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f14",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "both zero",
+          "file": "src/a.ts",
+          "start_line": 0,
+          "end_line": 0,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f15",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "zero to first line",
+          "file": "src/a.ts",
+          "start_line": 0,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f16",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "huge end, starts inside",
+          "file": "src/a.ts",
+          "start_line": 2,
+          "end_line": 1000000000000,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f17",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "huge start, end inside",
+          "file": "src/a.ts",
+          "start_line": 1000000000000,
+          "end_line": 2,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f18",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "huge end beyond",
+          "file": "src/a.ts",
+          "start_line": 100,
+          "end_line": 1000000000000,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f19",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "everything",
+          "file": "src/a.ts",
+          "start_line": -1000000000000,
+          "end_line": 1000000000000,
+          "rationale": "Because.",
+          "confidence": 0.8
+        }
+      ],
+      "keptIndexes": [0, 1, 2, 5, 6, 7, 9],
+      "dropped": [
+        {"index": 3, "reason": "lines -10--1 do not intersect any diff hunk in 'src/a.ts'"},
+        {"index": 4, "reason": "lines 0-0 do not intersect any diff hunk in 'src/a.ts'"},
+        {"index": 8, "reason": "lines 100-1000000000000 do not intersect any diff hunk in 'src/a.ts'"}
+      ],
+      "summary": "7/10 passed"
+    },
+    {
+      "name": "full_file_kinds_only_need_the_file",
+      "diff": "two_files",
+      "findings": [
+        {
+          "id": "f20",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "secret outside hunks",
+          "file": "src/a.ts",
+          "start_line": 500,
+          "end_line": 600,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": "secret_leak"
+        },
+        {
+          "id": "f21",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "trifecta outside hunks",
+          "file": "src/a.ts",
+          "start_line": 500,
+          "end_line": 600,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": "lethal_trifecta"
+        },
+        {
+          "id": "f22",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "phantom outside hunks",
+          "file": "src/a.ts",
+          "start_line": 500,
+          "end_line": 600,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": "phantom"
+        },
+        {
+          "id": "f23",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "hook outside hunks",
+          "file": "src/a.ts",
+          "start_line": 500,
+          "end_line": 600,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": "hook"
+        },
+        {
+          "id": "f24",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "plain finding outside hunks",
+          "file": "src/a.ts",
+          "start_line": 500,
+          "end_line": 600,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": "finding"
+        },
+        {
+          "id": "f25",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "secret in a file that is not in the diff",
+          "file": "src/z.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": "secret_leak"
+        },
+        {
+          "id": "f26",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "null kind outside hunks",
+          "file": "src/a.ts",
+          "start_line": 500,
+          "end_line": 600,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": null
+        }
+      ],
+      "keptIndexes": [0, 1, 2, 3],
+      "dropped": [
+        {"index": 4, "reason": "lines 500-600 do not intersect any diff hunk in 'src/a.ts'"},
+        {"index": 5, "reason": "file 'src/z.ts' not present in diff"},
+        {"index": 6, "reason": "lines 500-600 do not intersect any diff hunk in 'src/a.ts'"}
+      ],
+      "summary": "4/7 passed"
+    },
+    {
+      "name": "pure_deletion_hunks_fall_back_to_the_declared_new_range",
+      "diff": "pure_deletion",
+      "findings": [
+        {
+          "id": "f27",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "on the declared line",
+          "file": "src/d.ts",
+          "start_line": 5,
+          "end_line": 5,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f28",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "before it",
+          "file": "src/d.ts",
+          "start_line": 4,
+          "end_line": 4,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f29",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "after it",
+          "file": "src/d.ts",
+          "start_line": 6,
+          "end_line": 6,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f30",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "second file on its declared line",
+          "file": "src/e.ts",
+          "start_line": 3,
+          "end_line": 3,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f31",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "second file, range over three lines",
+          "file": "src/e.ts",
+          "start_line": 3,
+          "end_line": 5,
+          "rationale": "Because.",
+          "confidence": 0.8
+        }
+      ],
+      "keptIndexes": [0, 3, 4],
+      "dropped": [
+        {"index": 1, "reason": "lines 4-4 do not intersect any diff hunk in 'src/d.ts'"},
+        {"index": 2, "reason": "lines 6-6 do not intersect any diff hunk in 'src/d.ts'"}
+      ],
+      "summary": "3/5 passed"
+    },
+    {
+      "name": "empty_diff_drops_everything",
+      "diff": "empty",
+      "findings": [
+        {
+          "id": "f32",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "any",
+          "file": "src/a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f33",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "even secrets",
+          "file": "src/a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "kind": "secret_leak"
+        }
+      ],
+      "keptIndexes": [],
+      "dropped": [
+        {"index": 0, "reason": "file 'src/a.ts' not present in diff"},
+        {"index": 1, "reason": "file 'src/a.ts' not present in diff"}
+      ],
+      "summary": "0/2 passed"
+    },
+    {
+      "name": "no_findings",
+      "diff": "two_files",
+      "findings": [],
+      "keptIndexes": [],
+      "dropped": [],
+      "summary": "0/0 passed"
+    },
+    {
+      "name": "titles_with_quotes_and_unicode_in_reasons",
+      "diff": "two_files",
+      "findings": [
+        {
+          "id": "f34",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "title with \"quotes\" and ünïcode ✓",
+          "file": "src/ü/ñ.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        },
+        {
+          "id": "f35",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "it's a 'quoted' title",
+          "file": "src/a.ts",
+          "start_line": 99,
+          "end_line": 100,
+          "rationale": "Because.",
+          "confidence": 0.8
+        }
+      ],
+      "keptIndexes": [],
+      "dropped": [
+        {"index": 0, "reason": "file 'src/ü/ñ.ts' not present in diff"},
+        {"index": 1, "reason": "lines 99-100 do not intersect any diff hunk in 'src/a.ts'"}
+      ],
+      "summary": "0/2 passed"
+    }
+  ],
+  "scope": [
+    {
+      "name": "no_intent_forces_null",
+      "intent": null,
+      "findings": [
+        {
+          "id": "f36",
+          "severity": "CRITICAL",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "out_of_scope": true
+        },
+        {
+          "id": "f37",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "out_of_scope": false
+        },
+        {
+          "id": "f38",
+          "severity": "SUGGESTION",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "out_of_scope": null
+        },
+        {
+          "id": "f39",
+          "severity": "SUGGESTION",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        }
+      ],
+      "result": {
+        "findings": [
+          {
+            "id": "f36",
+            "severity": "CRITICAL",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": null
+          },
+          {
+            "id": "f37",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": null
+          },
+          {
+            "id": "f38",
+            "severity": "SUGGESTION",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": null
+          },
+          {
+            "id": "f39",
+            "severity": "SUGGESTION",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8
+          }
+        ],
+        "outOfScopeCount": 0,
+        "outOfScopeCriticalCount": 0
+      }
+    },
+    {
+      "name": "intent_coerces_to_boolean_and_counts",
+      "intent": {
+        "intent": "Add rate limiting to webhooks.",
+        "change_type": "feature",
+        "confidence": "high",
+        "derived_from": "description",
+        "in_scope": ["rate limiter"],
+        "out_of_scope": ["refactors"]
+      },
+      "findings": [
+        {
+          "id": "f40",
+          "severity": "CRITICAL",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "out_of_scope": true
+        },
+        {
+          "id": "f41",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "out_of_scope": true
+        },
+        {
+          "id": "f42",
+          "severity": "WARNING",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "out_of_scope": false
+        },
+        {
+          "id": "f43",
+          "severity": "SUGGESTION",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8,
+          "out_of_scope": null
+        },
+        {
+          "id": "f44",
+          "severity": "SUGGESTION",
+          "category": "bug",
+          "title": "Finding",
+          "file": "a.ts",
+          "start_line": 1,
+          "end_line": 1,
+          "rationale": "Because.",
+          "confidence": 0.8
+        }
+      ],
+      "result": {
+        "findings": [
+          {
+            "id": "f40",
+            "severity": "CRITICAL",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": true
+          },
+          {
+            "id": "f41",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": true
+          },
+          {
+            "id": "f42",
+            "severity": "WARNING",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": false
+          },
+          {
+            "id": "f43",
+            "severity": "SUGGESTION",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": false
+          },
+          {
+            "id": "f44",
+            "severity": "SUGGESTION",
+            "category": "bug",
+            "title": "Finding",
+            "file": "a.ts",
+            "start_line": 1,
+            "end_line": 1,
+            "rationale": "Because.",
+            "confidence": 0.8,
+            "out_of_scope": false
+          }
+        ],
+        "outOfScopeCount": 2,
+        "outOfScopeCriticalCount": 1
+      }
+    }
+  ]
+}

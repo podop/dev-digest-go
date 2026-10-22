@@ -1,0 +1,294 @@
+{
+  "note": "Cases for the Node unified-diff parser (server/src/adapters/git/diff-parser.ts parseUnifiedDiff). `lines` are joined with `eol` (default LF); trailingEol appends one more eol. Several cases pin quirks on purpose (spec 7.7.1: parsed by the Node rules).",
+  "cases": [
+    {
+      "name": "basic_two_files",
+      "lines": [
+        "diff --git a/src/a.ts b/src/a.ts",
+        "index 1111111..2222222 100644",
+        "--- a/src/a.ts",
+        "+++ b/src/a.ts",
+        "@@ -1,4 +1,5 @@",
+        " import x from 'x';",
+        "-const a = 1;",
+        "+const a = 2;",
+        "+const b = 3;",
+        " export { a };",
+        " ",
+        "@@ -20,3 +21,3 @@ function foo() {",
+        "   return 1;",
+        "-  // old",
+        "+  // new",
+        " }",
+        "diff --git a/README.md b/README.md",
+        "--- a/README.md",
+        "+++ b/README.md",
+        "@@ -1 +1,2 @@",
+        " # Title",
+        "+More text"
+      ]
+    },
+    {
+      "name": "new_file",
+      "lines": [
+        "diff --git a/src/new.ts b/src/new.ts",
+        "new file mode 100644",
+        "--- /dev/null",
+        "+++ b/src/new.ts",
+        "@@ -0,0 +1,3 @@",
+        "+export const one = 1;",
+        "+export const two = 2;",
+        "+export const three = 3;"
+      ]
+    },
+    {
+      "name": "deleted_file_is_dropped",
+      "lines": [
+        "diff --git a/old.ts b/old.ts",
+        "deleted file mode 100644",
+        "--- a/old.ts",
+        "+++ /dev/null",
+        "@@ -1,2 +0,0 @@",
+        "-a",
+        "-b",
+        "diff --git a/keep.ts b/keep.ts",
+        "--- a/keep.ts",
+        "+++ b/keep.ts",
+        "@@ -1 +1 @@",
+        "-x",
+        "+y"
+      ]
+    },
+    {
+      "name": "rename_takes_new_path",
+      "lines": [
+        "diff --git a/old/name.ts b/new/name.ts",
+        "similarity index 90%",
+        "rename from old/name.ts",
+        "rename to new/name.ts",
+        "--- a/old/name.ts",
+        "+++ b/new/name.ts",
+        "@@ -3,2 +3,2 @@",
+        " keep",
+        "-before",
+        "+after"
+      ]
+    },
+    {
+      "name": "binary_and_mode_only_files_are_dropped",
+      "lines": [
+        "diff --git a/logo.png b/logo.png",
+        "Binary files a/logo.png and b/logo.png differ",
+        "diff --git a/run.sh b/run.sh",
+        "old mode 100644",
+        "new mode 100755",
+        "diff --git a/src/c.ts b/src/c.ts",
+        "--- a/src/c.ts",
+        "+++ b/src/c.ts",
+        "@@ -1 +1 @@",
+        "-1",
+        "+2"
+      ]
+    },
+    {
+      "name": "no_newline_marker_counts_as_context",
+      "lines": [
+        "diff --git a/f.txt b/f.txt",
+        "--- a/f.txt",
+        "+++ b/f.txt",
+        "@@ -1,2 +1,2 @@",
+        " first",
+        "-last",
+        "\\ No newline at end of file",
+        "+last changed",
+        "\\ No newline at end of file"
+      ]
+    },
+    {
+      "name": "added_line_starting_with_two_pluses_is_read_as_a_file_line",
+      "lines": [
+        "diff --git a/a.txt b/a.txt",
+        "--- a/a.txt",
+        "+++ b/a.txt",
+        "@@ -1,2 +1,4 @@",
+        " keep",
+        "+++ counter",
+        "+after",
+        " tail"
+      ]
+    },
+    {
+      "name": "added_line_starting_with_three_pluses_no_space_counts_as_context",
+      "lines": [
+        "diff --git a/a.txt b/a.txt",
+        "--- a/a.txt",
+        "+++ b/a.txt",
+        "@@ -1,1 +1,3 @@",
+        " keep",
+        "+++x",
+        "+after"
+      ]
+    },
+    {
+      "name": "removed_line_starting_with_two_dashes_is_skipped",
+      "lines": [
+        "diff --git a/a.sql b/a.sql",
+        "--- a/a.sql",
+        "+++ b/a.sql",
+        "@@ -1,3 +1,2 @@",
+        " keep",
+        "--- comment",
+        "-gone",
+        "+new"
+      ]
+    },
+    {
+      "name": "removed_line_starting_with_three_dashes_no_space_counts_as_context",
+      "lines": [
+        "diff --git a/a.sql b/a.sql",
+        "--- a/a.sql",
+        "+++ b/a.sql",
+        "@@ -1,2 +1,2 @@",
+        "---x",
+        "+new"
+      ]
+    },
+    {
+      "name": "hunk_headers_without_counts",
+      "lines": [
+        "diff --git a/c.ts b/c.ts",
+        "--- a/c.ts",
+        "+++ b/c.ts",
+        "@@ -1 +1 @@",
+        "-a",
+        "+b",
+        "@@ -5 +5,2 @@",
+        "-c",
+        "+d",
+        "+e",
+        "@@ -9,0 +10 @@",
+        "+f"
+      ]
+    },
+    {
+      "name": "crlf_line_endings",
+      "eol": "\r\n",
+      "lines": [
+        "diff --git a/win.ts b/win.ts",
+        "--- a/win.ts",
+        "+++ b/win.ts",
+        "@@ -1,2 +1,3 @@",
+        " one",
+        "+two",
+        " three"
+      ]
+    },
+    {
+      "name": "quoted_path_keeps_its_quotes",
+      "lines": [
+        "diff --git \"a/my dir/f.ts\" \"b/my dir/f.ts\"",
+        "--- \"a/my dir/f.ts\"",
+        "+++ \"b/my dir/f.ts\"",
+        "@@ -1 +1 @@",
+        "-a",
+        "+b"
+      ]
+    },
+    {
+      "name": "pure_deletion_hunk_has_no_new_lines",
+      "lines": [
+        "diff --git a/d.ts b/d.ts",
+        "--- a/d.ts",
+        "+++ b/d.ts",
+        "@@ -5,2 +5,0 @@",
+        "-x",
+        "-y"
+      ]
+    },
+    {
+      "name": "stray_hunk_before_any_file_is_ignored",
+      "lines": [
+        "@@ -1 +1 @@",
+        "+orphan",
+        "diff --git a/e.ts b/e.ts",
+        "--- a/e.ts",
+        "+++ b/e.ts",
+        "@@ -1 +1 @@",
+        "-p",
+        "+q"
+      ]
+    },
+    {
+      "name": "plus_plus_plus_line_without_diff_git_header",
+      "lines": [
+        "--- a/solo.ts",
+        "+++ b/solo.ts",
+        "@@ -1,2 +1,2 @@",
+        " a",
+        "-b",
+        "+c"
+      ]
+    },
+    {
+      "name": "trailing_newline_adds_a_context_line",
+      "trailingEol": true,
+      "lines": [
+        "diff --git a/t.ts b/t.ts",
+        "--- a/t.ts",
+        "+++ b/t.ts",
+        "@@ -1,2 +1,2 @@",
+        " a",
+        "-b",
+        "+c"
+      ]
+    },
+    {
+      "name": "blank_line_inside_a_hunk_is_context",
+      "lines": [
+        "diff --git a/b.ts b/b.ts",
+        "--- a/b.ts",
+        "+++ b/b.ts",
+        "@@ -1,4 +1,5 @@",
+        " a",
+        "",
+        "+new",
+        " c"
+      ]
+    },
+    {
+      "name": "trailing_spaces_after_path_are_trimmed",
+      "lines": [
+        "diff --git a/s.ts b/s.ts",
+        "--- a/s.ts",
+        "+++ b/s.ts   ",
+        "@@ -1 +1 @@",
+        "-a",
+        "+b"
+      ]
+    },
+    {
+      "name": "unicode_path_and_multiple_hunks",
+      "lines": [
+        "diff --git a/src/héllo/日本.ts b/src/héllo/日本.ts",
+        "--- a/src/héllo/日本.ts",
+        "+++ b/src/héllo/日本.ts",
+        "@@ -1,2 +1,3 @@",
+        " a",
+        "+b",
+        " c",
+        "@@ -10,2 +11,2 @@",
+        " d",
+        "-e",
+        "+f"
+      ]
+    },
+    {
+      "name": "empty_input",
+      "text": ""
+    },
+    {
+      "name": "text_that_is_not_a_diff",
+      "lines": ["hello", "world", "+not a diff", "@@ nope @@"]
+    }
+  ]
+}

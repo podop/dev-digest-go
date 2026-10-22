@@ -124,6 +124,26 @@ type Request struct {
 	CorrelationID string
 	// Sections describes the prompt for that line. Empty = one section per message.
 	Sections []PromptSection
+	// Chunk is the map-reduce position of this call; the prompt_assembled line carries it when set.
+	Chunk *Chunk
+
+	// SessionID groups related calls in the OpenRouter dashboard (body field session_id); other
+	// providers ignore it.
+	SessionID string
+	// OnUsage is called once per received response, schema-invalid ones included, with that
+	// attempt's usage, so a caller can account spend when the call ends in an error. It is
+	// observational: it runs on the calling goroutine and a panic in it is recovered and logged.
+	OnUsage func(AttemptUsage)
+}
+
+// Chunk is the position of a call among the chunks of one review.
+type Chunk struct{ Index, Total int }
+
+// AttemptUsage is the usage of one response (one attempt) reported through Request.OnUsage.
+type AttemptUsage struct {
+	TokensIn, TokensOut int
+	// CostUSD is the provider-reported cost, else the price book's estimate; nil = unpriced.
+	CostUSD *float64
 }
 
 // Result is a successful structured completion.
@@ -150,6 +170,8 @@ type Attempt struct {
 	Schema      json.RawMessage
 	Temperature *float64
 	MaxTokens   int
+	// SessionID is Request.SessionID; only OpenRouter sends it.
+	SessionID string
 }
 
 // Usage is the token usage a provider reported.

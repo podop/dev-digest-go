@@ -157,3 +157,14 @@ type cloneDocs interface {
 type txRunner interface {
 	InTx(ctx context.Context, fn func(context.Context) error) error
 }
+
+// gitReader reads documents of a clone at a commit; *gitcli.Client serves it. BlobAt reports a
+// blob over max bytes as gitcli.ErrBlobTooLarge and a path that is not in the commit as
+// gitcli.ErrBlobMissing.
+type gitReader interface {
+	// BaseCommit resolves the commit a pull request's base side is read at from the base
+	// branch name and the head SHA; "" means none could be resolved.
+	BaseCommit(ctx context.Context, owner, name, baseRef, headSHA string) (string, error)
+	// BlobAt returns the file at path in commit, reading at most max bytes.
+	BlobAt(ctx context.Context, owner, name, commit, path string, max int64) ([]byte, error)
+}

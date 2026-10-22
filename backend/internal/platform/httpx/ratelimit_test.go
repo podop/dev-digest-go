@@ -3,10 +3,13 @@ package httpx_test
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/labstack/echo/v5"
 
 	"dev-digest-go/backend/internal/platform/httpx"
 )
@@ -201,5 +204,95 @@ func TestRateLimitIgnoresForwardedHeaders(t *testing.T) {
 		if rec.Code != wantStatus {
 			t.Errorf("request %d with spoofed forwarding headers status = %d, want %d", i, rec.Code, wantStatus)
 		}
+	}
+}
+
+const (
+	reviewPath = "/pulls/:id/review"
+	eventsPath = "/runs/:id/events"
+	pullID     = "0b7a4a52-3c2d-4a3e-9a51-6f1d2f6a7b10"
+)
+
+// phase4Echo registers the review start route and the SSE route the Phase 4 limits apply to.
+func phase4Echo(t *testing.T, clk *fakeClock, mutate func(*httpx.RateLimit)) http.Handler {
+	t.Helper()
+	rl := httpx.RateLimit{
+		Enabled: true,
+		Buckets: []httpx.Bucket{{Method: http.MethodPost, Path: reviewPath, Limit: 10}},
+		Exempt:  []httpx.Route{{Method: http.MethodGet, Path: eventsPath}},
+	}
+	if mutate != nil {
+		mutate(&rl)
+	}
+	e := httpx.New(httpx.Options{RateLimit: rl, Now: clk.Now, Log: slog.New(slog.DiscardHandler)})
+	ok := func(c *echo.Context) error { return c.JSON(http.StatusOK, map[string]bool{"ok": true}) }
+	e.POST(reviewPath, ok)
+	e.GET(eventsPath, ok)
+	e.GET("/settings", ok)
+	return e
+}
+
+func TestRateLimitReviewBucketAndExemptEvents(t *testing.T) {
+	clk := newClock()
+	h := phase4Echo(t, clk, nil)
+	const ip = "192.0.2.20"
+	review := "/pulls/" + pullID + "/review"
+
+	for i := 1; i <= 10; i++ {
+		if rec := call(h, http.MethodPost, review, ip); rec.Code != http.StatusOK {
+			t.Fatalf("POST review request %d status = %d, want 200", i, rec.Code)
+		}
+	}
+	rec := call(h, http.MethodPost, review, ip)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("POST review request 11 status = %d, want 429", rec.Code)
+	}
+	var body httpx.ErrorBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode body %q: %v", rec.Body.String(), err)
+	}
+	if got, want := body.Error.Code, "internal_error"; got != want {
+		t.Errorf("429 error code = %q, want %q", got, want)
+	}
+
+	// 130 SSE connects in the same window are never limited, even after the bucket is spent.
+	for i := 1; i <= 130; i++ {
+		if rec := call(h, http.MethodGet, "/runs/"+pullID+"/events", ip); rec.Code != http.StatusOK {
+			t.Fatalf("GET events request %d status = %d, want 200", i, rec.Code)
+		}
+	}
+}
+
+func TestRateLimitExemptRouteDoesNotSpendGlobalBudget(t *testing.T) {
+	clk := newClock()
+	h := phase4Echo(t, clk, func(rl *httpx.RateLimit) { rl.Limit = 2 })
+	const ip = "192.0.2.21"
+
+	for range 50 {
+		call(h, http.MethodGet, "/runs/"+pullID+"/events", ip)
+	}
+	for i := 1; i <= 2; i++ {
+		if rec := call(h, http.MethodGet, "/settings", ip); rec.Code != http.StatusOK {
+			t.Errorf("GET /settings request %d after exempt traffic status = %d, want 200", i, rec.Code)
+		}
+	}
+	if rec := call(h, http.MethodGet, "/settings", ip); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("GET /settings request 3 status = %d, want 429", rec.Code)
+	}
+}
+
+func TestRateLimitExemptMatchesMethod(t *testing.T) {
+	clk := newClock()
+	// Exempting GET on the review path must not exempt POST on it: the bucket still applies.
+	h := phase4Echo(t, clk, func(rl *httpx.RateLimit) {
+		rl.Exempt = []httpx.Route{{Method: http.MethodGet, Path: reviewPath}}
+	})
+	const ip = "192.0.2.22"
+	review := "/pulls/" + pullID + "/review"
+	for range 10 {
+		call(h, http.MethodPost, review, ip)
+	}
+	if rec := call(h, http.MethodPost, review, ip); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("POST review request 11 with only GET exempted status = %d, want 429", rec.Code)
 	}
 }

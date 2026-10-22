@@ -210,6 +210,14 @@ func (ev *env) exec(query string, args ...any) {
 	}
 }
 
+// dropDemoReview removes the PR #482 demo review (and its run) the seed writes, so a test
+// starts from a pull request that has no review.
+func (ev *env) dropDemoReview() {
+	ev.t.Helper()
+	ev.exec(`DELETE FROM reviews WHERE pr_id = ?`, ev.prID) // findings go with their review
+	ev.exec(`DELETE FROM agent_runs WHERE pr_id = ?`, ev.prID)
+}
+
 // insertPR stores a PR of the demo repo and returns its id.
 func (ev *env) insertPR(number int, title, author string, updated *time.Time, additions, deletions, files int) string {
 	ev.t.Helper()
@@ -550,8 +558,30 @@ func TestList_derivedStatuses(t *testing.T) {
 	}
 }
 
-func TestList_seededPullHasNullRollups(t *testing.T) {
+func TestList_seededPullCarriesTheDemoRollups(t *testing.T) {
 	ev := newEnv(t, "tok") // GitHub answers 404 for acme/payments-api: the error is swallowed
+	pr := byNumber(ev.do("GET", "/repos/"+ev.repoID+"/pulls", "").list(t), 482)
+	if pr == nil {
+		t.Fatal("list has no #482")
+	}
+	var reviewID string
+	scan(t, ev.db, &reviewID, `SELECT id FROM reviews WHERE pr_id = ?`, ev.prID)
+	got := map[string]any{
+		"score": pr["score"], "cost_usd": pr["cost_usd"], "latest_review_id": pr["latest_review_id"],
+		"latest_review_ids": pr["latest_review_ids"], "findings_counts": pr["findings_counts"],
+	}
+	want := map[string]any{
+		"score": 61.0, "cost_usd": 0.002135, "latest_review_id": reviewID,
+		"latest_review_ids": []any{reviewID}, "findings_counts": map[string]any{"CRITICAL": 1.0, "WARNING": 1.0, "SUGGESTION": 0.0},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("seeded #482 rollups mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestList_pullWithoutReviewsHasNullRollups(t *testing.T) {
+	ev := newEnv(t, "tok") // GitHub answers 404 for acme/payments-api: the error is swallowed
+	ev.dropDemoReview()
 	resp := ev.do("GET", "/repos/"+ev.repoID+"/pulls", "")
 	pr := byNumber(resp.list(t), 482)
 	if pr == nil {
@@ -572,6 +602,7 @@ func TestList_seededPullHasNullRollups(t *testing.T) {
 
 func TestList_rollupsOverHTTP(t *testing.T) {
 	ev := newEnv(t, "")
+	ev.dropDemoReview()
 	var agentA, agentB, a2, b1 string
 	scan(t, ev.db, &agentA, `INSERT INTO agents (workspace_id, name, provider, model, system_prompt) VALUES (?, 'A', 'openai', 'm', 'p') RETURNING id`, ev.wsID)
 	scan(t, ev.db, &agentB, `INSERT INTO agents (workspace_id, name, provider, model, system_prompt) VALUES (?, 'B', 'openai', 'm', 'p') RETURNING id`, ev.wsID)

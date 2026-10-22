@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -152,6 +153,61 @@ type agentSkillRow struct {
 }
 
 func (agentSkillRow) TableName() string { return "agent_skills" }
+
+// reviewRow lists the columns the demo review sets; created_at keeps its database default and
+// is read back (RETURNING) as the run's ran_at.
+type reviewRow struct {
+	ID          string    `gorm:"column:id;primaryKey;default:gen_random_uuid()"`
+	WorkspaceID string    `gorm:"column:workspace_id"`
+	PRID        string    `gorm:"column:pr_id"`
+	AgentID     *string   `gorm:"column:agent_id"`
+	Kind        string    `gorm:"column:kind"`
+	Verdict     string    `gorm:"column:verdict"`
+	Summary     string    `gorm:"column:summary"`
+	Score       int       `gorm:"column:score"`
+	Model       string    `gorm:"column:model"`
+	CreatedAt   time.Time `gorm:"column:created_at;default:now()"`
+}
+
+func (reviewRow) TableName() string { return "reviews" }
+
+type findingRow struct {
+	ID         string  `gorm:"column:id;primaryKey;default:gen_random_uuid()"`
+	ReviewID   string  `gorm:"column:review_id"`
+	File       string  `gorm:"column:file"`
+	StartLine  int     `gorm:"column:start_line"`
+	EndLine    int     `gorm:"column:end_line"`
+	Severity   string  `gorm:"column:severity"`
+	Category   string  `gorm:"column:category"`
+	Title      string  `gorm:"column:title"`
+	Rationale  string  `gorm:"column:rationale"`
+	Suggestion *string `gorm:"column:suggestion"`
+	Confidence float64 `gorm:"column:confidence"`
+}
+
+func (findingRow) TableName() string { return "findings" }
+
+type agentRunRow struct {
+	ID            string    `gorm:"column:id;primaryKey;default:gen_random_uuid()"`
+	WorkspaceID   string    `gorm:"column:workspace_id"`
+	AgentID       *string   `gorm:"column:agent_id"`
+	PRID          string    `gorm:"column:pr_id"`
+	RanAt         time.Time `gorm:"column:ran_at"`
+	Provider      string    `gorm:"column:provider"`
+	Model         string    `gorm:"column:model"`
+	DurationMs    int       `gorm:"column:duration_ms"`
+	TokensIn      int       `gorm:"column:tokens_in"`
+	TokensOut     int       `gorm:"column:tokens_out"`
+	CostUSD       float64   `gorm:"column:cost_usd"`
+	Status        string    `gorm:"column:status"`
+	Source        string    `gorm:"column:source"`
+	FindingsCount int       `gorm:"column:findings_count"`
+	Grounding     string    `gorm:"column:grounding"`
+	Score         int       `gorm:"column:score"`
+	Blockers      int       `gorm:"column:blockers"`
+}
+
+func (agentRunRow) TableName() string { return "agent_runs" }
 
 // Store runs the seed against Postgres.
 type Store struct {
@@ -378,4 +434,71 @@ func (t *txStore) LinkAgentSkills(ctx context.Context, agentID string, skillIDs 
 		return 0, fmt.Errorf("insert agent skills: %w", err)
 	}
 	return len(rows), nil
+}
+
+func (t *txStore) PullRequestHasReviewOrRun(ctx context.Context, prID string) (bool, error) {
+	var found bool
+	err := t.tx.WithContext(ctx).Raw(
+		`SELECT EXISTS (SELECT 1 FROM reviews WHERE pr_id = ?) OR EXISTS (SELECT 1 FROM agent_runs WHERE pr_id = ?)`,
+		prID, prID).Scan(&found).Error
+	if err != nil {
+		return false, fmt.Errorf("count reviews and runs: %w", err)
+	}
+	return found, nil
+}
+
+func (t *txStore) FindAgentID(ctx context.Context, workspaceID, name string) (string, bool, error) {
+	var row agentRow
+	err := t.tx.WithContext(ctx).Where("workspace_id = ? AND name = ?", workspaceID, name).
+		Order("created_at, id").Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("find agent: %w", err)
+	}
+	return row.ID, true, nil
+}
+
+func (t *txStore) InsertDemoReview(ctx context.Context, d seed.DemoReview) error {
+	db := t.tx.WithContext(ctx)
+	var agentID *string
+	if d.AgentID != "" {
+		agentID = &d.AgentID
+	}
+	review := reviewRow{
+		WorkspaceID: d.WorkspaceID, PRID: d.PRID, AgentID: agentID, Kind: d.Kind, Verdict: d.Verdict,
+		Summary: d.Summary, Score: d.Score, Model: d.Model,
+	}
+	if err := db.Create(&review).Error; err != nil {
+		return fmt.Errorf("insert review: %w", err)
+	}
+	findings := make([]findingRow, len(d.Findings))
+	for i, f := range d.Findings {
+		suggestion := f.Suggestion
+		findings[i] = findingRow{
+			ReviewID: review.ID, File: f.File, StartLine: f.StartLine, EndLine: f.EndLine,
+			Severity: f.Severity, Category: f.Category, Title: f.Title, Rationale: f.Rationale,
+			Suggestion: &suggestion, Confidence: f.Confidence,
+		}
+	}
+	if len(findings) > 0 {
+		if err := db.Create(&findings).Error; err != nil {
+			return fmt.Errorf("insert findings: %w", err)
+		}
+	}
+	r := d.Run
+	run := agentRunRow{
+		WorkspaceID: d.WorkspaceID, AgentID: agentID, PRID: d.PRID, RanAt: review.CreatedAt,
+		Provider: r.Provider, Model: r.Model, DurationMs: r.DurationMs, TokensIn: r.TokensIn,
+		TokensOut: r.TokensOut, CostUSD: r.CostUSD, Status: r.Status, Source: r.Source,
+		FindingsCount: r.FindingsCount, Grounding: r.Grounding, Score: r.Score, Blockers: r.Blockers,
+	}
+	if err := db.Create(&run).Error; err != nil {
+		return fmt.Errorf("insert agent run: %w", err)
+	}
+	if err := db.Model(&reviewRow{}).Where("id = ?", review.ID).Update("run_id", run.ID).Error; err != nil {
+		return fmt.Errorf("link review to run: %w", err)
+	}
+	return nil
 }

@@ -1,0 +1,40 @@
+{
+  "note": "getCallerSignatures(deps, repoId, changedFiles, limit) of server/src/modules/repo-intel/application/source-queries.ts over a copy of `fixture` (corpus/callers/fixtures/<name>) plus `extraFiles` (materialised into the copy: {path, content} or {path, content, padTo} = content followed by `//` comment padding up to exactly padTo bytes, or {path, link} = a symlink). The code index is Node's ripgrep adapter with its pure-Node scan, wrapped to return references sorted by path in byte order then by line (the order Go uses; Node's readdir order is filesystem dependent). `ranks` feed getFileRankFor (path, percentile).",
+  "cases": [
+    { "name": "basic_changed_math", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 10 },
+    { "name": "limit_two_stops_early", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 2 },
+    { "name": "limit_one", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 1 },
+    { "name": "default_limit_is_twenty", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": null },
+    { "name": "ranks_sort_descending_and_stable", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 10, "ranks": [
+      { "path": "src/util/helpers.ts", "percentile": 90 }, { "path": "src/z/last.ts", "percentile": 99 }, { "path": "src/app.ts", "percentile": 50 }
+    ] },
+    { "name": "ranks_partially_known_others_get_zero", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 10, "ranks": [{ "path": "src/z/last.ts", "percentile": 10 }] },
+    { "name": "ranks_empty_keeps_scan_order", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 10, "ranks": [] },
+    { "name": "unsupported_and_missing_changed_files_are_skipped", "fixture": "basic", "changedFiles": ["README.md", "src/missing.ts", "src/lib/math.ts"], "limit": 10 },
+    { "name": "first_declaring_file_wins_for_a_name", "fixture": "basic", "changedFiles": ["src/lib/other.ts", "src/lib/math.ts"], "limit": 10 },
+    { "name": "changed_file_order_decides_collection_order", "fixture": "basic", "changedFiles": ["src/lib/math.ts", "src/lib/other.ts"], "limit": 4 },
+    { "name": "only_here_has_one_caller", "fixture": "basic", "changedFiles": ["src/lib/other.ts"], "limit": 10 },
+    { "name": "class_and_jsx_usage", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 20 },
+    { "name": "no_changed_files", "fixture": "basic", "changedFiles": [], "limit": 10 },
+    { "name": "flag_off", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 10, "enabled": false },
+    { "name": "repo_without_a_clone", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 10, "noClone": true },
+    { "name": "path_escaping_the_clone_is_skipped", "fixture": "basic", "changedFiles": ["../outside.ts", "/etc/passwd", "src/lib/math.ts"], "limit": 10 },
+    { "name": "ignored_directories_and_size_bound", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 20, "extraFiles": [
+      { "path": "node_modules/pkg/index.ts", "content": "export function viaNodeModules() { return add(1, 1); }\n" },
+      { "path": "dist/out.js", "content": "export function viaDist() { return add(1, 1); }\n" },
+      { "path": "build/out.js", "content": "export function viaBuild() { return add(1, 1); }\n" },
+      { "path": ".next/out.js", "content": "export function viaNext() { return add(1, 1); }\n" },
+      { "path": "coverage/out.js", "content": "export function viaCoverage() { return add(1, 1); }\n" },
+      { "path": ".git/hooks/x.ts", "content": "export function viaGit() { return add(1, 1); }\n" },
+      { "path": "src/nested/node_modules/deep.ts", "content": "export function viaNestedNodeModules() { return add(1, 1); }\n" },
+      { "path": "src/big_included.ts", "content": "export function bigIncluded() { return add(1, 1); }\n", "padTo": 1999999 },
+      { "path": "src/big_excluded.ts", "content": "export function bigExcluded() { return add(1, 1); }\n", "padTo": 2000000 },
+      { "path": "src/data.json", "content": "{ \"add\": \"add(1)\" }\n" },
+      { "path": "src/script.py", "content": "def py():\n    add(1)\n" }
+    ] },
+    { "name": "symlinks_are_not_followed_by_the_scan", "fixture": "basic", "changedFiles": ["src/lib/math.ts"], "limit": 20, "extraFiles": [
+      { "path": "src/linked.ts", "link": "app.ts" },
+      { "path": "src/linkdir", "link": "util" }
+    ] }
+  ]
+}

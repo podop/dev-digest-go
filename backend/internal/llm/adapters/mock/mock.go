@@ -21,7 +21,8 @@ const (
 	CostUSD   = 0.00042
 )
 
-// ConventionExtraction is the one schema the mock has a fixture for.
+// ConventionExtraction is the schema name of the conventions extractor; with Review (review.go)
+// it is one of the two the mock has a fixture for.
 const ConventionExtraction = "ConventionExtraction"
 
 // ModelLabel is the label of the single model the mock lists.
@@ -71,10 +72,16 @@ func (a *Adapter) Complete(ctx context.Context, _ string, at llm.Attempt) (llm.A
 		case <-t.C:
 		}
 	}
-	if at.SchemaName != ConventionExtraction {
+	var raw []byte
+	var err error
+	switch at.SchemaName {
+	case ConventionExtraction:
+		raw, err = json.Marshal(conventions(at.Messages))
+	case Review:
+		raw, err = reviewJSON(at.Messages)
+	default:
 		return llm.AttemptResult{}, fmt.Errorf("Mock LLM provider has no fixture for structured output '%s'", at.SchemaName)
 	}
-	raw, err := json.Marshal(conventions(at.Messages))
 	if err != nil {
 		return llm.AttemptResult{}, err
 	}

@@ -11,8 +11,11 @@ const (
 // PromptSection describes one part of a prompt for the prompt_assembled log line: sizes and
 // labels only, never text.
 type PromptSection struct {
-	// Name is the section name; "system" is logged with role system, any other with role user.
+	// Name is the section name.
 	Name string
+	// Role is the message role the section belongs to ("system" or "user"). Empty = system for a
+	// section named "system", user for any other.
+	Role string
 	// Source says where the content came from (engine, repo, ...).
 	Source string
 	// Trust is Trusted or Untrusted.
@@ -21,6 +24,8 @@ type PromptSection struct {
 	Chars int
 	// Items is the number of items in a list-like section (sampled files); nil = not set.
 	Items *int
+	// Truncated says the section's text was cut (the PR description); nil = not set.
+	Truncated *bool
 }
 
 type sectionRecord struct {
@@ -31,6 +36,13 @@ type sectionRecord struct {
 	Chars  int    `json:"chars"`
 	Tokens int    `json:"tokens"`
 	Items  *int   `json:"items,omitempty"`
+	// Truncated is set only on sections that report it.
+	Truncated *bool `json:"truncated,omitempty"`
+}
+
+type chunkRecord struct {
+	Index int `json:"index"`
+	Total int `json:"total"`
 }
 
 // ceilTokens is the 4-characters-per-token estimate.
@@ -49,16 +61,19 @@ func (c *Client) logPrompt(ctx context.Context, req Request) {
 	records := make([]sectionRecord, len(sections))
 	totalChars, totalTokens := 0, 0
 	for i, s := range sections {
-		role := "user"
-		if s.Name == "system" {
-			role = "system"
+		role := s.Role
+		if role == "" {
+			role = "user"
+			if s.Name == "system" {
+				role = "system"
+			}
 		}
 		tokens := ceilTokens(s.Chars)
-		records[i] = sectionRecord{Name: s.Name, Source: s.Source, Role: role, Trust: s.Trust, Chars: s.Chars, Tokens: tokens, Items: s.Items}
+		records[i] = sectionRecord{Name: s.Name, Source: s.Source, Role: role, Trust: s.Trust, Chars: s.Chars, Tokens: tokens, Items: s.Items, Truncated: s.Truncated}
 		totalChars += s.Chars
 		totalTokens += tokens
 	}
-	c.log.InfoContext(ctx, "prompt_assembled",
+	attrs := []any{
 		"evt", "prompt_assembled",
 		"feature", req.Feature,
 		"correlationId", req.CorrelationID,
@@ -67,5 +82,9 @@ func (c *Client) logPrompt(ctx context.Context, req Request) {
 		"sections", records,
 		"totalChars", totalChars,
 		"totalTokens", totalTokens,
-	)
+	}
+	if req.Chunk != nil {
+		attrs = append(attrs, "chunk", chunkRecord{Index: req.Chunk.Index, Total: req.Chunk.Total})
+	}
+	c.log.InfoContext(ctx, "prompt_assembled", attrs...)
 }

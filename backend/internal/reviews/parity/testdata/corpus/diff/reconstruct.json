@@ -1,0 +1,52 @@
+{
+  "note": "Rebuild of the run diff from pr_files rows (Node pull.repo.ts storedDiff, run through a fake drizzle handle). Rows are listed in path byte order, as the Go store returns them (spec 7.7.1, D4003). patchLines are joined with LF; null or empty patches are skipped.",
+  "cases": [
+    {
+      "name": "two_files_with_patches",
+      "rows": [
+        { "path": "src/api/users.ts", "patchLines": ["@@ -43,5 +43,8 @@ export async function listUsers(req) {", "   const users = await db.select().limit(50);", "-  const out = [];", "+  const out = [];", "+  for (const u of users) out.push(u);", "   return out;", " }"] },
+        { "path": "src/config.ts", "patchLines": ["@@ -9,4 +9,5 @@", "   port: 3000,", "+  burst: 20,", " };"] }
+      ]
+    },
+    {
+      "name": "null_and_empty_patches_are_skipped",
+      "rows": [
+        { "path": "a.bin", "patchLines": null },
+        { "path": "b.png", "patchLines": [] },
+        { "path": "c.ts", "patchLines": ["@@ -1 +1 @@", "-x", "+y"] },
+        { "path": "d.lock", "patchLines": null }
+      ]
+    },
+    {
+      "name": "no_rows_at_all",
+      "rows": []
+    },
+    {
+      "name": "only_patchless_files",
+      "rows": [
+        { "path": "a.bin", "patchLines": null },
+        { "path": "b.bin", "patchLines": null }
+      ]
+    },
+    {
+      "name": "patch_ending_with_newline_adds_a_context_line",
+      "rows": [
+        { "path": "a.ts", "patchLines": ["@@ -1,2 +1,2 @@", " k", "-a", "+b", ""] },
+        { "path": "b.ts", "patchLines": ["@@ -1 +1 @@", "-c", "+d"] }
+      ]
+    },
+    {
+      "name": "path_with_spaces_and_unicode",
+      "rows": [
+        { "path": "docs/my notes.md", "patchLines": ["@@ -1 +1,2 @@", " # Notes", "+more"] },
+        { "path": "src/héllo.ts", "patchLines": ["@@ -0,0 +1 @@", "+export const é = 1;"] }
+      ]
+    },
+    {
+      "name": "single_file_with_deleted_line",
+      "rows": [
+        { "path": "moved.ts", "patchLines": ["@@ -1,3 +1,3 @@", " a", "-b", "+B", " c"] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "handWritten": true,
+  "spec": "FR4020, FR4021, FR4022, FR4041, EC4022, EC4023",
+  "why": "The agent_runs updates are SQL (CASE expressions, conditional WHERE). The generator records the statements the Node repository builds but cannot run them, so the resulting row states are written down here from reading run.repo.ts. goldens/runs.json `finalRuns` apply the same table in memory.",
+  "source": "server/src/modules/reviews/repository/run.repo.ts: completeAgentRunIfRunning, failAgentRun, cancelRunIfRunning, reapStaleRunningRuns",
+  "failAgentRun": {
+    "note": "UPDATE ... SET stats (durationMs, tokensIn, tokensOut, costUsd, findingsCount, grounding, score ?? null, blockers ?? null), status = CASE WHEN status = 'running' THEN :status ELSE status END, error = CASE WHEN status = 'running' THEN :error ELSE coalesce(error, 'Cancelled by user') END WHERE id = :id AND status IN ('running','cancelled') RETURNING status",
+    "cases": [
+      { "from": { "status": "running", "error": null }, "call": { "status": "failed", "error": "boom" }, "after": { "status": "failed", "error": "boom", "statsWritten": true }, "returns": "failed" },
+      { "from": { "status": "running", "error": null }, "call": { "status": "cancelled", "error": "Cancelled by user" }, "after": { "status": "cancelled", "error": "Cancelled by user", "statsWritten": true }, "returns": "cancelled" },
+      { "from": { "status": "cancelled", "error": "Cancelled by user" }, "call": { "status": "failed", "error": "aborted request failed" }, "after": { "status": "cancelled", "error": "Cancelled by user", "statsWritten": true }, "returns": "cancelled", "covers": "EC4023" },
+      { "from": { "status": "cancelled", "error": null }, "call": { "status": "failed", "error": "late" }, "after": { "status": "cancelled", "error": "Cancelled by user", "statsWritten": true }, "returns": "cancelled" },
+      { "from": { "status": "done", "error": null }, "call": { "status": "failed", "error": "late" }, "after": { "status": "done", "error": null, "statsWritten": false }, "returns": null },
+      { "from": { "status": "failed", "error": "first" }, "call": { "status": "failed", "error": "second" }, "after": { "status": "failed", "error": "first", "statsWritten": false }, "returns": null }
+    ]
+  },
+  "completeAgentRunIfRunning": {
+    "note": "UPDATE ... SET status = 'done', stats, error = :error ?? null WHERE id = :id AND status = 'running' RETURNING id; false when no row came back (the persist transaction then rolls back, EC4022).",
+    "cases": [
+      { "from": "running", "returns": true, "after": "done" },
+      { "from": "cancelled", "returns": false, "after": "cancelled" },
+      { "from": "failed", "returns": false, "after": "failed" },
+      { "from": "done", "returns": false, "after": "done" }
+    ]
+  },
+  "cancelRunIfRunning": {
+    "note": "UPDATE ... SET status = 'cancelled', error = 'Cancelled by user' WHERE id = :id AND workspace_id = :ws AND status = 'running' RETURNING id.",
+    "cases": [
+      { "from": "running", "returns": true, "after": { "status": "cancelled", "error": "Cancelled by user" } },
+      { "from": "done", "returns": false, "after": { "status": "done" } },
+      { "from": "failed", "returns": false, "after": { "status": "failed" } },
+      { "from": "cancelled", "returns": false, "after": { "status": "cancelled" } }
+    ]
+  },
+  "reapStaleRunningRuns": {
+    "note": "UPDATE agent_runs SET status = 'failed' WHERE status = 'running' (every workspace, any source); the error column is left as it is (null for a run that never ended).",
+    "cases": [
+      { "from": { "status": "running", "error": null }, "after": { "status": "failed", "error": null } },
+      { "from": { "status": "cancelled", "error": "Cancelled by user" }, "after": { "status": "cancelled", "error": "Cancelled by user" } },
+      { "from": { "status": "done", "error": null }, "after": { "status": "done", "error": null } }
+    ]
+  }
+}

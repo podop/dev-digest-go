@@ -466,3 +466,46 @@ func TestOpenAI_redirectIsNotFollowed(t *testing.T) {
 		t.Errorf("requests = %d (%v), want 1: the redirect must not be followed with the key and body", got, st.paths)
 	}
 }
+
+func TestOpenRouter_sessionID(t *testing.T) {
+	t.Parallel()
+	st := newStub(t, func(_ int, w http.ResponseWriter, _ *http.Request) { reply(w, 200, completion(valid, usage)) })
+	c := client(t, llm.OpenRouter, st.openrouter())
+
+	const session = "acme/payments-api#482:Security Reviewer"
+	req := request(llm.OpenRouter, "openai/gpt-4.1")
+	req.SessionID = session
+	req.Temperature = new(0.0)
+	if _, err := c.Structured(t.Context(), req); err != nil {
+		t.Fatalf("Structured() error = %v", err)
+	}
+	b := st.bodies[0]
+	if b["session_id"] != session {
+		t.Errorf("OpenRouter body session_id = %v, want %q", b["session_id"], session)
+	}
+	if u, _ := b["usage"].(map[string]any); u["include"] != true || b["temperature"] != 0.0 {
+		t.Errorf("OpenRouter body = %v, want usage.include true and temperature 0", b)
+	}
+
+	req.SessionID = ""
+	if _, err := c.Structured(t.Context(), req); err != nil {
+		t.Fatalf("Structured() error = %v", err)
+	}
+	if _, ok := st.bodies[1]["session_id"]; ok {
+		t.Errorf("OpenRouter body without a session id has session_id %v, want none", st.bodies[1]["session_id"])
+	}
+}
+
+func TestOpenAI_ignoresSessionID(t *testing.T) {
+	t.Parallel()
+	st := newStub(t, func(_ int, w http.ResponseWriter, _ *http.Request) { reply(w, 200, completion(valid, usage)) })
+	c := client(t, llm.OpenAI, st.openai())
+	req := request(llm.OpenAI, "gpt-4.1")
+	req.SessionID = "acme/payments-api#482:Security Reviewer"
+	if _, err := c.Structured(t.Context(), req); err != nil {
+		t.Fatalf("Structured() error = %v", err)
+	}
+	if _, ok := st.bodies[0]["session_id"]; ok {
+		t.Errorf("OpenAI body has session_id %v, want none", st.bodies[0]["session_id"])
+	}
+}

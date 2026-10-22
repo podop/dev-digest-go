@@ -1,11 +1,13 @@
 // Package seed writes the starter data of the Go backend: the default workspace, the system
 // user, four user settings and the demo repository acme/payments-api with PR #482, its four
 // files and one commit, plus the four built-in agents, nine built-in skills and their links
-// (knowledge.go).
+// (knowledge.go), and the PR #482 demo review with its two findings and its finished run
+// (review.go).
 //
 // The seed is idempotent. Rows are matched by natural key and never overwritten; the only
 // update is filling a file patch that is still null. The agents, skills and links are written
-// only for a new workspace or one with no agent and no skill. The whole run is one transaction.
+// only for a new workspace or one with no agent and no skill; the demo review only for a PR #482
+// that has no review and no agent run. The whole run is one transaction.
 package seed
 
 import (
@@ -90,6 +92,16 @@ type Tx interface {
 	// LinkAgentSkills links the skills to the agent, in order, unless the agent already has
 	// a link; it returns the number of links written.
 	LinkAgentSkills(ctx context.Context, agentID string, skillIDs []string) (linked int, err error)
+
+	// PullRequestHasReviewOrRun reports whether the pull request has a reviews row or an
+	// agent_runs row.
+	PullRequestHasReviewOrRun(ctx context.Context, prID string) (bool, error)
+	// FindAgentID returns the id of the workspace's agent of that name (the oldest when
+	// several share it); found is false and id empty when there is none.
+	FindAgentID(ctx context.Context, workspaceID, name string) (id string, found bool, err error)
+	// InsertDemoReview writes the review, its findings and its run, and links the review to
+	// the run (and the agent, when AgentID is set).
+	InsertDemoReview(ctx context.Context, d DemoReview) error
 }
 
 // Result counts the rows a run inserted, per entity.
@@ -108,6 +120,9 @@ type Result struct {
 	Agents        int
 	Skills        int
 	AgentSkills   int
+	Reviews       int
+	Findings      int
+	AgentRuns     int
 }
 
 // Seeder runs the seed.
@@ -145,7 +160,8 @@ func (s *Seeder) Run(ctx context.Context) (Result, error) {
 		"workspaces", res.Workspaces, "users", res.Users, "members", res.Members,
 		"settings", res.Settings, "repos", res.Repos, "pull_requests", res.PullRequests,
 		"pr_files", res.Files, "pr_commits", res.Commits, "patches_filled", res.PatchesFilled,
-		"agents", res.Agents, "skills", res.Skills, "agent_skills", res.AgentSkills)
+		"agents", res.Agents, "skills", res.Skills, "agent_skills", res.AgentSkills,
+		"reviews", res.Reviews, "findings", res.Findings, "agent_runs", res.AgentRuns)
 	return res, nil
 }
 
@@ -238,7 +254,10 @@ func (s *Seeder) write(ctx context.Context, tx Tx, res *Result) error {
 	}
 	res.Commits += b2i(inserted)
 
-	return s.writeKnowledge(ctx, tx, workspaceID, userID, workspaceInserted, res)
+	if err := s.writeKnowledge(ctx, tx, workspaceID, userID, workspaceInserted, res); err != nil {
+		return err
+	}
+	return s.writeDemoReview(ctx, tx, workspaceID, prID, res)
 }
 
 func b2i(b bool) int {

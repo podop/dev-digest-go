@@ -61,14 +61,14 @@ func TestSeed_WritesTheDemoData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	want := seed.Result{WorkspaceID: res.WorkspaceID, UserID: res.UserID, Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 1, Files: 4, Commits: 1, Agents: 4, Skills: 9, AgentSkills: 9}
+	want := seed.Result{WorkspaceID: res.WorkspaceID, UserID: res.UserID, Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 1, Files: 4, Commits: 1, Agents: 4, Skills: 9, AgentSkills: 9, Reviews: 1, Findings: 2, AgentRuns: 1}
 	if diff := cmp.Diff(want, res); diff != "" {
 		t.Errorf("Run() result mismatch (-want +got):\n%s", diff)
 	}
 
 	counts := rowCounts(t, d.DB)
 	wantCounts := map[string]int{"workspaces": 1, "users": 1, "workspace_members": 1, "settings": 4, "repos": 1, "pull_requests": 1, "pr_files": 4, "pr_commits": 1,
-		"agents": 4, "skills": 9, "skill_versions": 9, "agent_skills": 9}
+		"agents": 4, "skills": 9, "skill_versions": 9, "agent_skills": 9, "reviews": 1, "findings": 2, "agent_runs": 1}
 	for table, n := range counts {
 		if counts[table] != wantCounts[table] {
 			t.Errorf("rows in %s = %d, want %d", table, n, wantCounts[table])
@@ -300,7 +300,7 @@ func TestSeed_LogsOneLinePerRun(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[0]), &line); err != nil {
 		t.Fatal(err)
 	}
-	for k, want := range map[string]float64{"workspaces": 1, "users": 1, "members": 1, "settings": 4, "repos": 1, "pull_requests": 1, "pr_files": 4, "pr_commits": 1, "agents": 4, "skills": 9, "agent_skills": 9} {
+	for k, want := range map[string]float64{"workspaces": 1, "users": 1, "members": 1, "settings": 4, "repos": 1, "pull_requests": 1, "pr_files": 4, "pr_commits": 1, "agents": 4, "skills": 9, "agent_skills": 9, "reviews": 1, "findings": 2, "agent_runs": 1} {
 		if line[k] != want {
 			t.Errorf("log field %s = %v, want %v", k, line[k], want)
 		}
@@ -490,5 +490,246 @@ func TestSeed_SkillsOnlyWorkspaceIsNotSeeded(t *testing.T) {
 	}
 	if res.Agents != 0 || res.Skills != 0 || res.AgentSkills != 0 {
 		t.Errorf("Run() wrote agents=%d skills=%d links=%d, want none while skills exist", res.Agents, res.Skills, res.AgentSkills)
+	}
+}
+
+// demoRows reads the PR #482 demo review back: the review, its findings and the run it points at.
+type demoRows struct {
+	Review struct {
+		ID, Kind, Verdict, Summary, Model string
+		Score                             int
+		AgentID, RunID                    *string
+		CreatedAt                         string
+	}
+	Findings []struct {
+		File, Severity, Category, Title, Rationale, Kind string
+		StartLine, EndLine                               int
+		Suggestion                                       *string
+		Confidence                                       float64
+		AcceptedAt, DismissedAt                          *string
+	}
+	Run struct {
+		ID, Status, Source, Provider, Model, Grounding, RanAt string
+		AgentID                                               *string
+		DurationMs, TokensIn, TokensOut, FindingsCount        int
+		Score, Blockers                                       int
+		CostUSD                                               string
+		Error                                                 *string
+	}
+}
+
+func readDemo(t *testing.T, db *gorm.DB) demoRows {
+	t.Helper()
+	var d demoRows
+	if err := db.Raw(`SELECT id, kind, verdict, summary, model, score, agent_id::text AS agent_id, run_id::text AS run_id, created_at::text AS created_at
+		FROM reviews`).Scan(&d.Review).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Raw(`SELECT file, severity, category, title, rationale, kind, start_line, end_line, suggestion, confidence,
+		accepted_at::text AS accepted_at, dismissed_at::text AS dismissed_at FROM findings ORDER BY start_line`).Scan(&d.Findings).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Raw(`SELECT id, status, source, provider, model, grounding, ran_at::text AS ran_at, agent_id::text AS agent_id, duration_ms,
+		tokens_in, tokens_out, findings_count, score, blockers, cost_usd::text AS cost_usd, error FROM agent_runs`).Scan(&d.Run).Error; err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func TestSeed_WritesTheDemoReview(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	got := readDemo(t, d.DB)
+
+	var general string
+	if err := d.DB.Raw(`SELECT id::text FROM agents WHERE name = 'General Reviewer'`).Scan(&general).Error; err != nil {
+		t.Fatal(err)
+	}
+	str := func(s string) *string { return &s }
+
+	if got.Review.Kind != "review" || got.Review.Verdict != "request_changes" || got.Review.Score != 61 || got.Review.Model != "seed" ||
+		got.Review.Summary != "Solid middleware approach, but a Stripe secret key is committed in plaintext and the user-list endpoint introduces an N+1 query under the new limiter." {
+		t.Errorf("review = %+v, want the PR #482 demo review", got.Review)
+	}
+	if diff := cmp.Diff(&general, got.Review.AgentID); diff != "" {
+		t.Errorf("review agent_id mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(&got.Run.ID, got.Review.RunID); diff != "" {
+		t.Errorf("review run_id mismatch (-want +got):\n%s", diff)
+	}
+
+	type finding = struct {
+		File, Severity, Category, Title, Rationale, Kind string
+		StartLine, EndLine                               int
+		Suggestion                                       *string
+		Confidence                                       float64
+		AcceptedAt, DismissedAt                          *string
+	}
+	wantFindings := []finding{
+		{File: "src/config.ts", Severity: "CRITICAL", Category: "security", Title: "Hardcoded Stripe secret key in commit",
+			Rationale: "Line 12 contains a literal `sk_live_` Stripe secret key.", Kind: "finding", StartLine: 12, EndLine: 12,
+			Suggestion: str("Move to env var and rotate the key immediately."), Confidence: 0.98},
+		{File: "src/api/users.ts", Severity: "WARNING", Category: "perf", Title: "N+1 query in user list endpoint",
+			Rationale: "Loop issues one query per user → N+1.", Kind: "finding", StartLine: 45, EndLine: 52,
+			Suggestion: str("Use a single IN query and group in memory."), Confidence: 0.86},
+	}
+	if diff := cmp.Diff(wantFindings, got.Findings); diff != "" {
+		t.Errorf("findings mismatch (-want +got):\n%s", diff)
+	}
+
+	r := got.Run
+	if r.Status != "done" || r.Source != "local" || r.Provider != "openrouter" || r.Model != "deepseek/deepseek-v4-flash" ||
+		r.Grounding != "2/2 passed" || r.DurationMs != 18420 || r.TokensIn != 6214 || r.TokensOut != 842 ||
+		r.FindingsCount != 2 || r.Score != 61 || r.Blockers != 1 || r.CostUSD != "0.002135" || r.Error != nil {
+		t.Errorf("run = %+v, want the done demo run", r)
+	}
+	if diff := cmp.Diff(&general, r.AgentID); diff != "" {
+		t.Errorf("run agent_id mismatch (-want +got):\n%s", diff)
+	}
+	if r.RanAt != got.Review.CreatedAt {
+		t.Errorf("run ran_at = %s, want the review created_at %s", r.RanAt, got.Review.CreatedAt)
+	}
+	var prID, runPR string
+	if err := d.DB.Raw(`SELECT id::text FROM pull_requests WHERE number = 482`).Scan(&prID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Raw(`SELECT pr_id::text FROM agent_runs`).Scan(&runPR).Error; err != nil || runPR != prID {
+		t.Errorf("run pr_id = %q, %v, want %q", runPR, err, prID)
+	}
+}
+
+func TestSeed_DemoReviewWrittenOnce(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	first := readDemo(t, d.DB)
+	before := rowCounts(t, d.DB)
+
+	res, err := runSeed(t, d.DB)
+	if err != nil {
+		t.Fatalf("second Run() error = %v", err)
+	}
+	if res.Reviews != 0 || res.Findings != 0 || res.AgentRuns != 0 {
+		t.Errorf("second Run() wrote reviews=%d findings=%d runs=%d, want none", res.Reviews, res.Findings, res.AgentRuns)
+	}
+	if diff := cmp.Diff(before, rowCounts(t, d.DB)); diff != "" {
+		t.Errorf("row counts changed by the second run (-before +after):\n%s", diff)
+	}
+	if diff := cmp.Diff(first, readDemo(t, d.DB)); diff != "" {
+		t.Errorf("demo review changed by the second run (-first +second):\n%s", diff)
+	}
+}
+
+// EC4035: the demo review alone deleted -> nothing is re-created.
+func TestSeed_DeletedDemoReviewIsNotRecreatedWhileTheRunExists(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`DELETE FROM reviews`).Error; err != nil { // findings go with it (ON DELETE CASCADE)
+		t.Fatal(err)
+	}
+	before := rowCounts(t, d.DB)
+	res, err := runSeed(t, d.DB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Reviews != 0 || res.AgentRuns != 0 {
+		t.Errorf("Run() wrote reviews=%d runs=%d, want none while the run exists", res.Reviews, res.AgentRuns)
+	}
+	if diff := cmp.Diff(before, rowCounts(t, d.DB)); diff != "" {
+		t.Errorf("row counts changed (-before +after):\n%s", diff)
+	}
+}
+
+// EC4035: PR #482 with a user-made run and no review -> no demo review next to it.
+func TestSeed_UserRunWithoutReviewGetsNoDemoReview(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	// Replace the demo with a user-made failed run and no review.
+	if err := d.DB.Exec(`DELETE FROM reviews`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`UPDATE agent_runs SET status = 'failed', error = 'user run'`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	counts := rowCounts(t, d.DB)
+	if counts["reviews"] != 0 || counts["findings"] != 0 || counts["agent_runs"] != 1 {
+		t.Errorf("rows after the rerun = reviews %d, findings %d, agent_runs %d, want 0, 0, 1", counts["reviews"], counts["findings"], counts["agent_runs"])
+	}
+}
+
+// EC4035: the demo run deleted together with its review (DELETE /runs/:id) -> written again.
+func TestSeed_DeletedDemoRunIsWrittenAgain(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`DELETE FROM reviews WHERE run_id IN (SELECT id FROM agent_runs)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`DELETE FROM agent_runs`).Error; err != nil {
+		t.Fatal(err)
+	}
+	res, err := runSeed(t, d.DB)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if res.Reviews != 1 || res.Findings != 2 || res.AgentRuns != 1 {
+		t.Errorf("Run() reviews/findings/runs = %d/%d/%d, want 1/2/1", res.Reviews, res.Findings, res.AgentRuns)
+	}
+	got := readDemo(t, d.DB)
+	if got.Review.RunID == nil || *got.Review.RunID != got.Run.ID {
+		t.Errorf("rewritten review run_id = %v, want %s", got.Review.RunID, got.Run.ID)
+	}
+}
+
+// A database without "General Reviewer" (deleted) still gets the demo, with null agent ids.
+func TestSeed_DemoReviewWithoutGeneralReviewer(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`DELETE FROM reviews`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`DELETE FROM agent_runs`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := d.DB.Exec(`DELETE FROM agents WHERE name = 'General Reviewer'`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	got := readDemo(t, d.DB)
+	if got.Review.AgentID != nil || got.Run.AgentID != nil {
+		t.Errorf("agent ids = %v / %v, want both null", got.Review.AgentID, got.Run.AgentID)
+	}
+	if got.Review.RunID == nil || len(got.Findings) != 2 {
+		t.Errorf("demo = run_id %v, %d findings, want a linked run and 2 findings", got.Review.RunID, len(got.Findings))
+	}
+}
+
+func TestSeed_FailureInTheDemoReviewWritesNothing(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if err := d.DB.Exec(`ALTER TABLE agent_runs ADD CONSTRAINT force_fail CHECK (false)`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runSeed(t, d.DB); err == nil {
+		t.Fatal("Run() error = nil, want the CHECK violation")
+	}
+	for table, n := range rowCounts(t, d.DB) {
+		if n != 0 {
+			t.Errorf("rows in %s after failed seed = %d, want 0", table, n)
+		}
 	}
 }

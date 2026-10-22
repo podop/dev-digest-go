@@ -1,0 +1,83 @@
+{
+  "note": "SSE streams that are not scenario recordings. synthetic: events published on a fresh bus (connectFirst = the client connects before the first event, so the whole stream is live). finalStatus: a run the bus no longer holds (restart or TTL eviction) with this database status/error. errors: requests rejected before streaming.",
+  "synthetic": [
+    {
+      "name": "every_kind_with_data",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b1",
+      "events": [
+        { "kind": "info", "msg": "Starting review with agent \"Security Reviewer\" (openrouter/deepseek/deepseek-v4-flash)" },
+        { "kind": "tool", "msg": "Resolving openrouter provider…" },
+        { "kind": "tool", "msg": "Reviewing all files in one pass", "data": { "file": "all files" } },
+        { "kind": "result", "msg": "all files: 2 candidate finding(s)" },
+        { "kind": "info", "msg": "skills: 2 attached (a v1, b v2) · ~12 tokens", "data": { "skills": [{ "id": "s1", "name": "a", "version": 1 }, { "id": "s2", "name": "b", "version": 2 }] } },
+        { "kind": "info", "msg": "warning: x diff (250000 chars) exceeds maxDiffChars=200000 → split into 2 part(s); oversize hunk(s) truncated", "data": { "warning": "diff_oversize", "file": "x", "parts": 2, "truncated": true } },
+        { "kind": "error", "msg": "Run failed: boom" }
+      ]
+    },
+    {
+      "name": "live_stream_connected_before_the_first_event",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b2",
+      "connectFirst": true,
+      "dbStatus": "running",
+      "events": [
+        { "kind": "info", "msg": "first" },
+        { "kind": "info", "msg": "second", "data": { "n": 2, "ok": true, "none": null, "list": [1, 2.5, "three"], "nested": { "b": 1, "a": 2 } } },
+        { "kind": "result", "msg": "third" }
+      ]
+    },
+    {
+      "name": "json_escaping_of_the_message",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b3",
+      "events": [
+        { "kind": "info", "msg": "quotes \" and backslash \\ and slash / and tab \t and newline \n and cr \r" },
+        { "kind": "info", "msg": "html <script>alert(1)</script> & \"amp\" 'single'" },
+        { "kind": "info", "msg": "unicode café — 日本語 · ✓ …" },
+        { "kind": "info", "msg": "astral 😀 and control \u0001 \u001f and del \u007f" },
+        { "kind": "info", "msg": "", "data": { "empty": "" } }
+      ]
+    },
+    {
+      "name": "line_separators_are_not_escaped_by_node",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b4",
+      "escapingSensitive": true,
+      "events": [
+        { "kind": "info", "msg": "ls \u2028 ps \u2029 end" }
+      ]
+    },
+    {
+      "name": "long_message",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b5",
+      "events": [
+        { "kind": "info", "msg": { "$repeat": ["0123456789", 3000] } }
+      ]
+    },
+    {
+      "name": "no_events_completed_run",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b6",
+      "events": []
+    },
+    {
+      "name": "many_events",
+      "runId": "7e1d0000-0000-4000-8000-0000000000b7",
+      "events": [
+        { "kind": "info", "msg": "e1" }, { "kind": "info", "msg": "e2" }, { "kind": "info", "msg": "e3" }, { "kind": "info", "msg": "e4" },
+        { "kind": "info", "msg": "e5" }, { "kind": "info", "msg": "e6" }, { "kind": "info", "msg": "e7" }, { "kind": "info", "msg": "e8" },
+        { "kind": "info", "msg": "e9" }, { "kind": "info", "msg": "e10" }, { "kind": "info", "msg": "e11" }, { "kind": "result", "msg": "e12" }
+      ]
+    }
+  ],
+  "finalStatus": [
+    { "name": "done", "runId": "7e1d0000-0000-4000-8000-0000000000c1", "status": "done", "error": null },
+    { "name": "done_with_a_stale_error_text", "runId": "7e1d0000-0000-4000-8000-0000000000c2", "status": "done", "error": "ignored" },
+    { "name": "failed_with_a_note", "runId": "7e1d0000-0000-4000-8000-0000000000c3", "status": "failed", "error": "OPENROUTER_API_KEY is not configured" },
+    { "name": "failed_without_a_note_after_a_reap", "runId": "7e1d0000-0000-4000-8000-0000000000c4", "status": "failed", "error": null },
+    { "name": "cancelled", "runId": "7e1d0000-0000-4000-8000-0000000000c5", "status": "cancelled", "error": "Cancelled by user" },
+    { "name": "null_status_null_error", "runId": "7e1d0000-0000-4000-8000-0000000000c6", "status": null, "error": null },
+    { "name": "null_status_with_error", "runId": "7e1d0000-0000-4000-8000-0000000000c7", "status": null, "error": "legacy" },
+    { "name": "failed_with_unicode_and_quotes", "runId": "7e1d0000-0000-4000-8000-0000000000c8", "status": "failed", "error": "bad \"thing\" — café <x>" }
+  ],
+  "errors": [
+    { "name": "unknown_run_is_404_before_streaming", "path": "/runs/7e1d0000-0000-4000-8000-0000000000ff/events" },
+    { "name": "non_uuid_id_is_422", "path": "/runs/not-a-uuid/events" }
+  ]
+}

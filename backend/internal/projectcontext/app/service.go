@@ -20,6 +20,7 @@ type Service struct {
 	store store
 	clone cloneDocs
 	tx    txRunner
+	git   gitReader // set by WithGit; the run context needs it
 	globs *domain.GlobSet
 	log   *slog.Logger
 }

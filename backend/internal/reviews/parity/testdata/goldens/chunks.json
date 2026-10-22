@@ -1,0 +1,392 @@
+{
+  "note": "slice: sliceDiff(parseUnifiedDiff(raw), path) for each path (map-reduce chunk text). split: splitOversizeDiff(raw, max) → parts and truncated. Large cases rebuild `raw` from `synth` (README \"Synthetic diffs\"; padTo = extend the last line with x until raw has that many UTF-16 units) and appear as $blob digests.",
+  "slice": [
+    {
+      "name": "similar_names_are_not_substrings",
+      "raw": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-1\n+2\ndiff --git a/src/a.tsx b/src/a.tsx\n--- a/src/a.tsx\n+++ b/src/a.tsx\n@@ -1 +1 @@\n-x\n+y",
+      "fileLabels": ["src/a.ts", "src/a.tsx"],
+      "slices": [
+        {"path": "src/a.ts", "text": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-1\n+2"},
+        {"path": "src/a.tsx", "text": "diff --git a/src/a.tsx b/src/a.tsx\n--- a/src/a.tsx\n+++ b/src/a.tsx\n@@ -1 +1 @@\n-x\n+y"},
+        {
+          "path": "a.ts",
+          "text": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-1\n+2\ndiff --git a/src/a.tsx b/src/a.tsx\n--- a/src/a.tsx\n+++ b/src/a.tsx\n@@ -1 +1 @@\n-x\n+y"
+        }
+      ]
+    },
+    {
+      "name": "rename_matches_new_path_first_then_old",
+      "raw": "diff --git a/old.ts b/new.ts\nsimilarity index 80%\nrename from old.ts\nrename to new.ts\n--- a/old.ts\n+++ b/new.ts\n@@ -1,2 +1,2 @@\n k\n-a\n+b\ndiff --git a/zzz.ts b/zzz.ts\n--- a/zzz.ts\n+++ b/zzz.ts\n@@ -1 +1 @@\n-p\n+q",
+      "fileLabels": ["new.ts", "zzz.ts"],
+      "slices": [
+        {
+          "path": "new.ts",
+          "text": "diff --git a/old.ts b/new.ts\nsimilarity index 80%\nrename from old.ts\nrename to new.ts\n--- a/old.ts\n+++ b/new.ts\n@@ -1,2 +1,2 @@\n k\n-a\n+b"
+        },
+        {
+          "path": "old.ts",
+          "text": "diff --git a/old.ts b/new.ts\nsimilarity index 80%\nrename from old.ts\nrename to new.ts\n--- a/old.ts\n+++ b/new.ts\n@@ -1,2 +1,2 @@\n k\n-a\n+b"
+        },
+        {"path": "zzz.ts", "text": "diff --git a/zzz.ts b/zzz.ts\n--- a/zzz.ts\n+++ b/zzz.ts\n@@ -1 +1 @@\n-p\n+q"}
+      ]
+    },
+    {
+      "name": "quoted_header_with_spaces_and_escapes",
+      "raw": "diff --git \"a/my dir/f.ts\" \"b/my dir/f.ts\"\n--- \"a/my dir/f.ts\"\n+++ \"b/my dir/f.ts\"\n@@ -1 +1 @@\n-a\n+b\ndiff --git \"a/we\\\"ird\\\\name.ts\" \"b/we\\\"ird\\\\name.ts\"\n--- \"a/we\\\"ird\\\\name.ts\"\n+++ \"b/we\\\"ird\\\\name.ts\"\n@@ -2 +2 @@\n-c\n+d",
+      "fileLabels": ["\"b/my dir/f.ts\"", "\"b/we\\\"ird\\\\name.ts\""],
+      "slices": [
+        {"path": "my dir/f.ts", "text": "diff --git \"a/my dir/f.ts\" \"b/my dir/f.ts\"\n--- \"a/my dir/f.ts\"\n+++ \"b/my dir/f.ts\"\n@@ -1 +1 @@\n-a\n+b"},
+        {
+          "path": "we\"ird\\name.ts",
+          "text": "diff --git \"a/we\\\"ird\\\\name.ts\" \"b/we\\\"ird\\\\name.ts\"\n--- \"a/we\\\"ird\\\\name.ts\"\n+++ \"b/we\\\"ird\\\\name.ts\"\n@@ -2 +2 @@\n-c\n+d"
+        },
+        {
+          "path": "\"b/my dir/f.ts\"",
+          "text": "diff --git a/\"b/my dir/f.ts\" b/\"b/my dir/f.ts\"\n--- a/\"b/my dir/f.ts\"\n+++ b/\"b/my dir/f.ts\"\n@@ -1,1 +1,1 @@"
+        }
+      ]
+    },
+    {
+      "name": "unquoted_header_with_spaces",
+      "raw": "diff --git a/my dir/f.ts b/my dir/f.ts\n--- a/my dir/f.ts\n+++ b/my dir/f.ts\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/old name.ts b/new name.ts\n--- a/old name.ts\n+++ b/new name.ts\n@@ -1 +1 @@\n-c\n+d",
+      "fileLabels": ["my dir/f.ts", "new name.ts"],
+      "slices": [
+        {"path": "my dir/f.ts", "text": "diff --git a/my dir/f.ts b/my dir/f.ts\n--- a/my dir/f.ts\n+++ b/my dir/f.ts\n@@ -1 +1 @@\n-a\n+b"},
+        {"path": "new name.ts", "text": "diff --git a/old name.ts b/new name.ts\n--- a/old name.ts\n+++ b/new name.ts\n@@ -1 +1 @@\n-c\n+d"},
+        {"path": "old name.ts", "text": "diff --git a/old name.ts b/new name.ts\n--- a/old name.ts\n+++ b/new name.ts\n@@ -1 +1 @@\n-c\n+d"}
+      ]
+    },
+    {
+      "name": "no_diff_git_header_rebuilds_the_hunk_headers",
+      "raw": "--- a/solo.ts\n+++ b/solo.ts\n@@ -1,2 +1,3 @@\n a\n+b\n c\n@@ -9 +10 @@\n-x\n+y",
+      "fileLabels": ["solo.ts"],
+      "slices": [
+        {"path": "solo.ts", "text": "diff --git a/solo.ts b/solo.ts\n--- a/solo.ts\n+++ b/solo.ts\n@@ -1,2 +1,3 @@\n@@ -9,1 +10,1 @@"}
+      ]
+    },
+    {
+      "name": "unknown_path_returns_the_whole_diff",
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-1\n+2",
+      "fileLabels": ["a.ts"],
+      "slices": [
+        {"path": "missing.ts", "text": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-1\n+2"}
+      ]
+    },
+    {
+      "name": "unparsable_header_is_skipped",
+      "raw": "diff --git weird header\n--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@\n-1\n+2\ndiff --git a/y.ts b/y.ts\n--- a/y.ts\n+++ b/y.ts\n@@ -1 +1 @@\n-3\n+4",
+      "fileLabels": ["x.ts", "y.ts"],
+      "slices": [
+        {"path": "x.ts", "text": "diff --git a/x.ts b/x.ts\n--- a/x.ts\n+++ b/x.ts\n@@ -1,1 +1,1 @@"},
+        {"path": "y.ts", "text": "diff --git a/y.ts b/y.ts\n--- a/y.ts\n+++ b/y.ts\n@@ -1 +1 @@\n-3\n+4"}
+      ]
+    },
+    {
+      "name": "trailing_newline_stays_in_the_last_section",
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-1\n+2\ndiff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-3\n+4\n",
+      "fileLabels": ["a.ts", "b.ts"],
+      "slices": [
+        {"path": "a.ts", "text": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-1\n+2"},
+        {"path": "b.ts", "text": "diff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-3\n+4\n"}
+      ]
+    },
+    {
+      "name": "crlf_headers",
+      "raw": "diff --git a/w.ts b/w.ts\r\n--- a/w.ts\r\n+++ b/w.ts\r\n@@ -1 +1 @@\r\n-1\r\n+2\r\ndiff --git a/v.ts b/v.ts\r\n--- a/v.ts\r\n+++ b/v.ts\r\n@@ -1 +1 @@\r\n-3\r\n+4",
+      "fileLabels": ["w.ts", "v.ts"],
+      "slices": [
+        {"path": "w.ts", "text": "diff --git a/w.ts b/w.ts\r\n--- a/w.ts\r\n+++ b/w.ts\r\n@@ -1 +1 @@\r\n-1\r\n+2\r"},
+        {"path": "v.ts", "text": "diff --git a/v.ts b/v.ts\r\n--- a/v.ts\r\n+++ b/v.ts\r\n@@ -1 +1 @@\r\n-3\r\n+4"}
+      ]
+    }
+  ],
+  "split": [
+    {
+      "name": "fits_in_one_part",
+      "max": 500,
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b",
+      "parts": ["diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b"],
+      "truncated": false
+    },
+    {
+      "name": "exactly_at_the_cap",
+      "max": 64,
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b",
+      "parts": ["diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b"],
+      "truncated": false
+    },
+    {
+      "name": "one_over_the_cap_is_re_joined",
+      "max": 63,
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b",
+      "parts": ["\n[diff truncated by reviewer-core: 64 chars omitted (maxDiffChars=63)]"],
+      "truncated": true
+    },
+    {
+      "name": "two_files_two_parts",
+      "max": 120,
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-aaaaaaaaaa\n+bbbbbbbbbb\ndiff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-cccccccccc\n+dddddddddd",
+      "parts": [
+        "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-aaaaaaaaaa\n+bbbbbbbbbb",
+        "diff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-cccccccccc\n+dddddddddd"
+      ],
+      "truncated": false
+    },
+    {
+      "name": "same_file_hunks_share_one_header",
+      "max": 200,
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-aaaaaaaaaa\n+bbbbbbbbbb\n@@ -10 +10 @@\n-cccccccccc\n+dddddddddd\n@@ -20 +20 @@\n-eeeeeeeeee\n+ffffffffff",
+      "parts": [
+        "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-aaaaaaaaaa\n+bbbbbbbbbb\n@@ -10 +10 @@\n-cccccccccc\n+dddddddddd\n@@ -20 +20 @@\n-eeeeeeeeee\n+ffffffffff"
+      ],
+      "truncated": false
+    },
+    {
+      "name": "third_hunk_starts_a_part_with_the_header_again",
+      "max": 150,
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-aaaaaaaaaa\n+bbbbbbbbbb\n@@ -10 +10 @@\n-cccccccccc\n+dddddddddd\n@@ -20 +20 @@\n-eeeeeeeeee\n+ffffffffff",
+      "parts": [
+        "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-aaaaaaaaaa\n+bbbbbbbbbb\n@@ -10 +10 @@\n-cccccccccc\n+dddddddddd",
+        "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -20 +20 @@\n-eeeeeeeeee\n+ffffffffff"
+      ],
+      "truncated": false
+    },
+    {
+      "name": "one_hunk_above_the_cap_is_truncated_at_a_line",
+      "max": 250,
+      "raw": "diff --git a/big.ts b/big.ts\n--- a/big.ts\n+++ b/big.ts\n@@ -0,0 +1,12 @@\n+line number one is here\n+line number two is here\n+line number three is here\n+line number four is here\n+line number five is here\n+line number six is here\n+line number seven is here\n+line number eight is here\n+line number nine is here\n+line number ten is here\n+line number eleven is here\n+line number twelve is here",
+      "parts": [
+        "diff --git a/big.ts b/big.ts\n--- a/big.ts\n+++ b/big.ts\n@@ -0,0 +1,12 @@\n+line number one is here\n+line number two is here\n+line number three is here\n+line number four is here\n[diff truncated by reviewer-core: 212 chars omitted (maxDiffChars=250)]"
+      ],
+      "truncated": true
+    },
+    {
+      "name": "truncated_hunk_then_a_normal_file",
+      "max": 250,
+      "raw": "diff --git a/big.ts b/big.ts\n--- a/big.ts\n+++ b/big.ts\n@@ -0,0 +1,12 @@\n+line number one is here\n+line number two is here\n+line number three is here\n+line number four is here\n+line number five is here\n+line number six is here\n+line number seven is here\n+line number eight is here\n+line number nine is here\n+line number ten is here\n+line number eleven is here\n+line number twelve is here\ndiff --git a/small.ts b/small.ts\n--- a/small.ts\n+++ b/small.ts\n@@ -1 +1 @@\n-a\n+b",
+      "parts": [
+        "diff --git a/big.ts b/big.ts\n--- a/big.ts\n+++ b/big.ts\n@@ -0,0 +1,12 @@\n+line number one is here\n+line number two is here\n+line number three is here\n+line number four is here\n[diff truncated by reviewer-core: 212 chars omitted (maxDiffChars=250)]",
+        "diff --git a/small.ts b/small.ts\n--- a/small.ts\n+++ b/small.ts\n@@ -1 +1 @@\n-a\n+b"
+      ],
+      "truncated": true
+    },
+    {
+      "name": "text_without_hunks_is_truncated_whole",
+      "max": 120,
+      "raw": "this text has no diff header and no hunk marker at all, it is just a long line that keeps going and going well past the cap of one hundred and twenty units",
+      "parts": ["this text has no diff header and no hunk marker \n[diff truncated by reviewer-core: 107 chars omitted (maxDiffChars=120)]"],
+      "truncated": true
+    },
+    {
+      "name": "text_without_hunks_but_with_newlines",
+      "max": 120,
+      "raw": "first line of free text that is fairly long\nsecond line of free text that is fairly long\nthird line of free text that is fairly long\nfourth line",
+      "parts": ["first line of free text that is fairly long\n[diff truncated by reviewer-core: 101 chars omitted (maxDiffChars=120)]"],
+      "truncated": true
+    },
+    {
+      "name": "note_longer_than_the_cap",
+      "max": 10,
+      "raw": "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-a\n+b",
+      "parts": ["\n[diff truncated by reviewer-core: 64 chars omitted (maxDiffChars=10)]"],
+      "truncated": true
+    },
+    {
+      "name": "empty_raw",
+      "max": 100,
+      "raw": "",
+      "parts": [""],
+      "truncated": false
+    },
+    {
+      "name": "crlf_lines",
+      "max": 100,
+      "raw": "diff --git a/a.ts b/a.ts\r\n--- a/a.ts\r\n+++ b/a.ts\r\n@@ -1 +1 @@\r\n-aaaaaaaaaaaaaaaaaaaa\r\n+bbbbbbbbbbbbbbbbbbbb\r\ndiff --git a/b.ts b/b.ts\r\n--- a/b.ts\r\n+++ b/b.ts\r\n@@ -1 +1 @@\r\n-c\r\n+d",
+      "parts": [
+        "diff --git a/a.ts b/a.ts\r\n[diff truncated by reviewer-core: 83 chars omitted (maxDiffChars=100)]",
+        "diff --git a/b.ts b/b.ts\r\n--- a/b.ts\r\n+++ b/b.ts\r\n@@ -1 +1 @@\r\n-c\r\n+d"
+      ],
+      "truncated": true
+    },
+    {
+      "name": "astral_characters_count_as_two_units",
+      "max": 90,
+      "raw": "diff --git a/e.ts b/e.ts\n--- a/e.ts\n+++ b/e.ts\n@@ -1 +1 @@\n+😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\n+😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+      "parts": ["diff --git a/e.ts b\n[diff truncated by reviewer-core: 123 chars omitted (maxDiffChars=90)]"],
+      "truncated": true
+    },
+    {
+      "name": "large_exactly_at_the_default_cap_is_one_part",
+      "max": 200000,
+      "raw": {
+        "$blob": true,
+        "len": 200000,
+        "sha256": "4fa64114510e4aaee5768fa152499ee79623288b1290c76baa5a900b9645b60a",
+        "head": "diff --git a/src/pad.ts b/src/pad.ts\n--- a/src/pad.ts\n+++ b/src/pad.ts\n@@ -1,0 +",
+        "tail": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "parts": [
+        {
+          "$blob": true,
+          "len": 200000,
+          "sha256": "4fa64114510e4aaee5768fa152499ee79623288b1290c76baa5a900b9645b60a",
+          "head": "diff --git a/src/pad.ts b/src/pad.ts\n--- a/src/pad.ts\n+++ b/src/pad.ts\n@@ -1,0 +",
+          "tail": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      ],
+      "truncated": false,
+      "synth": {
+        "files": [
+          {
+            "path": "src/pad.ts",
+            "hunks": [
+              {"start": 1, "add": 1, "text": "x"}
+            ]
+          }
+        ]
+      },
+      "padTo": 200000
+    },
+    {
+      "name": "large_one_unit_over_the_default_cap_is_truncated",
+      "max": 200000,
+      "raw": {
+        "$blob": true,
+        "len": 200001,
+        "sha256": "e4309e7823dde45e0c83953933024df8c9d2cbb293ec1f4d9cc8735a25f431e2",
+        "head": "diff --git a/src/pad.ts b/src/pad.ts\n--- a/src/pad.ts\n+++ b/src/pad.ts\n@@ -1,0 +",
+        "tail": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "parts": [
+        "diff --git a/src/pad.ts b/src/pad.ts\n--- a/src/pad.ts\n+++ b/src/pad.ts\n@@ -1,0 +1,1 @@\n[diff truncated by reviewer-core: 199915 chars omitted (maxDiffChars=200000)]"
+      ],
+      "truncated": true,
+      "synth": {
+        "files": [
+          {
+            "path": "src/pad.ts",
+            "hunks": [
+              {"start": 1, "add": 1, "text": "x"}
+            ]
+          }
+        ]
+      },
+      "padTo": 200001
+    },
+    {
+      "name": "large_single_hunk_over_the_cap_is_truncated",
+      "max": 200000,
+      "raw": {
+        "$blob": true,
+        "len": 232986,
+        "sha256": "bba3d75d43b94382e0f6d2dae06a34bd5a1629eff01b0922b66d1ae6d79c2d47",
+        "head": "diff --git a/src/huge.ts b/src/huge.ts\n--- a/src/huge.ts\n+++ b/src/huge.ts\n@@ -1",
+        "tail": "99\n+const value = computeSomethingExpensiveHere(argument, other, third); new3000"
+      },
+      "parts": [
+        {
+          "$blob": true,
+          "len": 199991,
+          "sha256": "9fbb2bf2e5687e0aed1a4c84fdf3016d103d3ee1c1e66c6cc0afad4bde9c8cb6",
+          "head": "diff --git a/src/huge.ts b/src/huge.ts\n--- a/src/huge.ts\n+++ b/src/huge.ts\n@@ -1",
+          "tail": "576\n[diff truncated by reviewer-core: 33072 chars omitted (maxDiffChars=200000)]"
+        }
+      ],
+      "truncated": true,
+      "synth": {
+        "files": [
+          {
+            "path": "src/huge.ts",
+            "hunks": [
+              {"start": 1, "add": 3000, "text": "const value = computeSomethingExpensiveHere(argument, other, third);"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "large_hunks_pack_into_parts",
+      "max": 200000,
+      "raw": {
+        "$blob": true,
+        "len": 207716,
+        "sha256": "9a44423209be997e81ad39af8c93ebcd26b5c566c5acbc73c23a31d497a8321c",
+        "head": "diff --git a/src/many.ts b/src/many.ts\n--- a/src/many.ts\n+++ b/src/many.ts\n@@ -1",
+        "tail": "899\n+const value = computeSomethingExpensiveHere(argument, other, third); new900"
+      },
+      "parts": [
+        {
+          "$blob": true,
+          "len": 138500,
+          "sha256": "856294b6e3ba6930c96b542cfcda656c423587a5d4320ebcc35563bcf8ac6c9e",
+          "head": "diff --git a/src/many.ts b/src/many.ts\n--- a/src/many.ts\n+++ b/src/many.ts\n@@ -1",
+          "tail": "899\n+const value = computeSomethingExpensiveHere(argument, other, third); new900"
+        },
+        {
+          "$blob": true,
+          "len": 69290,
+          "sha256": "e62b930b579ce8f66418b9f0140d0ff1c64694745623b50ed04abc681b18aed5",
+          "head": "diff --git a/src/many.ts b/src/many.ts\n--- a/src/many.ts\n+++ b/src/many.ts\n@@ -2",
+          "tail": "899\n+const value = computeSomethingExpensiveHere(argument, other, third); new900"
+        }
+      ],
+      "truncated": false,
+      "synth": {
+        "files": [
+          {
+            "path": "src/many.ts",
+            "hunks": [
+              {"start": 1, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);"},
+              {"start": 1000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);"},
+              {"start": 2000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "large_two_files_each_in_its_own_part",
+      "max": 200000,
+      "raw": {
+        "$blob": true,
+        "len": 231965,
+        "sha256": "faaccfb8fe6355062fe94f848f427ca250021bf1a4a8cb7561eb0b5f077b47d0",
+        "head": "diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1,0 +",
+        "tail": "99\n+const value = computeSomethingExpensiveHere(argument, other, third); new1500"
+      },
+      "parts": [
+        {
+          "$blob": true,
+          "len": 115982,
+          "sha256": "434149e6aac91895625279c80a4aac8a5e740d5bf37702e457f80512f499f38d",
+          "head": "diff --git a/src/one.ts b/src/one.ts\n--- a/src/one.ts\n+++ b/src/one.ts\n@@ -1,0 +",
+          "tail": "99\n+const value = computeSomethingExpensiveHere(argument, other, third); new1500"
+        },
+        {
+          "$blob": true,
+          "len": 115982,
+          "sha256": "9f540147db8baf6ef36448502725d2bf8b9e8cea4323b6b6f61be79db670fe96",
+          "head": "diff --git a/src/two.ts b/src/two.ts\n--- a/src/two.ts\n+++ b/src/two.ts\n@@ -1,0 +",
+          "tail": "99\n+const value = computeSomethingExpensiveHere(argument, other, third); new1500"
+        }
+      ],
+      "truncated": false,
+      "synth": {
+        "files": [
+          {
+            "path": "src/one.ts",
+            "hunks": [
+              {"start": 1, "add": 1500, "text": "const value = computeSomethingExpensiveHere(argument, other, third);"}
+            ]
+          },
+          {
+            "path": "src/two.ts",
+            "hunks": [
+              {"start": 1, "add": 1500, "text": "const value = computeSomethingExpensiveHere(argument, other, third);"}
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

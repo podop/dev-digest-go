@@ -1,0 +1,139 @@
+{
+  "note": "splitOversizeDiff(raw, max). Small caps keep the full parts in the golden; the large cases use synthetic diffs (README) and the default cap 200000, so their parts are digests. Lengths are UTF-16 units.",
+  "cases": [
+    { "name": "fits_in_one_part", "max": 500, "lines": ["diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-a", "+b"] },
+    {
+      "name": "exactly_at_the_cap",
+      "max": 64,
+      "lines": ["diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-a", "+b"]
+    },
+    {
+      "name": "one_over_the_cap_is_re_joined",
+      "max": 63,
+      "lines": ["diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-a", "+b"]
+    },
+    {
+      "name": "two_files_two_parts",
+      "max": 120,
+      "lines": [
+        "diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-aaaaaaaaaa", "+bbbbbbbbbb",
+        "diff --git a/b.ts b/b.ts", "--- a/b.ts", "+++ b/b.ts", "@@ -1 +1 @@", "-cccccccccc", "+dddddddddd"
+      ]
+    },
+    {
+      "name": "same_file_hunks_share_one_header",
+      "max": 200,
+      "lines": [
+        "diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts",
+        "@@ -1 +1 @@", "-aaaaaaaaaa", "+bbbbbbbbbb",
+        "@@ -10 +10 @@", "-cccccccccc", "+dddddddddd",
+        "@@ -20 +20 @@", "-eeeeeeeeee", "+ffffffffff"
+      ]
+    },
+    {
+      "name": "third_hunk_starts_a_part_with_the_header_again",
+      "max": 150,
+      "lines": [
+        "diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts",
+        "@@ -1 +1 @@", "-aaaaaaaaaa", "+bbbbbbbbbb",
+        "@@ -10 +10 @@", "-cccccccccc", "+dddddddddd",
+        "@@ -20 +20 @@", "-eeeeeeeeee", "+ffffffffff"
+      ]
+    },
+    {
+      "name": "one_hunk_above_the_cap_is_truncated_at_a_line",
+      "max": 250,
+      "lines": [
+        "diff --git a/big.ts b/big.ts", "--- a/big.ts", "+++ b/big.ts", "@@ -0,0 +1,12 @@",
+        "+line number one is here", "+line number two is here", "+line number three is here",
+        "+line number four is here", "+line number five is here", "+line number six is here",
+        "+line number seven is here", "+line number eight is here", "+line number nine is here",
+        "+line number ten is here", "+line number eleven is here", "+line number twelve is here"
+      ]
+    },
+    {
+      "name": "truncated_hunk_then_a_normal_file",
+      "max": 250,
+      "lines": [
+        "diff --git a/big.ts b/big.ts", "--- a/big.ts", "+++ b/big.ts", "@@ -0,0 +1,12 @@",
+        "+line number one is here", "+line number two is here", "+line number three is here",
+        "+line number four is here", "+line number five is here", "+line number six is here",
+        "+line number seven is here", "+line number eight is here", "+line number nine is here",
+        "+line number ten is here", "+line number eleven is here", "+line number twelve is here",
+        "diff --git a/small.ts b/small.ts", "--- a/small.ts", "+++ b/small.ts", "@@ -1 +1 @@", "-a", "+b"
+      ]
+    },
+    {
+      "name": "text_without_hunks_is_truncated_whole",
+      "max": 120,
+      "text": "this text has no diff header and no hunk marker at all, it is just a long line that keeps going and going well past the cap of one hundred and twenty units"
+    },
+    {
+      "name": "text_without_hunks_but_with_newlines",
+      "max": 120,
+      "lines": ["first line of free text that is fairly long", "second line of free text that is fairly long", "third line of free text that is fairly long", "fourth line"]
+    },
+    {
+      "name": "note_longer_than_the_cap",
+      "max": 10,
+      "lines": ["diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-a", "+b"]
+    },
+    {
+      "name": "empty_raw",
+      "max": 100,
+      "text": ""
+    },
+    {
+      "name": "crlf_lines",
+      "max": 100,
+      "eol": "\r\n",
+      "lines": [
+        "diff --git a/a.ts b/a.ts", "--- a/a.ts", "+++ b/a.ts", "@@ -1 +1 @@", "-aaaaaaaaaaaaaaaaaaaa", "+bbbbbbbbbbbbbbbbbbbb",
+        "diff --git a/b.ts b/b.ts", "--- a/b.ts", "+++ b/b.ts", "@@ -1 +1 @@", "-c", "+d"
+      ]
+    },
+    {
+      "name": "astral_characters_count_as_two_units",
+      "max": 90,
+      "lines": [
+        "diff --git a/e.ts b/e.ts", "--- a/e.ts", "+++ b/e.ts", "@@ -1 +1 @@",
+        "+😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "+😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀"
+      ]
+    },
+    {
+      "name": "large_exactly_at_the_default_cap_is_one_part",
+      "max": 200000,
+      "padTo": 200000,
+      "synth": { "files": [{ "path": "src/pad.ts", "hunks": [{ "start": 1, "add": 1, "text": "x" }] }] }
+    },
+    {
+      "name": "large_one_unit_over_the_default_cap_is_truncated",
+      "max": 200000,
+      "padTo": 200001,
+      "synth": { "files": [{ "path": "src/pad.ts", "hunks": [{ "start": 1, "add": 1, "text": "x" }] }] }
+    },
+    {
+      "name": "large_single_hunk_over_the_cap_is_truncated",
+      "max": 200000,
+      "synth": { "files": [{ "path": "src/huge.ts", "hunks": [{ "start": 1, "add": 3000, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" }] }] }
+    },
+    {
+      "name": "large_hunks_pack_into_parts",
+      "max": 200000,
+      "synth": { "files": [{ "path": "src/many.ts", "hunks": [
+        { "start": 1, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" },
+        { "start": 1000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" },
+        { "start": 2000, "add": 900, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" }
+      ] }] }
+    },
+    {
+      "name": "large_two_files_each_in_its_own_part",
+      "max": 200000,
+      "synth": { "files": [
+        { "path": "src/one.ts", "hunks": [{ "start": 1, "add": 1500, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" }] },
+        { "path": "src/two.ts", "hunks": [{ "start": 1, "add": 1500, "text": "const value = computeSomethingExpensiveHere(argument, other, third);" }] }
+      ] }
+    }
+  ]
+}

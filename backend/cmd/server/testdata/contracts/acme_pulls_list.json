@@ -4,18 +4,24 @@
     "author": "marisa.koch",
     "base": "main",
     "branch": "feat/rate-limit-public",
-    "cost_usd": null,
+    "cost_usd": 0.002135,
     "deletions": 38,
     "files_count": 9,
-    "findings_counts": null,
+    "findings_counts": {
+      "CRITICAL": 1,
+      "SUGGESTION": 0,
+      "WARNING": 1
+    },
     "head_sha": "a1b2c3d4e5f6",
     "id": "00000000-0000-4000-8000-000000000001",
-    "last_reviewed_at": null,
-    "latest_review_id": null,
-    "latest_review_ids": [],
+    "last_reviewed_at": "2026-01-01T00:00:00.000Z",
+    "latest_review_id": "00000000-0000-4000-8000-000000000002",
+    "latest_review_ids": [
+      "00000000-0000-4000-8000-000000000002"
+    ],
     "number": 482,
     "opened_at": null,
-    "score": null,
+    "score": 61,
     "status": "needs_review",
     "title": "Add rate limiting to public API endpoints",
     "updated_at": null

@@ -43,6 +43,14 @@ func seeded(t *testing.T) fixture {
 	return f
 }
 
+// withoutDemoReview removes the PR #482 demo review (and its run) the seed writes, so a test
+// starts from a pull request that has no review.
+func (f fixture) withoutDemoReview(t *testing.T) {
+	t.Helper()
+	exec(t, f.db, `DELETE FROM reviews WHERE pr_id = ?`, f.prID) // findings go with their review
+	exec(t, f.db, `DELETE FROM agent_runs WHERE pr_id = ?`, f.prID)
+}
+
 func scan(t *testing.T, db *gorm.DB, dest any, query string, args ...any) {
 	t.Helper()
 	if err := db.Raw(query, args...).Scan(dest).Error; err != nil {
@@ -298,8 +306,32 @@ func TestMarkPolled(t *testing.T) {
 	}
 }
 
+func TestRollups_demoReview(t *testing.T) {
+	f := seeded(t)
+	var reviewID string
+	var createdAt time.Time
+	scan(t, f.db, &reviewID, `SELECT id FROM reviews WHERE pr_id = ?`, f.prID)
+	scan(t, f.db, &createdAt, `SELECT created_at FROM reviews WHERE id = ?`, reviewID)
+	got, err := f.store.Rollups(t.Context(), f.wsID, []string{f.prID})
+	if err != nil {
+		t.Fatalf("Rollups() error = %v", err)
+	}
+	want := domain.Rollup{
+		Score:           ptr(61),
+		CostUSD:         ptr(0.002135),
+		LatestReviewID:  &reviewID,
+		LastReviewedAt:  &createdAt,
+		LatestReviewIDs: []string{reviewID},
+		FindingsCounts:  &domain.FindingsCounts{Critical: 1, Warning: 1},
+	}
+	if diff := cmp.Diff(want, got[f.prID], timeEqual); diff != "" {
+		t.Errorf("Rollups(seeded PR with the demo review) mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestRollups_noReviews(t *testing.T) {
 	f := seeded(t)
+	f.withoutDemoReview(t)
 	got, err := f.store.Rollups(t.Context(), f.wsID, []string{f.prID})
 	if err != nil {
 		t.Fatalf("Rollups() error = %v", err)
@@ -315,6 +347,7 @@ func TestRollups_noReviews(t *testing.T) {
 
 func TestRollups_reviewsFindingsAndCost(t *testing.T) {
 	f := seeded(t)
+	f.withoutDemoReview(t)
 	var agentA, agentB string
 	for name, dest := range map[string]*string{"A": &agentA, "B": &agentB} {
 		scan(t, f.db, dest, `INSERT INTO agents (workspace_id, name, provider, model, system_prompt)
@@ -365,6 +398,7 @@ func TestRollups_reviewsFindingsAndCost(t *testing.T) {
 
 func TestRollups_unknownCostStaysNil(t *testing.T) {
 	f := seeded(t)
+	f.withoutDemoReview(t)
 	exec(t, f.db, `INSERT INTO agent_runs (workspace_id, pr_id, cost_usd) VALUES (?, ?, NULL)`, f.wsID, f.prID)
 	got, err := f.store.Rollups(t.Context(), f.wsID, []string{f.prID})
 	if err != nil {

@@ -1,0 +1,1109 @@
+{
+  "note": "Each run drives OpenRouterProvider.completeStructured({model, schema: Review, schemaName: \"Review\", messages: [system \"SYSTEM\", user \"USER\"], maxRetries, temperature, sessionId}) against a local HTTP server that answers `responses` in order. `requests` are the parsed JSON bodies the SDK sent; response_format equal to the strict Review schema (schema.json strict) is shown as \"$strictReview\". `usage` are the onUsage reports (one per response), `warnings` the onWarning texts. `result` is the StructuredResult or `error` the thrown message. The request key order is the SDK order.",
+  "scenarios": [
+    {
+      "name": "openrouter_success_first_attempt",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": "acme/payments-api#482:Security Reviewer",
+      "responses": [
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"ok\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 1200, "completion_tokens": 180, "cost": 0.00042}
+        }
+      ],
+      "runs": [
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "deepseek/deepseek-v4-flash",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "acme/payments-api#482:Security Reviewer",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 1200, "tokensOut": 180, "costUsd": 0.00042}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "ok",
+              "score": 50,
+              "findings": []
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "tokensIn": 1200,
+            "tokensOut": 180,
+            "costUsd": 0.00042,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"ok\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "openai_success_has_no_session_id_and_no_usage_include",
+      "provider": "openai",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": "acme/payments-api#482:Security Reviewer",
+      "responses": [
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"ok\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 500, "completion_tokens": 60}
+        }
+      ],
+      "runs": [
+        {
+          "model": "gpt-4.1-mini",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "gpt-4.1-mini",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview"
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 500, "tokensOut": 60, "costUsd": null}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "ok",
+              "score": 50,
+              "findings": []
+            },
+            "model": "gpt-4.1-mini",
+            "tokensIn": 500,
+            "tokensOut": 60,
+            "costUsd": null,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"ok\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "temperature_null_is_omitted",
+      "provider": "openrouter",
+      "temperature": null,
+      "maxRetries": 2,
+      "sessionId": null,
+      "responses": [
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.0001}
+        }
+      ],
+      "runs": [
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "deepseek/deepseek-v4-flash",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "deepseek/deepseek-v4-flash",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "reasoning_models_omit_temperature",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 0,
+      "sessionId": null,
+      "responses": [
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5, "cost": 0.0001}
+        }
+      ],
+      "runs": [
+        {
+          "model": "openai/o3-mini",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "openai/o3-mini",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "openai/o3-mini",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        },
+        {
+          "model": "openai/gpt-5",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "openai/gpt-5",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "openai/gpt-5",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        },
+        {
+          "model": "deepseek/deepseek-r1",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "deepseek/deepseek-r1",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "deepseek/deepseek-r1",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        },
+        {
+          "model": "deepseek/deepseek-reasoner",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "deepseek/deepseek-reasoner",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "deepseek/deepseek-reasoner",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        },
+        {
+          "model": "openai/gpt-4o",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "openai/gpt-4o",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "openai/gpt-4o",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        },
+        {
+          "model": "openai/o4",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "openai/o4",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "openai/o4",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        },
+        {
+          "model": "openai/gpt-5-mini",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "openai/gpt-5-mini",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "openai/gpt-5-mini",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        },
+        {
+          "model": "vendor/deepseek-r1-distill",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "vendor/deepseek-r1-distill",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "vendor/deepseek-r1-distill",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": 0.0001,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid_json_then_valid",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": "o/r#1:A",
+      "responses": [
+        {
+          "content": "not json at all",
+          "usage": {"prompt_tokens": 100, "completion_tokens": 10, "cost": 0.001}
+        },
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"second\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 140, "completion_tokens": 50, "cost": 0.0015}
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            },
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"},
+                  {"role": "assistant", "content": "not json at all"},
+                  {
+                    "role": "user",
+                    "content": "Output was not valid JSON: Unexpected token 'o', \"not json at all\" is not valid JSON\nReturn ONLY a single valid JSON object matching the schema, no prose."
+                  }
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 100, "tokensOut": 10, "costUsd": 0.001},
+            {"tokensIn": 140, "tokensOut": 50, "costUsd": 0.0015}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "second",
+              "score": 50,
+              "findings": []
+            },
+            "model": "m/x",
+            "tokensIn": 240,
+            "tokensOut": 60,
+            "costUsd": 0.0025,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"second\", \"score\": 50, \"findings\": []}",
+            "attempts": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "schema_mismatch_twice_then_valid",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": "o/r#1:A",
+      "responses": [
+        {
+          "content": "{\"verdict\": \"maybe\", \"summary\": \"S\", \"score\": 101, \"findings\": []}",
+          "usage": {"prompt_tokens": 100, "completion_tokens": 10, "cost": 0.001}
+        },
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"HIGH\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}",
+          "usage": {"prompt_tokens": 150, "completion_tokens": 60, "cost": 0.0016}
+        },
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"third\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 200, "completion_tokens": 70, "cost": 0.0017}
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            },
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"},
+                  {"role": "assistant", "content": "{\"verdict\": \"maybe\", \"summary\": \"S\", \"score\": 101, \"findings\": []}"},
+                  {
+                    "role": "user",
+                    "content": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'maybe'\n- score: Number must be less than or equal to 100"
+                  }
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            },
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"},
+                  {"role": "assistant", "content": "{\"verdict\": \"maybe\", \"summary\": \"S\", \"score\": 101, \"findings\": []}"},
+                  {
+                    "role": "user",
+                    "content": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'maybe'\n- score: Number must be less than or equal to 100"
+                  },
+                  {
+                    "role": "assistant",
+                    "content": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": [{\"id\": \"f1\", \"severity\": \"HIGH\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}]}"
+                  },
+                  {
+                    "role": "user",
+                    "content": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- findings.0.severity: Invalid enum value. Expected 'CRITICAL' | 'WARNING' | 'SUGGESTION', received 'HIGH'"
+                  }
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 100, "tokensOut": 10, "costUsd": 0.001},
+            {"tokensIn": 150, "tokensOut": 60, "costUsd": 0.0016},
+            {"tokensIn": 200, "tokensOut": 70, "costUsd": 0.0017}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "third",
+              "score": 50,
+              "findings": []
+            },
+            "model": "m/x",
+            "tokensIn": 450,
+            "tokensOut": 140,
+            "costUsd": 0.0043,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"third\", \"score\": 50, \"findings\": []}",
+            "attempts": 3
+          }
+        }
+      ]
+    },
+    {
+      "name": "every_attempt_fails_the_schema",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": "o/r#1:A",
+      "responses": [
+        {
+          "content": "{\"verdict\": \"maybe\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 100, "completion_tokens": 10, "cost": 0.001}
+        },
+        {
+          "content": "still not json",
+          "usage": {"prompt_tokens": 120, "completion_tokens": 11, "cost": 0.0011}
+        },
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 7.5, \"findings\": []}",
+          "usage": {"prompt_tokens": 130, "completion_tokens": 12, "cost": 0.0012}
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            },
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"},
+                  {"role": "assistant", "content": "{\"verdict\": \"maybe\", \"summary\": \"S\", \"score\": 50, \"findings\": []}"},
+                  {
+                    "role": "user",
+                    "content": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'maybe'"
+                  }
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            },
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"},
+                  {"role": "assistant", "content": "{\"verdict\": \"maybe\", \"summary\": \"S\", \"score\": 50, \"findings\": []}"},
+                  {
+                    "role": "user",
+                    "content": "Your JSON did not match the required schema. Fix these and return ONLY valid JSON:\n- verdict: Invalid enum value. Expected 'request_changes' | 'approve' | 'comment', received 'maybe'"
+                  },
+                  {"role": "assistant", "content": "still not json"},
+                  {
+                    "role": "user",
+                    "content": "Output was not valid JSON: Unexpected token 's', \"still not json\" is not valid JSON\nReturn ONLY a single valid JSON object matching the schema, no prose."
+                  }
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "session_id": "o/r#1:A",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 100, "tokensOut": 10, "costUsd": 0.001},
+            {"tokensIn": 120, "tokensOut": 11, "costUsd": 0.0011},
+            {"tokensIn": 130, "tokensOut": 12, "costUsd": 0.0012}
+          ],
+          "warnings": [],
+          "error": "OpenRouter structured output failed schema validation for Review after 3 attempt(s). Last issues:\n- score: Expected integer, received float\nLast raw output (68 chars): {\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 7.5, \"findings\": []}"
+        }
+      ]
+    },
+    {
+      "name": "max_retries_zero_fails_after_one_attempt",
+      "provider": "openai",
+      "temperature": 0,
+      "maxRetries": 0,
+      "sessionId": null,
+      "responses": [
+        {
+          "content": "nope",
+          "usage": {"prompt_tokens": 10, "completion_tokens": 1}
+        }
+      ],
+      "runs": [
+        {
+          "model": "gpt-4.1-mini",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "gpt-4.1-mini",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview"
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 1, "costUsd": null}
+          ],
+          "warnings": [],
+          "error": "OpenRouter structured output failed schema validation for Review after 1 attempt(s). Last issues:\nOutput was not valid JSON: Unexpected token 'o', \"nope\" is not valid JSON\nLast raw output (4 chars): nope"
+        }
+      ]
+    },
+    {
+      "name": "response_without_usage_is_estimated",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": null,
+      "responses": [
+        {"content": "{\"verdict\": \"comment\", \"summary\": \"no usage block\", \"score\": 50, \"findings\": []}"}
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 3, "tokensOut": 20, "costUsd": null}
+          ],
+          "warnings": ["m/x returned no usage for Review; estimated 3 in / 20 out tokens"],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "no usage block",
+              "score": 50,
+              "findings": []
+            },
+            "model": "m/x",
+            "tokensIn": 3,
+            "tokensOut": 20,
+            "costUsd": null,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"no usage block\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "response_without_cost_is_unpriced",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": null,
+      "responses": [
+        {
+          "content": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+          "usage": {"prompt_tokens": 10, "completion_tokens": 5}
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 5, "costUsd": null}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "comment",
+              "summary": "S",
+              "score": 50,
+              "findings": []
+            },
+            "model": "m/x",
+            "tokensIn": 10,
+            "tokensOut": 5,
+            "costUsd": null,
+            "raw": "{\"verdict\": \"comment\", \"summary\": \"S\", \"score\": 50, \"findings\": []}",
+            "attempts": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "no_choices_with_an_error_body",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": null,
+      "responses": [
+        {
+          "raw": {
+            "id": "x",
+            "object": "chat.completion",
+            "choices": [],
+            "error": {"message": "upstream rate limited"},
+            "usage": {"prompt_tokens": 10, "completion_tokens": 0, "cost": 0.0001}
+          }
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 0, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "error": "OpenRouter returned no choices for Review: upstream rate limited"
+        }
+      ]
+    },
+    {
+      "name": "no_choices_without_an_error_body",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": null,
+      "responses": [
+        {
+          "raw": {
+            "id": "x",
+            "object": "chat.completion",
+            "choices": []
+          }
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 3, "tokensOut": 0, "costUsd": null}
+          ],
+          "warnings": ["m/x returned no usage for Review; estimated 3 in / 0 out tokens"],
+          "error": "OpenRouter returned no choices for Review"
+        }
+      ]
+    },
+    {
+      "name": "null_content_counts_as_empty_output",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 0,
+      "sessionId": null,
+      "responses": [
+        {
+          "raw": {
+            "id": "x",
+            "object": "chat.completion",
+            "choices": [
+              {
+                "index": 0,
+                "finish_reason": "stop",
+                "message": {"role": "assistant", "content": null}
+              }
+            ],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 0, "cost": 0.0001}
+          }
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 10, "tokensOut": 0, "costUsd": 0.0001}
+          ],
+          "warnings": [],
+          "error": "OpenRouter structured output failed schema validation for Review after 1 attempt(s). Last issues:\nOutput was not valid JSON: Unexpected end of JSON input\nLast raw output (0 chars): "
+        }
+      ]
+    },
+    {
+      "name": "valid_review_with_findings_and_fenced_output",
+      "provider": "openrouter",
+      "temperature": 0,
+      "maxRetries": 2,
+      "sessionId": null,
+      "responses": [
+        {
+          "content": "```json\n{\"verdict\": \"request_changes\", \"summary\": \"two findings\", \"score\": 44, \"findings\": [{\"id\": \"a\", \"severity\": \"CRITICAL\", \"category\": \"security\", \"title\": \"Secret\", \"file\": \"src/config.ts\", \"start_line\": 12, \"end_line\": 12, \"rationale\": \"R\", \"suggestion\": \"rotate\", \"confidence\": 0.5, \"kind\": \"secret_leak\", \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}, {\"id\": \"b\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": \"rubric\", \"out_of_scope\": null}]}\n```",
+          "usage": {"prompt_tokens": 2000, "completion_tokens": 300, "cost": 0.002}
+        }
+      ],
+      "runs": [
+        {
+          "model": "m/x",
+          "requests": [
+            {
+              "path": "/v1/chat/completions",
+              "authorization": "Bearer sk-test-key",
+              "body": {
+                "model": "m/x",
+                "messages": [
+                  {"role": "system", "content": "SYSTEM"},
+                  {"role": "user", "content": "USER"}
+                ],
+                "temperature": 0,
+                "response_format": "$strictReview",
+                "usage": {"include": true}
+              }
+            }
+          ],
+          "usage": [
+            {"tokensIn": 2000, "tokensOut": 300, "costUsd": 0.002}
+          ],
+          "warnings": [],
+          "result": {
+            "data": {
+              "verdict": "request_changes",
+              "summary": "two findings",
+              "score": 44,
+              "findings": [
+                {
+                  "id": "a",
+                  "severity": "CRITICAL",
+                  "category": "security",
+                  "title": "Secret",
+                  "file": "src/config.ts",
+                  "start_line": 12,
+                  "end_line": 12,
+                  "rationale": "R",
+                  "suggestion": "rotate",
+                  "confidence": 0.5,
+                  "kind": "secret_leak",
+                  "trifecta_components": null,
+                  "evidence": null,
+                  "skill": null,
+                  "out_of_scope": null
+                },
+                {
+                  "id": "b",
+                  "severity": "WARNING",
+                  "category": "bug",
+                  "title": "T",
+                  "file": "a.ts",
+                  "start_line": 1,
+                  "end_line": 2,
+                  "rationale": "R",
+                  "suggestion": null,
+                  "confidence": 0.5,
+                  "kind": null,
+                  "trifecta_components": null,
+                  "evidence": null,
+                  "skill": "rubric",
+                  "out_of_scope": null
+                }
+              ]
+            },
+            "model": "m/x",
+            "tokensIn": 2000,
+            "tokensOut": 300,
+            "costUsd": 0.002,
+            "raw": "```json\n{\"verdict\": \"request_changes\", \"summary\": \"two findings\", \"score\": 44, \"findings\": [{\"id\": \"a\", \"severity\": \"CRITICAL\", \"category\": \"security\", \"title\": \"Secret\", \"file\": \"src/config.ts\", \"start_line\": 12, \"end_line\": 12, \"rationale\": \"R\", \"suggestion\": \"rotate\", \"confidence\": 0.5, \"kind\": \"secret_leak\", \"trifecta_components\": null, \"evidence\": null, \"skill\": null, \"out_of_scope\": null}, {\"id\": \"b\", \"severity\": \"WARNING\", \"category\": \"bug\", \"title\": \"T\", \"file\": \"a.ts\", \"start_line\": 1, \"end_line\": 2, \"rationale\": \"R\", \"suggestion\": null, \"confidence\": 0.5, \"kind\": null, \"trifecta_components\": null, \"evidence\": null, \"skill\": \"rubric\", \"out_of_scope\": null}]}\n```",
+            "attempts": 1
+          }
+        }
+      ]
+    }
+  ]
+}

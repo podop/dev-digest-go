@@ -1,0 +1,17 @@
+{
+  "note": "A PR whose pr_files rows were never loaded (EC4008).",
+  "pull": {
+    "id": "5a8e1c2f-0b7d-4f43-9c11-555000000003",
+    "workspaceId": "0b6f2d1a-7c34-4e0a-8a55-00000000w001",
+    "repoId": "9c0d7b2e-3f51-4a6b-b0aa-00000000r003",
+    "number": 5,
+    "title": "Draft with no loaded files",
+    "author": "sam",
+    "branch": "wip/empty",
+    "base": "main",
+    "headSha": "ffffffffffffffffffffffffffffffffffffffff",
+    "body": "   "
+  },
+  "repo": { "id": "9c0d7b2e-3f51-4a6b-b0aa-00000000r003", "owner": "acme", "name": "empty-repo" },
+  "files": []
+}

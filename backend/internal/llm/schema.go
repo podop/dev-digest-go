@@ -121,9 +121,9 @@ func readValue(dec *json.Decoder) (any, error) {
 	}
 }
 
-// strictSchema returns the form of schema that providers receive (spec 7.2): every object that
+// StrictSchema returns the form of schema that providers receive (spec 7.2): every object that
 // lists properties requires all of them and forbids others; array length limits are dropped.
-func strictSchema(raw json.RawMessage) (json.RawMessage, error) {
+func StrictSchema(raw json.RawMessage) (json.RawMessage, error) {
 	tree, err := decodeOrdered(raw)
 	if err != nil {
 		return nil, fmt.Errorf("response schema: %w", err)
@@ -240,6 +240,13 @@ func (v *validator) check(node, inst any, path []string, out *[]issue) {
 }
 
 func (v *validator) checkObject(s *jobj, inst any, path []string, out *[]issue, add func(string)) {
+	// "nullable": true (the OpenAPI form the Node schema writer emits for Zod .nullish()) accepts
+	// JSON null in place of whatever the node describes.
+	if inst == nil {
+		if n, ok := s.get("nullable"); ok && n == true {
+			return
+		}
+	}
 	if ref, ok := s.get("$ref"); ok {
 		if r, ok := ref.(string); ok {
 			if target := v.resolve(r); target != nil {

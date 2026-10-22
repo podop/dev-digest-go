@@ -48,6 +48,14 @@ var (
 	ErrInvalidSHA = errors.New("invalid commit sha")
 	// ErrOutputTooLarge means git printed more than the stdout cap, so the output is incomplete.
 	ErrOutputTooLarge = errors.New("git output exceeds the size limit")
+	// ErrBlobTooLarge means a file at a commit is larger than the caller's limit; it was not read.
+	ErrBlobTooLarge = errors.New("file at commit exceeds the size limit")
+	// ErrBlobMissing means the commit, the path or the clone does not exist.
+	ErrBlobMissing = errors.New("file not found at commit")
+	// ErrInvalidBlobPath reports a path that is not a plain relative path inside a commit.
+	ErrInvalidBlobPath = errors.New("invalid file path")
+	// ErrNotBlob means the path exists at the commit but is not a regular file (a directory or a submodule).
+	ErrNotBlob = errors.New("path at commit is not a file")
 )
 
 // TokenProvider returns the GitHub token at call time, so rotations apply
@@ -248,6 +256,131 @@ func (c *Client) DiffNames(ctx context.Context, owner, name, base, head string) 
 	return names, nil
 }
 
+var (
+	baseRefRE = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+	headSHARE = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	fullSHARE = regexp.MustCompile(`^[0-9a-f]{40}$`)
+)
+
+// BaseCommit resolves the commit a pull request is based on: the merge base of baseRef and
+// headSHA in an existing clone, else the tip of baseRef. Candidates are origin/<baseRef> then
+// <baseRef>; each is tried with `merge-base <ref> <head>` and then `rev-parse --verify
+// <ref>^{commit}`; the first 40-hex answer wins. It returns "" and no error when nothing
+// resolves: an unsafe ref or head (see below), a missing clone, a ref or commit the clone lacks.
+// baseRef must match ^[A-Za-z0-9._/-]+$, must not start with "-" or contain ".."; headSHA must
+// match ^[0-9a-f]{7,40}$, so neither can be read as an option, a range or a revision expression.
+// A cancelled ctx or an unusable clone path is an error.
+func (c *Client) BaseCommit(ctx context.Context, owner, name, baseRef, headSHA string) (string, error) {
+	dest, err := c.existingClone(owner, name)
+	if err != nil {
+		return "", err
+	}
+	if !baseRefRE.MatchString(baseRef) || strings.HasPrefix(baseRef, "-") ||
+		strings.Contains(baseRef, "..") || !headSHARE.MatchString(headSHA) {
+		return "", nil
+	}
+	for _, ref := range []string{"origin/" + baseRef, baseRef} {
+		for _, args := range [][]string{
+			{"merge-base", ref, headSHA},
+			{"rev-parse", "--verify", ref + "^{commit}"},
+		} {
+			out, err := c.run(ctx, dest, args...)
+			if err != nil {
+				if ctx.Err() != nil {
+					return "", err
+				}
+				continue // this candidate does not exist in the clone
+			}
+			if sha := strings.TrimSpace(out); fullSHARE.MatchString(sha) {
+				return sha, nil
+			}
+		}
+	}
+	return "", nil
+}
+
+// BlobAt returns the content of path at commit in an existing clone, without a checkout and
+// without following anything on disk. The size is checked first: a file over max bytes (or over
+// git's 1 MiB output cap) is ErrBlobTooLarge and is not read. A missing clone, commit or path is
+// ErrBlobMissing; a directory or submodule is ErrNotBlob; a path that is not a plain relative
+// path (empty, absolute, "." or ".." segments, backslash, control characters, trailing slash) is
+// ErrInvalidBlobPath and commit must be hexadecimal (ErrInvalidSHA), so neither reaches git as
+// an option or a revision expression.
+func (c *Client) BlobAt(ctx context.Context, owner, name, commit, path string, max int64) ([]byte, error) {
+	dest, err := c.existingClone(owner, name)
+	if err != nil {
+		return nil, err
+	}
+	if !validSHA(commit) {
+		return nil, ErrInvalidSHA
+	}
+	if !validBlobPath(path) {
+		return nil, ErrInvalidBlobPath
+	}
+	if max <= 0 {
+		return nil, errors.New("gitcli: blob size limit must be positive")
+	}
+	if _, err := os.Lstat(dest); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, ErrBlobMissing
+		}
+		return nil, fmt.Errorf("inspect clone path: %w", err)
+	}
+
+	// batch-check answers "<input> missing" with exit 0 for an absent object, so a missing file
+	// is told from a failing git without reading stderr.
+	out, _, err := c.runStdin(ctx, dest, commit+":"+path+"\n",
+		"cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
+	if err != nil {
+		return nil, err
+	}
+	line := strings.TrimSpace(out)
+	fields := strings.Split(line, " ")
+	if len(fields) != 3 || !validSHA(fields[0]) {
+		if strings.HasSuffix(line, " missing") {
+			return nil, ErrBlobMissing
+		}
+		return nil, &Error{Op: "cat-file", Err: errors.New("unexpected batch-check answer")}
+	}
+	if fields[1] != "blob" {
+		return nil, &Error{Op: "cat-file", Err: ErrNotBlob}
+	}
+	size, err := strconv.ParseInt(fields[2], 10, 64)
+	if err != nil {
+		return nil, &Error{Op: "cat-file", Err: errors.New("unexpected object size")}
+	}
+	if size > max {
+		return nil, &Error{Op: "cat-file", Err: ErrBlobTooLarge}
+	}
+	body, truncated, err := c.runCapped(ctx, dest, "cat-file", "blob", fields[0])
+	if err != nil {
+		return nil, err
+	}
+	if truncated {
+		return nil, &Error{Op: "cat-file", Err: ErrBlobTooLarge}
+	}
+	return []byte(body), nil
+}
+
+// validBlobPath accepts a plain relative path inside a commit: no empty, "." or ".." segment,
+// no leading or trailing slash, no backslash, no NUL, newline or other control character.
+func validBlobPath(p string) bool {
+	if p == "" || strings.HasPrefix(p, "/") || strings.HasSuffix(p, "/") || strings.Contains(p, "\\") {
+		return false
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
 // validSHA accepts 4 to 64 hexadecimal digits (SHA-1 and SHA-256 object ids, abbreviations too).
 func validSHA(s string) bool {
 	if len(s) < 4 || len(s) > 64 {
@@ -319,6 +452,11 @@ func (c *Client) run(ctx context.Context, dir string, args ...string) (string, e
 
 // runCapped is run that also reports whether stdout hit the cap and was cut short.
 func (c *Client) runCapped(ctx context.Context, dir string, args ...string) (string, bool, error) {
+	return c.runStdin(ctx, dir, "", args...)
+}
+
+// runStdin is runCapped that feeds stdin to git; empty stdin means none.
+func (c *Client) runStdin(ctx context.Context, dir, stdin string, args ...string) (string, bool, error) {
 	op := args[0]
 	var token string
 	if c.token != nil {
@@ -339,6 +477,9 @@ func (c *Client) runCapped(ctx context.Context, dir string, args ...string) (str
 	var stdout, stderr limitedBuffer
 	stdout.limit, stderr.limit = stdoutLimit, stderrKeep
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	cmd.WaitDelay = killWaitDelay
 
 	if err := cmd.Run(); err != nil {
