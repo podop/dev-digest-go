@@ -44,8 +44,10 @@ swaps every provider for a deterministic mock with a startup warning (D214).
    - Phase 1 **AC97** — five UI flows with a real `GITHUB_TOKEN`.
 2. Follow-ups (README): pin base images by digest; `govulncheck` once CI exists; optional arch LOW
    (fake catalog in `skills/app` importer tests).
-3. **Phase 3** (repo-intel: indexing, rank, repo map — 2 routes): spec → plan → waves → review gate,
-   same flow. The conventions sampler then switches from the fallback walk to the ranker (spec D211).
+3. **Phase 3** (repo-intel: indexing, rank, repo map — 2 routes): spec `specs/2026-10-22-go-backend-phase-3.md`
+   (FR3001…, AC3001–AC3071, D3001–D3019; user: D3002 CGO tree-sitter, D3019 fix Node import-graph bugs) and plan
+   `docs/plans/2026-10-22-go-backend-phase-3.md` (+ `.context.md`; S1–S25, waves W0–W4, P1–P20) committed
+   (`8b6c896`, `83638d8`). Next: run the waves, then the review gate. The conventions sampler switches to the ranker in S18.
 
 Recipe for a fresh-volume check without touching the real volumes: an override file that renames
 `pgdata`/`backend_data` (e.g. `devdigest_go_ac_*`), `WEB_PORT=3200 API_PORT=3201 DB_PORT=5434`,
