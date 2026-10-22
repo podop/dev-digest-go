@@ -92,6 +92,26 @@ type job struct {
 	kind    string
 	payload json.RawMessage
 	handler Handler
+	timeout time.Duration // per-attempt limit of this job's kind
+}
+
+// registration is what Register stores for a kind; timeout 0 means the runner's default.
+type registration struct {
+	handler Handler
+	timeout time.Duration
+}
+
+// RegisterOption tunes one kind at Register time.
+type RegisterOption func(*registration)
+
+// WithTimeout gives the kind its own per-attempt limit instead of the runner's. A value <= 0
+// keeps the runner's default.
+func WithTimeout(d time.Duration) RegisterOption {
+	return func(reg *registration) {
+		if d > 0 {
+			reg.timeout = d
+		}
+	}
 }
 
 // Runner is the in-process job pool. Create it with New and stop it with Shutdown.
@@ -110,7 +130,7 @@ type Runner struct {
 	wg     sync.WaitGroup // running job goroutines
 
 	mu          sync.Mutex
-	handlers    map[string]Handler
+	handlers    map[string]registration
 	pending     []job
 	running     int
 	outstanding int // accepted jobs not yet finished or dropped
@@ -128,7 +148,7 @@ func New(store Store, opts Options) *Runner {
 		baseDelay:  opts.RetryBaseDelay,
 		log:        opts.Logger,
 		now:        opts.Now,
-		handlers:   make(map[string]Handler),
+		handlers:   make(map[string]registration),
 	}
 	if r.concurrent <= 0 {
 		r.concurrent = DefaultConcurrency
@@ -154,9 +174,10 @@ func New(store Store, opts Options) *Runner {
 	return r
 }
 
-// Register binds a handler to a job kind. It panics on a nil handler or a duplicate kind, so a
-// wiring mistake fails at startup.
-func (r *Runner) Register(kind string, h Handler) {
+// Register binds a handler to a job kind. Kinds registered without WithTimeout run under the
+// runner's per-attempt timeout. It panics on a nil handler or a duplicate kind, so a wiring
+// mistake fails at startup.
+func (r *Runner) Register(kind string, h Handler, opts ...RegisterOption) {
 	if h == nil {
 		panic("jobs: nil handler for kind " + kind)
 	}
@@ -165,7 +186,11 @@ func (r *Runner) Register(kind string, h Handler) {
 	if _, dup := r.handlers[kind]; dup {
 		panic("jobs: duplicate handler for kind " + kind)
 	}
-	r.handlers[kind] = h
+	reg := registration{handler: h}
+	for _, opt := range opts {
+		opt(&reg)
+	}
+	r.handlers[kind] = reg
 }
 
 // Enqueue stores a `queued` row for the job and schedules it; it returns the job id without
@@ -174,7 +199,7 @@ func (r *Runner) Register(kind string, h Handler) {
 // ErrShuttingDown after Shutdown.
 func (r *Runner) Enqueue(ctx context.Context, workspaceID, kind string, payload any) (string, error) {
 	r.mu.Lock()
-	h, ok := r.handlers[kind]
+	reg, ok := r.handlers[kind]
 	closed := r.closed
 	r.mu.Unlock()
 	if !ok {
@@ -198,7 +223,11 @@ func (r *Runner) Enqueue(ctx context.Context, workspaceID, kind string, payload 
 		// Shutdown began during the insert; the row stays queued like any other undone job.
 		return "", fmt.Errorf("enqueue %q: %w", kind, ErrShuttingDown)
 	}
-	r.pending = append(r.pending, job{id: id, kind: kind, payload: raw, handler: h})
+	timeout := reg.timeout
+	if timeout <= 0 {
+		timeout = r.timeout
+	}
+	r.pending = append(r.pending, job{id: id, kind: kind, payload: raw, handler: reg.handler, timeout: timeout})
 	r.outstanding++
 	r.dispatchLocked()
 	return id, nil
@@ -326,7 +355,7 @@ func (r *Runner) execute(j job) {
 // attempt runs the handler once under the per-attempt timeout, turning a panic or a timeout
 // into an error.
 func (r *Runner) attempt(ctx context.Context, j job) (err error) {
-	actx, cancel := context.WithTimeout(ctx, r.timeout)
+	actx, cancel := context.WithTimeout(ctx, j.timeout)
 	defer cancel()
 	defer func() {
 		if p := recover(); p != nil {
@@ -335,7 +364,7 @@ func (r *Runner) attempt(ctx context.Context, j job) (err error) {
 	}()
 	err = j.handler(actx, j.payload)
 	if err != nil && actx.Err() != nil && ctx.Err() == nil {
-		return fmt.Errorf("attempt timed out after %s: %w", r.timeout, context.DeadlineExceeded)
+		return fmt.Errorf("attempt timed out after %s: %w", j.timeout, context.DeadlineExceeded)
 	}
 	return err
 }

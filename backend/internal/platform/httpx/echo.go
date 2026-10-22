@@ -4,6 +4,7 @@ package httpx
 import (
 	"io"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/labstack/echo/v5"
@@ -20,6 +21,10 @@ type Options struct {
 	// server answers to; any other Host header gets 403. Empty switches the check off; a
 	// non-empty list without a well-formed entry refuses every request.
 	AllowedHosts []string
+	// BodyLimits raises the request body limit (1 MiB by default) of single routes. Keys are
+	// "METHOD /route/path" exactly as the route is registered, e.g. "POST /skills/import/preview"
+	// or "PUT /repos/:id/context/files"; values are the largest accepted body in bytes.
+	BodyLimits map[string]int64
 	// RateLimit configures the fixed-window limiter; the zero value disables it.
 	RateLimit RateLimit
 	// Now is the clock of the rate limiter; nil means time.Now.
@@ -57,6 +62,6 @@ func New(opts Options) *echo.Echo {
 	if opts.RateLimit.Enabled {
 		e.Use(rateLimit(opts.RateLimit, now))
 	}
-	e.Use(bodyRules())
+	e.Use(bodyRules(maps.Clone(opts.BodyLimits)))
 	return e
 }

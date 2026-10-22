@@ -11,7 +11,8 @@ import (
 	"github.com/labstack/echo/v5"
 )
 
-// maxBodyBytes is the request body limit: 1 MiB is accepted, one more byte is a 413.
+// maxBodyBytes is the default request body limit: 1 MiB is accepted, one more byte is a 413.
+// Options.BodyLimits raises it for single routes.
 const maxBodyBytes = 1 << 20
 
 // bodyRules applies the Fastify body behavior to POST, PUT, PATCH and DELETE on registered
@@ -19,11 +20,15 @@ const maxBodyBytes = 1 << 20
 //   - no body and no Content-Type: accepted;
 //   - non-empty body without Content-Type, or a media type other than application/json and
 //     text/plain: 415;
-//   - body over the limit: 413;
+//   - body over the limit (maxBodyBytes, or the route's entry in limits): 413;
 //   - application/json that is empty or not valid JSON: 400.
 //
 // A valid body is buffered and put back; handlers read it through ReadJSONBody.
-func bodyRules() echo.MiddlewareFunc {
+//
+// limits maps "METHOD /registered/route/path" (the route as registered, e.g.
+// "POST /skills/import/preview" or "PUT /repos/:id/context/files") to that route's limit in
+// bytes; a route without an entry uses maxBodyBytes.
+func bodyRules(limits map[string]int64) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
 			req := c.Request()
@@ -41,14 +46,18 @@ func bodyRules() echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnsupportedMediaType, "Unsupported Media Type")
 			}
 
-			if req.ContentLength > maxBodyBytes {
+			limit := int64(maxBodyBytes)
+			if l, ok := limits[req.Method+" "+c.RouteInfo().Path]; ok {
+				limit = l
+			}
+			if req.ContentLength > limit {
 				return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Request body is too large")
 			}
-			body, err := io.ReadAll(io.LimitReader(req.Body, maxBodyBytes+1))
+			body, err := io.ReadAll(io.LimitReader(req.Body, limit+1))
 			if err != nil {
 				return echo.NewHTTPError(http.StatusBadRequest, "Request body could not be read")
 			}
-			if len(body) > maxBodyBytes {
+			if int64(len(body)) > limit {
 				return echo.NewHTTPError(http.StatusRequestEntityTooLarge, "Request body is too large")
 			}
 			if media == "application/json" {

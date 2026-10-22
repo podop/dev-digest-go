@@ -7,7 +7,18 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
+)
+
+const (
+	// LLMProviderMock is the only accepted non-empty value of LLM_PROVIDER_OVERRIDE.
+	LLMProviderMock = "mock"
+	// DefaultProjectContextGlobs is the PROJECT_CONTEXT_GLOBS default.
+	DefaultProjectContextGlobs = "**/{specs,docs,insights}/**/*.md"
+	// maxMockDelayMS is the upper bound of LLM_MOCK_DELAY_MS.
+	maxMockDelayMS = 60_000
 )
 
 // Config is the typed configuration passed from main to the rest of the backend.
@@ -25,6 +36,10 @@ type Config struct {
 	RateLimitEnabled bool       // RATE_LIMIT_ENABLED, off only on "false"
 	AutoMigrate      bool       // DB_AUTO_MIGRATE, off only on "false"
 	AutoSeed         bool       // DB_AUTO_SEED, off only on "false"
+
+	LLMProviderOverride string        // LLM_PROVIDER_OVERRIDE: "" or LLMProviderMock
+	LLMMockDelay        time.Duration // LLM_MOCK_DELAY_MS, 0 to 60 s
+	ProjectContextGlobs []string      // PROJECT_CONTEXT_GLOBS, never empty
 }
 
 // Load reads the configuration through getenv (os.Getenv in production).
@@ -41,6 +56,12 @@ type Config struct {
 // service name or domain under which the API is reached when that is not one of the defaults.
 // A value without any entry (e.g. ",") is an error, so the guard cannot be switched off by
 // accident.
+//
+// LLM_PROVIDER_OVERRIDE is empty (default) or "mock", which replaces every LLM provider by a
+// deterministic mock; any other value is an error. LLM_MOCK_DELAY_MS (integer 0-60000, default
+// 0) delays each mock call. PROJECT_CONTEXT_GLOBS is a comma-separated glob list (commas inside
+// {...} belong to the glob; blank entries are dropped); unset or empty gives
+// DefaultProjectContextGlobs.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Addr:             valueOr(getenv("API_ADDR"), ":3001"),
@@ -73,7 +94,23 @@ func Load(getenv func(string) string) (Config, error) {
 		}
 		dataDir = filepath.Join(home, ".devdigest")
 	}
-	var err error
+	switch override := strings.TrimSpace(getenv("LLM_PROVIDER_OVERRIDE")); override {
+	case "", LLMProviderMock:
+		cfg.LLMProviderOverride = override
+	default:
+		return Config{}, fmt.Errorf("LLM_PROVIDER_OVERRIDE: %q is not supported (use empty or %q)", override, LLMProviderMock)
+	}
+	delay, err := parseMockDelay(getenv("LLM_MOCK_DELAY_MS"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.LLMMockDelay = delay
+	cfg.ProjectContextGlobs = splitGlobs(valueOr(getenv("PROJECT_CONTEXT_GLOBS"), DefaultProjectContextGlobs))
+	if len(cfg.ProjectContextGlobs) == 0 {
+		// Only reachable through a value like "," — fall back rather than list nothing.
+		cfg.ProjectContextGlobs = []string{DefaultProjectContextGlobs}
+	}
+
 	if cfg.DataDir, err = filepath.Abs(dataDir); err != nil {
 		return Config{}, fmt.Errorf("DEVDIGEST_DATA_DIR: %w", err)
 	}
@@ -107,5 +144,47 @@ func splitList(s string) []string {
 			out = append(out, p)
 		}
 	}
+	return out
+}
+
+// parseMockDelay reads LLM_MOCK_DELAY_MS: an integer of 0 to 60000 milliseconds, empty = 0.
+func parseMockDelay(v string) (time.Duration, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, nil
+	}
+	ms, err := strconv.Atoi(v)
+	if err != nil || ms < 0 || ms > maxMockDelayMS {
+		return 0, fmt.Errorf("LLM_MOCK_DELAY_MS: %q is not an integer from 0 to %d", v, maxMockDelayMS)
+	}
+	return time.Duration(ms) * time.Millisecond, nil
+}
+
+// splitGlobs splits a glob list at the commas outside braces, trims every entry and drops
+// blank ones.
+func splitGlobs(s string) []string {
+	var out []string
+	depth, start := 0, 0
+	add := func(end int) {
+		if p := strings.TrimSpace(s[start:end]); p != "" {
+			out = append(out, p)
+		}
+	}
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '{':
+			depth++
+		case '}':
+			if depth > 0 {
+				depth--
+			}
+		case ',':
+			if depth == 0 {
+				add(i)
+				start = i + 1
+			}
+		}
+	}
+	add(len(s))
 	return out
 }

@@ -1,0 +1,130 @@
+[
+  {
+    "id": "owasp-top-10-review",
+    "name": "owasp-top-10-review",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "any",
+    "type": "security",
+    "tags": [
+      "security",
+      "owasp",
+      "web"
+    ],
+    "desc": "Checks changed server code against the OWASP Top 10 web risks.",
+    "description": "Flag server-side changes that introduce an OWASP Top 10 risk: broken access control, injection, SSRF, insecure design, security misconfiguration or vulnerable data handling.",
+    "body": "Review every changed request handler, query and outbound call against the\nOWASP Top 10 (2021). Report a finding only when the diff itself introduces or\nwidens the risk, and name the category in the title (e.g. \"A01 Broken access control\").\n\n- **A01 Broken access control** — a handler reads or writes a resource by id\n  without checking that the caller owns it (tenant / workspace / user scope).\n- **A02 Cryptographic failures** — secrets or tokens logged, stored in plain text,\n  compared with `===` instead of a constant-time compare, weak hashes (MD5/SHA-1)\n  for passwords.\n- **A03 Injection** — SQL, shell, template or LDAP built by string concatenation\n  from request data.\n- **A04 Insecure design** — a sensitive action (delete, payout, role change) with\n  no rate limit, confirmation or audit trail.\n- **A05 Security misconfiguration** — CORS `*` with credentials, debug endpoints,\n  verbose errors that echo stack traces or SQL.\n- **A07 Identification and authentication failures** — session or JWT not validated\n  (`alg: none`, missing expiry check).\n- **A08 Software and data integrity failures** — deserializing untrusted data into\n  objects, `eval` / `new Function` on input.\n- **A10 SSRF** — the server fetches a user-supplied URL without an allow-list or a\n  private-address check.\n\nSeverity: CRITICAL when the defect is reachable from an unauthenticated or\ncross-tenant request; WARNING when it needs an authenticated user or a\nmisconfiguration; never report a category just because the file is security-related."
+  },
+  {
+    "id": "sql-injection-gate",
+    "name": "sql-injection-gate",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "sql",
+    "type": "security",
+    "tags": [
+      "security",
+      "sql",
+      "database"
+    ],
+    "desc": "Blocks SQL built from untrusted input instead of bound parameters.",
+    "description": "Flag SQL that is assembled from request, env or model data by string concatenation or template interpolation instead of bound parameters.",
+    "body": "Trace every value that reaches a SQL string back to its origin. Flag it when\nuntrusted data (request params/body/headers, webhook payloads, LLM output, file\ncontents) is concatenated or interpolated into the statement text.\n\nReport as CRITICAL:\n- `` `SELECT … WHERE id = ${req.params.id}` `` passed to a raw query API\n  (`sql.unsafe`, `db.execute(string)`, `knex.raw` without bindings, `query(text)`).\n- Dynamic `ORDER BY` / column / table names taken from input without an allow-list.\n- `LIKE` patterns built from input without escaping `%` and `_` (WARNING when\n  only the pattern semantics change, CRITICAL when it becomes an injection).\n\nDo NOT flag:\n- Tagged templates that bind parameters (the postgres-js or Drizzle `sql` tag),\n  `$1` placeholders with a values array.\n- Query-builder calls (`eq(col, value)`, `.where({ id })`).\n- Identifiers that come from a hard-coded constant or a closed enum.\n\nSuggest the parameterised form in the finding's suggestion."
+  },
+  {
+    "id": "react-hooks-rules",
+    "name": "react-hooks-rules",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "typescript",
+    "type": "convention",
+    "tags": [
+      "react",
+      "frontend",
+      "hooks"
+    ],
+    "desc": "Enforces the Rules of Hooks and effect-dependency hygiene.",
+    "description": "Flag React components or custom hooks in the diff that break the Rules of Hooks or use effects with missing, stale or unnecessary dependencies.",
+    "body": "Apply to changed `.tsx` / `.jsx` files and custom hooks (`use*` functions).\n\nReport as CRITICAL (these are runtime bugs):\n- A hook called conditionally, inside a loop, after an early `return`, or inside a\n  nested function / event handler.\n- A hook called from a plain function that is neither a component nor a `use*` hook.\n\nReport as WARNING:\n- `useEffect` / `useMemo` / `useCallback` that reads a prop, state or function\n  missing from its dependency array (stale closure), or silences the lint rule.\n- An effect that sets state derived purely from props/state (should be computed\n  during render or with `useMemo`).\n- An effect that subscribes, sets a timer or starts a fetch with no cleanup /\n  abort on unmount or dependency change.\n- Objects or arrays created inline and passed as a dependency, causing the effect\n  to run on every render.\n\nReport as SUGGESTION:\n- `useEffect` used to respond to a user event that could run in the handler.\n\nDo not flag server components that use no hooks."
+  },
+  {
+    "id": "a11y-jsx-audit",
+    "name": "a11y-jsx-audit",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "typescript",
+    "type": "rubric",
+    "tags": [
+      "accessibility",
+      "a11y",
+      "react",
+      "frontend"
+    ],
+    "desc": "Catches accessibility regressions in changed JSX.",
+    "description": "Flag changed JSX that makes the UI unusable with a keyboard or a screen reader: missing names, non-semantic click targets, lost focus handling.",
+    "body": "Check every changed JSX element against WCAG 2.2 AA basics. Cite the exact\nelement line.\n\nWARNING:\n- `<img>` without `alt` (decorative images use `alt=\"\"`).\n- Icon-only `<button>` / link without `aria-label` or visually hidden text.\n- `onClick` on a `div` / `span` without `role`, `tabIndex={0}` and a key handler —\n  prefer a real `<button>`.\n- Form controls without an associated `<label>` (`htmlFor` / wrapping) or\n  `aria-label`.\n- A modal/dialog that does not move focus into itself or return it on close.\n- `outline: none` / `focus:outline-none` without a visible replacement focus style.\n\nSUGGESTION:\n- Heading levels that skip (h2 → h4) in the changed markup.\n- Colour used as the only signal of state (error, selected) with no text or icon.\n- `aria-*` attributes that duplicate native semantics (`role=\"button\"` on `<button>`).\n\nNever report CRITICAL for accessibility unless the change removes the only way\nto complete a primary flow with a keyboard."
+  },
+  {
+    "id": "error-handling-discipline",
+    "name": "error-handling-discipline",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "typescript",
+    "type": "convention",
+    "tags": [
+      "reliability",
+      "errors",
+      "node"
+    ],
+    "desc": "Finds swallowed errors, floating promises and lost causes.",
+    "description": "Flag changed code that swallows errors, leaves promises unhandled, or rethrows without the original cause so failures become silent or undiagnosable.",
+    "body": "Follow each changed `try` / `catch`, `.catch()` and async call.\n\nWARNING:\n- `catch {}` or `catch (e) { return null }` on a path whose failure the caller must\n  know about (payments, writes, auth) — the error disappears.\n- A promise that is neither awaited, returned nor explicitly `void`-ed with a\n  `.catch` (floating promise) — an unhandled rejection can crash the process.\n- `throw new Error(msg)` inside a `catch` without `{ cause: err }`: the stack of the\n  real failure is lost.\n- Logging an error AND rethrowing it at every layer (the same failure is logged\n  N times).\n- `Promise.all` over independent side effects where one failure should not\n  abandon the others (`Promise.allSettled`).\n\nSUGGESTION:\n- Error messages that echo secrets, SQL or full request bodies to the client.\n\nCRITICAL only when the swallowed error leads to data loss or a wrong success\nresponse on a money / security path."
+  },
+  {
+    "id": "input-validation-boundaries",
+    "name": "input-validation-boundaries",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "typescript",
+    "type": "security",
+    "tags": [
+      "security",
+      "validation",
+      "api"
+    ],
+    "desc": "Requires schema validation where untrusted data enters the system.",
+    "description": "Flag new request handlers, webhooks, queue consumers or LLM-output parsers in the diff that use untrusted data without schema validation at the boundary.",
+    "body": "Untrusted data must be parsed once, at the edge, into a typed value.\n\nWARNING:\n- A new route / webhook / consumer that reads `req.body`, `req.query`, headers or a\n  message payload without a schema (zod, JSON Schema, valibot…) — or casts it\n  with `as SomeType`.\n- `JSON.parse` of external or model output used without validating the shape.\n- Numeric input used as a size, limit, offset or timeout without bounds (can be\n  negative, huge or `NaN`).\n- File names or paths from input joined into a filesystem path without\n  normalising and checking the result stays inside the intended directory.\n\nCRITICAL:\n- The unvalidated value reaches SQL, a shell command, a file path, a redirect URL\n  or an authorisation decision.\n\nDo NOT flag internal function calls between already-validated layers."
+  },
+  {
+    "id": "test-assertion-quality",
+    "name": "test-assertion-quality",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "any",
+    "type": "rubric",
+    "tags": [
+      "testing",
+      "quality"
+    ],
+    "desc": "Flags tests that cannot fail or assert nothing meaningful.",
+    "description": "Flag new or changed tests whose assertions cannot fail, only check that code ran, or restate the implementation instead of the expected behaviour.",
+    "body": "Read each changed test and ask: \"which bug in the code under test would make\nthis test fail?\" If the answer is \"none\", report it.\n\nWARNING:\n- No assertion at all, or only `expect(fn).not.toThrow()` / `toBeDefined()` on a value\n  that is always defined.\n- Tautologies: asserting a mock returns what the test just told it to return;\n  computing the expected value with the same function under test.\n- Snapshot tests of large objects added without a reviewed, meaningful snapshot.\n- `expect` inside a callback or `.then` that is never awaited, so the test finishes\n  before the assertion runs.\n- Error-path tests that catch the error and assert nothing about its type/code.\n\nSUGGESTION:\n- One test asserting many unrelated behaviours (split it so a failure names the\n  broken behaviour).\n- Magic numbers in expectations with no hint where they come from.\n\nCategory: `test`. Never CRITICAL."
+  },
+  {
+    "id": "async-test-hygiene",
+    "name": "async-test-hygiene",
+    "repo": "devdigest/community-skills",
+    "stars": 0,
+    "lang": "typescript",
+    "type": "rubric",
+    "tags": [
+      "testing",
+      "flaky",
+      "async"
+    ],
+    "desc": "Catches timing-dependent async tests before they turn flaky.",
+    "description": "Flag tests in the diff that depend on real time, sleeps, execution order or shared state, so they pass locally and fail intermittently in CI.",
+    "body": "Flag the pattern, and in the suggestion name the deterministic alternative.\n\nWARNING:\n- `setTimeout` / `sleep(n)` used to \"wait for\" async work — await the promise, poll\n  a condition with a timeout, or use fake timers.\n- Assertions on `Date.now()` / `new Date()` without a fixed clock.\n- Tests that share mutable module state or a DB row and pass only in file order\n  (no reset in `beforeEach`).\n- Parallel promises whose completion order is asserted.\n- Real network, DNS or current-directory dependence in a unit test.\n- Random data without a fixed seed that decides a branch.\n\nSUGGESTION:\n- Very long per-test timeouts added to make a slow test pass.\n\nCategory: `test`. Never CRITICAL."
+  }
+]

@@ -275,6 +275,75 @@ func TestRunner_AttemptTimeout(t *testing.T) {
 	})
 }
 
+// AC303 (runner): a kind registered with its own timeout is cut at that timeout, a kind
+// registered without one at the runner default, both under the same runner.
+func TestRunner_PerKindTimeout(t *testing.T) {
+	const long = 300 * time.Second
+	tests := []struct {
+		name     string
+		opts     []jobs.RegisterOption
+		wantTook time.Duration
+		wantErr  string
+	}{
+		{name: "own timeout", opts: []jobs.RegisterOption{jobs.WithTimeout(long)}, wantTook: long,
+			wantErr: "attempt timed out after 5m0s: context deadline exceeded"},
+		{name: "default timeout", wantTook: jobs.DefaultTimeout,
+			wantErr: "attempt timed out after 2m0s: context deadline exceeded"},
+		{name: "non-positive timeout keeps the default", opts: []jobs.RegisterOption{jobs.WithTimeout(0)},
+			wantTook: jobs.DefaultTimeout, wantErr: "attempt timed out after 2m0s: context deadline exceeded"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				store := newFakeStore()
+				r := jobs.New(store, jobs.Options{})
+				r.Register("kind", func(ctx context.Context, _ json.RawMessage) error {
+					<-ctx.Done()
+					return ctx.Err()
+				}, tc.opts...)
+
+				start := time.Now()
+				id := enqueue(t, r, "kind", nil)
+				if err := r.Wait(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+
+				got := store.get(id)
+				if got.Status != jobs.StatusFailed || got.Error != tc.wantErr {
+					t.Errorf("status, error = %q, %q; want failed, %q", got.Status, got.Error, tc.wantErr)
+				}
+				if elapsed := time.Since(start); elapsed != tc.wantTook {
+					t.Errorf("job took %v, want %v", elapsed, tc.wantTook)
+				}
+			})
+		})
+	}
+}
+
+// A handler registered with a longer limit survives past the default and finishes done.
+func TestRunner_PerKindTimeoutOutlivesDefault(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := newFakeStore()
+		r := jobs.New(store, jobs.Options{})
+		r.Register("slow", func(ctx context.Context, _ json.RawMessage) error {
+			select {
+			case <-time.After(jobs.DefaultTimeout + 60*time.Second):
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}, jobs.WithTimeout(300*time.Second))
+
+		id := enqueue(t, r, "slow", nil)
+		if err := r.Wait(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if got := store.get(id).Status; got != jobs.StatusDone {
+			t.Errorf("status = %q, want done", got)
+		}
+	})
+}
+
 func TestRunner_PanicBecomesFailure(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		store := newFakeStore()
