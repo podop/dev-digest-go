@@ -573,10 +573,12 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	var poller *pullsapp.Poller
 	if cfg.PRPollEnabled {
 		pages := github.New(github.Options{BaseURL: o.githubBaseURL, Token: githubToken, Retry: &retry.Options{}})
+		pollGH := pullsgh.New(pages)
 		poller = pullsapp.NewPoller(pullsapp.PollerDeps{
 			Targets:   pullsStore,
 			Intervals: settingsIntervals{settings: settingsSvc},
-			Pages:     pullsgh.New(pages),
+			Pages:     pollGH,
+			Stats:     pollGH,
 			Store:     pullsStore,
 			Log:       log,
 			Now:       now,

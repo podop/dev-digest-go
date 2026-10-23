@@ -211,6 +211,89 @@ func TestStatusError_carriesRateLimitReset(t *testing.T) {
 	}
 }
 
+func TestStatusError_carriesRetryAfterAndDetectsTheSecondaryLimit(t *testing.T) {
+	t.Parallel()
+	date := time.Now().Add(90 * time.Second).UTC().Format(http.TimeFormat)
+	for _, tc := range []struct {
+		name, retryAfter, message string
+		remaining                 string
+		status                    int
+		wantWait                  time.Duration // 0: no Retry-After expected
+		wantLimit                 bool
+	}{
+		{"403 with Retry-After", "60", "You have exceeded a secondary rate limit", "4999", 403, 60 * time.Second, true},
+		{"429 with Retry-After", "30", "slow down", "4999", 429, 30 * time.Second, true},
+		{"Retry-After as an HTTP date", date, "slow down", "4999", 403, 90 * time.Second, true},
+		{"unreadable Retry-After counts as a minute", "soon", "slow down", "4999", 403, time.Minute, true},
+		{"absurd Retry-After is cut to a day", "99999999999", "slow down", "4999", 403, 24 * time.Hour, true},
+		{"message alone", "", "You have exceeded a SECONDARY RATE LIMIT.", "4999", 403, 0, true},
+		{"primary limit", "", "API rate limit exceeded", "0", 403, 0, true},
+		{"plain 403", "", "Resource not accessible by integration", "4999", 403, 0, false},
+		{"Retry-After on a 503 is no rate limit", "10", "unavailable", "4999", 503, 10 * time.Second, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-RateLimit-Remaining", tc.remaining)
+				if tc.retryAfter != "" {
+					w.Header().Set("Retry-After", tc.retryAfter)
+				}
+				writeJSON(w, tc.status, map[string]any{"message": tc.message})
+			})
+			c := newClient(s, github.Options{Retry: &retry.Options{}})
+			before := time.Now()
+			_, err := c.ListPullRequestsPage(t.Context(), "o", "r", 1, 50)
+			after := time.Now()
+			var se *github.StatusError
+			if !errors.As(err, &se) {
+				t.Fatalf("ListPullRequestsPage() error = %v, want a StatusError", err)
+			}
+			if got := se.LimitReached(); got != tc.wantLimit {
+				t.Errorf("StatusError{%d, %q}.LimitReached() = %v, want %v", tc.status, tc.message, got, tc.wantLimit)
+			}
+			if tc.wantWait == 0 {
+				if !se.RetryAfter.IsZero() {
+					t.Errorf("RetryAfter = %v, want the zero time (no header)", se.RetryAfter)
+				}
+				return
+			}
+			// The HTTP date has whole-second precision, so allow two seconds of slack.
+			if se.RetryAfter.Before(before.Add(tc.wantWait-2*time.Second)) || se.RetryAfter.After(after.Add(tc.wantWait)) {
+				t.Errorf("RetryAfter = %v, want about %v after the request (%v..%v)", se.RetryAfter, tc.wantWait, before, after)
+			}
+		})
+	}
+}
+
+func TestGetPullStats_isOneRequestWithTheDiffStats(t *testing.T) {
+	t.Parallel()
+	s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/repos/o/r/pulls/5") {
+			t.Errorf("GetPullStats requested %s, want only /repos/o/r/pulls/5", r.URL.Path)
+		}
+		writeJSON(w, 200, prJSON(5, "open", nil, nil))
+	})
+	got, err := newClient(s, github.Options{}).GetPullStats(t.Context(), "o", "r", 5)
+	if err != nil {
+		t.Fatalf("GetPullStats() error: %v", err)
+	}
+	if want := (github.PullStats{Additions: 7, Deletions: 3, FilesCount: 2}); got != want {
+		t.Errorf("GetPullStats() = %+v, want %+v", got, want)
+	}
+	if s.count() != 1 {
+		t.Errorf("stub received %d requests, want 1", s.count())
+	}
+}
+
+func TestGetPullStats_noToken(t *testing.T) {
+	t.Parallel()
+	s := newStub(t, func(http.ResponseWriter, *http.Request) { t.Error("a request was sent without a token") })
+	_, err := newClient(s, github.Options{Token: func() string { return "" }}).GetPullStats(t.Context(), "o", "r", 5)
+	if !errors.Is(err, github.ErrNoToken) {
+		t.Errorf("GetPullStats() error = %v, want ErrNoToken", err)
+	}
+}
+
 func TestClient_noToken(t *testing.T) {
 	t.Parallel()
 	s := newStub(t, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, []any{}) })

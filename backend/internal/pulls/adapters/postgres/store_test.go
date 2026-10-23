@@ -518,3 +518,77 @@ func TestListPollTargets_everyRepoOfEveryWorkspace(t *testing.T) {
 		}
 	}
 }
+
+func TestListWithoutDiffStats(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	var otherWS, otherRepo, newRepo string
+	scan(t, f.db, &otherWS, `INSERT INTO workspaces (name) VALUES ('other') RETURNING id`)
+	scan(t, f.db, &otherRepo, `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES (?, 'zed', 'tool', 'zed/tool') RETURNING id`, otherWS)
+	scan(t, f.db, &newRepo, `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES (?, 'acme', 'fresh', 'acme/fresh') RETURNING id`, f.wsID)
+
+	pr := func(n int, updated *time.Time) domain.Listed {
+		return domain.Listed{Number: n, Title: "t", Author: "a", Branch: "b", Base: "m", HeadSHA: "h", Status: "open", UpdatedAt: updated}
+	}
+	listed := []domain.Listed{
+		pr(1, day(3, 10)),
+		pr(2, day(3, 12)),
+		pr(3, day(3, 12)), // same time as #2: the higher number first
+		pr(4, day(3, 11)), // gets stats below
+		pr(5, day(1, 9)),  // before the cutoff
+		pr(6, day(2, 0)),  // exactly at the cutoff
+		pr(7, nil),        // never updated
+		pr(8, day(3, 9)),
+	}
+	if err := f.store.UpsertListed(ctx, f.wsID, newRepo, listed); err != nil {
+		t.Fatalf("UpsertListed() error = %v", err)
+	}
+	if err := f.store.UpsertListed(ctx, otherWS, otherRepo, []domain.Listed{pr(1, day(3, 12))}); err != nil {
+		t.Fatalf("UpsertListed(other workspace) error = %v", err)
+	}
+	var pr4 string
+	scan(t, f.db, &pr4, `SELECT id FROM pull_requests WHERE repo_id = ? AND number = 4`, newRepo)
+	if err := f.store.SetDiffStats(ctx, pr4, domain.DiffStats{FilesCount: 1}); err != nil { // any one non-zero column counts as stats
+		t.Fatalf("SetDiffStats() error = %v", err)
+	}
+
+	numbers := func(t *testing.T, ws, repo string, since time.Time, limit int) []int {
+		t.Helper()
+		got, err := f.store.ListWithoutDiffStats(ctx, ws, repo, since, limit)
+		if err != nil {
+			t.Fatalf("ListWithoutDiffStats(limit %d) error = %v", limit, err)
+		}
+		var out []int
+		for _, p := range got {
+			if p.ID == "" {
+				t.Errorf("ListWithoutDiffStats() returned PR %d without an id", p.Number)
+			}
+			out = append(out, p.Number)
+		}
+		return out
+	}
+	since := *day(2, 0)
+	tests := []struct {
+		name  string
+		ws    string
+		repo  string
+		since time.Time
+		limit int
+		want  []int
+	}{
+		{"newest first, cutoff inclusive, stats and null times excluded", f.wsID, newRepo, since, 20, []int{3, 2, 1, 8, 6}},
+		{"limit keeps the newest", f.wsID, newRepo, since, 2, []int{3, 2}},
+		{"earlier cutoff adds older PRs", f.wsID, newRepo, *day(1, 0), 20, []int{3, 2, 1, 8, 6, 5}},
+		{"another workspace sees nothing of this repo", otherWS, newRepo, since, 20, nil},
+		{"the repo of another workspace is not reachable", f.wsID, otherRepo, since, 20, nil},
+		{"the other workspace's own repo", otherWS, otherRepo, since, 20, []int{1}},
+		{"no limit, no rows", f.wsID, newRepo, since, 0, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.want, numbers(t, tc.ws, tc.repo, tc.since, tc.limit)); diff != "" {
+				t.Errorf("ListWithoutDiffStats(%s, %v, %d) numbers mismatch (-want +got):\n%s", tc.repo, tc.since, tc.limit, diff)
+			}
+		})
+	}
+}

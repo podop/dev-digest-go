@@ -150,6 +150,8 @@ Prototype alignment and the Settings poll interval. Supersedes the listed parts 
 ### S25 — Poller diff-stat backfill [W3b-x]
 - M `P/app/poller{,_test}.go`, `P/app/ports.go` (stats fetch port; reuse the PR-list backfill's GitHub call), `P/adapters/postgres/store{,_test}.go` (PRs without stats, updated ≥ now−62 d, newest first, limit 20), `S/app.go` wiring if the port needs it
 - Covers: FR24, NFR3, AC21
+- Deviation (accepted, W3b): stats come from a new one-request `platform/github.Client.GetPullStats` (same additions/deletions/changed_files) instead of `GetPullRequest` (≤ 34 requests/PR, would break NFR3); also edits `platform/github/{client,pulls}.go` and `S/leaderboard_wiring_test.go` (fixed clock, stats assertion)
+- Also in W3b: security r1 F1 (secondary rate limit: 403/429 with Retry-After or message → pause, `StatusError.LimitReached`, `RetryAfter`) and arch r1 finding 1 (GORM builder for the four simple leaderboard store queries)
 ### S26 — Header compare + Hot files links [W3b-y]
 - M `V/helpers{,.test}.ts` / `C/Header/*` (FR25), `C/HotFiles/*` + `E/leaderboardPanels.json` (FR26, rich tag)
 - Covers: FR25, FR26, AC22

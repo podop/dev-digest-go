@@ -33,6 +33,9 @@ const (
 	maxResponseBytes = 64 << 20
 	maxMessageBytes  = 1000
 	maxResetSeconds  = 1 << 40 // far beyond any real reset; keeps time.Unix well inside its range
+	maxRetryAfter    = 24 * time.Hour
+	// defaultRetryAfter stands for a Retry-After header that is present but unreadable.
+	defaultRetryAfter = time.Minute
 )
 
 // ErrNoToken is returned when no GitHub token is configured at call time.
@@ -47,6 +50,10 @@ type StatusError struct {
 	// RateLimitReset is when GitHub's x-ratelimit-reset header says the window renews; the zero
 	// time when the response had no valid one.
 	RateLimitReset time.Time
+	// RetryAfter is the time the Retry-After header says to wait until (now + the header's seconds,
+	// or its HTTP date); the zero time when the response had no such header. An unreadable value
+	// counts as a minute. It is at most a day away.
+	RetryAfter time.Time
 }
 
 func (e *StatusError) Error() string {
@@ -55,6 +62,17 @@ func (e *StatusError) Error() string {
 
 // RateLimited reports whether the response said the rate limit is used up (remaining 0).
 func (e *StatusError) RateLimited() bool { return strings.TrimSpace(e.RateLimitRemaining) == "0" }
+
+// LimitReached reports whether the response is a rate limit of either kind: a 403 or 429 whose
+// x-ratelimit-remaining is 0, that carries Retry-After, or whose message says "secondary rate
+// limit" (GitHub answers the secondary limit with 403 and leaves remaining above 0).
+func (e *StatusError) LimitReached() bool {
+	if e.Status != http.StatusForbidden && e.Status != http.StatusTooManyRequests {
+		return false
+	}
+	return e.RateLimited() || !e.RetryAfter.IsZero() ||
+		strings.Contains(strings.ToLower(e.Message), "secondary rate limit")
+}
 
 // StatusCode lets retry.IsTransient classify the error.
 func (e *StatusError) StatusCode() int { return e.Status }
@@ -256,7 +274,25 @@ func statusError(resp *http.Response, token string) error {
 		Message:            msg,
 		RateLimitRemaining: strings.TrimSpace(resp.Header.Get("X-RateLimit-Remaining")),
 		RateLimitReset:     parseReset(resp.Header.Get("X-RateLimit-Reset")),
+		RetryAfter:         parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()),
 	}
+}
+
+// parseRetryAfter reads Retry-After (delay seconds or an HTTP date) as the time to wait until,
+// at most maxRetryAfter after now. An absent header is the zero time; an unreadable one is
+// defaultRetryAfter after now.
+func parseRetryAfter(v string, now time.Time) time.Time {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return time.Time{}
+	}
+	wait := defaultRetryAfter
+	if secs, err := strconv.ParseInt(v, 10, 64); err == nil && secs >= 0 {
+		wait = time.Duration(min(secs, int64(maxRetryAfter/time.Second))) * time.Second
+	} else if at, err := http.ParseTime(v); err == nil {
+		wait = min(max(at.Sub(now), 0), maxRetryAfter)
+	}
+	return now.Add(wait)
 }
 
 // parseReset reads x-ratelimit-reset (Unix seconds); an absent or malformed value is the zero time.

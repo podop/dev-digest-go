@@ -3,7 +3,9 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"sort"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -119,10 +121,92 @@ type polled struct {
 	at   time.Time
 }
 
+// storedPull is a PR of the fake store; stats are missing until SetDiffStats fills them.
+type storedPull struct {
+	id        string
+	number    int
+	updatedAt time.Time
+	stats     domain.DiffStats
+}
+
 type pollStore struct {
 	mu       sync.Mutex
 	upserted map[string]int // repo -> PRs written
 	marked   []polled
+	pulls    map[string][]storedPull // repo -> stored PRs
+	listErr  error
+}
+
+func (s *pollStore) ListWithoutDiffStats(_ context.Context, _, repo string, since time.Time, limit int) ([]domain.Pull, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listErr != nil {
+		return nil, s.listErr
+	}
+	var pending []storedPull
+	for _, p := range s.pulls[repo] {
+		if domain.NeedsDiffStats(p.stats) && !p.updatedAt.Before(since) {
+			pending = append(pending, p)
+		}
+	}
+	sort.Slice(pending, func(i, j int) bool { return pending[i].updatedAt.After(pending[j].updatedAt) })
+	var out []domain.Pull
+	for _, p := range pending[:min(limit, len(pending))] {
+		out = append(out, domain.Pull{ID: p.id, Number: p.number})
+	}
+	return out, nil
+}
+
+func (s *pollStore) SetDiffStats(_ context.Context, prID string, stats domain.DiffStats) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for repo, ps := range s.pulls {
+		for i := range ps {
+			if ps[i].id == prID {
+				s.pulls[repo][i].stats = stats
+			}
+		}
+	}
+	return nil
+}
+
+// filled returns the numbers of the repo's PRs that have stats, ascending.
+func (s *pollStore) filled(repo string) []int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []int
+	for _, p := range s.pulls[repo] {
+		if !domain.NeedsDiffStats(p.stats) {
+			out = append(out, p.number)
+		}
+	}
+	sort.Ints(out)
+	return out
+}
+
+// pollStats answers diff-stat fetches through respond (nil answers with non-zero stats) and
+// records the PR numbers asked for.
+type pollStats struct {
+	mu      sync.Mutex
+	asked   []int
+	respond func(repo string, number int) (domain.DiffStats, error)
+}
+
+func (g *pollStats) GetPullStats(_ context.Context, _, name string, number int) (domain.DiffStats, error) {
+	g.mu.Lock()
+	g.asked = append(g.asked, number)
+	respond := g.respond
+	g.mu.Unlock()
+	if respond == nil {
+		return domain.DiffStats{Additions: 3, Deletions: 1, FilesCount: 2}, nil
+	}
+	return respond(name, number)
+}
+
+func (g *pollStats) count() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return len(g.asked)
 }
 
 func (s *pollStore) UpsertListed(_ context.Context, _, repo string, l []domain.Listed) error {
@@ -185,6 +269,7 @@ func (s *logSink) warns() []string {
 
 type pollRig struct {
 	gh        *pollGitHub
+	stats     *pollStats
 	store     *pollStore
 	intervals *pollIntervals
 	logs      *logSink
@@ -194,7 +279,7 @@ type pollRig struct {
 
 func newRig(targets ...domain.PollTarget) *pollRig {
 	return &pollRig{
-		gh: &pollGitHub{}, store: &pollStore{}, logs: &logSink{}, targets: targets,
+		gh: &pollGitHub{}, stats: &pollStats{}, store: &pollStore{}, logs: &logSink{}, targets: targets,
 		intervals: &pollIntervals{set: map[string]time.Duration{}},
 	}
 }
@@ -204,7 +289,7 @@ func newRig(targets ...domain.PollTarget) *pollRig {
 func (r *pollRig) start(t *testing.T) (stop func()) {
 	t.Helper()
 	p := app.NewPoller(app.PollerDeps{
-		Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Store: r.store, Log: slog.New(r.logs),
+		Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Stats: r.stats, Store: r.store, Log: slog.New(r.logs),
 	}, r.opts)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
@@ -488,6 +573,21 @@ func TestPoller_rateLimitPausesUntilTheLaterOfResetAndNextDue(t *testing.T) {
 		{"secondary 429 without reset", 3 * time.Minute, func(time.Time) *app.GitHubError {
 			return &app.GitHubError{Status: 429}
 		}, 3 * time.Minute},
+		{"secondary 403 with Retry-After after due", time.Minute, func(base time.Time) *app.GitHubError {
+			return &app.GitHubError{Status: 403, RateLimited: true, RetryAfter: base.Add(7 * time.Minute)}
+		}, 7 * time.Minute},
+		{"secondary 403 with Retry-After before due", 5 * time.Minute, func(base time.Time) *app.GitHubError {
+			return &app.GitHubError{Status: 403, RateLimited: true, RetryAfter: base.Add(time.Minute)}
+		}, 5 * time.Minute},
+		{"429 with Retry-After", time.Minute, func(base time.Time) *app.GitHubError {
+			return &app.GitHubError{Status: 429, RetryAfter: base.Add(4 * time.Minute)}
+		}, 4 * time.Minute},
+		{"Retry-After wins over the primary reset", time.Minute, func(base time.Time) *app.GitHubError {
+			return &app.GitHubError{Status: 403, RateLimited: true, RateLimitReset: base.Add(10 * time.Minute), RetryAfter: base.Add(3 * time.Minute)}
+		}, 3 * time.Minute},
+		{"Retry-After is capped at two hours", time.Minute, func(base time.Time) *app.GitHubError {
+			return &app.GitHubError{Status: 403, RateLimited: true, RetryAfter: base.Add(1000 * time.Hour)}
+		}, domain.MaxRateLimitWait},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -600,7 +700,7 @@ func TestPoller_stopsWithinFiveSecondsOfCancel(t *testing.T) {
 		r := newRig(target("ws", "a"))
 		r.gh.delay = time.Hour // a request that only the context can end
 		p := app.NewPoller(app.PollerDeps{
-			Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Store: r.store, Log: slog.New(r.logs),
+			Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Stats: r.stats, Store: r.store, Log: slog.New(r.logs),
 		}, r.opts)
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})
@@ -656,6 +756,140 @@ func TestPoller_aRateLimitPausesEveryWorkspace(t *testing.T) {
 
 		if got := r.gh.firstPageTimes("b", base); len(got) == 0 || got[0] != 5*time.Minute {
 			t.Errorf("workspace 2 request times = %v, want the first at 5m", got)
+		}
+	})
+}
+
+// pendingPulls stores n PRs without stats, PR k updated k hours before now (so PR 1 is the newest).
+func pendingPulls(repo string, n int) []storedPull {
+	out := make([]storedPull, n)
+	for i := range out {
+		k := i + 1
+		out[i] = storedPull{id: fmt.Sprintf("%s-%d", repo, k), number: k, updatedAt: time.Now().Add(-time.Duration(k) * time.Hour)}
+	}
+	return out
+}
+
+func TestPoller_backfillsTwentyNewestStatlessPRsPerCycle(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(target("ws", "a"))
+		r.intervals.setAll(time.Minute, "ws")
+		r.store.pulls = map[string][]storedPull{"a": pendingPulls("a", 25)}
+		var failed sync.Once
+		r.stats.respond = func(_ string, number int) (domain.DiffStats, error) {
+			if number == 7 {
+				var err error
+				failed.Do(func() { err = &app.GitHubError{Status: 500, Message: "boom"} })
+				if err != nil {
+					return domain.DiffStats{}, err
+				}
+			}
+			return domain.DiffStats{Additions: 3, Deletions: 1, FilesCount: 2}, nil
+		}
+		stop := r.start(t)
+		advance(30 * time.Second) // cycle 1 only
+
+		var wantFirst []int // the 20 newest, but PR 7, whose fetch fails
+		for n := 1; n <= 20; n++ {
+			if n != 7 {
+				wantFirst = append(wantFirst, n)
+			}
+		}
+		if diff := cmp.Diff(wantFirst, r.store.filled("a")); diff != "" {
+			t.Errorf("PRs with stats after cycle 1 mismatch (-want +got):\n%s", diff)
+		}
+		if got, want := r.stats.count(), 20; got != want {
+			t.Errorf("stats fetches in cycle 1 = %d, want %d (the 20 newest)", got, want)
+		}
+		if got := len(r.gh.pagesOf("a")) + r.stats.count(); got > 30 {
+			t.Errorf("GitHub requests in cycle 1 = %d, want <= 30", got)
+		}
+		if got := r.logs.warns(); len(got) != 1 {
+			t.Errorf("WARN lines after cycle 1 = %q, want exactly the failed stats fetch of PR 7", got)
+		}
+
+		advance(time.Minute) // cycle 2: PR 7 (failed once) and the five oldest
+		stop()
+		if diff := cmp.Diff([]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25}, r.store.filled("a")); diff != "" {
+			t.Errorf("PRs with stats after cycle 2 mismatch (-want +got):\n%s", diff)
+		}
+		if got, want := r.stats.count(), 26; got != want {
+			t.Errorf("stats fetches in two cycles = %d, want %d (20, then PR 7 and 21-25)", got, want)
+		}
+	})
+}
+
+func TestPoller_backfillSkipsPRsOlderThanTheHorizonOrWithStats(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(target("ws", "a"))
+		r.intervals.setAll(time.Hour, "ws")
+		now := time.Now()
+		r.store.pulls = map[string][]storedPull{"a": {
+			{id: "a-1", number: 1, updatedAt: now.Add(-time.Hour)},
+			{id: "a-2", number: 2, updatedAt: now.Add(-63 * 24 * time.Hour)},                              // too old
+			{id: "a-3", number: 3, updatedAt: now.Add(-time.Hour), stats: domain.DiffStats{Additions: 1}}, // has stats
+		}}
+		stop := r.start(t)
+		advance(time.Second)
+		stop()
+
+		r.stats.mu.Lock()
+		defer r.stats.mu.Unlock()
+		if diff := cmp.Diff([]int{1}, r.stats.asked); diff != "" {
+			t.Errorf("PRs asked for stats mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestPoller_aRateLimitInTheStatsEndsTheCycle(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+		r := newRig(target("ws", "a"), target("ws", "b"))
+		r.intervals.setAll(time.Minute, "ws")
+		r.store.pulls = map[string][]storedPull{"a": pendingPulls("a", 3)}
+		var first sync.Once
+		r.stats.respond = func(string, int) (domain.DiffStats, error) {
+			var err error
+			first.Do(func() {
+				err = &app.GitHubError{Status: 403, RateLimited: true, RetryAfter: base.Add(5 * time.Minute)}
+			})
+			if err != nil {
+				return domain.DiffStats{}, err
+			}
+			return domain.DiffStats{Additions: 1}, nil
+		}
+		stop := r.start(t)
+		advance(5*time.Minute - time.Second)
+		if got := r.stats.count(); got != 1 {
+			t.Errorf("stats fetches during the pause = %d, want only the limited one", got)
+		}
+		if got := r.gh.firstPageTimes("b", base); len(got) != 0 {
+			t.Errorf("repo b page requests during the pause = %v, want none (the cycle ended)", got)
+		}
+		advance(11 * time.Second)
+		stop()
+
+		if got := r.gh.firstPageTimes("b", base); len(got) == 0 || got[0] != 5*time.Minute {
+			t.Errorf("repo b request times = %v, want the first at 5m", got)
+		}
+	})
+}
+
+func TestPoller_aFailedStatsListingIsLoggedAndTheCycleGoesOn(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+		r := newRig(target("ws", "a"), target("ws", "b"))
+		r.intervals.setAll(time.Hour, "ws")
+		r.store.listErr = errors.New("db is down")
+		stop := r.start(t)
+		advance(time.Second)
+		stop()
+
+		if got := r.gh.firstPageTimes("b", base); len(got) != 1 {
+			t.Errorf("repo b page requests = %v, want it polled once", got)
+		}
+		if got := r.logs.warns(); len(got) != 2 {
+			t.Errorf("WARN lines = %q, want one per repo for the failed listing", got)
 		}
 	})
 }

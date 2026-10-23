@@ -38,14 +38,14 @@ var uuidRe = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[
 func (s *Store) RepoScope(ctx context.Context, workspaceID, repo string) ([]domain.RepoRef, error) {
 	var rows []repoRow
 	if repo == domain.RepoAll {
-		if err := s.conn(ctx).Raw(qRepoAll, workspaceID).Scan(&rows).Error; err != nil {
+		if err := repoAll(s.conn(ctx), workspaceID).Scan(&rows).Error; err != nil {
 			return nil, fmt.Errorf("select repos: %w", err)
 		}
 	} else {
 		if !uuidRe.MatchString(repo) {
 			return nil, fmt.Errorf("repo %q: %w", repo, domain.ErrNotFound)
 		}
-		if err := s.conn(ctx).Raw(qRepoOne, workspaceID, repo).Scan(&rows).Error; err != nil {
+		if err := repoOne(s.conn(ctx), workspaceID, repo).Scan(&rows).Error; err != nil {
 			return nil, fmt.Errorf("select repo: %w", err)
 		}
 		if len(rows) == 0 {
@@ -74,7 +74,7 @@ func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []s
 		return domain.Facts{}, fmt.Errorf("select window pulls: %w", err)
 	}
 	var reviews []reviewRow
-	if err := db.Raw(qWindowReviews, args...).Scan(&reviews).Error; err != nil {
+	if err := windowReviews(db, workspaceID, repoIDs, facts.From, facts.To).Scan(&reviews).Error; err != nil {
 		return domain.Facts{}, fmt.Errorf("select window reviews: %w", err)
 	}
 	var findings []findingRow
@@ -82,7 +82,7 @@ func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []s
 		return domain.Facts{}, fmt.Errorf("select window findings: %w", err)
 	}
 	var runs []runRow
-	if err := db.Raw(qWindowRuns, args...).Scan(&runs).Error; err != nil {
+	if err := windowRuns(db, workspaceID, repoIDs, facts.From, facts.To).Scan(&runs).Error; err != nil {
 		return domain.Facts{}, fmt.Errorf("select window runs: %w", err)
 	}
 	var critical []openCriticalRow

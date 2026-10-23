@@ -17,6 +17,7 @@ type api interface {
 	ListPullRequests(ctx context.Context, owner, name string) ([]ghclient.PullSummary, error)
 	ListPullRequestsPage(ctx context.Context, owner, name string, page, perPage int) ([]ghclient.PullSummary, error)
 	GetPullRequest(ctx context.Context, owner, name string, number int) (ghclient.PullDetail, error)
+	GetPullStats(ctx context.Context, owner, name string, number int) (ghclient.PullStats, error)
 	GetIssue(ctx context.Context, owner, name string, number int) (ghclient.Issue, error)
 	ListReviewComments(ctx context.Context, owner, name string, number int) ([]ghclient.ReviewComment, error)
 	CreateReviewComment(ctx context.Context, owner, name string, number int, in ghclient.CommentInput) (ghclient.ReviewComment, error)
@@ -79,6 +80,15 @@ func (a *Adapter) GetPullRequest(ctx context.Context, owner, name string, number
 	return out, nil
 }
 
+// GetPullStats fetches only the diff stats of a PR, with one request.
+func (a *Adapter) GetPullStats(ctx context.Context, owner, name string, number int) (domain.DiffStats, error) {
+	st, err := a.api.GetPullStats(ctx, owner, name, number)
+	if err != nil {
+		return domain.DiffStats{}, mapErr(err)
+	}
+	return domain.DiffStats{Additions: st.Additions, Deletions: st.Deletions, FilesCount: st.FilesCount}, nil
+}
+
 // GetIssue fetches one issue.
 func (a *Adapter) GetIssue(ctx context.Context, owner, name string, number int) (domain.Issue, error) {
 	i, err := a.api.GetIssue(ctx, owner, name, number)
@@ -136,7 +146,7 @@ func comment(c ghclient.ReviewComment) domain.ReviewComment {
 }
 
 // mapErr converts client errors to the app's: the missing token and non-2xx answers (with the
-// rate-limit state) get their own types, everything else (network, timeout, decoding) passes through unchanged.
+// rate-limit state, primary or secondary) get their own types, everything else (network, timeout, decoding) passes through unchanged.
 func mapErr(err error) error {
 	if errors.Is(err, ghclient.ErrNoToken) {
 		return app.ErrNoToken
@@ -145,7 +155,7 @@ func mapErr(err error) error {
 	if errors.As(err, &se) {
 		return &app.GitHubError{
 			Status: se.Status, Message: se.Message,
-			RateLimited: se.RateLimited(), RateLimitReset: se.RateLimitReset,
+			RateLimited: se.LimitReached(), RateLimitReset: se.RateLimitReset, RetryAfter: se.RetryAfter,
 		}
 	}
 	return err

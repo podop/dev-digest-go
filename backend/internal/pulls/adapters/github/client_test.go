@@ -180,3 +180,76 @@ func TestListPullRequestsPage_translatesErrors(t *testing.T) {
 		}
 	})
 }
+
+func TestListPullRequestsPage_secondaryLimitCarriesRetryAfter(t *testing.T) {
+	t.Run("403 with Retry-After and requests left", func(t *testing.T) {
+		a := newAdapter(t, "tok", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-RateLimit-Remaining", "4999")
+			w.Header().Set("Retry-After", "60")
+			reply(403, map[string]string{"message": "You have exceeded a secondary rate limit"})(w, r)
+		})
+		before := time.Now()
+		_, err := a.ListPullRequestsPage(t.Context(), "acme", "api", 1, 50)
+		after := time.Now()
+		var ge *app.GitHubError
+		if !errors.As(err, &ge) {
+			t.Fatalf("ListPullRequestsPage() error = %v, want *app.GitHubError", err)
+		}
+		if ge.Status != 403 || !ge.RateLimited {
+			t.Errorf("ListPullRequestsPage() error = %+v, want a rate-limited 403", ge)
+		}
+		if ge.RetryAfter.Before(before.Add(60*time.Second)) || ge.RetryAfter.After(after.Add(60*time.Second)) {
+			t.Errorf("RetryAfter = %v, want 60 s after the request (%v..%v)", ge.RetryAfter, before, after)
+		}
+	})
+	t.Run("403 saying secondary rate limit without a header", func(t *testing.T) {
+		a := newAdapter(t, "tok", reply(403, map[string]string{"message": "You have exceeded a secondary rate limit. Please wait."}))
+		_, err := a.ListPullRequestsPage(t.Context(), "acme", "api", 1, 50)
+		var ge *app.GitHubError
+		if !errors.As(err, &ge) || !ge.RateLimited || !ge.RetryAfter.IsZero() {
+			t.Errorf("ListPullRequestsPage() error = %+v, want rate limited without RetryAfter", ge)
+		}
+	})
+	t.Run("a plain 403 is not a rate limit", func(t *testing.T) {
+		a := newAdapter(t, "tok", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-RateLimit-Remaining", "4999")
+			reply(403, map[string]string{"message": "Resource not accessible by integration"})(w, r)
+		})
+		_, err := a.ListPullRequestsPage(t.Context(), "acme", "api", 1, 50)
+		var ge *app.GitHubError
+		if !errors.As(err, &ge) || ge.RateLimited || !ge.RetryAfter.IsZero() {
+			t.Errorf("ListPullRequestsPage() error = %+v, want a 403 without rate-limit state", ge)
+		}
+	})
+}
+
+func TestGetPullStats_mapsStatsAndErrors(t *testing.T) {
+	t.Run("stats", func(t *testing.T) {
+		a := newAdapter(t, "tok", reply(200, map[string]any{
+			"number": 4, "additions": 12, "deletions": 5, "changed_files": 3,
+			"head": map[string]string{"ref": "f", "sha": "s"}, "base": map[string]string{"ref": "main"},
+			"state": "open", "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-03T00:00:00Z",
+		}))
+		got, err := a.GetPullStats(t.Context(), "acme", "api", 4)
+		if err != nil {
+			t.Fatalf("GetPullStats() error = %v", err)
+		}
+		if want := (domain.DiffStats{Additions: 12, Deletions: 5, FilesCount: 3}); got != want {
+			t.Errorf("GetPullStats() = %+v, want %+v", got, want)
+		}
+	})
+	t.Run("no token", func(t *testing.T) {
+		a := newAdapter(t, "", reply(200, map[string]any{}))
+		if _, err := a.GetPullStats(t.Context(), "acme", "api", 4); !errors.Is(err, app.ErrNoToken) {
+			t.Errorf("GetPullStats() error = %v, want app.ErrNoToken", err)
+		}
+	})
+	t.Run("status error", func(t *testing.T) {
+		a := newAdapter(t, "tok", reply(404, map[string]string{"message": "Not Found"}))
+		_, err := a.GetPullStats(t.Context(), "acme", "api", 4)
+		var ge *app.GitHubError
+		if !errors.As(err, &ge) || ge.Status != 404 || ge.RateLimited {
+			t.Errorf("GetPullStats() error = %v, want a 404 GitHubError", err)
+		}
+	})
+}

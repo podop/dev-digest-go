@@ -233,6 +233,24 @@ func TestRepoScope(t *testing.T) {
 			t.Errorf("RepoScope(all) mismatch (-want +got):\n%s", diff)
 		}
 	})
+	t.Run("all: byte order of the full name, independent of the database locale", func(t *testing.T) {
+		ws := w.insert(t, `INSERT INTO workspaces (name) VALUES ('collation') RETURNING id`)
+		for _, name := range []string{"api", "Zed", "_x", "Beta"} {
+			w.exec(t, `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES (?, 'acme', ?, ?)`, ws, name, "acme/"+name)
+		}
+		got, err := w.store.RepoScope(ctx, ws, domain.RepoAll)
+		if err != nil {
+			t.Fatalf("RepoScope(all) error = %v", err)
+		}
+		var names []string
+		for _, r := range got {
+			names = append(names, r.FullName)
+		}
+		want := []string{"acme/Beta", "acme/Zed", "acme/_x", "acme/api"}
+		if diff := cmp.Diff(want, names); diff != "" {
+			t.Errorf("RepoScope(all) full names mismatch (-want +got):\n%s", diff)
+		}
+	})
 	t.Run("all: a workspace without repos is empty, not an error", func(t *testing.T) {
 		empty := w.insert(t, `INSERT INTO workspaces (name) VALUES ('empty') RETURNING id`)
 		got, err := w.store.RepoScope(ctx, empty, domain.RepoAll)

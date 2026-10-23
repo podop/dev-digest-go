@@ -16,10 +16,14 @@ var ErrNoToken = errors.New("github token is not configured")
 type GitHubError struct {
 	Status  int
 	Message string
-	// RateLimited is true when GitHub said the rate limit is used up (remaining 0).
+	// RateLimited is true when GitHub said a rate limit was hit: the primary limit (remaining 0),
+	// or a 403/429 that carries Retry-After or says "secondary rate limit".
 	RateLimited bool
-	// RateLimitReset is when GitHub says the limit renews; the zero time when it said nothing valid.
+	// RateLimitReset is when GitHub says the primary limit renews; the zero time when it said nothing valid.
 	RateLimitReset time.Time
+	// RetryAfter is the time GitHub's Retry-After header says to wait until (the secondary limit);
+	// the zero time when the answer had none.
+	RetryAfter time.Time
 }
 
 func (e *GitHubError) Error() string {
@@ -79,8 +83,20 @@ type PageLister interface {
 	ListPullRequestsPage(ctx context.Context, owner, name string, page, perPage int) ([]domain.Listed, error)
 }
 
+// StatsFetcher reads the diff stats of one PR with a single GitHub request (the same fields the
+// PR detail fetch reads). It fails with ErrNoToken when no token is configured and with a
+// *GitHubError for a non-2xx answer. Like PageLister, the poller's instance must not retry.
+type StatsFetcher interface {
+	GetPullStats(ctx context.Context, owner, name string, number int) (domain.DiffStats, error)
+}
+
 // PollStore is the persistence of the background poll.
 type PollStore interface {
 	UpsertListed(ctx context.Context, workspaceID, repoID string, listed []domain.Listed) error
 	MarkPolled(ctx context.Context, workspaceID, repoID string, at time.Time) error
+	// ListWithoutDiffStats returns at most limit PRs of the repo whose stats are still missing
+	// (domain.NeedsDiffStats) and that were updated at or after updatedSince, most recently updated
+	// first. Only ID and Number of the returned pulls are set.
+	ListWithoutDiffStats(ctx context.Context, workspaceID, repoID string, updatedSince time.Time, limit int) ([]domain.Pull, error)
+	SetDiffStats(ctx context.Context, prID string, stats domain.DiffStats) error
 }

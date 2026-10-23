@@ -15,14 +15,17 @@ const (
 	DefaultPollMaxPages = 10 // requests per repo per cycle
 	DefaultPollPageSize = 50
 	DefaultPollTick     = time.Minute
-	maxPollPageSize     = 100 // GitHub's per_page ceiling
+	// PollStatsPerRepo caps the diff-stat fetches per repo per cycle (FR24, NFR3: 10 + 20 <= 30 requests).
+	PollStatsPerRepo = 20
+	maxPollPageSize  = 100 // GitHub's per_page ceiling
 
 	statusTooManyRequests = 429
 )
 
 // PollerOptions tunes the background poll; a zero field takes its default.
 type PollerOptions struct {
-	// Horizon is how far back the first poll of a repo in this process looks (default domain.PollHorizon, 62 d).
+	// Horizon is how far back the first poll of a repo in this process looks, and how old a PR may be
+	// to get its diff stats filled (default domain.PollHorizon, 62 d).
 	Horizon time.Duration
 	// MaxPages caps the pages one repo poll reads (default 10).
 	MaxPages int
@@ -39,6 +42,8 @@ type PollerDeps struct {
 	// Pages must be a GitHub client of its own that never retries, so a repo poll stays within
 	// MaxPages requests.
 	Pages PageLister
+	// Stats must be a GitHub client of its own that never retries; one fetch is one request.
+	Stats StatsFetcher
 	Store PollStore
 	Log   *slog.Logger // nil discards
 	Now   func() time.Time
@@ -51,6 +56,7 @@ type Poller struct {
 	targets   PollTargets
 	intervals IntervalSource
 	pages     PageLister
+	stats     StatsFetcher
 	store     PollStore
 	log       *slog.Logger
 	now       func() time.Time
@@ -64,8 +70,8 @@ type Poller struct {
 
 // NewPoller builds a Poller. It panics on a missing required port (a wiring bug).
 func NewPoller(deps PollerDeps, opts PollerOptions) *Poller {
-	if deps.Targets == nil || deps.Intervals == nil || deps.Pages == nil || deps.Store == nil {
-		panic("pulls: NewPoller needs Targets, Intervals, Pages and Store")
+	if deps.Targets == nil || deps.Intervals == nil || deps.Pages == nil || deps.Stats == nil || deps.Store == nil {
+		panic("pulls: NewPoller needs Targets, Intervals, Pages, Stats and Store")
 	}
 	if opts.Horizon <= 0 {
 		opts.Horizon = domain.PollHorizon
@@ -89,7 +95,7 @@ func NewPoller(deps PollerDeps, opts PollerOptions) *Poller {
 		now = time.Now
 	}
 	return &Poller{
-		targets: deps.Targets, intervals: deps.Intervals, pages: deps.Pages, store: deps.Store,
+		targets: deps.Targets, intervals: deps.Intervals, pages: deps.Pages, stats: deps.Stats, store: deps.Store,
 		log: log, now: now, opts: opts,
 		nextDue: map[string]time.Time{}, cutoffs: map[string]time.Time{},
 	}
@@ -137,8 +143,8 @@ func (p *Poller) round(ctx context.Context) {
 	}
 }
 
-// cycle polls every repo of one workspace. A failed repo is logged and skipped; a missing token
-// or a rate limit ends the cycle.
+// cycle polls every repo of one workspace: its PR pages, then the diff stats of stored PRs that
+// have none. A failed repo is logged and skipped; a missing token or a rate limit ends the cycle.
 func (p *Poller) cycle(ctx context.Context, g workspaceTargets) {
 	start := p.now()
 	due := start.Add(p.interval(ctx, g.workspaceID))
@@ -149,6 +155,9 @@ func (p *Poller) cycle(ctx context.Context, g workspaceTargets) {
 			return
 		}
 		err := p.pollRepo(ctx, g.workspaceID, repo)
+		if err == nil {
+			err = p.backfillStats(ctx, g.workspaceID, repo)
+		}
 		if err == nil {
 			continue
 		}
@@ -213,6 +222,47 @@ func (p *Poller) pollRepo(ctx context.Context, workspaceID string, repo domain.R
 	return nil
 }
 
+// backfillStats fills the diff stats of up to PollStatsPerRepo stored PRs of the repo that have
+// none and were updated within the horizon, newest update first. A failed fetch or store of one PR
+// is logged and the next PR goes on; only a missing token, a rate limit or a cancelled ctx is
+// returned, which ends the cycle.
+func (p *Poller) backfillStats(ctx context.Context, workspaceID string, repo domain.Repo) error {
+	since := p.now().Add(-p.opts.Horizon)
+	pending, err := p.store.ListWithoutDiffStats(ctx, workspaceID, repo.ID, since, PollStatsPerRepo)
+	if err != nil {
+		if ctx.Err() == nil {
+			p.log.WarnContext(ctx, "background poll: listing pull requests without diff stats failed",
+				"workspace_id", workspaceID, "repo_id", repo.ID, "err", err)
+		}
+		return nil
+	}
+	for _, pr := range pending {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		stats, err := p.stats.GetPullStats(ctx, repo.Owner, repo.Name, pr.Number)
+		if err != nil {
+			if ctx.Err() != nil || errors.Is(err, ErrNoToken) {
+				return err
+			}
+			if _, limited := rateLimit(err); limited {
+				return err
+			}
+			p.log.WarnContext(ctx, "background poll: diff-stat backfill of a pull request failed",
+				"workspace_id", workspaceID, "repo_id", repo.ID, "number", pr.Number, "err", err)
+			continue
+		}
+		if err := p.store.SetDiffStats(ctx, pr.ID, stats); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			p.log.WarnContext(ctx, "background poll: diff stats not stored",
+				"workspace_id", workspaceID, "repo_id", repo.ID, "number", pr.Number, "err", err)
+		}
+	}
+	return nil
+}
+
 // forget drops the state of workspaces and repos that no longer exist.
 func (p *Poller) forget(targets []domain.PollTarget) {
 	repos := make(map[string]bool, len(targets))
@@ -242,11 +292,15 @@ func reachedCutoff(listed []domain.Listed, cutoff time.Time) bool {
 	return false
 }
 
-// rateLimit reports whether err is GitHub's rate limit (primary, or a 429) and when it renews
-// (the zero time when unknown).
+// rateLimit reports whether err is a GitHub rate limit (primary, secondary, or a 429) and when
+// it ends: Retry-After when GitHub sent it, else the primary limit's reset (the zero time when
+// unknown).
 func rateLimit(err error) (reset time.Time, limited bool) {
 	var ge *GitHubError
 	if errors.As(err, &ge) && (ge.RateLimited || ge.Status == statusTooManyRequests) {
+		if !ge.RetryAfter.IsZero() {
+			return ge.RetryAfter, true
+		}
 		return ge.RateLimitReset, true
 	}
 	return time.Time{}, false

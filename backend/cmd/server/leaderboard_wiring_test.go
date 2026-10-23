@@ -56,6 +56,8 @@ func pollSpec(t *testing.T, enabled bool) (spec, string) {
 	return spec{
 		db:     db,
 		noSeed: true,
+		// The stub's PR #7 was updated on 2026-10-20: a fixed clock keeps it inside the poller's 62-day window.
+		now:    func() time.Time { return time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC) },
 		env:    map[string]string{"GITHUB_TOKEN": "poll-token"},
 		config: func(c *config.Config) { c.PRPollEnabled = enabled },
 	}, repo
@@ -82,6 +84,19 @@ func TestPoll_StartsWhenEnabled(t *testing.T) {
 	})
 	if n := scalar[int](t, s.db.DB, `SELECT count(*) FROM pull_requests WHERE repo_id = ? AND number = 7`, repo); n != 1 {
 		t.Errorf("stored pull requests #7 of the polled repository = %d, want 1", n)
+	}
+	// FR24: the same round fills the stats of the stored PR with one request that carries the token.
+	eventually(t, 30*time.Second, "the diff stats of PR #7 to be filled", func() bool {
+		return scalar[int](t, s.db.DB, `SELECT count(*) FROM pull_requests WHERE repo_id = ? AND number = 7 AND additions = 10 AND deletions = 2 AND files_count = 2`, repo) == 1
+	})
+	var statRequests []ghRequest
+	for _, r := range s.gh.requests() {
+		if strings.HasPrefix(r.Path, "/repos/o/r/pulls/") {
+			statRequests = append(statRequests, r)
+		}
+	}
+	if len(statRequests) != 1 || statRequests[0].Path != "/repos/o/r/pulls/7" || statRequests[0].Auth != "Bearer poll-token" {
+		t.Errorf("GitHub requests below /repos/o/r/pulls/ = %+v, want one GET of /pulls/7 with the poll token", statRequests)
 	}
 	reqs := listRequests(s)
 	if len(reqs) == 0 {

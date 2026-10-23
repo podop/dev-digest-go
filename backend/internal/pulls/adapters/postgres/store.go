@@ -226,6 +226,32 @@ func (s *Store) UpsertListed(ctx context.Context, workspaceID, repoID string, li
 	return nil
 }
 
+// ListWithoutDiffStats returns at most limit PRs of the repo that still have the zeroed stats of a
+// list import (the rule of domain.NeedsDiffStats) and were updated at or after updatedSince, most
+// recently updated first, then by number descending. Only ID and Number are set.
+func (s *Store) ListWithoutDiffStats(ctx context.Context, workspaceID, repoID string, updatedSince time.Time, limit int) ([]domain.Pull, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	var rows []pullRow
+	err := s.db.WithContext(ctx).
+		Select("id", "number").
+		Where("workspace_id = ? AND repo_id = ?", workspaceID, repoID).
+		Where("updated_at >= ?", updatedSince).
+		Where("additions = 0 AND deletions = 0 AND files_count = 0").
+		Order("updated_at DESC, number DESC").
+		Limit(limit).
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list pull requests without diff stats: %w", err)
+	}
+	out := make([]domain.Pull, len(rows))
+	for i, r := range rows {
+		out[i] = domain.Pull{ID: r.ID, Number: r.Number}
+	}
+	return out, nil
+}
+
 // SetDiffStats writes the diff stats of one PR.
 func (s *Store) SetDiffStats(ctx context.Context, prID string, stats domain.DiffStats) error {
 	err := s.db.WithContext(ctx).Model(&pullRow{}).Where("id = ?", prID).

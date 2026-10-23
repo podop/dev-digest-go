@@ -239,6 +239,27 @@ func (c *Client) GetPullRequest(ctx context.Context, owner, name string, number 
 	return detail, nil
 }
 
+// PullStats are the diff stats GitHub reports on a pull request.
+type PullStats struct {
+	Additions  int
+	Deletions  int
+	FilesCount int
+}
+
+// GetPullStats fetches a pull request's diff stats with one request: the same additions,
+// deletions and changed_files fields GetPullRequest reads, without its files and commits pages.
+func (c *Client) GetPullStats(ctx context.Context, owner, name string, number int) (PullStats, error) {
+	token, err := c.currentToken()
+	if err != nil {
+		return PullStats{}, err
+	}
+	pr, err := getJSON[apiPull](ctx, c, token, repoPath(owner, name)+"/pulls/"+strconv.Itoa(number), nil)
+	if err != nil {
+		return PullStats{}, err
+	}
+	return PullStats{Additions: pr.Additions, Deletions: pr.Deletions, FilesCount: pr.ChangedFiles}, nil
+}
+
 // paginateCapped reads pages of PageSize until a short page or max items.
 func paginateCapped[T any](ctx context.Context, c *Client, token, path string, max int) ([]T, error) {
 	var out []T
