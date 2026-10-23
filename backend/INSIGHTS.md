@@ -11,6 +11,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-23 — repointel/app blast degraded scan: a cap that counts distinct (name, file) symbols does not bound a per-file index that grows with lines — one name declared on every line kept ~117k entries per 2 MB changed file (480 MiB per scan, security r2 N1) → recompute the changed file's enclosing index when the caller scan hits it, keep nothing per file (TestBlastRadius_ScanRetainsNoChangedFileIndex)
 - 2026-10-23 — a per-file cache in a one-pass clone scan keeps every file's full text alive because symbol names/labels are substrings of it (degraded blast scan: 845 MiB live heap) → keep per-file state only while scanning that file, strings.Clone what is stored, share identical scans and cap concurrent scans (repointel/app/blast.go, blast_load_test.go)
 - 2026-10-22 — a 1,024-slot chan per SSE subscriber costs ~105 KB each (2,000 streams = 213 MB) → runbus uses a growing slice queue + 1-slot wake channel + pump goroutine (≈3.5 KB idle); callers must drain C() or Close (platform/runbus state.go)
 - 2026-10-22 — per-name ReferenceLines over a hostile clone file is O(names × size) between ctx checks (1,000 names × 2 MB: 31–89 s, cancel ignored) → one Aho-Corasick pass per file with a ctx tick every ~32K units of work, plus a binary-search enclosing-symbol index (repointel/domain/refscan.go; differential test vs ReferenceLines)
@@ -27,6 +28,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-23 — GET /pulls/:id/blast and GET /pulls/:id/brief cost scales with the caller count, not the changed-file count: a 300-file PR every one of 5,000 files calls (11,998 callers, 1.17 MB) gave blast p95 569-746 ms and brief p95 108-176 ms (the stored brief keeps a full blast snapshot, read+validated+re-encoded per GET); leaf PRs 113 / 25 ms (AC5064, .sdd/review/2026-10-22-go-backend-phase-5/ac5064-latency.md; unfinished fix patch in ac5064-perf-wip/)
 - 2026-10-22 — findings has no ordering column: 'insertion order' is ORDER BY ctid (Node had no ORDER BY), and an accept/dismiss UPDATE can move the row → stable order after triage needs a new column + migration (reviews/adapters/postgres reads.go)
 - 2026-10-22 — seed changes to PR #482 (demo review) shift every deterministic placeholder id in cmd/server/testdata/contracts and the pulls rollup tests → after touching the seed run go test ./cmd/server -run TestContracts_GoldenResponses -update (flag AFTER the package), review the diff, clear demo rows in rollup tests
 - 2026-10-22 — reviews executor: a cancel of a queued run lives only in the bus flag, which the 5 min TTL evicts → re-read the run row before starting ONLY when the flag is absent; with the flag set the Node goldens require the full cancelled path (skills recorded, ended trace) — executor run.go endedWhileQueued
@@ -74,6 +76,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Recurring Errors & Fixes
 <!-- error message → cause → fix -->
+- 2026-10-23 — repointel degraded-scan tests under -race (~10x slower) hit the default 30 s CallerScan.Timeout and silently answer the empty degraded result, which looks like missing data, not a timeout → set CallerScan.Timeout explicitly in heavy scan tests (blast_load_test.go)
 - 2026-10-23 — flaky tests under full-gate load: (1) a context derived via context.AfterFunc learns of the parent's cancel on another goroutine, so 'no read after cancel' must count reads that START with a cancelled ctx, not a total; (2) tiny SO_RCVBUF/SO_SNDBUF make TCP window probes load-dependent — stall a non-reading SSE client with a server-side net.Conn wrapper; (3) assert a goroutine's result with a bounded wait, not select default (parity onboarding bounded reads, cmd/server stallListener, brief TestShutdown)
 - 2026-10-22 — httpx rate limiter 429 renders as code internal_error (Node parity quirk, ratelimit_test.go) → a new 429 that must say rate_limited writes httpx.ErrorBody itself (reviews SSE stream caps)
 - 2026-10-22 — go build ./cmd/... (one main package matched) from backend/ writes a 25 MB 'server' binary into the tree → use go build -o /dev/null ./...; /backend/server is now git-ignored
@@ -86,6 +89,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Session Notes
 <!-- YYYY-MM-DD — one-line summary of a meaningful session -->
+- 2026-10-23 — Phase 5 review gate closed: arch r2 PASS, security r2 PASS (F1-F3 closed, N1 LOW fixed in c668ede), verify r2 0 FAIL; AC5063 PASS, AC5064 5/7 routes (blast/brief worst case over the limit, follow-up, perf round stopped by the user); Phase 6 spec 58226c0 + plan d2440e0 (D8: Go runner)
 - 2026-10-23 — Phase 5 implemented (W0–W4, 10+7 parallel lanes) and review r1 fixes committed at 6f5028f; review r2 (security + verify) and the Phase 5 handoff are pending — resume per docs/migration/STATUS.md and the migration-progress memory
 - 2026-10-22 — reviews Phase 4 done: W1 ran 8 parallel lanes and W2 6 on W0 contract code; gate needed one fix round (caller-scan DoS, queued cancel after eviction, SSE caps); the W0 smoke test disproved the Echo ReadTimeout risk before any lane built on it
 - 2026-10-22 — Phase 3 (repo-intel) implemented in 5 waves; review gate arch PASS, security PASS after r1 fixes (3 MEDIUM hostile-clone DoS + 5 LOW closed), plan-verify PASS; AC3066 5,000-file index 28.7 s after the ResolveReferences rewrite — see docs/migration/STATUS.md

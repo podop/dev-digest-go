@@ -26,7 +26,7 @@ The wire contracts are the Zod schemas vendored in `frontend/src/vendor/shared/c
 | D5 | **Fresh database only**: the Go stack does not adopt an existing Node database | 2026-10-21 | user |
 | D6 | Wire compatibility with the existing UI is mandatory: same paths, status codes, JSON field names (snake_case + the documented camelCase exceptions), error envelope, SSE frames | 2026-10-21 | goal |
 | D7 | Backend runtime image is Alpine with `git` (the backend shells out to git) | 2026-10-21 | research 03 |
-| D8 | CI export runner (Node `agent-runner` bundle vs Go runner): **decided later**, in the CI phase | 2026-10-21 | user |
+| D8 | CI export runner: **port `agent-runner` to Go** on the Go reviewer engine (one engine for local reviews, evals and CI); decided 2026-10-23, details D17 | 2026-10-21 / 2026-10-23 | user |
 | D9 | Browser-attack hardening beyond Node parity (API has no auth): JSON bodies only as `application/json` (restores Node's 422 for `text/plain`), POST/PUT/PATCH/DELETE with a foreign `Origin` → 403, `Host` allowlist `ALLOWED_HOSTS` against DNS rebinding | 2026-10-21 | user (security review r1) |
 | D10 | The composition root (`cmd/`) may hold the `*gorm.DB` handle; querying stays in adapters | 2026-10-21 | architecture review r1 |
 | D11 | Phase 2 pulls a **minimal LLM layer** forward from Phase 4 (structured completion + model listing for OpenAI, Anthropic, OpenRouter; price book; prompt log) so `conventions/extract` works end to end; Phase 4 reuses and extends it | 2026-10-22 | user |
@@ -34,6 +34,8 @@ The wire contracts are the Zod schemas vendored in `frontend/src/vendor/shared/c
 | D13 | The Go import graph **fixes Node's adapter bugs** instead of copying them: tsconfig `paths`/`baseUrl` resolve the way TypeScript does, a bad tsconfig or unreadable file no longer empties the graph, symlinks are not followed — ranks differ from Node on alias-using repos | 2026-10-22 | user (spec D3019) |
 | D14 | Phase 4 reviews run **without PR intent** (as Node with `REVIEW_INTENT_ENABLED=false`): no intent LLM call, no `## PR intent` section, `out_of_scope` false; Phase 5 adds the intent module and the executor hook | 2026-10-22 | user (spec D4001) |
 | D15 | Review SSE streams are capped at 32 open streams per run and 256 overall (429 `rate_limited` beyond) — hardening beyond Node; the route stays exempt from the request rate limit | 2026-10-22 | security review r1 (Phase 4 F3) |
+| D16 | Phase 5 reviews derive the **PR intent by default** (`REVIEW_INTENT_ENABLED`, off only on `false`, off = Phase 4 behaviour exactly); generations (intent, brief, onboarding) stop through `platform/inflight` before Echo drains, because Echo's shutdown never cancels request contexts | 2026-10-22 | user (spec D5001) + W0 proof |
+| D17 | Phase 6 CI runner shipping: a static linux/amd64 Go binary built in the backend image and embedded in the server; exported as gzip+base64 text `.devdigest/runner/devdigest-runner-linux-amd64.gz.b64` plus a `sha256sum` checksum file that the workflow verifies before running (no Node setup step; `checkWorkflow` rules unchanged); the UI stays unchanged (the runner file shows as text in the export Preview) | 2026-10-23 | user (spec D6003–D6008) |
 
 Corrections: the Node schema after migrations 0000–0020 has **46 tables**, not 44 as research 02 and
 the Phase 1 spec state (verified on a migrated database and in Drizzle's `0020_snapshot.json`).

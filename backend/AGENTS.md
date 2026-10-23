@@ -50,7 +50,9 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   `RenderIntent` and the untrusted-text wrapping live there. Otherwise contexts reach each other only
   through consumer-side ports wired in `cmd/` (peers adapters may import another context's
   app/domain types); adapters never import other adapters (`cmd/` binds them, e.g. `newLLMCaller`).
-- Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/`. GORM only in
+- Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
+  exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
+  graceful shutdown never cancels request contexts). GORM only in
   `adapters/postgres` packages, `internal/platform/postgres` and `cmd/` (the composition root may
   hold and pass the `*gorm.DB` handle, never query with it). Domain and app import neither.
 - Stores use GORM (`*gorm.DB`, `Transaction`, `clause.OnConflict`, `clause.Locking`); GORM

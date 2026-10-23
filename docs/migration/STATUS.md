@@ -1,12 +1,40 @@
 # Migration status — handoff
 
-Last updated: 2026-10-22 · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-23 · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
-**Phases 1–4 are implemented and passed the review gate.** Phase 4 (reviews: reviewer-core engine, LLM
-extensions, run bus + SSE, multi-agent — 15 routes) was finished on 2026-10-22. Phase 5 spec is being
-written. Still open (user, credentials needed): Phase 1 AC97 (GitHub token), Phase 2 AC301 and Phase 4
-AC4077 real-key half (OpenAI/OpenRouter key).
+**Phases 1–5 are implemented and passed the review gate.** Phase 5 (intent + review intent hook,
+smart diff, blast, brief, onboarding, performance — 11 routes) was finished on 2026-10-23. **Phase 6**
+(evals, ci, Go CI runner — 20 routes, the last phase) has an approved spec and plan; implementation
+starts with W0. Still open (user, credentials needed): Phase 1 AC97 (GitHub token), Phase 2 AC301,
+Phase 4 AC4077 real-key half and Phase 5 AC5070 (OpenAI/OpenRouter key).
+
+Phase 5: spec `specs/2026-10-22-go-backend-phase-5.md` (FR5001–FR5057, AC5001–AC5072, D5001–D5021);
+plan `docs/plans/2026-10-22-go-backend-phase-5.md` (+ `.context.md`, S1–S38, W0–W4). Phase 6: spec
+`specs/2026-10-23-go-backend-phase-6.md` (FR6001–FR6057, AC6001–AC6068, D6001–D6025); plan
+`docs/plans/2026-10-23-go-backend-phase-6.md` (+ `.context.md`, S1–S38, W0–W4, 24 lanes).
+Backend gate after Phase 5: `db-tests-r2.log` 5,930 PASS / 0 SKIP / 0 FAIL, 73 packages; frontend contract
+test 111/111. Stack rebuilt 2026-10-23 with Phase 5 (`/health/ready` true).
+
+## Phase 5 review gate (reports in `.sdd/review/2026-10-22-go-backend-phase-5/`, git-ignored)
+| Reviewer | r1 (`3551565`) | r2 (fix delta `6f5028f`) |
+|---|---|---|
+| Architecture | **PASS**, 1 LOW (inflight smoke test imports Echo → exception recorded in `backend/AGENTS.md`) | **PASS**, 0 findings (build/vet re-run on Go 1.27 by the orchestrator) |
+| Security | **FAIL**, 2 MEDIUM (degraded blast scan 906 MiB live heap, no scan cap; `RedactSecrets` quadratic on `${` runs, 59 s) + 1 LOW (onboarding logged model text) | **PASS** — all closed (23 MiB, ≤ 2 scans at once; 0.22 s; class-only cause); new LOW N1 (changed-file indexes kept, 480 MiB) → **fixed in `c668ede`** with a regression test, no r3 run |
+| Plan verification | 146 PASS · 2 FAIL (AC5053 heap test missing) · 4 CANNOT_VERIFY | 150 PASS · 0 FAIL · 4 manual → AC5063 PASS (generator rerun byte-identical, `../dev-digest` clean); AC5064 see below; AC5070 user |
+
+Manual checks: **AC5064** (throwaway project, 5,000-file index, 10,001 runs, 50,002 findings): intent p95
+5 ms, smart-diff 19 ms, onboarding 6 ms, performance 191 ms, stats 225 ms — PASS; **blast p95 569–746 ms
+(limit 500) and brief p95 108–176 ms (limit 100) FAIL** on a worst-case PR whose 300 files every other
+file calls (11,998 callers, 1.17 MB response; leaf-file PR: 113 / 25 ms). A perf round was stopped by
+the user to move on; its unverified patch is in `ac5064-perf-wip/` (see follow-ups).
+
+Phase 5 decisions worth knowing (details in the spec/plan): `REVIEW_INTENT_ENABLED` default on (off =
+Phase 4 behaviour exactly, `executor.Deps.Intent` nil); Echo's graceful shutdown never cancels request
+contexts, so intent/brief/onboarding stop via `platform/inflight` before Echo; `reviewer/domain` is the
+Phase 5 shared kernel (JS-parity text, `Intent`, untrusted wrapping); no migration (D5012); degraded blast
+= Node's regex clone scan, 30 s, ≤ 2 scans per process, identical scans shared; only intent refresh has a
+10/min bucket (D5014); no `OnboardingTour` mock fixture (502 under the mock, as Node).
 
 | Item | Phase 1 | Phase 2 | Phase 3 | Phase 4 |
 |---|---|---|---|---|
@@ -108,9 +136,12 @@ swaps every provider for a deterministic mock with a startup warning (D214).
    SSE slots; caller scan: one hostile line can still delay the ctx check ≈ 4.7 s (tick by whitespace
    trimmed); share one caller scan per batch across agents; findings order after accept/dismiss (needs an
    ordering column + migration); persist-path run notes keep Go prefixes (`insert review: …`).
-5. **Phase 5** (intent, smart-diff, blast, brief, onboarding, performance — 11 routes, plus the review
-   intent hook deferred by D14): spec in progress → plan → waves → review gate.
-
+5. Phase 5 follow-ups: **AC5064 blast/brief latency** on caller-heavy PRs (profile, then: read enclosing
+   symbols only for kept callers, slimmer row scans, cheaper brief read validation; an index only via a
+   new up/down migration — D5012 allows it now that NFR5007 failed); `blastFlights` not stopped at
+   shutdown (security INFO 7); user walkthrough AC5070.
+6. **Phase 6** (evals 16 + ci 4 routes, Go CI runner — README D8/D16): implement W0 → W4 per the plan,
+   then the review gate.
 Recipe for a fresh-volume check without touching the real volumes: an override file that renames
 `pgdata`/`backend_data` (e.g. `devdigest_go_ac_*`), `WEB_PORT=3200 API_PORT=3201 DB_PORT=5434`,
 `docker compose -p devdigest-go-ac -f docker-compose.yml -f <override> …`; confirm with
@@ -130,3 +161,6 @@ r2 security LOWs (Host port validation, `ALLOWED_HOSTS` fail-closed) fixed in `7
   `14fe593` (W3), `43c89c8` (W4), review fixes `5d7b081`, `12505fc`.
 - Phase 4: spec `f1f16bb`, plan `f63a41a`, waves `95e5146` (W0), `f0f5c39` (W1), `ba80ea6` (W2),
   `7c4609d` (W3), `4d1a2b3` (W4), review fixes `c7de1c0`.
+- Phase 5: spec `54f2b7e`, plan `0ab8d5b`, waves `946d1e8` (W0), `dd31aae` (W1), `8ec87d0` (W2),
+  `778605c` (W3), `3551565` (W4), review fixes `6f5028f`, `c668ede`.
+- Phase 6: spec `58226c0`, plan `d2440e0`.
