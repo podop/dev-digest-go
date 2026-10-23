@@ -9,8 +9,21 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
+# The CI runner is built first, static (cgo off) and reproducible, into the package that embeds
+# it; the server then carries it (-tags devdigest_runner). DEVDIGEST_BUILD_ID is the source
+# commit (12 hex); anything else becomes "dev".
+ARG DEVDIGEST_BUILD_ID=dev
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/server ./cmd/server
+    set -eu; \
+    id="$DEVDIGEST_BUILD_ID"; \
+    case "$id" in *[!0-9a-f]*|"") id=dev ;; esac; \
+    [ "$id" = dev ] || [ "${#id}" -eq 12 ] || id=dev; \
+    dir=internal/ci/adapters/runnerbin; \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false \
+      -ldflags "-s -w -buildid= -X main.buildID=$id" -o "$dir/devdigest-runner-linux-amd64" ./cmd/devdigest-runner; \
+    printf '%s' "$id" > "$dir/build-id"
+RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=1 go build -trimpath -tags devdigest_runner -ldflags="-s -w" -o /out/server ./cmd/server
 
 # Alpine, not distroless: the backend shells out to `git` (clone, fetch, diff, blame).
 FROM alpine:3.23

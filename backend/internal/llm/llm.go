@@ -15,8 +15,8 @@ import (
 	"log/slog"
 	"time"
 
+	"dev-digest-go/backend/internal/platform/keynames"
 	"dev-digest-go/backend/internal/platform/retry"
-	"dev-digest-go/backend/internal/platform/secrets"
 )
 
 // Provider identifies a model provider on the wire and in settings.
@@ -64,11 +64,11 @@ func (p Provider) DisplayName() string {
 func (p Provider) KeyName() string {
 	switch p {
 	case OpenAI:
-		return secrets.OpenAIKey
+		return keynames.OpenAIKey
 	case Anthropic:
-		return secrets.AnthropicKey
+		return keynames.AnthropicKey
 	case OpenRouter:
-		return secrets.OpenRouterKey
+		return keynames.OpenRouterKey
 	}
 	return ""
 }

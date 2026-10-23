@@ -9,14 +9,16 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"dev-digest-go/backend/internal/platform/keynames"
 )
 
-// Secret names, as used in the secrets file and as environment variables.
+// Secret names, as used in the secrets file and as environment variables (defined in keynames).
 const (
-	OpenAIKey     = "OPENAI_API_KEY"
-	AnthropicKey  = "ANTHROPIC_API_KEY"
-	OpenRouterKey = "OPENROUTER_API_KEY"
-	GitHubToken   = "GITHUB_TOKEN"
+	OpenAIKey     = keynames.OpenAIKey
+	AnthropicKey  = keynames.AnthropicKey
+	OpenRouterKey = keynames.OpenRouterKey
+	GitHubToken   = keynames.GitHubToken
 
 	// githubTokenFallback is the legacy environment variable read when
 	// GITHUB_TOKEN is unset.

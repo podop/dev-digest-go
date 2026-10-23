@@ -28,6 +28,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-23 — internal/llm New: Options.Prices == nil does not mean 'no prices' — it starts a live-fed PriceBook (own goroutine + HTTP model listing) → a process that must not price or call out (the CI runner) passes a non-nil Pricer that returns nil (cmd/devdigest-runner noPrices)
 - 2026-10-23 — GET /pulls/:id/blast and GET /pulls/:id/brief cost scales with the caller count, not the changed-file count: a 300-file PR every one of 5,000 files calls (11,998 callers, 1.17 MB) gave blast p95 569-746 ms and brief p95 108-176 ms (the stored brief keeps a full blast snapshot, read+validated+re-encoded per GET); leaf PRs 113 / 25 ms (AC5064, .sdd/review/2026-10-22-go-backend-phase-5/ac5064-latency.md; unfinished fix patch in ac5064-perf-wip/)
 - 2026-10-22 — findings has no ordering column: 'insertion order' is ORDER BY ctid (Node had no ORDER BY), and an accept/dismiss UPDATE can move the row → stable order after triage needs a new column + migration (reviews/adapters/postgres reads.go)
 - 2026-10-22 — seed changes to PR #482 (demo review) shift every deterministic placeholder id in cmd/server/testdata/contracts and the pulls rollup tests → after touching the seed run go test ./cmd/server -run TestContracts_GoldenResponses -update (flag AFTER the package), review the diff, clear demo rows in rollup tests
@@ -50,6 +51,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-23 — go list -deps under CGO_ENABLED=0 silently drops cgo packages (tree-sitter) from the closure, so an import-closure test passes falsely → list with CGO_ENABLED=1 and inspect CgoFiles of non-standard packages (cmd/devdigest-runner closure_test.go)
 - 2026-10-23 — JS-parity numbers/dates: strconv rounds exact ties to even but JS toFixed rounds away from zero (0.125→'0.13') → reviewer/domain.ToFixed (big.Rat); V8 Date.parse accepts a lower-case 'z' and Feb 30 (rolls over) and zod datetime() errors do not stop superRefine → see performance/domain/period.go, blast/domain/history.go
 - 2026-10-23 — echo/v5@5.4.0 graceful shutdown (http.Server.Shutdown) never cancels in-flight request contexts — a long generation outlives the 20 s grace and Start reports DeadlineExceeded → generations run on the request ctx plus a service stop (platform/inflight Flights/Markers) that cmd calls before stopping Echo (inflight/shutdown_test.go real-listener proof)
 - 2026-10-22 — JS-parity text: x/text collate.New(language.English) equals Node localeCompare(b,'en') (0 mismatches / 20k pairs; Collator not goroutine-safe → one per sort); JS String.trim trims U+FEFF but not U+0085, strings.TrimSpace does the reverse → use reviewer/domain.JSTrim

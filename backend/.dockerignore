@@ -3,3 +3,5 @@
 Dockerfile
 .dockerignore
 *.md
+internal/ci/adapters/runnerbin/devdigest-runner-linux-amd64
+internal/ci/adapters/runnerbin/build-id

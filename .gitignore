@@ -6,6 +6,8 @@
 /dev-digest-go
 backend/bin/
 /backend/server
+/backend/internal/ci/adapters/runnerbin/devdigest-runner-linux-amd64
+/backend/internal/ci/adapters/runnerbin/build-id
 *.test
 *.out
 

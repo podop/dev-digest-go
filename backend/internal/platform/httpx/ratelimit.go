@@ -44,6 +44,12 @@ type Bucket struct {
 	Method string // HTTP method, e.g. "POST"
 	Path   string // registered route path, e.g. "/settings/test-connection"
 	Limit  int    // requests per window
+	// Name, when set, names the counter: buckets with the same Name share one counter, so several
+	// routes can draw on one budget. Empty keeps one counter per "METHOD path".
+	Name string
+	// Key derives the client part of the counter key from the request. Nil keys by client IP.
+	// A constant key makes the counter shared by all clients (single-tenant workspace key).
+	Key func(*echo.Context) string
 }
 
 // rateLimit returns the limiter middleware. It runs after routing, so it can tell registered

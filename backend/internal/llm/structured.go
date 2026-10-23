@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"dev-digest-go/backend/internal/platform/apperr"
+	"dev-digest-go/backend/internal/platform/keynames"
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/retry"
-	"dev-digest-go/backend/internal/platform/secrets"
 )
 
 // Diagnostic snippet sizes of the final schema-failure text (spec 7.2).
@@ -24,7 +24,7 @@ const (
 // logging package redacts by attribute name only, so any text that may carry a provider's
 // error message goes through here first (decision D219).
 func (c *Client) Redact(s string) string {
-	for _, name := range []string{secrets.OpenAIKey, secrets.AnthropicKey, secrets.OpenRouterKey, secrets.GitHubToken} {
+	for _, name := range []string{keynames.OpenAIKey, keynames.AnthropicKey, keynames.OpenRouterKey, keynames.GitHubToken} {
 		s = redactValue(s, c.keys.Get(name))
 	}
 	return s

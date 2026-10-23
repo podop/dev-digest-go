@@ -3,7 +3,8 @@ package domain
 import (
 	"fmt"
 	"strings"
-	"unicode"
+
+	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 )
 
 // TaskLine is the per-run task instruction for a pull request: its trusted part states the task
@@ -65,15 +66,10 @@ func RankNote(hot, changed int) string {
 	return fmt.Sprintf("\n\n%d of %d changed file(s) are in the top 5%% most-depended-on (high blast risk) — prioritise their correctness.", hot, changed)
 }
 
-// SkillBlock is the block one skill contributes to "## Skills / rules": "### <name>", then
-// "_Applies when:_ <description>" when the trimmed description is not empty, a blank line and the
-// trimmed body.
+// SkillBlock is the block one skill contributes to "## Skills / rules": the shared kernel
+// renderer, so reviews, eval runs and the CI runner render a skill alike.
 func SkillBlock(s ReviewSkill) string {
-	head := "### " + s.Name
-	if d := jsTrim(s.Description); d != "" {
-		head += "\n_Applies when:_ " + d
-	}
-	return head + "\n\n" + jsTrim(s.Body)
+	return reviewer.SkillBlock(s.Name, s.Description, s.Body)
 }
 
 // SkillBlocks renders the skills in order; nil for none.
@@ -110,15 +106,4 @@ func SkillsUsed(skills []ReviewSkill) []SkillUsed {
 		used[i] = SkillUsed{ID: s.ID, Name: s.Name, Version: s.Version}
 	}
 	return used
-}
-
-// jsTrim trims what JavaScript's String.prototype.trim trims: Go's unicode.IsSpace set without
-// U+0085 and with U+FEFF.
-func jsTrim(s string) string {
-	return strings.TrimFunc(s, func(r rune) bool {
-		if r == 0x85 {
-			return false
-		}
-		return r == 0xFEFF || unicode.IsSpace(r)
-	})
 }
