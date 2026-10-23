@@ -183,6 +183,9 @@ type findingRow struct {
 	Rationale  string  `gorm:"column:rationale"`
 	Suggestion *string `gorm:"column:suggestion"`
 	Confidence float64 `gorm:"column:confidence"`
+	// AcceptedAt and DismissedAt stay null for a pending finding.
+	AcceptedAt  *time.Time `gorm:"column:accepted_at"`
+	DismissedAt *time.Time `gorm:"column:dismissed_at"`
 }
 
 func (findingRow) TableName() string { return "findings" }
@@ -450,17 +453,17 @@ func (t *txStore) PullRequestHasReviewOrRun(ctx context.Context, prID string) (b
 	return false, nil
 }
 
-func (t *txStore) FindAgentID(ctx context.Context, workspaceID, name string) (string, bool, error) {
+func (t *txStore) FindAgent(ctx context.Context, workspaceID, name string) (seed.AgentRef, bool, error) {
 	var row agentRow
 	err := t.tx.WithContext(ctx).Where("workspace_id = ? AND name = ?", workspaceID, name).
 		Order("created_at, id").Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", false, nil
+		return seed.AgentRef{}, false, nil
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("find agent: %w", err)
+		return seed.AgentRef{}, false, fmt.Errorf("find agent: %w", err)
 	}
-	return row.ID, true, nil
+	return seed.AgentRef{ID: row.ID, Provider: row.Provider, Model: row.Model}, true, nil
 }
 
 func (t *txStore) InsertDemoReview(ctx context.Context, d seed.DemoReview) error {
@@ -483,6 +486,12 @@ func (t *txStore) InsertDemoReview(ctx context.Context, d seed.DemoReview) error
 			ReviewID: review.ID, File: f.File, StartLine: f.StartLine, EndLine: f.EndLine,
 			Severity: f.Severity, Category: f.Category, Title: f.Title, Rationale: f.Rationale,
 			Suggestion: &suggestion, Confidence: f.Confidence,
+		}
+		if f.Accepted {
+			findings[i].AcceptedAt = &review.CreatedAt
+		}
+		if f.Dismissed {
+			findings[i].DismissedAt = &review.CreatedAt
 		}
 	}
 	if len(findings) > 0 {

@@ -570,8 +570,8 @@ func TestStartup_EmptyDatabaseMigratesAndSeedsBeforeListening(t *testing.T) { //
 		t.Errorf("migration log line %v has no duration_ms", applied[0])
 	}
 	seeded := logLines(t, s.logs, "seed complete")
-	if len(seeded) != 1 || seeded[0]["repos"] != float64(1) || seeded[0]["pull_requests"] != float64(1) {
-		t.Errorf("seed log lines = %v, want one line with repos=1 pull_requests=1", seeded)
+	if len(seeded) != 1 || seeded[0]["repos"] != float64(1) || seeded[0]["pull_requests"] != float64(2) {
+		t.Errorf("seed log lines = %v, want one line with repos=1 pull_requests=2 (PR #482 and #483)", seeded)
 	}
 }
 

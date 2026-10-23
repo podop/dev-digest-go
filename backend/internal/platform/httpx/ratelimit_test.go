@@ -296,3 +296,97 @@ func TestRateLimitExemptMatchesMethod(t *testing.T) {
 		t.Errorf("POST review request 11 with only GET exempted status = %d, want 429", rec.Code)
 	}
 }
+
+const (
+	agentEvalPath = "/agents/:id/eval-runs"
+	skillEvalPath = "/skills/:id/eval-runs"
+)
+
+// sharedBucketEcho registers two run-start routes drawing on one named 10/min bucket keyed by a
+// constant (single-tenant workspace key), plus a route with its own per-route bucket.
+func sharedBucketEcho(t *testing.T, clk *fakeClock) http.Handler {
+	t.Helper()
+	workspace := func(*echo.Context) string { return "workspace" }
+	rl := httpx.RateLimit{
+		Enabled: true,
+		Buckets: []httpx.Bucket{
+			{Method: http.MethodPost, Path: agentEvalPath, Limit: 10, Name: "eval-run-start", Key: workspace},
+			{Method: http.MethodPost, Path: skillEvalPath, Limit: 10, Name: "eval-run-start", Key: workspace},
+			{Method: http.MethodPost, Path: reviewPath, Limit: 10},
+		},
+	}
+	e := httpx.New(httpx.Options{RateLimit: rl, Now: clk.Now, Log: slog.New(slog.DiscardHandler)})
+	ok := func(c *echo.Context) error { return c.JSON(http.StatusOK, map[string]bool{"ok": true}) }
+	e.POST(agentEvalPath, ok)
+	e.POST(skillEvalPath, ok)
+	e.POST(reviewPath, ok)
+	e.GET("/settings", ok)
+	return e
+}
+
+func TestRateLimitSharedNamedBucket(t *testing.T) {
+	clk := newClock()
+	h := sharedBucketEcho(t, clk)
+	agent := "/agents/" + pullID + "/eval-runs"
+	skill := "/skills/" + pullID + "/eval-runs"
+
+	// 6 agent + 4 skill starts from different IPs spend the one workspace-keyed budget.
+	for i := 1; i <= 6; i++ {
+		if rec := call(h, http.MethodPost, agent, fmt.Sprintf("192.0.2.%d", 30+i)); rec.Code != http.StatusOK {
+			t.Fatalf("agent eval start %d status = %d, want 200", i, rec.Code)
+		}
+	}
+	for i := 7; i <= 10; i++ {
+		if rec := call(h, http.MethodPost, skill, fmt.Sprintf("192.0.2.%d", 30+i)); rec.Code != http.StatusOK {
+			t.Fatalf("skill eval start %d status = %d, want 200", i, rec.Code)
+		}
+	}
+	for _, path := range []string{agent, skill} {
+		rec := call(h, http.MethodPost, path, "192.0.2.99")
+		if rec.Code != http.StatusTooManyRequests {
+			t.Errorf("POST %s after the shared budget is spent status = %d, want 429", path, rec.Code)
+			continue
+		}
+		var body httpx.ErrorBody
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("decode body %q: %v", rec.Body.String(), err)
+		}
+		if got, want := body.Error.Code, "internal_error"; got != want {
+			t.Errorf("429 error code = %q, want %q", got, want)
+		}
+		if got, want := rec.Header().Get("Retry-After"), "60"; got != want {
+			t.Errorf("Retry-After = %q, want %q", got, want)
+		}
+	}
+
+	// Other routes keep their own budgets: the review bucket and the global budget are untouched.
+	if rec := call(h, http.MethodPost, "/pulls/"+pullID+"/review", "192.0.2.99"); rec.Code != http.StatusOK {
+		t.Errorf("POST review after the shared bucket is spent status = %d, want 200", rec.Code)
+	}
+	if rec := call(h, http.MethodGet, "/settings", "192.0.2.99"); rec.Code != http.StatusOK {
+		t.Errorf("GET /settings after the shared bucket is spent status = %d, want 200", rec.Code)
+	}
+
+	// The window reopens the shared budget.
+	clk.Advance(61 * time.Second)
+	if rec := call(h, http.MethodPost, skill, "192.0.2.99"); rec.Code != http.StatusOK {
+		t.Errorf("POST skill eval start after the window status = %d, want 200", rec.Code)
+	}
+}
+
+func TestRateLimitNamedBucketWithoutKeyIsPerIP(t *testing.T) {
+	clk := newClock()
+	h := phase4Echo(t, clk, func(rl *httpx.RateLimit) {
+		rl.Buckets = []httpx.Bucket{{Method: http.MethodPost, Path: reviewPath, Limit: 2, Name: "shared"}}
+	})
+	review := "/pulls/" + pullID + "/review"
+	for range 2 {
+		call(h, http.MethodPost, review, "192.0.2.40")
+	}
+	if rec := call(h, http.MethodPost, review, "192.0.2.40"); rec.Code != http.StatusTooManyRequests {
+		t.Errorf("third POST from the same IP status = %d, want 429", rec.Code)
+	}
+	if rec := call(h, http.MethodPost, review, "192.0.2.41"); rec.Code != http.StatusOK {
+		t.Errorf("first POST from another IP status = %d, want 200", rec.Code)
+	}
+}

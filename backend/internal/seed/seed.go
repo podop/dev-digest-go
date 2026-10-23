@@ -1,13 +1,15 @@
 // Package seed writes the starter data of the Go backend: the default workspace, the system
 // user, four user settings and the demo repository acme/payments-api with PR #482, its four
 // files and one commit, plus the four built-in agents, nine built-in skills and their links
-// (knowledge.go), and the PR #482 demo review with its two findings and its finished run
-// (review.go).
+// (knowledge.go), the PR #482 demo review with its two findings and its finished run
+// (review.go), and the PR #483 eval demo with four files, one commit and a Security Reviewer
+// review with fourteen findings (evaldemo.go).
 //
 // The seed is idempotent. Rows are matched by natural key and never overwritten; the only
 // update is filling a file patch that is still null. The agents, skills and links are written
 // only for a new workspace or one with no agent and no skill; the demo review only for a PR #482
-// that has no review and no agent run. The whole run is one transaction.
+// that has no review and no agent run; the eval demo only when PR #483 does not exist and the
+// workspace has a "Security Reviewer". The whole run is one transaction.
 package seed
 
 import (
@@ -96,12 +98,19 @@ type Tx interface {
 	// PullRequestHasReviewOrRun reports whether the pull request has a reviews row or an
 	// agent_runs row.
 	PullRequestHasReviewOrRun(ctx context.Context, prID string) (bool, error)
-	// FindAgentID returns the id of the workspace's agent of that name (the oldest when
-	// several share it); found is false and id empty when there is none.
-	FindAgentID(ctx context.Context, workspaceID, name string) (id string, found bool, err error)
+	// FindAgent returns the workspace's agent of that name (the oldest when several share
+	// it); found is false and the AgentRef zero when there is none.
+	FindAgent(ctx context.Context, workspaceID, name string) (agent AgentRef, found bool, err error)
 	// InsertDemoReview writes the review, its findings and its run, and links the review to
 	// the run (and the agent, when AgentID is set).
 	InsertDemoReview(ctx context.Context, d DemoReview) error
+}
+
+// AgentRef is the part of an agent row the demo reviews need.
+type AgentRef struct {
+	ID       string
+	Provider string
+	Model    string
 }
 
 // Result counts the rows a run inserted, per entity.
@@ -257,7 +266,10 @@ func (s *Seeder) write(ctx context.Context, tx Tx, res *Result) error {
 	if err := s.writeKnowledge(ctx, tx, workspaceID, userID, workspaceInserted, res); err != nil {
 		return err
 	}
-	return s.writeDemoReview(ctx, tx, workspaceID, prID, res)
+	if err := s.writeDemoReview(ctx, tx, workspaceID, prID, res); err != nil {
+		return err
+	}
+	return s.writeEvalDemo(ctx, tx, workspaceID, repoID, res)
 }
 
 func b2i(b bool) int {

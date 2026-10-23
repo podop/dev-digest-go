@@ -1,0 +1,185 @@
+{
+  "workspaceId": "ws-1",
+  "rounding": [
+    [0.5, 0], [1.5, 0], [2.5, 0], [-0.5, 0], [-1.5, 0], [-2.5, 0], [0, 4], [1, 4], [0.12345, 4], [0.00005, 4],
+    [0.00004999, 4], [-0.00005, 4], [-0.00004, 4], [1.005, 2], [2.675, 2], [0.1, 6], [0.30000000000000004, 6],
+    [0.0000005, 6], [0.0000015, 6], [0.0000025, 6], [0.123456789, 6], [0.9999995, 6], [0.99995, 4], [1e-7, 6],
+    [123456.7890125, 6], [0.03125, 4], [0.09375, 4], [0.6666666666666666, 4], [0.3333333333333333, 4], [5e-324, 4]
+  ],
+  "deltas": [
+    { "prev": 0.92, "next": 0.9 },
+    { "prev": 0.9, "next": 0.92 },
+    { "prev": 0.5, "next": 0.5 },
+    { "prev": null, "next": 0.5 },
+    { "prev": 0.5, "next": null },
+    { "prev": null, "next": null },
+    { "prev": 1, "next": 0.9799 },
+    { "prev": 1, "next": 0.98 },
+    { "prev": 0.1, "next": 0.3 },
+    { "prev": 0.3, "next": 0.1 },
+    { "prev": 0.0123, "next": 0.0124, "decimals": 6 },
+    { "prev": 0.001, "next": 0.0034567, "decimals": 6 },
+    { "prev": 0.0034567, "next": 0.001, "decimals": 6 },
+    { "prev": 0.00001, "next": 0.0000151, "decimals": 6 },
+    { "prev": 0.5, "next": 0.5000049 },
+    { "prev": 0.5, "next": 0.50005 },
+    { "prev": 0.5, "next": 0.49995 }
+  ],
+  "intersect": [
+    [1, 5, 5, 9], [1, 5, 6, 9], [5, 1, 3, 3], [5, 1, 9, 6], [9, 6, 5, 1], [9, 6, 6, 6], [3, 3, 3, 3], [3, 3, 4, 4],
+    [1, 1, 1, 100], [100, 1, 50, 50], [10, 10, 1, 9], [10, 10, 11, 20], [0, 0, 0, 0], [7, 2, 4, 5]
+  ],
+  "names": [
+    { "title": "Null dereference", "file": "src/a.ts", "startLine": 3 },
+    { "title": "   padded title \t\n", "file": "src/a.ts", "startLine": 3 },
+    { "title": "", "file": "src/a.ts", "startLine": 3 },
+    { "title": "  \t\n ", "file": "src/b/c.ts", "startLine": 120 },
+    { "title": "\\u{00A0}nbsp only\\u{00A0}", "file": "src/a.ts", "startLine": 1 },
+    { "title": "\\u{FEFF}", "file": "src/a.ts", "startLine": 9 },
+    { "title": "\\u{2003}", "file": "src/a.ts", "startLine": 9 },
+    { "title": { "$repeat": ["x", 120] }, "file": "src/a.ts", "startLine": 1 },
+    { "title": { "$repeat": ["x", 121] }, "file": "src/a.ts", "startLine": 1 },
+    { "title": { "$repeat": ["y", 300] }, "file": "src/a.ts", "startLine": 1 },
+    { "title": { "$concat": [{ "$repeat": ["a", 119] }, "\\u{1F600}tail"] }, "file": "src/a.ts", "startLine": 1 },
+    { "title": { "$concat": [{ "$repeat": ["a", 118] }, "\\u{1F600}tail"] }, "file": "src/a.ts", "startLine": 1 },
+    { "title": { "$concat": ["  ", { "$repeat": ["b", 125] }, "  "] }, "file": "src/a.ts", "startLine": 1 },
+    { "title": { "$repeat": ["\\u{E9}", 130] }, "file": "src/a.ts", "startLine": 1 },
+    { "title": "Zero line", "file": "src/a.ts", "startLine": 0 },
+    { "title": "", "file": "", "startLine": 5 },
+    { "title": "", "file": "d\\u{00E9}j\\u{00E0}/vu.ts", "startLine": 2 }
+  ],
+  "singleFile": [
+    { "path": "src/a.ts", "patch": "@@ -1,1 +1,2 @@\n a\n+b" },
+    { "path": "src/a.ts", "patch": "" },
+    { "path": "a b/c d.ts", "patch": "@@ -1 +1 @@\n-x\n+y\n" },
+    { "path": "\\u{00E9}.ts", "patch": "@@ -1 +1 @@\n-\\u{00E9}\n+e" },
+    { "path": "x", "patch": "no hunk\r\nat all" }
+  ],
+  "normalize": [
+    { "name": "headers kept", "file": "src/a.ts", "raw": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-a\n+b\n" },
+    { "name": "crlf to lf with headers", "file": "src/a.ts", "raw": "diff --git a/src/a.ts b/src/a.ts\r\n--- a/src/a.ts\r\n+++ b/src/a.ts\r\n@@ -1 +1 @@\r\n-a\r\n+b\r\n" },
+    { "name": "bare hunk is wrapped", "file": "src/a.ts", "raw": "@@ -1 +1 @@\n-a\n+b" },
+    { "name": "bare hunk crlf is wrapped", "file": "src/a.ts", "raw": "@@ -1 +1 @@\r\n-a\r\n+b\r\n" },
+    { "name": "lone cr is kept", "file": "src/a.ts", "raw": "@@ -1 +1 @@\r-a\r+b" },
+    { "name": "crcrlf", "file": "src/a.ts", "raw": "@@ -1 +1 @@\r\r\n-a\n+b" },
+    { "name": "plus-plus-plus header only", "file": "src/a.ts", "raw": "+++ b/src/z.ts\n@@ -1 +1 @@\n-a\n+b" },
+    { "name": "plus-plus-plus without trailing space", "file": "src/a.ts", "raw": "+++b/src/z.ts\n@@ -1 +1 @@\n-a\n+b" },
+    { "name": "diff --git mid line is not a header", "file": "src/a.ts", "raw": "@@ -1 +1 @@\n-a\n+see diff --git x" },
+    { "name": "indented diff --git is not a header", "file": "src/a.ts", "raw": " diff --git a/x b/x\n@@ -1 +1 @@\n-a\n+b" },
+    { "name": "diff --git on a later line", "file": "src/a.ts", "raw": "note\n@@ -1 +1 @@\n-a\n+b\ndiff --git a/o b/o\n" },
+    { "name": "plus-plus-plus added content line", "file": "src/a.ts", "raw": "@@ -1 +1 @@\n-a\n++++ b" },
+    { "name": "empty after crlf", "file": "src/a.ts", "raw": "\r\n" },
+    { "name": "unicode line separator is not a line break", "file": "src/a.ts", "raw": "@@ -1 +1 @@\n-a\\u{2028}diff --git x\n+b" },
+    { "name": "file with spaces", "file": "my dir/my file.ts", "raw": "@@ -2 +2 @@\n-a\n+b" }
+  ],
+  "findings": {
+    "base": {
+      "findingId": "f-1", "reviewId": "r-1", "prId": "p-1", "agentId": "a-1", "decision": "accepted",
+      "file": "src/a.ts", "startLine": 10, "endLine": 12, "severity": "WARNING", "category": "bug", "title": "Null dereference",
+      "patch": "@@ -8,3 +8,5 @@\n const a = 1;\n+const b = 2;\n+const c = 3;\n const d = 4;\n const e = 5;",
+      "prTitle": "Fix the parser", "prBody": "Closes the crash.", "prNumber": 7, "headSha": "abc123", "repoFullName": "acme/api"
+    },
+    "cases": [
+      { "name": "accepted" },
+      { "name": "dismissed", "set": { "decision": "dismissed", "findingId": "f-2" } },
+      { "name": "undecided", "set": { "decision": null } },
+      { "name": "undecided and no agent: decision first", "set": { "decision": null, "agentId": null } },
+      { "name": "undecided and patch null: decision first", "set": { "decision": null, "patch": null } },
+      { "name": "no agent", "set": { "agentId": null } },
+      { "name": "no agent and patch null: agent first", "set": { "agentId": null, "patch": null } },
+      { "name": "patch null", "set": { "patch": null } },
+      { "name": "patch empty", "set": { "patch": "" } },
+      { "name": "patch blank", "set": { "patch": " \n\t\\u{00A0}\\u{FEFF} " } },
+      { "name": "patch blank with ideographic space", "set": { "patch": "\\u{3000}\n" } },
+      { "name": "patch at the limit", "set": { "patch": { "$concat": ["@@ -1 +1 @@\n", { "$repeat": ["x", 199988] }] } } },
+      { "name": "patch over the limit", "set": { "patch": { "$concat": ["@@ -1 +1 @@\n", { "$repeat": ["x", 199989] }] } } },
+      { "name": "patch over the limit in utf16 units", "set": { "patch": { "$repeat": ["\\u{1F600}", 100001] } } },
+      { "name": "patch under the limit in utf16 units", "set": { "patch": { "$repeat": ["\\u{1F600}", 100000] } } },
+      { "name": "end before start", "set": { "startLine": 20, "endLine": 5 } },
+      { "name": "end equals start", "set": { "startLine": 20, "endLine": 20 } },
+      { "name": "blank title falls back to the location", "set": { "title": "   " } },
+      { "name": "empty title", "set": { "title": "" } },
+      { "name": "long title is cut", "set": { "title": { "$repeat": ["t", 200] } } },
+      { "name": "surrogate cut", "set": { "title": { "$concat": [{ "$repeat": ["a", 119] }, "\\u{1F600}"] } } },
+      { "name": "no pr body no head sha", "set": { "prBody": null, "headSha": null } },
+      { "name": "empty pr body", "set": { "prBody": "" } },
+      { "name": "unicode path", "set": { "file": "src/\\u{00FC}ber/\\u{65E5}\\u{672C}.ts" } },
+      { "name": "path with spaces", "set": { "file": "my dir/a b.ts" } },
+      { "name": "severity and category kept as is", "set": { "severity": "CRITICAL", "category": "security" } },
+      { "name": "pr number zero", "set": { "prNumber": 0 } }
+    ]
+  },
+  "taskLines": [
+    { "pr_number": 7, "pr_title": "Fix the parser" },
+    { "pr_number": null, "pr_title": "Manual case" },
+    { "pr_number": 0, "pr_title": "Zero" },
+    { "pr_number": 482, "pr_title": "" },
+    { "pr_number": null, "pr_title": "" },
+    { "pr_number": 3, "pr_title": "Quote \" and 'single' and \\ backslash" },
+    { "pr_number": 3, "pr_title": "Line one\nLine two" },
+    { "pr_number": 12, "pr_title": "Emoji \\u{1F600} and \\u{00E9}" },
+    { "pr_number": 12, "pr_title": "  leading and trailing  " },
+    { "pr_number": 9007199254740991, "pr_title": "max safe" }
+  ],
+  "errors": [
+    { "kind": "error", "message": "plain failure" },
+    { "kind": "error", "message": "  spaced \n\n  out\t\tmessage  " },
+    { "kind": "error", "message": "" },
+    { "kind": "error", "message": "   \n  " },
+    { "kind": "error", "message": { "$repeat": ["ab ", 400] } },
+    { "kind": "error", "message": { "$repeat": ["x", 500] } },
+    { "kind": "error", "message": { "$repeat": ["x", 501] } },
+    { "kind": "error", "message": { "$concat": [{ "$repeat": ["x", 499] }, "\\u{1F600}"] } },
+    { "kind": "error", "message": { "$concat": [{ "$repeat": ["x", 498] }, " \n\n\n y"] } },
+    { "kind": "error", "message": "nbsp\\u{00A0}inside\\u{00A0}\\u{00A0}text\\u{FEFF}end" },
+    { "kind": "error", "message": "\\u{2028}line sep\\u{2029}para" },
+    { "kind": "error", "message": "tab\tsep\rcr\\u{000B}vt\\u{000C}ff" },
+    { "kind": "string", "message": "a thrown string" },
+    { "kind": "string", "message": "" },
+    { "kind": "number", "message": "42" },
+    { "kind": "null" },
+    { "kind": "undefined" },
+    { "kind": "object", "message": "{}" }
+  ],
+  "usage": [
+    { "name": "no calls", "costs": [] },
+    { "name": "one priced", "costs": [0.001] },
+    { "name": "one unpriced", "costs": [null] },
+    { "name": "priced then unpriced", "costs": [0.001, null] },
+    { "name": "unpriced then priced", "costs": [null, 0.002] },
+    { "name": "float sum", "costs": [0.1, 0.2] },
+    { "name": "three floats", "costs": [0.1, 0.2, 0.3] },
+    { "name": "tiny costs", "costs": [0.0000004, 0.0000004, 0.0000004] },
+    { "name": "tie at six decimals", "costs": [0.0000005] },
+    { "name": "zero cost reported", "costs": [0, 0] },
+    { "name": "many", "costs": [0.01234, 0.0004, 0.00123456, 0.1, 0.000001] }
+  ],
+  "kept": [
+    { "name": "empty", "findings": [] },
+    {
+      "name": "reduces to six fields",
+      "findings": [
+        { "id": "x1", "severity": "CRITICAL", "category": "security", "title": "T1", "file": "a.ts", "start_line": 1, "end_line": 2, "rationale": "r", "suggestion": "s", "confidence": 0.9, "kind": "finding", "out_of_scope": null }
+      ]
+    },
+    {
+      "name": "order preserved",
+      "findings": [
+        { "id": "x1", "severity": "WARNING", "category": "bug", "title": "T1", "file": "b.ts", "start_line": 9, "end_line": 9, "rationale": "r" },
+        { "id": "x2", "severity": "SUGGESTION", "category": "style", "title": "T2", "file": "a.ts", "start_line": 3, "end_line": 1, "rationale": "r" }
+      ]
+    }
+  ],
+  "skillBlocks": [
+    { "name": "plain", "description": "Applies to API code", "body": "Check auth.\nCheck input." },
+    { "name": "no description", "description": "", "body": "Body only" },
+    { "name": "blank description", "description": "  \t\n ", "body": "Body only" },
+    { "name": "padded description", "description": "  when in api  \n", "body": "\n\n  body with spaces  \n\n" },
+    { "name": "empty body", "description": "d", "body": "" },
+    { "name": "blank body", "description": "d", "body": " \n\t " },
+    { "name": "unicode", "description": "\\u{00E9}\\u{4E2D}\\u{6587}", "body": "\\u{1F600} unicode body\\u{00A0}" },
+    { "name": "nbsp body is trimmed", "description": "d", "body": "\\u{00A0}\\u{FEFF}text\\u{00A0}\\u{FEFF}" },
+    { "name": "name with markdown", "description": "d", "body": "# heading\n\n- item" },
+    { "name": "crlf body", "description": "d", "body": "line one\r\nline two\r\n" }
+  ]
+}

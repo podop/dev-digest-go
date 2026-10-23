@@ -49,6 +49,10 @@ type DemoFinding struct {
 	Rationale  string
 	Suggestion string
 	Confidence float64
+	// Accepted and Dismissed set findings.accepted_at / dismissed_at to the review's
+	// created_at; both false leaves the finding pending.
+	Accepted  bool
+	Dismissed bool
 }
 
 // DemoRun is the finished agent run behind the demo review.
@@ -125,11 +129,11 @@ func (s *Seeder) writeDemoReview(ctx context.Context, tx Tx, workspaceID, prID s
 	if used {
 		return nil
 	}
-	agentID, _, err := tx.FindAgentID(ctx, workspaceID, demoAgentName)
+	agent, _, err := tx.FindAgent(ctx, workspaceID, demoAgentName)
 	if err != nil {
 		return fmt.Errorf("find %s: %w", demoAgentName, err)
 	}
-	d := demoReview(workspaceID, prID, agentID)
+	d := demoReview(workspaceID, prID, agent.ID)
 	if err := tx.InsertDemoReview(ctx, d); err != nil {
 		return fmt.Errorf("demo review: %w", err)
 	}

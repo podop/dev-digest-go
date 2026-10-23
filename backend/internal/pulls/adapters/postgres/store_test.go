@@ -152,7 +152,7 @@ func TestUpsertListed_duplicateNumberInOneCall(t *testing.T) {
 
 func TestListPulls_order(t *testing.T) {
 	f := seeded(t)
-	// The seeded #482 has a null updated_at.
+	// The seeded #482 and #483 have a null updated_at.
 	listed := []domain.Listed{
 		{Number: 1, Title: "t", Author: "a", Branch: "b", Base: "m", HeadSHA: "h", Status: "open", UpdatedAt: day(3, 10)},
 		{Number: 2, Title: "t", Author: "a", Branch: "b", Base: "m", HeadSHA: "h", Status: "open", UpdatedAt: day(3, 11)},
@@ -170,7 +170,7 @@ func TestListPulls_order(t *testing.T) {
 	for _, p := range pulls {
 		got = append(got, p.Number)
 	}
-	if diff := cmp.Diff([]int{3, 2, 1, 482, 4}, got); diff != "" {
+	if diff := cmp.Diff([]int{3, 2, 1, 483, 482, 4}, got); diff != "" {
 		t.Errorf("ListPulls() numbers mismatch (-want +got):\n%s", diff)
 	}
 }

@@ -1,0 +1,16 @@
+{
+  "note": "Provenance of the Phase 6 goldens (evals, ci, wfrules, runner). Regenerate with the command in gen/README.md.",
+  "devDigestCommit": "d1c9093c19bafea4365f1d6bae435f5f8ae2ed6b",
+  "collationLocale": "en-US",
+  "icu": "78.2",
+  "node": "v22.22.2",
+  "tools": {
+    "yaml": "2.9.0",
+    "yaml (agent-runner)": "2.9.0",
+    "fflate": "0.8.3",
+    "p-queue": "8.1.1",
+    "zod": "3.25.76",
+    "zod (agent-runner)": "3.25.76",
+    "openai": "4.104.0"
+  }
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"os"
 	"slices"
 	"testing"
@@ -41,9 +42,13 @@ type fakeTx struct {
 	links           map[string][]string // agent id -> skill ids
 
 	prUsed       bool // PullRequestHasReviewOrRun result
-	noGeneral    bool // FindAgentID reports no "General Reviewer"
+	noGeneral    bool // FindAgent reports no "General Reviewer"
+	noSecurity   bool // FindAgent reports no "Security Reviewer"
+	evalPRExists bool // EnsurePullRequest reports PR #483 as existing
 	demo         *DemoReview
+	evalDemo     *DemoReview
 	demoRunCount int
+	evalRunCount int
 }
 
 func (f *fakeTx) record(name string) error {
@@ -70,6 +75,9 @@ func (f *fakeTx) EnsureRepo(_ context.Context, r Repo) (string, bool, error) {
 	return "repo", true, f.record("repo:" + r.FullName + "@" + r.WorkspaceID)
 }
 func (f *fakeTx) EnsurePullRequest(_ context.Context, p PullRequest) (string, bool, error) {
+	if p.Number == evalDemoPRNumber {
+		return "pr483", !f.evalPRExists, f.record("pr483:" + p.RepoID)
+	}
 	return "pr", true, f.record("pr:" + p.RepoID)
 }
 func (f *fakeTx) EnsureFile(_ context.Context, prID string, file File) (bool, bool, error) {
@@ -109,15 +117,21 @@ func (f *fakeTx) LinkAgentSkills(_ context.Context, agentID string, skillIDs []s
 func (f *fakeTx) PullRequestHasReviewOrRun(_ context.Context, prID string) (bool, error) {
 	return f.prUsed, f.record("has-review-or-run:" + prID)
 }
-func (f *fakeTx) FindAgentID(_ context.Context, ws, name string) (string, bool, error) {
-	if f.noGeneral {
-		return "", false, f.record("find-agent:" + name + "@" + ws)
+func (f *fakeTx) FindAgent(_ context.Context, ws, name string) (AgentRef, bool, error) {
+	err := f.record("find-agent:" + name + "@" + ws)
+	if (f.noGeneral && name == demoAgentName) || (f.noSecurity && name == evalDemoAgentName) {
+		return AgentRef{}, false, err
 	}
-	return "agent:" + name, true, f.record("find-agent:" + name + "@" + ws)
+	return AgentRef{ID: "agent:" + name, Provider: "prov", Model: "mod"}, true, err
 }
 func (f *fakeTx) InsertDemoReview(_ context.Context, d DemoReview) error {
-	f.demo = &d
-	f.demoRunCount++
+	if d.PRID == "pr483" {
+		f.evalDemo = &d
+		f.evalRunCount++
+	} else {
+		f.demo = &d
+		f.demoRunCount++
+	}
 	return f.record("demo-review:" + d.PRID + "/" + d.AgentID)
 }
 
@@ -147,15 +161,21 @@ func TestSeederRun(t *testing.T) {
 		"link:agent:General Reviewer", "link:agent:Security Reviewer", "link:agent:Performance Reviewer",
 		"link:agent:Test Quality Reviewer",
 		"has-review-or-run:pr", "find-agent:General Reviewer@ws", "demo-review:pr/agent:General Reviewer",
+		"find-agent:Security Reviewer@ws", "pr483:repo",
+		"file:pr483/src/api/admin/export.ts", "file:pr483/src/webhooks/stripe.ts",
+		"file:pr483/src/auth/session.ts", "file:pr483/src/billing/invoices.ts",
+		"commit:pr483/c3d4e5f6a7b8", "demo-review:pr483/agent:Security Reviewer",
 	}
 	if diff := cmp.Diff(wantCalls, tx.calls); diff != "" {
 		t.Errorf("Run() calls mismatch (-want +got):\n%s", diff)
 	}
-	wantRes := Result{WorkspaceID: "ws", UserID: "user", Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 1, Files: 4, Commits: 1, Agents: 4, Skills: 9, AgentSkills: 9, Reviews: 1, Findings: 2, AgentRuns: 1}
+	wantRes := Result{WorkspaceID: "ws", UserID: "user", Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 2, Files: 8, Commits: 2, Agents: 4, Skills: 9, AgentSkills: 9, Reviews: 2, Findings: 16, AgentRuns: 2}
 	if diff := cmp.Diff(wantRes, res); diff != "" {
 		t.Errorf("Run() result mismatch (-want +got):\n%s", diff)
 	}
-	if diff := cmp.Diff(pr482Patches(), tx.patches); diff != "" {
+	wantPatches := pr482Patches()
+	maps.Copy(wantPatches, evalDemoPatches())
+	if diff := cmp.Diff(wantPatches, tx.patches); diff != "" {
 		t.Errorf("Run() file patches mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -283,7 +303,7 @@ func TestSeederRun_DemoReviewGuard(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tx := &fakeTx{patches: map[string]string{}, workspaceExists: true, occupied: true, prUsed: tc.prUsed, noGeneral: tc.noGeneral}
+			tx := &fakeTx{patches: map[string]string{}, workspaceExists: true, occupied: true, prUsed: tc.prUsed, noGeneral: tc.noGeneral, evalPRExists: true}
 			res, err := New(fakeStore{tx}, slog.New(slog.DiscardHandler)).Run(t.Context())
 			if err != nil {
 				t.Fatalf("Run() error = %v", err)

@@ -475,7 +475,7 @@ func TestList_orderWithoutToken(t *testing.T) {
 	for _, m := range ev.do("GET", "/repos/"+ev.repoID+"/pulls", "").list(t) {
 		got = append(got, int(m["number"].(float64)))
 	}
-	if diff := cmp.Diff([]int{2, 1, 482, 3}, got); diff != "" {
+	if diff := cmp.Diff([]int{2, 1, 483, 482, 3}, got); diff != "" {
 		t.Errorf("order mismatch (-want +got):\n%s", diff)
 	}
 	if n := len(ev.stub.requests(".*")); n != 0 {

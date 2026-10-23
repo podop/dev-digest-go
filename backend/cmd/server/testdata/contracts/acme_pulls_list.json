@@ -1,5 +1,32 @@
 [
   {
+    "additions": 55,
+    "author": "dev.rivera",
+    "base": "main",
+    "branch": "feat/admin-export",
+    "cost_usd": 0.002412,
+    "deletions": 0,
+    "files_count": 4,
+    "findings_counts": {
+      "CRITICAL": 6,
+      "SUGGESTION": 4,
+      "WARNING": 4
+    },
+    "head_sha": "c3d4e5f6a7b8",
+    "id": "00000000-0000-4000-8000-000000000001",
+    "last_reviewed_at": "2026-01-01T00:00:00.000Z",
+    "latest_review_id": "00000000-0000-4000-8000-000000000002",
+    "latest_review_ids": [
+      "00000000-0000-4000-8000-000000000002"
+    ],
+    "number": 483,
+    "opened_at": null,
+    "score": 34,
+    "status": "needs_review",
+    "title": "Add admin data export and Stripe webhook verification",
+    "updated_at": null
+  },
+  {
     "additions": 247,
     "author": "marisa.koch",
     "base": "main",
@@ -13,11 +40,11 @@
       "WARNING": 1
     },
     "head_sha": "a1b2c3d4e5f6",
-    "id": "00000000-0000-4000-8000-000000000001",
+    "id": "00000000-0000-4000-8000-000000000003",
     "last_reviewed_at": "2026-01-01T00:00:00.000Z",
-    "latest_review_id": "00000000-0000-4000-8000-000000000002",
+    "latest_review_id": "00000000-0000-4000-8000-000000000004",
     "latest_review_ids": [
-      "00000000-0000-4000-8000-000000000002"
+      "00000000-0000-4000-8000-000000000004"
     ],
     "number": 482,
     "opened_at": null,

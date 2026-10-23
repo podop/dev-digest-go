@@ -572,7 +572,15 @@ func TestContracts_GoldenResponses(t *testing.T) { // AC26
 	acme := repoByName(t, s, "acme/payments-api")
 	list := s.get("/repos/" + acme + "/pulls")
 	g.check("acme_pulls_list", list, http.StatusOK)
-	acmePR := list.JSON(t).([]any)[0].(map[string]any)["id"].(string)
+	acmePR := ""
+	for _, item := range list.JSON(t).([]any) { // the seed holds PR #482 and the eval demo PR #483
+		if pr := item.(map[string]any); pr["number"] == float64(482) {
+			acmePR = pr["id"].(string)
+		}
+	}
+	if acmePR == "" {
+		t.Fatalf("GET /repos/%s/pulls has no PR #482: %s", acme, list.Body)
+	}
 	g.check("acme_pull_detail", s.get("/pulls/"+acmePR), http.StatusOK)
 
 	g.check("test_connection", s.post("/settings/test-connection", map[string]string{"provider": "github", "key": "ghp_contract"}), http.StatusOK)

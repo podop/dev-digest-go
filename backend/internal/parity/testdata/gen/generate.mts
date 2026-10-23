@@ -1,7 +1,9 @@
 /**
  * Golden generator for the Phase 5 parity corpus (step S21): intent, smart diff, blast radius (+ prior PRs),
  * PR brief, onboarding tour, agent performance, the three structured-output schemas, the mock fixtures
- * and the route-level wire bodies Node can produce without a database. See ./README.md.
+ * and the route-level wire bodies Node can produce without a database; extended in Phase 6 (steps S16, S17)
+ * with the evals and ci modules, the workflow rules and the agent-runner (parts evals, ci, wfrules, runner).
+ * See ./README.md.
  *
  * Runs the NODE implementation of dev-digest (read-only checkout, commit d1c9093): the real domain
  * functions, the real application services over in-memory fakes of their ports (scripted LLM, fake
@@ -15,7 +17,7 @@
  *  - output is deterministic: no real clocks (a logical clock replaces Date), no random data, the
  *    local HTTP servers only influence recorded bodies, never ports or timings.
  *
- * Usage: tsx gen/generate.mts --dd <dev-digest> --out goldens [--only intent,brief,...]
+ * Usage: tsx gen/generate.mts --dd <dev-digest> --out goldens [--only intent,brief,evals,...]
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -35,6 +37,10 @@ import { genPerformance } from './performance.mts';
 import { genSchemas } from './schemas.mts';
 import { genRoutes } from './routes.mts';
 import { genGit } from './git.mts';
+import { genEvals } from './evals.mts';
+import { genCi } from './ci.mts';
+import { genWfRules } from './wfrules.mts';
+import { genRunner } from './runner.mts';
 
 const EXPECTED_DD_HEAD_PREFIX = 'd1c9093';
 
@@ -109,6 +115,7 @@ const load = async (rel: string): Promise<Mod> => import(pathToFileURL(join(dd, 
 const S = 'server/src/';
 const R = 'reviewer-core/src/';
 const M = `${S}modules/`;
+const A = 'agent-runner/src/';
 
 const ddRequire = createRequire(join(dd, 'server', 'package.json'));
 const rcRequire = createRequire(join(dd, 'reviewer-core', 'package.json'));
@@ -174,12 +181,52 @@ const N = {
   perfService: await load(`${M}performance/application/performance-service.ts`),
   perfSchemas: await load(`${M}performance/http/schemas.ts`),
   perfRoutes: await load(`${M}performance/http/routes.ts`),
+  // evals (Phase 6)
+  evConstants: await load(`${M}evals/domain/constants.ts`),
+  evCaseBuilder: await load(`${M}evals/domain/case-builder.ts`),
+  evCaseInput: await load(`${M}evals/domain/case-input.ts`),
+  evRunInput: await load(`${M}evals/domain/run-input.ts`),
+  evScoring: await load(`${M}evals/domain/scoring.ts`),
+  evCompare: await load(`${M}evals/domain/compare.ts`),
+  evDashboard: await load(`${M}evals/domain/dashboard.ts`),
+  evCasesService: await load(`${M}evals/application/eval-cases-service.ts`),
+  evRunsService: await load(`${M}evals/application/eval-runs-service.ts`),
+  evExecutor: await load(`${M}evals/application/run-executor.ts`),
+  skillsDomain: await load(`${M}skills/domain/skill.ts`),
+  serverDiffParser: await load(`${S}adapters/git/diff-parser.ts`),
+  // ci (Phase 6)
+  ciConstants: await load(`${M}ci/domain/constants.ts`),
+  ciSlug: await load(`${M}ci/domain/slug.ts`),
+  ciWorkflow: await load(`${M}ci/domain/workflow.ts`),
+  ciManifest: await load(`${M}ci/domain/manifest.ts`),
+  ciIngest: await load(`${M}ci/domain/ingest.ts`),
+  ciRules: await load(`${M}ci/domain/workflow-rules.ts`),
+  ciCheck: await load(`${M}ci/application/workflow-check.ts`),
+  ciArtifactReader: await load(`${M}ci/application/artifact-reader.ts`),
+  ciExport: await load(`${M}ci/application/export-service.ts`),
+  ciIngestService: await load(`${M}ci/application/ingest-service.ts`),
+  ciYaml: await load(`${M}ci/infrastructure/yaml-codec.ts`),
+  ciZip: await load(`${M}ci/infrastructure/zip-entry-reader.ts`),
+  // agent-runner (Phase 6)
+  runManifest: await load(`${A}manifest.ts`),
+  runSkills: await load(`${A}skills.ts`),
+  runContext: await load(`${A}context.ts`),
+  runDiff: await load(`${A}diff.ts`),
+  runGithub: await load(`${A}github.ts`),
+  runArtifact: await load(`${A}artifact.ts`),
+  runRun: await load(`${A}run.ts`),
+  runErrors: await load(`${A}errors.ts`),
+  rcOpenRouter: await load(`${R}llm/openrouter.ts`),
+  rcToReview: await load(`${R}output/to-review.ts`),
+  // tools of the checkout the Phase 6 parts use
+  pQueue: (await import(pathToFileURL(createRequire(join(dd, 'server', 'package.json')).resolve('p-queue')).href)) as Mod,
+  arRequire: createRequire(join(dd, 'agent-runner', 'package.json')),
 };
 
 const fastifyFactory = ddRequire('fastify') as Mod;
 const providerZod = (await import(pathToFileURL(ddRequire.resolve('fastify-type-provider-zod')).href)) as Mod;
 
-function versionOf(pkg: string, from: 'server' | 'reviewer-core'): string {
+function versionOf(pkg: string, from: 'server' | 'reviewer-core' | 'agent-runner'): string {
   const pj = join(dd, from, 'node_modules', pkg, 'package.json');
   return (JSON.parse(readFileSync(pj, 'utf8')) as { version: string }).version;
 }
@@ -206,7 +253,12 @@ const parts: Array<[string, (c: Ctx) => Promise<void>]> = [
   ['schemas', genSchemas],
   ['routes', genRoutes],
   ['git', genGit],
+  ['evals', genEvals],
+  ['ci', genCi],
+  ['wfrules', genWfRules],
+  ['runner', genRunner],
 ];
+const PHASE6_PARTS = ['evals', 'ci', 'wfrules', 'runner'];
 
 // AbortSignal.timeout() timers are unref'd: keep the event loop alive while a budget scenario waits for one.
 const keepAlive = setInterval(() => undefined, 1000);
@@ -214,6 +266,25 @@ try {
   for (const [name, fn] of parts) {
     if (only && !only.includes(name)) continue;
     await fn(ctx);
+  }
+  // meta6.json is separate from meta.json so that the Phase 5 goldens stay byte-identical (P15).
+  if (!only || PHASE6_PARTS.some((p) => only.includes(p))) {
+    ctx.writer.write('meta6.json', {
+      note: 'Provenance of the Phase 6 goldens (evals, ci, wfrules, runner). Regenerate with the command in gen/README.md.',
+      devDigestCommit: ddHead,
+      collationLocale,
+      icu: process.versions.icu,
+      node: process.version,
+      tools: {
+        yaml: versionOf('yaml', 'server'),
+        'yaml (agent-runner)': versionOf('yaml', 'agent-runner'),
+        fflate: versionOf('fflate', 'server'),
+        'p-queue': versionOf('p-queue', 'server'),
+        zod: versionOf('zod', 'server'),
+        'zod (agent-runner)': versionOf('zod', 'agent-runner'),
+        openai: versionOf('openai', 'reviewer-core'),
+      },
+    });
   }
   if (!only) {
     ctx.writer.write('meta.json', {

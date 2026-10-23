@@ -40,11 +40,16 @@ var ErrNoToken = errors.New("github token is not configured")
 type StatusError struct {
 	Status  int
 	Message string
+	// RateLimitRemaining is GitHub's x-ratelimit-remaining header, "" when the response had none.
+	RateLimitRemaining string
 }
 
 func (e *StatusError) Error() string {
 	return fmt.Sprintf("github: HTTP %d: %s", e.Status, e.Message)
 }
+
+// RateLimited reports whether the response said the rate limit is used up (remaining 0).
+func (e *StatusError) RateLimited() bool { return strings.TrimSpace(e.RateLimitRemaining) == "0" }
 
 // StatusCode lets retry.IsTransient classify the error.
 func (e *StatusError) StatusCode() int { return e.Status }
@@ -58,6 +63,9 @@ type Options struct {
 	// HTTPClient defaults to a client with no overall timeout; deadlines come
 	// from contexts.
 	HTTPClient *http.Client
+	// ArtifactClient fetches the storage leg of an artifact download. It defaults to HTTPClient;
+	// either way the copy used never follows a redirect and never keeps a cookie jar.
+	ArtifactClient *http.Client
 	// Retry is the policy for idempotent reads. Nil means retry.Default().
 	Retry *retry.Options
 	// Timeout bounds each REST call (default DefaultTimeout).
@@ -71,7 +79,8 @@ type Client struct {
 	token         func() string
 	baseURL       string
 	http          *http.Client
-	strict        *http.Client // copy of http that never follows a redirect (contents, merged PRs)
+	strict        *http.Client // copy of http that never follows a redirect (contents, merged PRs, git, actions)
+	storage       *http.Client // artifact storage leg: no redirect, no cookie jar
 	retry         retry.Options
 	timeout       time.Duration
 	detailTimeout time.Duration
@@ -97,6 +106,12 @@ func New(opts Options) *Client {
 		c.http = &http.Client{}
 	}
 	c.strict = withoutRedirects(c.http)
+	storageBase := opts.ArtifactClient
+	if storageBase == nil {
+		storageBase = c.http
+	}
+	c.storage = withoutRedirects(storageBase)
+	c.storage.Jar = nil
 	if opts.Retry != nil {
 		c.retry = *opts.Retry
 	}
@@ -231,7 +246,11 @@ func statusError(resp *http.Response, token string) error {
 	if len(msg) > maxMessageBytes {
 		msg = msg[:maxMessageBytes]
 	}
-	return &StatusError{Status: resp.StatusCode, Message: msg}
+	return &StatusError{
+		Status:             resp.StatusCode,
+		Message:            msg,
+		RateLimitRemaining: strings.TrimSpace(resp.Header.Get("X-RateLimit-Remaining")),
+	}
 }
 
 // errorDetails flattens GitHub's "errors" array (strings or objects with a

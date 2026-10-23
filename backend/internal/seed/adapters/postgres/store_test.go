@@ -25,9 +25,11 @@ func runSeed(t *testing.T, db *gorm.DB) (seed.Result, error) {
 	return seed.New(seedpg.NewStore(db), slog.New(slog.DiscardHandler)).Run(t.Context())
 }
 
-func goldenPatches(t *testing.T) map[string]string {
+func goldenPatches(t *testing.T) map[string]string { return goldenFile(t, "pr482_patches.golden.json") }
+
+func goldenFile(t *testing.T, name string) map[string]string {
 	t.Helper()
-	raw, err := os.ReadFile("../../testdata/pr482_patches.golden.json")
+	raw, err := os.ReadFile("../../testdata/" + name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,14 +64,14 @@ func TestSeed_WritesTheDemoData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
-	want := seed.Result{WorkspaceID: res.WorkspaceID, UserID: res.UserID, Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 1, Files: 4, Commits: 1, Agents: 4, Skills: 9, AgentSkills: 9, Reviews: 1, Findings: 2, AgentRuns: 1}
+	want := seed.Result{WorkspaceID: res.WorkspaceID, UserID: res.UserID, Workspaces: 1, Users: 1, Members: 1, Settings: 4, Repos: 1, PullRequests: 2, Files: 8, Commits: 2, Agents: 4, Skills: 9, AgentSkills: 9, Reviews: 2, Findings: 16, AgentRuns: 2}
 	if diff := cmp.Diff(want, res); diff != "" {
 		t.Errorf("Run() result mismatch (-want +got):\n%s", diff)
 	}
 
 	counts := rowCounts(t, d.DB)
-	wantCounts := map[string]int{"workspaces": 1, "users": 1, "workspace_members": 1, "settings": 4, "repos": 1, "pull_requests": 1, "pr_files": 4, "pr_commits": 1,
-		"agents": 4, "skills": 9, "skill_versions": 9, "agent_skills": 9, "reviews": 1, "findings": 2, "agent_runs": 1}
+	wantCounts := map[string]int{"workspaces": 1, "users": 1, "workspace_members": 1, "settings": 4, "repos": 1, "pull_requests": 2, "pr_files": 8, "pr_commits": 2,
+		"agents": 4, "skills": 9, "skill_versions": 9, "agent_skills": 9, "reviews": 2, "findings": 16, "agent_runs": 2}
 	for table, n := range counts {
 		if counts[table] != wantCounts[table] {
 			t.Errorf("rows in %s = %d, want %d", table, n, wantCounts[table])
@@ -140,7 +142,7 @@ func TestSeed_WritesTheDemoData(t *testing.T) {
 	}
 	var p pr
 	if err := d.DB.Raw(`SELECT number, title, author, branch, base, head_sha, status, additions, deletions, files_count, body,
-		last_reviewed_sha, opened_at::text AS opened_at, updated_at::text AS updated_at FROM pull_requests`).Scan(&p).Error; err != nil {
+		last_reviewed_sha, opened_at::text AS opened_at, updated_at::text AS updated_at FROM pull_requests WHERE number = 482`).Scan(&p).Error; err != nil {
 		t.Fatal(err)
 	}
 	body := "Add rate limiting to public API endpoints to prevent abuse from unauthenticated clients."
@@ -156,7 +158,7 @@ func TestSeed_WritesTheDemoData(t *testing.T) {
 		Patch                *string
 	}
 	var files []file
-	if err := d.DB.Raw(`SELECT path, additions, deletions, patch FROM pr_files ORDER BY path`).Scan(&files).Error; err != nil {
+	if err := d.DB.Raw(`SELECT path, additions, deletions, patch FROM pr_files WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 482) ORDER BY path`).Scan(&files).Error; err != nil {
 		t.Fatal(err)
 	}
 	golden := goldenPatches(t)
@@ -175,7 +177,7 @@ func TestSeed_WritesTheDemoData(t *testing.T) {
 		SHA, Message, Author string
 		CommittedAt          *string
 	}
-	if err := d.DB.Raw(`SELECT sha, message, author, committed_at::text AS committed_at FROM pr_commits`).Scan(&commit).Error; err != nil {
+	if err := d.DB.Raw(`SELECT sha, message, author, committed_at::text AS committed_at FROM pr_commits WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 482)`).Scan(&commit).Error; err != nil {
 		t.Fatal(err)
 	}
 	if commit.SHA != "a1b2c3d4e5f6" || commit.Message != "Add token-bucket rate limiter" || commit.Author != "marisa.koch" || commit.CommittedAt != nil {
@@ -282,8 +284,8 @@ func TestSeed_ConcurrentRunsInsertOnce(t *testing.T) {
 	}
 	wg.Wait()
 	counts := rowCounts(t, d.DB)
-	if counts["workspaces"] != 1 || counts["users"] != 1 || counts["repos"] != 1 || counts["pr_files"] != 4 {
-		t.Errorf("rows after 3 concurrent runs = %v, want one workspace, user, repo and 4 files", counts)
+	if counts["workspaces"] != 1 || counts["users"] != 1 || counts["repos"] != 1 || counts["pr_files"] != 8 {
+		t.Errorf("rows after 3 concurrent runs = %v, want one workspace, user, repo and 8 files", counts)
 	}
 }
 
@@ -301,7 +303,7 @@ func TestSeed_LogsOneLinePerRun(t *testing.T) {
 	if err := json.Unmarshal([]byte(lines[0]), &line); err != nil {
 		t.Fatal(err)
 	}
-	for k, want := range map[string]float64{"workspaces": 1, "users": 1, "members": 1, "settings": 4, "repos": 1, "pull_requests": 1, "pr_files": 4, "pr_commits": 1, "agents": 4, "skills": 9, "agent_skills": 9, "reviews": 1, "findings": 2, "agent_runs": 1} {
+	for k, want := range map[string]float64{"workspaces": 1, "users": 1, "members": 1, "settings": 4, "repos": 1, "pull_requests": 2, "pr_files": 8, "pr_commits": 2, "agents": 4, "skills": 9, "agent_skills": 9, "reviews": 2, "findings": 16, "agent_runs": 2} {
 		if line[k] != want {
 			t.Errorf("log field %s = %v, want %v", k, line[k], want)
 		}
@@ -494,7 +496,7 @@ func TestSeed_SkillsOnlyWorkspaceIsNotSeeded(t *testing.T) {
 	}
 }
 
-// demoRows reads the PR #482 demo review back: the review, its findings and the run it points at.
+// demoRows reads a demo review back: the review, its findings and the run it points at.
 type demoRows struct {
 	Review struct {
 		ID, Kind, Verdict, Summary, Model string
@@ -519,19 +521,25 @@ type demoRows struct {
 	}
 }
 
-func readDemo(t *testing.T, db *gorm.DB) demoRows {
+// readDemo reads the PR #482 demo review.
+func readDemo(t *testing.T, db *gorm.DB) demoRows { return readDemoOf(t, db, 482) }
+
+// readDemoOf reads the review, findings and run of the pull request with that number.
+func readDemoOf(t *testing.T, db *gorm.DB, number int) demoRows {
 	t.Helper()
 	var d demoRows
 	if err := db.Raw(`SELECT id, kind, verdict, summary, model, score, agent_id::text AS agent_id, run_id::text AS run_id, created_at::text AS created_at
-		FROM reviews`).Scan(&d.Review).Error; err != nil {
+		FROM reviews WHERE pr_id = (SELECT id FROM pull_requests WHERE number = ?)`, number).Scan(&d.Review).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Raw(`SELECT file, severity, category, title, rationale, kind, start_line, end_line, suggestion, confidence,
-		accepted_at::text AS accepted_at, dismissed_at::text AS dismissed_at FROM findings ORDER BY start_line`).Scan(&d.Findings).Error; err != nil {
+		accepted_at::text AS accepted_at, dismissed_at::text AS dismissed_at FROM findings
+		WHERE review_id = ? ORDER BY start_line, file, title`, d.Review.ID).Scan(&d.Findings).Error; err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Raw(`SELECT id, status, source, provider, model, grounding, ran_at::text AS ran_at, agent_id::text AS agent_id, duration_ms,
-		tokens_in, tokens_out, findings_count, score, blockers, cost_usd::text AS cost_usd, error FROM agent_runs`).Scan(&d.Run).Error; err != nil {
+		tokens_in, tokens_out, findings_count, score, blockers, cost_usd::text AS cost_usd, error FROM agent_runs
+		WHERE pr_id = (SELECT id FROM pull_requests WHERE number = ?)`, number).Scan(&d.Run).Error; err != nil {
 		t.Fatal(err)
 	}
 	return d
@@ -596,7 +604,7 @@ func TestSeed_WritesTheDemoReview(t *testing.T) {
 	if err := d.DB.Raw(`SELECT id::text FROM pull_requests WHERE number = 482`).Scan(&prID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := d.DB.Raw(`SELECT pr_id::text FROM agent_runs`).Scan(&runPR).Error; err != nil || runPR != prID {
+	if err := d.DB.Raw(`SELECT pr_id::text FROM agent_runs WHERE id = ?`, got.Run.ID).Scan(&runPR).Error; err != nil || runPR != prID {
 		t.Errorf("run pr_id = %q, %v, want %q", runPR, err, prID)
 	}
 }
@@ -663,8 +671,8 @@ func TestSeed_UserRunWithoutReviewGetsNoDemoReview(t *testing.T) {
 		t.Fatal(err)
 	}
 	counts := rowCounts(t, d.DB)
-	if counts["reviews"] != 0 || counts["findings"] != 0 || counts["agent_runs"] != 1 {
-		t.Errorf("rows after the rerun = reviews %d, findings %d, agent_runs %d, want 0, 0, 1", counts["reviews"], counts["findings"], counts["agent_runs"])
+	if counts["reviews"] != 0 || counts["findings"] != 0 || counts["agent_runs"] != 2 {
+		t.Errorf("rows after the rerun = reviews %d, findings %d, agent_runs %d, want 0, 0, 2", counts["reviews"], counts["findings"], counts["agent_runs"])
 	}
 }
 
@@ -775,5 +783,206 @@ func TestStore_PullRequestHasReviewOrRun(t *testing.T) {
 	}
 	if has(t) {
 		t.Error("PullRequestHasReviewOrRun() = true with neither, want false")
+	}
+}
+
+// The PR #483 eval demo, as Node writes it (server/src/db/seed-eval-demo.ts).
+func TestSeed_WritesTheEvalDemo(t *testing.T) {
+	d := pgtest.Migrated(t)
+	res, err := runSeed(t, d.DB)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if res.PullRequests != 2 || res.Files != 8 || res.Commits != 2 || res.Reviews != 2 || res.Findings != 16 || res.AgentRuns != 2 {
+		t.Errorf("Run() = %+v, want the PR #482 and PR #483 demos", res)
+	}
+
+	var pr struct {
+		ID, Title, Author, Branch, Base, HeadSHA, Status, Body string
+		Additions, Deletions, FilesCount                       int
+		RepoFullName                                           string
+	}
+	if err := d.DB.Raw(`SELECT p.id::text AS id, p.title, p.author, p.branch, p.base, p.head_sha, p.status, p.body, p.additions,
+		p.deletions, p.files_count, r.full_name AS repo_full_name
+		FROM pull_requests p JOIN repos r ON r.id = p.repo_id WHERE p.number = 483`).Scan(&pr).Error; err != nil {
+		t.Fatal(err)
+	}
+	wantPR := pr
+	wantPR.Title, wantPR.Author, wantPR.Branch, wantPR.Base, wantPR.HeadSHA = "Add admin data export and Stripe webhook verification", "dev.rivera", "feat/admin-export", "main", "c3d4e5f6a7b8"
+	wantPR.Status, wantPR.Additions, wantPR.Deletions, wantPR.FilesCount, wantPR.RepoFullName = "needs_review", 55, 0, 4, "acme/payments-api"
+	wantPR.Body = "Adds an admin CSV/JSON export, verifies Stripe webhook signatures and issues session tokens for the admin app."
+	if diff := cmp.Diff(wantPR, pr); diff != "" {
+		t.Errorf("PR #483 mismatch (-want +got):\n%s", diff)
+	}
+
+	var files []struct {
+		Path                 string
+		Additions, Deletions int
+		Patch                *string
+	}
+	if err := d.DB.Raw(`SELECT path, additions, deletions, patch FROM pr_files WHERE pr_id = ? ORDER BY path`, pr.ID).Scan(&files).Error; err != nil {
+		t.Fatal(err)
+	}
+	golden := goldenFile(t, "pr483_patches.golden.json")
+	if len(files) != len(golden) {
+		t.Fatalf("PR #483 has %d files, want %d", len(files), len(golden))
+	}
+	for _, f := range files {
+		if f.Patch == nil || *f.Patch != golden[f.Path] || f.Deletions != 0 || f.Additions != strings.Count(golden[f.Path], "\n") {
+			t.Errorf("PR #483 file %s = +%d -%d patch %v, want the Node new-file hunk", f.Path, f.Additions, f.Deletions, f.Patch)
+		}
+	}
+	var commit struct{ SHA, Message, Author string }
+	if err := d.DB.Raw(`SELECT sha, message, author FROM pr_commits WHERE pr_id = ?`, pr.ID).Scan(&commit).Error; err != nil {
+		t.Fatal(err)
+	}
+	if want := (struct{ SHA, Message, Author string }{"c3d4e5f6a7b8", "Add admin export, Stripe webhook handler and session tokens", "dev.rivera"}); commit != want {
+		t.Errorf("PR #483 commit = %+v, want %+v", commit, want)
+	}
+
+	var security string
+	if err := d.DB.Raw(`SELECT id::text FROM agents WHERE name = 'Security Reviewer'`).Scan(&security).Error; err != nil {
+		t.Fatal(err)
+	}
+	got := readDemoOf(t, d.DB, 483)
+	rv := got.Review
+	if rv.Kind != "review" || rv.Verdict != "request_changes" || rv.Score != 34 || rv.Model != "seed-eval-demo" ||
+		rv.Summary != "Several exploitable issues: injection and missing auth on the admin export, and unverified JWT handling. A few lower-confidence notes are style-level." {
+		t.Errorf("review = %+v, want the PR #483 demo review", rv)
+	}
+	if diff := cmp.Diff(&security, rv.AgentID); diff != "" {
+		t.Errorf("review agent_id mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(&got.Run.ID, rv.RunID); diff != "" {
+		t.Errorf("review run_id mismatch (-want +got):\n%s", diff)
+	}
+	r := got.Run
+	if r.Status != "done" || r.Source != "local" || r.Provider != "openrouter" || r.Model != "deepseek/deepseek-v4-flash" ||
+		r.Grounding != "14/14 passed" || r.DurationMs != 21350 || r.TokensIn != 5870 || r.TokensOut != 1460 ||
+		r.FindingsCount != 14 || r.Score != 34 || r.Blockers != 6 || r.CostUSD != "0.002412" || r.Error != nil || r.RanAt != rv.CreatedAt {
+		t.Errorf("run = %+v, want the done PR #483 demo run with ran_at = review created_at", r)
+	}
+	if diff := cmp.Diff(&security, r.AgentID); diff != "" {
+		t.Errorf("run agent_id mismatch (-want +got):\n%s", diff)
+	}
+
+	accepted, dismissed, pending := 0, 0, 0
+	for _, f := range got.Findings {
+		switch {
+		case f.AcceptedAt != nil && f.DismissedAt != nil:
+			t.Errorf("finding %q is both accepted and dismissed", f.Title)
+		case f.AcceptedAt != nil:
+			accepted++
+			if *f.AcceptedAt != rv.CreatedAt {
+				t.Errorf("finding %q accepted_at = %s, want the review created_at %s", f.Title, *f.AcceptedAt, rv.CreatedAt)
+			}
+		case f.DismissedAt != nil:
+			dismissed++
+			if *f.DismissedAt != rv.CreatedAt {
+				t.Errorf("finding %q dismissed_at = %s, want the review created_at %s", f.Title, *f.DismissedAt, rv.CreatedAt)
+			}
+		default:
+			pending++
+		}
+		if f.Kind != "finding" || f.StartLine != f.EndLine || f.Suggestion == nil {
+			t.Errorf("finding %+v, want kind finding on one line with a suggestion", f)
+		}
+	}
+	if len(got.Findings) != 14 || accepted != 8 || dismissed != 5 || pending != 1 {
+		t.Errorf("findings = %d (accepted %d, dismissed %d, pending %d), want 14 (8, 5, 1)", len(got.Findings), accepted, dismissed, pending)
+	}
+}
+
+// AC6068: a database seeded before Phase 6 (PR #482 only) gets PR #483 once; the seed after that,
+// and the seed after the user changed PR #483, add nothing.
+func TestSeed_EvalDemoAddedOnceToAnOlderDatabase(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	removePR483 := func() {
+		t.Helper()
+		for _, q := range []string{
+			`DELETE FROM reviews WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 483)`,
+			`DELETE FROM agent_runs WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 483)`,
+			`DELETE FROM pull_requests WHERE number = 483`,
+		} {
+			if err := d.DB.Exec(q).Error; err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	removePR483()
+	before := rowCounts(t, d.DB)
+
+	res, err := runSeed(t, d.DB)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if res.PullRequests != 1 || res.Files != 4 || res.Commits != 1 || res.Reviews != 1 || res.Findings != 14 || res.AgentRuns != 1 {
+		t.Errorf("Run() = %+v, want PR #483 with 4 files, 1 commit, 1 review, 14 findings, 1 run", res)
+	}
+	afterFirst := rowCounts(t, d.DB)
+	if diff := cmp.Diff(before["pull_requests"]+1, afterFirst["pull_requests"]); diff != "" {
+		t.Errorf("pull_requests after the seed (-want +got):\n%s", diff)
+	}
+
+	if err := d.DB.Exec(`DELETE FROM findings WHERE review_id = (SELECT id FROM reviews WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 483))`).Error; err != nil {
+		t.Fatal(err)
+	}
+	afterEdit := rowCounts(t, d.DB)
+	res, err = runSeed(t, d.DB)
+	if err != nil {
+		t.Fatalf("second Run() error = %v", err)
+	}
+	if res.PullRequests != 0 || res.Reviews != 0 || res.Findings != 0 || res.AgentRuns != 0 {
+		t.Errorf("second Run() = %+v, want nothing written while PR #483 exists", res)
+	}
+	if diff := cmp.Diff(afterEdit, rowCounts(t, d.DB)); diff != "" {
+		t.Errorf("row counts changed by the second run (-before +after):\n%s", diff)
+	}
+}
+
+// The demo needs the workspace's Security Reviewer; without it PR #483 is not written.
+func TestSeed_EvalDemoNeedsTheSecurityReviewer(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if _, err := runSeed(t, d.DB); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{
+		`DELETE FROM reviews WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 483)`,
+		`DELETE FROM agent_runs WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 483)`,
+		`DELETE FROM pull_requests WHERE number = 483`,
+		`DELETE FROM agents WHERE name = 'Security Reviewer'`,
+	} {
+		if err := d.DB.Exec(q).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	res, err := runSeed(t, d.DB)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if res.PullRequests != 0 || res.Files != 0 || res.Reviews != 0 {
+		t.Errorf("Run() = %+v, want no PR #483 without a Security Reviewer", res)
+	}
+	var n int
+	if err := d.DB.Raw(`SELECT count(*) FROM pull_requests WHERE number = 483`).Scan(&n).Error; err != nil || n != 0 {
+		t.Errorf("PR #483 rows = %d, %v, want 0", n, err)
+	}
+}
+
+func TestSeed_FailureInTheEvalDemoWritesNothing(t *testing.T) {
+	d := pgtest.Migrated(t)
+	if err := d.DB.Exec(`ALTER TABLE pr_commits ADD CONSTRAINT force_fail CHECK (sha <> 'c3d4e5f6a7b8')`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runSeed(t, d.DB); err == nil {
+		t.Fatal("Run() error = nil, want the CHECK violation")
+	}
+	for table, n := range rowCounts(t, d.DB) {
+		if n != 0 {
+			t.Errorf("rows in %s after failed seed = %d, want 0", table, n)
+		}
 	}
 }

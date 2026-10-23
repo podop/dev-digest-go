@@ -1278,7 +1278,11 @@ func TestContracts_Phase4GoldenResponses(t *testing.T) {
 	check("review_dismiss", s.post("/findings/"+findings[0]+"/dismiss", nil), http.StatusOK)
 	check("review_learn", s.post("/findings/"+findings[1]+"/learn", nil), http.StatusOK)
 	// Only General Reviewer has finished runs so far (the seeded one and the mock one), so the
-	// estimates have a single row and no id order to depend on.
+	// estimates have a single row and no id order to depend on: drop the run of the eval demo
+	// PR #483 (a Security Reviewer run) first.
+	if err := s.db.DB.Exec(`DELETE FROM agent_runs WHERE pr_id = (SELECT id FROM pull_requests WHERE number = 483)`).Error; err != nil {
+		t.Fatal(err)
+	}
 	check("review_estimates", s.get("/runs/estimates"), http.StatusOK)
 
 	// Three agents: a parent run with three columns; one finding is raised to CRITICAL so the
@@ -1630,7 +1634,7 @@ func TestSeed_DemoReviewAcrossRestarts(t *testing.T) {
 	counts := func() [3]int {
 		return [3]int{
 			count(t, db.DB, `SELECT count(*) FROM reviews WHERE pr_id = ?`, pr),
-			count(t, db.DB, `SELECT count(*) FROM findings`),
+			count(t, db.DB, `SELECT count(*) FROM findings WHERE review_id IN (SELECT id FROM reviews WHERE pr_id = ?)`, pr),
 			count(t, db.DB, `SELECT count(*) FROM agent_runs WHERE pr_id = ?`, pr),
 		}
 	}

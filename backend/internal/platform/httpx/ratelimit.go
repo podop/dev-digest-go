@@ -52,6 +52,15 @@ type Bucket struct {
 	Key func(*echo.Context) string
 }
 
+// counterName is the counter's name part of the key: the shared Name, or one counter per route.
+// Named counters carry a prefix so a Name can never collide with "global" or a "METHOD path" counter.
+func (b Bucket) counterName() string {
+	if b.Name != "" {
+		return "bucket:" + b.Name
+	}
+	return b.Method + " " + b.Path
+}
+
 // rateLimit returns the limiter middleware. It runs after routing, so it can tell registered
 // routes (counted) from unmatched ones (not counted) and find a route's bucket.
 func rateLimit(cfg RateLimit, now func() time.Time) echo.MiddlewareFunc {
@@ -81,14 +90,17 @@ func rateLimit(cfg RateLimit, now func() time.Time) echo.MiddlewareFunc {
 				return next(c)
 			}
 			name, limit := "global", cfg.Limit
+			var keyOf func(*echo.Context) string
 			if b, ok := buckets[ri.Method+" "+ri.Path]; ok {
-				name, limit = b.Method+" "+b.Path, b.Limit
+				name, limit, keyOf = b.counterName(), b.Limit, b.Key
 			}
-			ip := c.RealIP()
-			if ip == "" {
-				ip = "unknown"
+			var client string
+			if keyOf != nil {
+				client = keyOf(c)
+			} else if client = c.RealIP(); client == "" {
+				client = "unknown"
 			}
-			ok, remaining := l.hit(name+"|"+ip, limit)
+			ok, remaining := l.hit(name+"|"+client, limit)
 			if ok {
 				return next(c)
 			}
