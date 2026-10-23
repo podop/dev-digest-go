@@ -536,6 +536,20 @@ func TestEvals_ManualCases(t *testing.T) {
 			gold.check("eval_cases_list", listed, http.StatusOK)
 		}
 	}
+	// An owner without cases lists the envelope with an empty array, not null (AC6057).
+	for _, kind := range []string{"agent", "skill"} {
+		owner := e.f.agent("Empty Cases Agent")
+		if kind == "skill" {
+			owner = newSkill(t, s, "empty-cases-skill", "Body of the empty skill.")
+		}
+		empty := s.get("/" + kind + "s/" + owner + "/eval-cases")
+		if got, want := strings.TrimSpace(string(empty.Body)), `{"cases":[]}`; got != want {
+			t.Errorf("GET /%ss/:id/eval-cases without cases = %s, want %s", kind, got, want)
+		}
+		if kind == "agent" {
+			evCheck(t, gold, "eval_case_list_empty", empty, http.StatusOK)
+		}
+	}
 	evExpect(t, "unknown agent", s.post("/agents/"+unknownID+"/eval-cases", evCaseBody("x", "must_find", "a", 1, 1, "@@ -1 +1 @@\n+x")), 404, "not_found", "Agent not found")
 	evExpect(t, "unknown skill", s.post("/skills/"+unknownID+"/eval-cases", evCaseBody("x", "must_find", "a", 1, 1, "@@ -1 +1 @@\n+x")), 404, "not_found", "Skill not found")
 	evExpect(t, "list of an unknown agent", s.get("/agents/"+unknownID+"/eval-cases"), 404, "not_found", "Agent not found")
@@ -1264,9 +1278,10 @@ func TestEvals_RunAll(t *testing.T) {
 	s := startStack(t, spec{llmAdapters: mockScript().forAll()})
 	e := newEvFixtures(t, s)
 	gold := &goldens{t: t, cloneDir: s.cfg.CloneDir, ids: map[string]string{}}
-	// Created in name order: GET /agents orders by creation time first and run-all by name, so only
-	// then do the two orders agree.
-	bare := evAgent(t, s, "Zeta Bare")
+	// Created out of name order ("Zulu Bare" first, but it sorts after "Zeta Running"): GET /agents
+	// orders by creation time, then name, so the two orders differ for the skipped agents and the
+	// test can tell a run-all in GET /agents order from one in name order.
+	bare := evAgent(t, s, "Zulu Bare")
 	disabled := evAgent(t, s, "Zeta Disabled")
 	running := evAgent(t, s, "Zeta Running")
 	withCases := evAgent(t, s, "Zeta With Cases")
@@ -1292,8 +1307,13 @@ func TestEvals_RunAll(t *testing.T) {
 		t.Fatal(err)
 	}
 	var order []string
+	names := map[string]string{}
 	for _, a := range list(t, s.get("/agents")) {
 		order = append(order, a["id"].(string))
+		names[a["id"].(string)] = a["name"].(string)
+	}
+	if iBare, iRunning := slices.Index(order, bare), slices.Index(order, running); iBare < 0 || iRunning < 0 || iBare > iRunning || names[bare] < names[running] {
+		t.Fatalf("GET /agents positions: bare %d (%q), running %d (%q), want created order bare before running while the name sorts after", iBare, names[bare], iRunning, names[running])
 	}
 	startable := map[string]bool{withCases: true, disabled: true}
 	var wantStarted []string

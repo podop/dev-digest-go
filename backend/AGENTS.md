@@ -86,6 +86,12 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 - Request bodies only through `httpx.ReadJSONBody` (JSON parsed only for `application/json`).
   State-changing requests with a foreign `Origin` → 403; `Host` must be in `ALLOWED_HOSTS`
   (default `localhost,127.0.0.1,[::1],backend`). New routes get both for free via `httpx.New`.
+- DB pool: `postgres.Open` caps it (`DB_MAX_OPEN_CONNS`, 1-90, default 20 of Postgres' 100; idle ≤ 10,
+  idle time 5 min), so a burst waits for a connection instead of failing with 53300 "too many
+  clients". Never hold a connection (an `InTx` body) while asking the same pool for a second one:
+  every store method called inside `InTx` takes its handle from `postgres.Conn(ctx, db)`, never
+  from its own `db`. With a saturated pool such a nested call deadlocks (all connections held by
+  transactions that wait for another). Long holders: repo-intel indexing (a job, ≤ 3 at once).
 - Integration tests use `internal/platform/postgres/pgtest` (one container per test binary, fresh
   DB per test) and skip under `-short`.
 

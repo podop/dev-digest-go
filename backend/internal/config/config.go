@@ -26,6 +26,10 @@ const (
 	// DefaultReviewMapConcurrency and MaxReviewMapConcurrency bound REVIEW_MAP_CONCURRENCY.
 	DefaultReviewMapConcurrency = 3
 	MaxReviewMapConcurrency     = 16
+	// DefaultDBMaxOpenConns and MaxDBMaxOpenConns bound DB_MAX_OPEN_CONNS. Postgres' own
+	// max_connections is 100, so the cap stays below it.
+	DefaultDBMaxOpenConns = 20
+	MaxDBMaxOpenConns     = 90
 )
 
 // Config is the typed configuration passed from main to the rest of the backend.
@@ -63,6 +67,9 @@ type Config struct {
 	// ReviewMapConcurrency is REVIEW_MAP_CONCURRENCY: how many map-reduce chunks of one agent run
 	// are in flight at once (1-MaxReviewMapConcurrency, default DefaultReviewMapConcurrency).
 	ReviewMapConcurrency int
+	// DBMaxOpenConns is DB_MAX_OPEN_CONNS: the size of the Postgres connection pool
+	// (1-MaxDBMaxOpenConns, default DefaultDBMaxOpenConns).
+	DBMaxOpenConns int
 }
 
 // Load reads the configuration through getenv (os.Getenv in production).
@@ -87,6 +94,9 @@ type Config struct {
 // DefaultProjectContextGlobs. REVIEW_AGENT_CONCURRENCY (integer 1-20, default 4) and
 // REVIEW_MAP_CONCURRENCY (integer 1-16, default 3) bound the parallelism of a review request; an
 // empty value counts as unset and any other value is an error naming the variable.
+// DB_MAX_OPEN_CONNS (integer 1-90, default 20) caps the connections of the Postgres pool; work
+// beyond the cap waits for a free connection (Postgres itself refuses clients above its
+// max_connections, 100 by default).
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Addr:             valueOr(getenv("API_ADDR"), ":3001"),
@@ -140,6 +150,11 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	if cfg.ReviewMapConcurrency, err = parseBoundedInt(
 		"REVIEW_MAP_CONCURRENCY", getenv("REVIEW_MAP_CONCURRENCY"), DefaultReviewMapConcurrency, MaxReviewMapConcurrency,
+	); err != nil {
+		return Config{}, err
+	}
+	if cfg.DBMaxOpenConns, err = parseBoundedInt(
+		"DB_MAX_OPEN_CONNS", getenv("DB_MAX_OPEN_CONNS"), DefaultDBMaxOpenConns, MaxDBMaxOpenConns,
 	); err != nil {
 		return Config{}, err
 	}

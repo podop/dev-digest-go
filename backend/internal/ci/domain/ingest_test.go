@@ -33,6 +33,26 @@ func TestInspectable(t *testing.T) {
 	}
 }
 
+func TestFromBaseRepository(t *testing.T) {
+	tests := []struct {
+		name string
+		run  domain.WorkflowRun
+		want bool
+	}{
+		{"same repository", domain.WorkflowRun{RepositoryID: 99, HeadRepositoryID: 99}, true},
+		{"fork", domain.WorkflowRun{RepositoryID: 99, HeadRepositoryID: 77}, false},
+		{"head repository missing", domain.WorkflowRun{RepositoryID: 99}, false},
+		{"both missing", domain.WorkflowRun{}, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := domain.FromBaseRepository(tc.run); got != tc.want {
+				t.Errorf("FromBaseRepository(repo %d, head %d) = %v, want %v", tc.run.RepositoryID, tc.run.HeadRepositoryID, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestKeyOf_AttemptDefaultsToOne(t *testing.T) {
 	if got, want := domain.KeyOf(domain.WorkflowRun{ID: 9}), (domain.RunKey{GithubRunID: 9, Attempt: 1}); got != want {
 		t.Errorf("KeyOf(no attempt) = %+v, want %+v", got, want)

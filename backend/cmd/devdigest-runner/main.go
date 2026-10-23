@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"io"
 	"log/slog"
@@ -41,9 +42,34 @@ func defaultEndpoints() endpoints {
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := run(ctx, os.LookupEnv, os.Stdout, os.Stderr, defaultEndpoints())
+	code := withCommandsStopped(os.Stdout, func() int {
+		return run(ctx, os.LookupEnv, os.Stdout, os.Stderr, defaultEndpoints())
+	})
 	stop()
 	os.Exit(code)
+}
+
+// withCommandsStopped runs body with workflow-command processing switched off for the job log
+// (security r1 F2): the runner prints text it does not control (the model name from the manifest,
+// warnings, failure texts), and GitHub Actions would act on a "##[...]" or "::..." command in it.
+// The stop token is random and unknown to anything that feeds the runner, and the resume line is
+// printed however body ends. The runner itself prints no workflow command.
+func withCommandsStopped(stdout io.Writer, body func() int) int {
+	token := rand.Text()
+	_, _ = io.WriteString(stdout, "::stop-commands::"+token+"\n")
+	defer func() { _, _ = io.WriteString(stdout, "::"+token+"::\n") }()
+	return body()
+}
+
+// commandSafeWriter breaks "##[" and "::" in everything written through it. It guards the one
+// stream the runner does not print itself: the model layer's log lines.
+type commandSafeWriter struct{ w io.Writer }
+
+func (c commandSafeWriter) Write(p []byte) (int, error) {
+	if _, err := io.WriteString(c.w, runnerapp.BreakCommands(string(p))); err != nil {
+		return 0, err
+	}
+	return len(p), nil
 }
 
 // envKeys reads the two names the runner knows from the environment; everything else is unset.
@@ -70,7 +96,7 @@ func newClient(getenv func(string) string, stderr io.Writer, ep endpoints) *llm.
 		Adapters: map[llm.Provider]llm.Adapter{
 			llm.OpenRouter: openaicompat.NewOpenRouter(openaicompat.Options{BaseURL: ep.OpenRouter}),
 		},
-		Logger: slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: slog.LevelWarn})),
+		Logger: slog.New(slog.NewTextHandler(commandSafeWriter{w: stderr}, &slog.HandlerOptions{Level: slog.LevelWarn})),
 		Prices: noPrices{},
 	})
 }
@@ -96,7 +122,7 @@ func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr
 					msg = strings.ReplaceAll(msg, v, "[REDACTED]")
 				}
 			}
-			out.Stderr("[agent-runner] fatal error: " + msg)
+			out.Stderr(runnerapp.LogLine("[agent-runner] fatal error: ", msg))
 			code = runnerapp.ExitFailed
 		}
 	}()

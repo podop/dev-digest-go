@@ -455,6 +455,7 @@ const contracts: Record<string, z.ZodTypeAny> = {
   eval_case_finding: agentEvalCase,
   eval_case_updated: agentEvalCase,
   eval_cases_list: z.object({ cases: z.array(agentEvalCase) }).strict(),
+  eval_case_list_empty: z.object({ cases: z.array(agentEvalCase) }).strict(),
   eval_run_started: evalRunSummary,
   eval_skill_run_started: evalRunSummary,
   eval_runs_list: evalRunList,
@@ -769,6 +770,7 @@ describe("Go backend golden responses", () => {
     expect(read("eval_case_updated")).toMatchObject({ content_edited_at: expect.any(String) });
     const list = read("eval_cases_list") as { cases: { origin: string }[] };
     expect(list.cases.map((c) => c.origin)).toEqual(["manual", "manual"]);
+    expect(read("eval_case_list_empty")).toEqual({ cases: [] });
   });
 
   it("the eval run detail is a completed run with one result per case, passed and failed", () => {

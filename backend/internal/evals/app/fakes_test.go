@@ -353,6 +353,21 @@ func (f *fakeRuns) FinishedAgentRuns(_ context.Context, _, agent string, limit i
 	return list, nil
 }
 
+func (f *fakeRuns) FinishedRunsByAgent(_ context.Context, _ string, agents []string, limit int) (map[string][]domain.Run, error) {
+	out := map[string][]domain.Run{}
+	for _, agent := range agents {
+		f.queries = append(f.queries, finishedQuery{agent, limit, nil})
+		list := f.finished[agent]
+		if limit < len(list) {
+			list = list[:limit]
+		}
+		if len(list) > 0 {
+			out[agent] = list
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeRuns) DashboardAgents(context.Context, string) ([]domain.AgentRef, error) {
 	return f.dashboard, nil
 }

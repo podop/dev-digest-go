@@ -446,3 +446,70 @@ func TestDashboardAgentsAndRecentRuns(t *testing.T) {
 		t.Errorf("RecentAgentRuns(limit 1) = %+v; want the newest run (any status)", recent)
 	}
 }
+
+// FinishedRunsByAgent is FinishedAgentRuns for many agents at once: same runs, same order, same
+// per-agent limit, only the overview columns filled in.
+func TestFinishedRunsByAgent(t *testing.T) {
+	e := newEnv(t)
+	busy, other, idle := e.agent(t, e.ws, "busy"), e.agent(t, e.ws, "other"), e.agent(t, e.ws, "idle")
+	skill := e.skill(t, e.ws, "s", true)
+	base := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
+
+	hour := 0
+	add := func(agent string, status domain.RunStatus) domain.Run {
+		r := e.newRun(t, e.ws, agent)
+		e.exec(t, `UPDATE eval_suite_runs SET started_at = ? WHERE id = ?`, base.Add(time.Duration(hour)*time.Hour), r.ID)
+		hour++
+		if status != domain.RunRunning {
+			e.finish(t, r, status)
+		}
+		return r
+	}
+	for range 5 {
+		add(busy, domain.RunCompleted)
+		add(other, domain.RunFailed)
+	}
+	add(busy, domain.RunRunning) // newest, but not finished
+	if _, err := e.store.CreateRun(t.Context(), domain.NewRun{
+		WorkspaceID: e.ws, OwnerKind: domain.OwnerSkill, SkillID: &skill, SkillVersion: ip(1), AgentID: busy, AgentVersion: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The batch carries only the overview fields, so the single-agent answer is trimmed to them.
+	trim := func(rs []domain.Run) []domain.Run {
+		out := make([]domain.Run, len(rs))
+		for i, r := range rs {
+			r.Config = domain.Config{Model: r.Config.Model}
+			r.CaseIDs = []string{}
+			out[i] = r
+		}
+		return out
+	}
+	for _, limit := range []int{3, 10} {
+		got, err := e.store.FinishedRunsByAgent(t.Context(), e.ws, []string{busy, other, idle, "not-a-uuid"}, limit)
+		if err != nil {
+			t.Fatalf("FinishedRunsByAgent(limit %d) error = %v", limit, err)
+		}
+		want := map[string][]domain.Run{}
+		for _, agent := range []string{busy, other} {
+			list, err := e.store.FinishedAgentRuns(t.Context(), e.ws, agent, limit, nil)
+			if err != nil || len(list) == 0 {
+				t.Fatalf("FinishedAgentRuns(%s) = %d runs, %v", agent, len(list), err)
+			}
+			want[agent] = trim(list)
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("FinishedRunsByAgent(limit %d) mismatch (-want +got):\n%s", limit, diff)
+		}
+		if got[busy][0].Config.Model != "m" {
+			t.Errorf("FinishedRunsByAgent(limit %d)[busy][0].Config.Model = %q, want m", limit, got[busy][0].Config.Model)
+		}
+	}
+	if got, err := e.store.FinishedRunsByAgent(t.Context(), e.workspace(t), []string{busy}, 10); err != nil || len(got) != 0 {
+		t.Errorf("FinishedRunsByAgent(other workspace) = %v, %v, want none", got, err)
+	}
+	if got, err := e.store.FinishedRunsByAgent(t.Context(), e.ws, nil, 10); err != nil || len(got) != 0 {
+		t.Errorf("FinishedRunsByAgent(no agents) = %v, %v, want none", got, err)
+	}
+}

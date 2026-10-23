@@ -227,6 +227,8 @@ type WorkflowRun struct {
 	Conclusion   *string
 	HTMLURL      string
 	RepositoryID int64
+	// HeadRepositoryID is the repository of the run's head commit; 0 when GitHub names none.
+	HeadRepositoryID int64
 	// PRNumbers are the pull requests of the run in GitHub's order.
 	PRNumbers []int
 	CreatedAt string

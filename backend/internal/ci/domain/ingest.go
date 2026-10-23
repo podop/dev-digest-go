@@ -23,6 +23,13 @@ func Inspectable(r WorkflowRun) bool {
 	return *r.Conclusion != conclusionSkipped && *r.Conclusion != conclusionCancelled
 }
 
+// FromBaseRepository reports whether the run's head commit lives in the run's own repository. A
+// pull request from a fork runs the fork's copy of the workflow, which can drop the fork guard and
+// write any result artifact, so such a run (or one with no known head repository) is never stored.
+func FromBaseRepository(r WorkflowRun) bool {
+	return r.HeadRepositoryID != 0 && r.HeadRepositoryID == r.RepositoryID
+}
+
 // AttemptOf is the attempt number of a run; GitHub omits it for the first attempt.
 func AttemptOf(r WorkflowRun) int {
 	if r.RunAttempt <= 0 {

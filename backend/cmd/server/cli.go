@@ -23,7 +23,7 @@ func runMigrate(ctx context.Context, cfg config.Config, args []string, stdout io
 	if len(args) != 1 {
 		return errors.New("migrate: expected up, down or status; " + usage)
 	}
-	db, err := postgres.Open(ctx, cfg.DatabaseURL, log)
+	db, err := postgres.Open(ctx, cfg.DatabaseURL, log, postgres.WithMaxOpenConns(cfg.DBMaxOpenConns))
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func runMigrate(ctx context.Context, cfg config.Config, args []string, stdout io
 
 // runSeed implements `server seed`.
 func runSeed(ctx context.Context, cfg config.Config, stdout io.Writer, log *slog.Logger) error {
-	db, err := postgres.Open(ctx, cfg.DatabaseURL, log)
+	db, err := postgres.Open(ctx, cfg.DatabaseURL, log, postgres.WithMaxOpenConns(cfg.DBMaxOpenConns))
 	if err != nil {
 		return err
 	}

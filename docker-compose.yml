@@ -61,6 +61,8 @@ services:
       # Parallelism of a review request: agents at once (1-20) and map-reduce chunks at once (1-16).
       REVIEW_AGENT_CONCURRENCY: ${REVIEW_AGENT_CONCURRENCY:-4}
       REVIEW_MAP_CONCURRENCY: ${REVIEW_MAP_CONCURRENCY:-3}
+      # Size of the Postgres connection pool (1-90); Postgres allows 100 connections in total.
+      DB_MAX_OPEN_CONNS: ${DB_MAX_OPEN_CONNS:-20}
     # Shutdown grace is 20 s in the app (requests) plus up to 10 s for running jobs; docker's
     # default 10 s would SIGKILL it mid-shutdown.
     stop_grace_period: 30s

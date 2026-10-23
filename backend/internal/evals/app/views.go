@@ -122,12 +122,18 @@ func (s *RunService) Overview(ctx context.Context, workspaceID string) (domain.O
 	if err != nil {
 		return domain.Overview{}, fmt.Errorf("count agent cases: %w", err)
 	}
+	agentIDs := make([]string, len(agents))
+	for i, ag := range agents {
+		agentIDs[i] = ag.ID
+	}
+	// One read for all agents: a query per agent made the overview slow with many agents.
+	finishedByAgent, err := s.runs.FinishedRunsByAgent(ctx, workspaceID, agentIDs, domain.SparklineMax)
+	if err != nil {
+		return domain.Overview{}, fmt.Errorf("read finished runs: %w", err)
+	}
 	out := domain.Overview{Agents: make([]domain.AgentOverview, 0, len(agents))}
 	for _, ag := range agents {
-		finished, err := s.runs.FinishedAgentRuns(ctx, workspaceID, ag.ID, domain.SparklineMax, nil)
-		if err != nil {
-			return domain.Overview{}, fmt.Errorf("read finished runs of agent %s: %w", ag.ID, err)
-		}
+		finished := finishedByAgent[ag.ID]
 		row := domain.AgentOverview{AgentRef: ag, CasesTotal: counts[ag.ID], Sparkline: domain.Sparkline(finished)}
 		if len(finished) > 0 {
 			row.Latest = &finished[0]

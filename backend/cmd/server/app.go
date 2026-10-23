@@ -185,7 +185,7 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	}
 	log := logging.New(o.logOut, cfg.LogLevel)
 
-	db, err := postgres.Open(ctx, cfg.DatabaseURL, log)
+	db, err := postgres.Open(ctx, cfg.DatabaseURL, log, postgres.WithMaxOpenConns(cfg.DBMaxOpenConns))
 	if err != nil {
 		return err
 	}

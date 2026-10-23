@@ -288,9 +288,16 @@ func TestJobs_CloneFromLocalRemote(t *testing.T) { // AC62, AC101
 		t.Errorf("commits in the clone = %s, want 1 (depth 1)", got)
 	}
 
-	lines := logLines(t, s.logs, "job finished")
+	// The clone enqueues a repo-intel-index job, which may finish before the logs are read, so
+	// only the clone's own line is counted.
+	var lines []map[string]any
+	for _, l := range logLines(t, s.logs, "job finished") {
+		if l["kind"] == "clone" {
+			lines = append(lines, l)
+		}
+	}
 	if len(lines) != 1 {
-		t.Fatalf("job log lines = %v, want exactly one", lines)
+		t.Fatalf("clone job log lines = %v, want exactly one", lines)
 	}
 	l := lines[0]
 	if l["kind"] != "clone" || l["job_id"] != row.ID || l["status"] != "done" || l["attempts"] != float64(1) {

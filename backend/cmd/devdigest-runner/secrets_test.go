@@ -151,17 +151,17 @@ func TestSecrets_SuccessfulRunLeavesNone(t *testing.T) {
 }
 
 // The failure line scrubs a secret even when it comes from somewhere no client scrubbed: a
-// manifest whose enum value is the key is printed in Node's validation message.
+// manifest whose skill slug is the key is printed in the "not a valid file name" message.
 func TestSecrets_FailureLineScrubsEnvironmentValues(t *testing.T) {
-	manifest := "name: A\nmodel: m\nsystem_prompt: p\nstrategy: " + keyMarker + "\n"
+	manifest := "name: A\nmodel: m\nsystem_prompt: p\nskills: [" + keyMarker + "]\n"
 	w := newWorkspace(t, manifest, map[string]string{"OPENROUTER_API_KEY": keyMarker, "GITHUB_TOKEN": tokenMarker})
 	var stdout, stderr bytes.Buffer
 	code := run(t.Context(), w.lookup, &stdout, &stderr, defaultEndpoints())
 	if code != 1 {
 		t.Errorf("exit code = %d, want 1", code)
 	}
-	if !strings.Contains(stderr.String(), "received '[REDACTED]'") {
-		t.Errorf("stderr = %q, want the value redacted", stderr.String())
+	if !strings.Contains(stderr.String(), "Skill slug '[REDACTED]'") {
+		t.Errorf("stderr = %q, want the slug redacted", stderr.String())
 	}
 	assertNoMarkers(t, "stderr", stderr.String())
 }

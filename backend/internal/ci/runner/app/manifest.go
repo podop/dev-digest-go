@@ -160,7 +160,9 @@ func validateManifest(root any) (Manifest, []issue) {
 				return s
 			}
 		}
-		add("Invalid enum value. Expected "+joinValues(values)+", received '"+s+"'", key)
+		// Zod echoes the received value; it is the repository's text, of any length, and it
+		// would reach the job log, so the issue names the allowed values only (spec 7.8.9).
+		add("Invalid enum value. Expected "+joinValues(values), key)
 		return def
 	}
 
@@ -479,7 +481,7 @@ func (c *yamlConverter) mapping(n *yaml.Node, depth int) (any, error) {
 		if keyNode.Kind == yaml.ScalarNode {
 			if dk, ok := dupKeyOf(key); ok {
 				if _, dup := seen[dk]; dup {
-					return nil, fmt.Errorf("%w: duplicate mapping key %q", errYAMLInvalid, keyNode.Value)
+					return nil, fmt.Errorf("%w: duplicate mapping key at line %d", errYAMLInvalid, keyNode.Line)
 				}
 				seen[dk] = struct{}{}
 			}

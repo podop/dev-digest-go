@@ -144,15 +144,16 @@ func (a *GitHub) ListWorkflowRuns(ctx context.Context, repo app.RepoRef, workflo
 	out := make([]domain.WorkflowRun, len(runs))
 	for i, r := range runs {
 		w := domain.WorkflowRun{
-			ID:           r.ID,
-			RunAttempt:   r.RunAttempt,
-			HeadSHA:      r.HeadSHA,
-			Path:         r.Path,
-			Event:        r.Event,
-			HTMLURL:      r.HTMLURL,
-			RepositoryID: r.RepositoryID,
-			PRNumbers:    r.PullNumbers,
-			CreatedAt:    timeText(r.CreatedAt),
+			ID:               r.ID,
+			RunAttempt:       r.RunAttempt,
+			HeadSHA:          r.HeadSHA,
+			Path:             r.Path,
+			Event:            r.Event,
+			HTMLURL:          r.HTMLURL,
+			RepositoryID:     r.RepositoryID,
+			HeadRepositoryID: r.HeadRepositoryID,
+			PRNumbers:        r.PullNumbers,
+			CreatedAt:        timeText(r.CreatedAt),
 		}
 		if r.Conclusion != "" {
 			c := r.Conclusion

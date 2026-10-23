@@ -39,7 +39,7 @@ const minRedactLen = 8
 func Run(ctx context.Context, cfg Config, deps Deps) int {
 	res, err := run(ctx, cfg, deps)
 	if err != nil {
-		deps.Out.Stderr("[agent-runner] FAILED: " + oneLine(redact(deps.Env, err.Error())))
+		deps.Out.Stderr(FailureLine(redact(deps.Env, err.Error())))
 		return ExitFailed
 	}
 	deps.Out.Stdout(fmt.Sprintf("[agent-runner] findings=%d blockers=%d gateTriggered=%t posted=%s",
@@ -144,7 +144,7 @@ func run(ctx context.Context, cfg Config, deps Deps) (result, error) {
 		Task:          "Review PR #" + strconv.Itoa(prc.Number) + ": " + prc.Title,
 	}, deps.LLM.For(manifest.Model), nil, reviewerapp.Options{})
 	if err != nil {
-		return result{}, err
+		return result{}, &ModelCallError{Class: modelCallClass(err), cause: err}
 	}
 	durationMS := now().Sub(start).Milliseconds()
 
@@ -240,13 +240,4 @@ func redact(env Env, s string) string {
 		}
 	}
 	return s
-}
-
-// oneLine escapes line breaks so a value from the repository cannot start a second log line (the
-// Actions runner reads workflow commands at the start of a line).
-func oneLine(s string) string {
-	if !strings.ContainsAny(s, "\r\n") {
-		return s
-	}
-	return strings.NewReplacer("\r", `\r`, "\n", `\n`).Replace(s)
 }

@@ -22,7 +22,7 @@ func TestListWorkflowRuns(t *testing.T) {
 			map[string]any{
 				"id": 11, "run_attempt": 2, "head_sha": "abc", "path": ".github/workflows/devdigest-review-x.yml@refs/pull/3/merge",
 				"event": "pull_request", "conclusion": "success", "html_url": "https://github.com/acme/api/actions/runs/11",
-				"repository": map[string]any{"id": 99}, "pull_requests": []any{map[string]any{"number": 3}, map[string]any{"number": 4}},
+				"repository": map[string]any{"id": 99}, "head_repository": map[string]any{"id": 77}, "pull_requests": []any{map[string]any{"number": 3}, map[string]any{"number": 4}},
 				"created_at": "2026-10-20T08:00:00Z",
 			},
 			map[string]any{"id": 12, "head_sha": "def", "conclusion": nil, "created_at": "garbage"},
@@ -34,7 +34,7 @@ func TestListWorkflowRuns(t *testing.T) {
 	}
 	want := []github.WorkflowRun{
 		{ID: 11, RunAttempt: 2, HeadSHA: "abc", Path: ".github/workflows/devdigest-review-x.yml@refs/pull/3/merge", Event: "pull_request",
-			Conclusion: "success", HTMLURL: "https://github.com/acme/api/actions/runs/11", RepositoryID: 99, PullNumbers: []int{3, 4},
+			Conclusion: "success", HTMLURL: "https://github.com/acme/api/actions/runs/11", RepositoryID: 99, HeadRepositoryID: 77, PullNumbers: []int{3, 4},
 			CreatedAt: time.Date(2026, 10, 20, 8, 0, 0, 0, time.UTC)},
 		{ID: 12, RunAttempt: 1, HeadSHA: "def"},
 	}

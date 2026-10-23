@@ -49,7 +49,7 @@ func artifactRig(t testing.TB, zips ...[]byte) *ingestRig {
 			runs = append(runs, domain.WorkflowRun{
 				ID: int64(1001 + i), RunAttempt: 1, HeadSHA: "abc123", Path: domain.WorkflowPath(instSlug),
 				Event: "pull_request", Conclusion: &conclusion, HTMLURL: fmt.Sprintf("https://github.com/acme/widgets/actions/runs/%d", 1001+i),
-				RepositoryID: 99, PRNumbers: []int{42}, CreatedAt: "2026-03-01T10:00:00Z",
+				RepositoryID: 99, HeadRepositoryID: 99, PRNumbers: []int{42}, CreatedAt: "2026-03-01T10:00:00Z",
 			})
 		}
 		return runs, nil
@@ -303,6 +303,73 @@ func TestRefreshStopsWhenTheCallerIsGone(t *testing.T) {
 	}
 	for _, l := range rig.logs.snapshot(t) {
 		t.Errorf("log line %v after the caller left", l)
+	}
+}
+
+// A pull request from a fork runs the fork's copy of the workflow, which can drop the fork guard
+// and upload a forged result whose commit, repository id and path all match. Such a run (and one
+// with no head repository) is neither inspected nor stored nor reported; the next run still is.
+func TestRefreshIgnoresRunsFromForks(t *testing.T) {
+	tests := []struct {
+		name string
+		head int64
+	}{
+		{"fork", 77},
+		{"head repository missing", 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			forged := resultZip(t, marshal(t, baseResult()))
+			good := resultZip(t, marshal(t, with(baseResult(), obj{"run_id": 1002})))
+			rig := artifactRig(t, forged, good)
+			list := rig.gh.listRuns
+			rig.gh.listRuns = func(repo app.RepoRef, file string, n int) ([]domain.WorkflowRun, error) {
+				runs, err := list(repo, file, n)
+				runs[0].HeadRepositoryID = tc.head
+				return runs, err
+			}
+
+			got := refresh(t, rig)
+
+			if len(got.Installations[0].Skipped) != 0 {
+				t.Errorf("Skipped = %+v, want none: the run is not inspectable, not skipped", got.Installations[0].Skipped)
+			}
+			if len(rig.store.recorded) != 1 || rig.store.recorded[0].GithubRunID != 1002 || got.Ingested != 1 {
+				t.Errorf("recorded = %+v ingested = %d, want only run 1002", rig.store.recorded, got.Ingested)
+			}
+			for _, c := range rig.gh.calls.snapshot(t) {
+				if id := asObj(c)["runId"]; asObj(c)["fn"] == "listRunArtifacts" && asInt(id) == 1001 {
+					t.Errorf("run 1001 was inspected: %v", c)
+				}
+				if asObj(c)["fn"] == "downloadArtifact" && asInt64(asObj(c)["artifactId"]) == 1501 {
+					t.Errorf("the artifact of run 1001 was downloaded: %v", c)
+				}
+			}
+			lines := rig.logs.snapshot(t)
+			if len(lines) != 1 || asObj(lines[0])["level"] != "warn" {
+				t.Fatalf("log lines = %+v, want one warning", lines)
+			}
+			want := map[string]any{
+				"installation_id": "inst-1", "repo": "acme/widgets", "github_run_id": float64(1001), "reason": "head_repository_differs",
+			}
+			if diff := cmp.Diff(want, asObj(lines[0])["obj"]); diff != "" {
+				t.Errorf("log fields mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// A fork run that left no artifact is not stored as a failed run either.
+func TestRefreshForkRunWithoutArtifactIsNotStoredAsFailed(t *testing.T) {
+	rig := artifactRig(t, nil)
+	rig.gh.listArtifact = func(app.RepoRef, int64) ([]domain.RunArtifact, error) { return nil, nil }
+	rig.gh.listRuns = func(app.RepoRef, string, int) ([]domain.WorkflowRun, error) {
+		c := "failure"
+		return []domain.WorkflowRun{{ID: 1001, Conclusion: &c, RepositoryID: 99, HeadRepositoryID: 77}}, nil
+	}
+	got := refresh(t, rig)
+	if len(rig.store.recorded) != 0 || got.Ingested != 0 {
+		t.Errorf("recorded = %+v ingested = %d, want nothing", rig.store.recorded, got.Ingested)
 	}
 }
 

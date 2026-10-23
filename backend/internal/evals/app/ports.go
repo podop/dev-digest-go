@@ -65,6 +65,10 @@ type RunStore interface {
 	// FinishedAgentRuns returns the agent's finished (completed or failed) agent-owned runs,
 	// newest started_at first, at most limit; since non-nil keeps started_at >= since.
 	FinishedAgentRuns(ctx context.Context, workspaceID, agentID string, limit int, since *time.Time) ([]domain.Run, error)
+	// FinishedRunsByAgent returns, per agent, what FinishedAgentRuns returns (newest first, at most
+	// limit each, no since), in one call. An agent without a finished run has no key. The runs
+	// need only the fields the overview shows: Config.Model, not the rest of Config or CaseIDs.
+	FinishedRunsByAgent(ctx context.Context, workspaceID string, agentIDs []string, limit int) (map[string][]domain.Run, error)
 	// DashboardAgents returns the agents of the workspace that own a case or an agent-owned run,
 	// ordered by name then id (database default collation).
 	DashboardAgents(ctx context.Context, workspaceID string) ([]domain.AgentRef, error)

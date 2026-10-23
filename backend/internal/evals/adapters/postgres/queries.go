@@ -103,6 +103,53 @@ func (s *Store) runList(ctx context.Context, workspaceID string, kind domain.Own
 	return runsToDomain(rows)
 }
 
+// overviewColumns are the columns of eval_suite_runs the overview needs: every field of the run
+// DTO, and from config (system prompt and skill bodies make it large) only the model. case_ids is
+// not read: Run.CaseIDs stays empty on these rows.
+const overviewColumns = `eval_suite_runs.id, workspace_id, owner_kind, skill_id, skill_version, agent_id,
+	agent_version, agent_name, jsonb_build_object('model', config->'model') AS config, status,
+	started_at, finished_at, cases_total, cases_finished, cases_passed, cases_errored, recall,
+	"precision", citation_accuracy, unlabeled_findings, cost_usd, duration_ms, error`
+
+// FinishedRunsByAgent returns, for each of the agents, its newest finished (completed or failed)
+// agent-owned runs, newest started_at first, at most limit per agent: what FinishedAgentRuns
+// returns, for all agents in one round trip. Agents without such a run have no key. The runs
+// carry only the overview columns (see overviewColumns).
+func (s *Store) FinishedRunsByAgent(ctx context.Context, workspaceID string, agentIDs []string, limit int) (map[string][]domain.Run, error) {
+	out := map[string][]domain.Run{}
+	ids := make([]string, 0, len(agentIDs))
+	for _, id := range agentIDs {
+		if isUUID(id) {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 || limit <= 0 {
+		return out, nil
+	}
+	// The window ranks the narrow (id, rn) rows; the wide columns are read for the survivors only,
+	// so the config of runs beyond the limit is never touched.
+	ranked := s.workspaceRuns(ctx, workspaceID).
+		Select("id, ROW_NUMBER() OVER (PARTITION BY agent_id ORDER BY started_at DESC, id DESC) AS rn").
+		Where("owner_kind = ? AND status IN ? AND agent_id IN ?", string(domain.OwnerAgent), finishedStatuses, ids)
+	var rows []runRow
+	err := s.conn(ctx).Table("(?) AS ranked", ranked).
+		Joins("JOIN eval_suite_runs ON eval_suite_runs.id = ranked.id").
+		Select(overviewColumns).
+		Where("ranked.rn <= ?", limit).
+		Order("eval_suite_runs.agent_id, ranked.rn").Scan(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("select finished runs by agent: %w", err)
+	}
+	for _, row := range rows {
+		run, err := row.toDomain()
+		if err != nil {
+			return nil, err
+		}
+		out[run.AgentID] = append(out[run.AgentID], run)
+	}
+	return out, nil
+}
+
 // DashboardAgents returns the agents of the workspace that own a case or an agent-owned run,
 // ordered by name then id (database default collation).
 func (s *Store) DashboardAgents(ctx context.Context, workspaceID string) ([]domain.AgentRef, error) {
@@ -125,14 +172,14 @@ func (s *Store) DashboardAgents(ctx context.Context, workspaceID string) ([]doma
 }
 
 // RecentAgentRuns returns the newest agent-owned runs of the workspace, any status, with the
-// agents' current names.
+// agents' current names. The runs carry only the overview columns (see overviewColumns).
 func (s *Store) RecentAgentRuns(ctx context.Context, workspaceID string, limit int) ([]domain.RecentRun, error) {
 	if limit <= 0 {
 		return []domain.RecentRun{}, nil
 	}
 	var rows []runRow
-	err := s.workspaceRuns(ctx, workspaceID).Where("owner_kind = ?", string(domain.OwnerAgent)).
-		Order("started_at DESC, id DESC").Limit(limit).Find(&rows).Error
+	err := s.workspaceRuns(ctx, workspaceID).Select(overviewColumns).Where("owner_kind = ?", string(domain.OwnerAgent)).
+		Order("started_at DESC, id DESC").Limit(limit).Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select recent runs: %w", err)
 	}

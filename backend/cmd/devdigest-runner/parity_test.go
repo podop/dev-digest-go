@@ -586,8 +586,9 @@ func TestParity_Manifests(t *testing.T) {
 					t.Errorf("LoadAgentManifest(%q) error = %v, want prefix %q", text, err, want)
 				}
 			case c.Error != nil:
-				if err == nil || err.Error() != c.Error.Message {
-					t.Errorf("LoadAgentManifest(%q) error = %v, want %q", text, err, c.Error.Message)
+				want := goManifestMessage(c.Error.Message)
+				if err == nil || err.Error() != want {
+					t.Errorf("LoadAgentManifest(%q) error = %v, want %q", text, err, want)
 				}
 			default:
 				if err != nil {
@@ -1194,8 +1195,13 @@ func runCiScenarioTest(t *testing.T, corpus *runCiCorpus, sc runCiScenario) {
 		wantCode, wantError = 1, "Skill slug '../../outside' is not a valid file name"
 		wantReads = []string{goldenDir + "/agents/", goldenDir + "/agents/" + agentFile}
 		wantWrites, wantRequests, wantLLM, wantArtifact, wantLogs = nil, nil, nil, nil, nil
+	case sc.Name == "Q5: a model error fails hard: no artifact, nothing posted",
+		sc.Name == "a model error after a partial first call in map-reduce":
+		// Deliberate deviation from Node (security r1 F1, spec 7.8.9): a failed model call prints
+		// its class, never the error text, which can quote the diff or the model's output.
+		wantError = "the model call failed (error)"
 	case wantError != "":
-		wantError = goErrorMessage(wantError, env["GITHUB_TOKEN"])
+		wantError = goManifestMessage(goErrorMessage(wantError, env["GITHUB_TOKEN"]))
 	}
 
 	if code != wantCode {
@@ -1516,15 +1522,18 @@ func TestParity_OpenRouter(t *testing.T) {
 				}
 			}
 
-			// the failure text: the engine's own texts are Go's where Node printed the OpenAI SDK's
+			// the failure text: Node printed the OpenAI SDK's message or the engine's; the Go runner
+			// prints the content-free class of the failure (security r1 F1, deviation from Node)
 			if sc.Result.Error != "" {
 				stderrText := strings.ReplaceAll(stderr.String(), root, goldenWorkspace)
-				if strings.HasPrefix(sc.Result.Error, "OpenRouter ") {
-					if !strings.Contains(stderrText, "[agent-runner] FAILED: "+oneLineText(sc.Result.Error)) {
-						t.Errorf("stderr lacks the Node failure text\n got: %s\nwant: %s", stderrText, oneLineText(sc.Result.Error))
-					}
-				} else if !strings.Contains(stderrText, "[agent-runner] FAILED: ") {
-					t.Errorf("stderr lacks a failure line: %s", stderrText)
+				failure := goModelFailure(sc.Result.Error)
+				if sc.Name == "an empty key is sent as an empty bearer and the stub refuses it" {
+					// Node sent the call with an empty bearer and the stub refused it; the Go client
+					// refuses an empty key before any request.
+					failure = "the model call failed (not_configured)"
+				}
+				if want := "[agent-runner] FAILED: " + failure + "\n"; !strings.Contains(stderrText, want) {
+					t.Errorf("stderr lacks the failure line\n got: %s\nwant: %s", stderrText, want)
 				}
 			}
 
@@ -1566,7 +1575,31 @@ func maskParseError(s string) string {
 	return parseErrorReprompt.ReplaceAllString(s, "${1}<parser message>${2}")
 }
 
-func oneLineText(s string) string { return strings.NewReplacer("\r", `\r`, "\n", `\n`).Replace(s) }
+// goManifestMessage is Node's manifest validation message with the Go runner's one difference
+// (security r1 F1, spec 7.8.9): an invalid enum value is not echoed ("received '<value>'" is
+// dropped), because the value is the repository's text of any length and the message is printed
+// on the public job log.
+func goManifestMessage(msg string) string {
+	return enumReceived.ReplaceAllString(msg, "$1")
+}
+
+var enumReceived = regexp.MustCompile(`(Invalid enum value\. Expected [^;]*?), received '[^']*'`)
+
+// statusPrefix is the HTTP status Node's OpenAI SDK put in front of a provider error.
+var statusPrefix = regexp.MustCompile(`^(\d{3}) `)
+
+// goModelFailure is the failure text of a model call in the Go runner for the error text Node
+// printed: the class only. The golden scenarios cover a schema failure, an answer without choices
+// and HTTP statuses.
+func goModelFailure(nodeError string) string {
+	switch {
+	case strings.Contains(nodeError, "failed schema validation"):
+		return "the model call failed (schema_failure)"
+	case statusPrefix.MatchString(nodeError):
+		return "the model call failed (http " + statusPrefix.FindStringSubmatch(nodeError)[1] + ")"
+	}
+	return "the model call failed (provider_error)"
+}
 
 func compareLLMBody(t *testing.T, i int, w orHTTPRequest, r map[string]any) {
 	t.Helper()

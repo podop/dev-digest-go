@@ -103,6 +103,7 @@ type ciWFRun struct {
 	Conclusion string // "" = null
 	URL        string
 	RepoID     int64
+	HeadRepoID int64 // 0 = GitHub names no head repository
 	PRs        []int
 	CreatedAt  string
 }
@@ -313,12 +314,17 @@ func (d *ciGH) route(w http.ResponseWriter, r *http.Request) {
 			for _, n := range run.PRs {
 				prs = append(prs, map[string]int{"number": n})
 			}
-			list = append(list, map[string]any{
+			item := map[string]any{
 				"id": run.ID, "run_attempt": run.Attempt, "head_sha": run.HeadSHA, "path": run.Path, "event": "pull_request",
 				"conclusion": conclusion, "html_url": run.URL, "created_at": run.CreatedAt,
-				"repository":    map[string]int64{"id": run.RepoID},
-				"pull_requests": prs,
-			})
+				"repository":      map[string]int64{"id": run.RepoID},
+				"head_repository": nil,
+				"pull_requests":   prs,
+			}
+			if run.HeadRepoID != 0 {
+				item["head_repository"] = map[string]int64{"id": run.HeadRepoID}
+			}
+			list = append(list, item)
 		}
 		ciJSON(w, http.StatusOK, map[string]any{"total_count": len(list), "workflow_runs": list})
 	case r.Method == http.MethodGet && ciArtsRE.MatchString(p):
@@ -1409,7 +1415,7 @@ const ciRepoID = 4242
 func ciRun(slug, repo string, id int64, created time.Time) ciWFRun {
 	return ciWFRun{
 		ID: id, Attempt: 1, HeadSHA: fmt.Sprintf("sha%d", id), Path: ".github/workflows/devdigest-review-" + slug + ".yml",
-		Conclusion: "success", URL: fmt.Sprintf("https://github.com/%s/actions/runs/%d", repo, id), RepoID: ciRepoID,
+		Conclusion: "success", URL: fmt.Sprintf("https://github.com/%s/actions/runs/%d", repo, id), RepoID: ciRepoID, HeadRepoID: ciRepoID,
 		CreatedAt: created.UTC().Format(time.RFC3339),
 	}
 }
@@ -1546,6 +1552,68 @@ func TestCiRefresh_StoresVerifiedAndFailedRuns(t *testing.T) { // AC6034, EC6035
 	again := s.do(http.MethodPost, "/ci/refresh", map[string]any{"agent_id": agent})
 	if got := again.Obj(t)["ingested"]; again.Status != http.StatusOK || got != float64(0) {
 		t.Errorf("second refresh = %d %s, want ingested 0", again.Status, again.Body)
+	}
+}
+
+// A fork pull request runs the fork's copy of the workflow: it can drop the fork guard and upload
+// a result that matches the run's commit, repository id and workflow path. Such a run is not
+// inspected, downloaded or stored, however perfect its artifact; same-repository runs still are.
+func TestCiRefresh_ForkRunWithAForgedArtifactIsNotStored(t *testing.T) { // AC6062, EC6042
+	s, gh := ciStack(t, ciSpec())
+	agent := ciCreateAgent(t, s, "Alpha Reviewer", "openrouter")
+	const slug, repo = "alpha-reviewer", "acme/ci-one"
+	inst := ciInstall(t, s, agent, repo, slug, 2, time.Now())
+	base := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+
+	fork := ciRun(slug, repo, 401, base.Add(-time.Hour))
+	fork.HeadRepoID = ciRepoID + 1
+	gone := ciRun(slug, repo, 402, base.Add(-2*time.Hour)) // the fork was deleted: no head repository
+	gone.HeadRepoID = 0
+	forkNoArtifact := ciRun(slug, repo, 403, base.Add(-3*time.Hour))
+	forkNoArtifact.HeadRepoID = ciRepoID + 1
+	forkNoArtifact.Conclusion = "failure"
+	own := ciRun(slug, repo, 404, base.Add(-4*time.Hour))
+	forged := map[string]any{"blockers": 0, "cost_usd": 999999.99, "pr_number": 1}
+	gh.addWorkflow(repo, slug, forkNoArtifact) // replaces the list: add the others after it
+	gh.addGoodRun(t, repo, slug, fork, 9401, forged)
+	gh.addGoodRun(t, repo, slug, gone, 9402, forged)
+	gh.addGoodRun(t, repo, slug, own, 9404, nil)
+
+	resp := s.post("/ci/refresh", nil)
+	if resp.Status != http.StatusOK {
+		t.Fatalf("POST /ci/refresh = %d %s, want 200", resp.Status, resp.Body)
+	}
+	want := map[string]any{
+		"ingested": float64(1), "degraded": false,
+		"installations": []any{map[string]any{"installation_id": inst, "repo": repo, "state": "ok", "ingested": float64(1), "skipped": []any{}}},
+	}
+	if diff := cmp.Diff(want, resp.JSON(t)); diff != "" {
+		t.Errorf("refresh body mismatch (-want +got):\n%s", diff)
+	}
+	if got := count(t, s.db.DB, `SELECT count(*) FROM ci_runs WHERE github_run_id IN (401, 402, 403)`); got != 0 {
+		t.Errorf("fork runs stored = %d, want 0", got)
+	}
+	if got := count(t, s.db.DB, `SELECT count(*) FROM ci_runs WHERE github_run_id = 404`); got != 1 {
+		t.Errorf("same-repository run stored = %d, want 1", got)
+	}
+	for _, id := range []string{"401", "402", "403"} {
+		if reqs := ciWith(s.gh.requests(), "GET", "/runs/"+id+"/artifacts"); len(reqs) != 0 {
+			t.Errorf("run %s: %d artifact listing(s), want none for a run from a fork", id, len(reqs))
+		}
+	}
+	for _, art := range []string{"9401", "9402"} {
+		if reqs := ciWith(s.gh.requests(), "GET", "/artifacts/"+art+"/zip"); len(reqs) != 0 {
+			t.Errorf("artifact %s was downloaded %d time(s), want none", art, len(reqs))
+		}
+	}
+	lines := logLines(t, s.logs, "ci refresh: run not inspected")
+	if len(lines) != 3 {
+		t.Fatalf("not-inspected log lines = %d, want 3 (runs 401-403)", len(lines))
+	}
+	for _, line := range lines {
+		if line["level"] != "WARN" || line["installation_id"] != inst || line["repo"] != repo || line["reason"] != "head_repository_differs" {
+			t.Errorf("log line = %v, want WARN with installation_id %s, repo %s and the fixed reason", line, inst, repo)
+		}
 	}
 }
 

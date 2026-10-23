@@ -219,6 +219,7 @@ func workflowRunOf(m obj) domain.WorkflowRun {
 		Event: asStr(m["event"]), Conclusion: optStr(m["conclusion"]), HTMLURL: asStr(m["html_url"]),
 		RepositoryID: asInt64(m["repository_id"]), CreatedAt: asStr(m["created_at"]),
 	}
+	run.HeadRepositoryID = run.RepositoryID // the Node goldens know no forks: every run is a same-repository run
 	for _, n := range asList(m["pr_numbers"]) {
 		run.PRNumbers = append(run.PRNumbers, asInt(n))
 	}

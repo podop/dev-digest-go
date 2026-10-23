@@ -17,8 +17,11 @@ type WorkflowRun struct {
 	Conclusion   string // "" when null
 	HTMLURL      string
 	RepositoryID int64
-	PullNumbers  []int
-	CreatedAt    time.Time // zero when GitHub sent none or an unparsable value
+	// HeadRepositoryID is the repository the run's head commit lives in: a fork's id for a fork
+	// pull request. 0 when GitHub sends no head repository (a deleted fork).
+	HeadRepositoryID int64
+	PullNumbers      []int
+	CreatedAt        time.Time // zero when GitHub sent none or an unparsable value
 }
 
 // RunArtifact is one artifact of a workflow run.
@@ -43,6 +46,9 @@ type apiRuns struct {
 		Repository struct {
 			ID int64 `json:"id"`
 		} `json:"repository"`
+		HeadRepository *struct {
+			ID int64 `json:"id"`
+		} `json:"head_repository"`
 		PullRequests []struct {
 			Number int `json:"number"`
 		} `json:"pull_requests"`
@@ -83,6 +89,9 @@ func (c *Client) ListWorkflowRuns(ctx context.Context, owner, name, workflowFile
 			HTMLURL:      r.HTMLURL,
 			RepositoryID: r.Repository.ID,
 			CreatedAt:    parseTime(r.CreatedAt),
+		}
+		if r.HeadRepository != nil {
+			run.HeadRepositoryID = r.HeadRepository.ID
 		}
 		if run.RunAttempt <= 0 {
 			run.RunAttempt = 1

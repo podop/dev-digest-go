@@ -39,6 +39,7 @@ func TestLoad(t *testing.T) {
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
+				DBMaxOpenConns:         20,
 			},
 		},
 		{
@@ -70,6 +71,7 @@ func TestLoad(t *testing.T) {
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
+				DBMaxOpenConns:         20,
 			},
 		},
 		{
@@ -95,6 +97,7 @@ func TestLoad(t *testing.T) {
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
+				DBMaxOpenConns:         20,
 			},
 		},
 		{
@@ -122,6 +125,7 @@ func TestLoad(t *testing.T) {
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
+				DBMaxOpenConns:         20,
 			},
 		},
 		{
@@ -151,6 +155,7 @@ func TestLoad(t *testing.T) {
 				ProjectContextGlobs:    []string{"docs/*.md", "{a,b}/**/*.md"},
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
+				DBMaxOpenConns:         20,
 			},
 		},
 		{
@@ -175,6 +180,7 @@ func TestLoad(t *testing.T) {
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
+				DBMaxOpenConns:         20,
 			},
 		},
 		{name: "provider override other", env: map[string]string{"DATABASE_URL": "x", "LLM_PROVIDER_OVERRIDE": "other"}, wantErr: true},
@@ -342,6 +348,43 @@ func TestLoadReviewConcurrency(t *testing.T) {
 			if got.ReviewAgentConcurrency != tc.wantAgent || got.ReviewMapConcurrency != tc.wantMap {
 				t.Errorf("Load(%v) concurrency = agent %d, map %d; want agent %d, map %d",
 					tc.env, got.ReviewAgentConcurrency, got.ReviewMapConcurrency, tc.wantAgent, tc.wantMap)
+			}
+		})
+	}
+}
+
+// DB_MAX_OPEN_CONNS (1-90, default 20) sizes the Postgres pool; a bad value stops the start.
+func TestLoadDBMaxOpenConns(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		want    int
+		wantErr bool
+	}{
+		{name: "unset", value: "", want: 20},
+		{name: "blank counts as unset", value: "  ", want: 20},
+		{name: "lower bound", value: "1", want: 1},
+		{name: "upper bound", value: "90", want: 90},
+		{name: "trimmed", value: " 35 ", want: 35},
+		{name: "zero", value: "0", wantErr: true},
+		{name: "above range", value: "91", wantErr: true},
+		{name: "text", value: "many", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := map[string]string{"DATABASE_URL": "postgres://db", "HOME": "/home/u", "DB_MAX_OPEN_CONNS": tc.value}
+			got, err := config.Load(func(k string) string { return env[k] })
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "DB_MAX_OPEN_CONNS") {
+					t.Fatalf("Load(DB_MAX_OPEN_CONNS=%q) error = %v, want one naming DB_MAX_OPEN_CONNS", tc.value, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Load(DB_MAX_OPEN_CONNS=%q) error = %v", tc.value, err)
+			}
+			if got.DBMaxOpenConns != tc.want {
+				t.Errorf("Load(DB_MAX_OPEN_CONNS=%q).DBMaxOpenConns = %d, want %d", tc.value, got.DBMaxOpenConns, tc.want)
 			}
 		})
 	}

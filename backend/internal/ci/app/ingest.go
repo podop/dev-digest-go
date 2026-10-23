@@ -197,6 +197,11 @@ func (r *refresh) installation(ctx context.Context, inst domain.Installation, sl
 		if !domain.Inspectable(run) || stored[domain.KeyOf(run)] {
 			continue
 		}
+		if !domain.FromBaseRepository(run) { // a fork's copy of the workflow can forge the artifact
+			r.s.log.WarnContext(ctx, "ci refresh: run not inspected",
+				"installation_id", inst.ID, "repo", inst.Repo, "github_run_id", run.ID, "reason", "head_repository_differs")
+			continue
+		}
 		out, err := r.inspect(ctx, inst, slug, workflowPath, repo, run)
 		if err != nil {
 			return err
