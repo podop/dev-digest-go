@@ -123,11 +123,14 @@ func (r *Reader) persistentBlast(ctx context.Context, repoID string, changed []s
 }
 
 // maxConcurrentBlastScans is how many degraded clone scans run at once in one Reader (one per
-// process). A scan is CPU-bound on one core for up to the scan timeout and holds a few files'
-// text at a time (at most about 2 MB each, decoded and extracted: tens of MB), so two keep a
-// core free on a small host and bound the memory of all scans at a few tens of MB. Callers of
-// the same repo and changed set share one scan (blastFlights), so the limit only meets
-// different repos or changed sets.
+// process). A scan is CPU-bound on one core for up to the scan timeout, so two keep a core free on
+// a small host. What a scan keeps for its whole length is bounded by constants: at most
+// domain.MaxBlastScanSymbols symbols (names copied) and domain.MaxBlastScanCallers rows. Beyond
+// that it holds only the file it is on (at most about 2 MB: the text, its decoded copy and the
+// extracted symbols, which for a file that declares a name on every line is the larger part, a few
+// MB), so all scans together stay at tens of MB however many files a clone has. Callers of the same
+// repo and changed set share one scan (blastFlights), so the limit only meets different repos or
+// changed sets.
 const maxConcurrentBlastScans = 2
 
 // blastScan is the degraded path: Node's clone scan with the regex symbol extractor, bounded for
@@ -253,11 +256,10 @@ type blastScanner struct {
 	// symbols are the changed symbols in walk then extraction order; the scan looks for
 	// symbols[i].Name in every other file.
 	symbols []domain.BlastSymbol
-	// enclosing holds the enclosing-symbol index of the changed files, which collectSymbols
-	// extracts anyway and a caller scan can hit again. The index of any other file lives only
-	// while that file is scanned: a file is visited once, and an index kept per hit file would
-	// keep its text reachable for the rest of the scan.
-	enclosing map[string]domain.Enclosing
+	// The enclosing-symbol index of a file is never kept: it lives only while that file is
+	// scanned for callers (enclosingFor). An index kept per file would hold the file's text
+	// reachable (names and labels are substrings of it) and, for a file that declares one name
+	// on every line, one entry per line while the symbol cap counts the name once.
 
 	// rows[i] are the callers of symbols[i] in scan order; limit[i] is how many of them can still
 	// matter and wanted the number of leading symbols that can matter at all (see prune).
@@ -280,7 +282,6 @@ func (s *blastScanner) collectSymbols(ctx context.Context, walked, changed []str
 	for _, c := range changed {
 		changedSet[c] = struct{}{}
 	}
-	s.enclosing = map[string]domain.Enclosing{}
 	type key struct{ name, file string }
 	dedup := map[key]struct{}{}
 	for _, rel := range walked {
@@ -298,12 +299,11 @@ func (s *blastScanner) collectSymbols(ctx context.Context, walked, changed []str
 		if err != nil {
 			return fmt.Errorf("blast radius: %w", err)
 		}
-		// The names are substrings of the file text; the symbols and the index outlive the
-		// text, so each name is copied once and the copy is shared.
+		// The names are substrings of the file text and the symbols outlive it, so each name is
+		// copied.
 		for i := range syms {
 			syms[i].Name = strings.Clone(syms[i].Name)
 		}
-		s.enclosing[rel] = enclosingOf(syms)
 		for _, x := range syms {
 			if len(s.symbols) >= domain.MaxBlastScanSymbols {
 				return nil
@@ -373,7 +373,7 @@ func (s *blastScanner) collectCallers(ctx context.Context, files []string) error
 			}
 			if !haveEn {
 				var err error
-				if enc, err = s.enclosingFor(ctx, rel, text); err != nil {
+				if enc, err = s.enclosingFor(ctx, text); err != nil {
 					hitErr = err
 					return false, err
 				}
@@ -405,12 +405,11 @@ func (s *blastScanner) collectCallers(ctx context.Context, files []string) error
 	return nil
 }
 
-// enclosingFor returns the enclosing-symbol index of a file: the kept one of a changed file, else
-// one extracted from text for the caller to use while it scans that file.
-func (s *blastScanner) enclosingFor(ctx context.Context, rel, text string) (domain.Enclosing, error) {
-	if enc, ok := s.enclosing[rel]; ok {
-		return enc, nil
-	}
+// enclosingFor extracts the enclosing-symbol index of the file being scanned from its text, for the
+// caller to use while it scans that file. A changed file that is also scanned as a caller file
+// (for the other changed symbols) is extracted a second time rather than kept from
+// collectSymbols; the text is the same, so is the index.
+func (s *blastScanner) enclosingFor(ctx context.Context, text string) (domain.Enclosing, error) {
 	syms, err := domain.ExtractSymbols(ctx, text)
 	if err != nil {
 		return domain.Enclosing{}, fmt.Errorf("blast radius: %w", err)

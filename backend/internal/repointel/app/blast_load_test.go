@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -107,6 +108,95 @@ func TestBlastRadius_ScanRetainsNoCallerFileText(t *testing.T) {
 	t.Logf("live heap growth while scanning: %d KiB", delta>>10)
 	if delta > bound {
 		t.Errorf("BlastRadius() live heap grew by %d KiB while scanning %d files of %d KiB, want under %d KiB (caller file text kept reachable)",
+			delta>>10, files, fileSize>>10, int64(bound)>>10)
+	}
+}
+
+// byteFiles is a clone of fixed files; sample runs inside ReadCallerFile.
+type byteFiles struct {
+	list   []string
+	data   map[string][]byte
+	sample func(read int)
+	reads  int
+}
+
+func (b *byteFiles) ScanCallers(context.Context, string) ([]string, error) { return b.list, nil }
+
+func (b *byteFiles) ReadCallerFile(root, rel string) ([]byte, error) {
+	b.reads++
+	if b.sample != nil {
+		b.sample(b.reads)
+	}
+	d, ok := b.data[rel]
+	if !ok {
+		return nil, fs.ErrNotExist
+	}
+	return d, nil
+}
+
+func (b *byteFiles) ReadFile(root, rel string) ([]byte, error) { return b.ReadCallerFile(root, rel) }
+
+// N1 of the Phase 5 security review (r2): the degraded scan kept the enclosing-symbol index of
+// every changed file for the whole scan. The collection stops at 1,000 distinct (name, file)
+// symbols, so changed files that declare one name on every line added one symbol each but one
+// index entry per line (about 1.6 bytes of heap per byte of file). The live heap, measured after
+// GC while the scan is between two files, must not grow with the number of changed files read
+// (before the fix: about 0.6 MiB per 256 KiB file, 7.3 MiB for these 12 files).
+func TestBlastRadius_ScanRetainsNoChangedFileIndex(t *testing.T) {
+	if testing.Short() {
+		t.Skip("heavy: scans 12 changed files of 256 KiB")
+	}
+	const (
+		files    = 12
+		fileSize = 256 << 10
+		bound    = 2 << 20
+	)
+	var decl strings.Builder
+	for decl.Len() < fileSize {
+		decl.WriteString("function foo(){}\n")
+	}
+	decl.WriteString("function outer(){}\nfoo();\n") // the call a changed file shows as a caller file
+	bf := &byteFiles{data: map[string][]byte{}}
+	changed := make([]string, 0, files)
+	for i := range files {
+		rel := fmt.Sprintf("src/m%02d.ts", i)
+		bf.list = append(bf.list, rel)
+		bf.data[rel] = []byte(decl.String())
+		changed = append(changed, rel)
+	}
+
+	runtime.GC()
+	var base runtime.MemStats
+	runtime.ReadMemStats(&base)
+	var peak uint64
+	bf.sample = func(read int) {
+		if read%4 != 0 {
+			return
+		}
+		var ms runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&ms)
+		peak = max(peak, ms.HeapAlloc)
+	}
+
+	r := app.NewReader(newFakeStore(), false, app.WithCallerScan(app.CallerScan{Repos: oneRepo{}, Files: bf, Analyzer: &fakeAnalyzer{}, Timeout: 5 * time.Minute}))
+	got, err := r.BlastRadius(t.Context(), repoID, changed)
+	if err != nil {
+		t.Fatalf("BlastRadius() error = %v", err)
+	}
+	if len(got.ChangedSymbols) != 2*files {
+		t.Errorf("BlastRadius() found %d changed symbols, want %d: foo and outer of each file (results must be unchanged)", len(got.ChangedSymbols), 2*files)
+	}
+	if len(got.Callers) == 0 || got.Callers[0].Symbol != "outer" {
+		t.Errorf("BlastRadius() callers = %d, first %+v, want callers enclosed by outer (a changed file is also a caller file)", len(got.Callers), got.Callers)
+	}
+	if bf.reads < 2*files {
+		t.Fatalf("scan read %d files, want %d (every changed file twice)", bf.reads, 2*files)
+	}
+	delta := int64(peak) - int64(base.HeapAlloc)
+	t.Logf("live heap growth while scanning: %d KiB", delta>>10)
+	if delta > bound {
+		t.Errorf("BlastRadius() live heap grew by %d KiB while scanning %d changed files of %d KiB, want under %d KiB (changed-file indexes kept)",
 			delta>>10, files, fileSize>>10, int64(bound)>>10)
 	}
 }
