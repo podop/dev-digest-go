@@ -38,7 +38,17 @@ The brief points at the old session scratchpad, so use these copies.
   to Go are O(rows), not O(findings).
 - The S19 goldens must pass unchanged.
 - Re-measure on the throwaway project `devdigest-go-s22` (API 3211, DB 5436).
-- Uncommitted work in `backend/internal/leaderboard/**` (11 files) when this was written; not reviewed, not committed.
+- **Stopped by the user at 23:35** (agent killed mid-run). The partial work is uncommitted in the working tree: 13 files in
+  `backend/internal/leaderboard/**`, +930/−413, plus the new `domain/findings_helper_test.go`. It has not been reviewed and its
+  tests were not confirmed green.
+  - Backup: `.sdd/review/2026-10-23-pr-leaderboard/fix-r1-partial.patch` and `fix-r1-partial-findings_helper_test.go`.
+  - **It contains temporary `TMPTIMING` debug output in `leaderboard/transport/http/routes.go`, which must be removed.**
+  - The agent's last step was "check equality at NFR1 and timing with a fresh host binary": the result had not yet been
+    compared with the old output, and no after-fix numbers exist.
+  - The `s22-assets/r1-base-mix.txt` it wrote at 22:57 shows 30d/all ≈ 2.2 s and week/all ≈ 1.0 s per request. It is
+    probably the round's re-measured baseline; check before relying on it.
+- The throwaway stack is **stopped, not removed**, so the NFR1 data is kept (volumes `devdigest_go_s22_*`). To restart it:
+  `docker compose -p devdigest-go-s22 -f docker-compose.yml -f .sdd/review/2026-10-23-pr-leaderboard/s22-assets/override.yml up -d --build db backend`.
 
 To resume:
 1. `git status`: check whether the fix round left a report (no commit) or partial code.
