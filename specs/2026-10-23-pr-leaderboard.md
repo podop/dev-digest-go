@@ -37,7 +37,7 @@ fresh without anyone opening the PR list, because PRs are polled from GitHub in 
 - Review score per review = 100 − 35·CRITICAL − 12·WARNING − 3·SUGGESTION, clamped 0–100
   (`reviewer/domain/score.go:32`). Findings have no status column: accepted = `accepted_at` set, dismissed =
   `dismissed_at` set (`performance/adapters/postgres/read.go:31-36`). A finding's time is its review's `created_at`.
-- "Current reviews" of a PR = newest review per agent (`pulls/domain/rollup.go:273`); the PR list's `score` is only the
+- "Current reviews" of a PR = newest review per agent (`pulls/domain/rollup.go:44`); the PR list's `score` is only the
   newest one of them, while `findings_counts` sums all of them (`frontend/INSIGHTS.md` 2026-10-02 entry).
 - Derived status: merged/closed as stored; otherwise `needs_review` when `last_reviewed_sha ≠ head_sha`, `stale` when
   not updated for 7 days, else `reviewed` (`pulls/domain/pulls.go:33,153`).
@@ -82,8 +82,9 @@ Out of scope:
 - FR3 [sync] — The system shall poll every repository of every workspace in the background at a configurable
   interval (default 15 min; 0 disables) and on server start, one repository at a time.
 - FR4 [sync] — A background poll of a repository shall page through PRs newest-update-first until it reaches a PR not
-  updated since the repository's previous successful poll, or 62 days back on the first poll, capped at 10 pages of
-  50 PRs; it shall then set the repository's last-polled time.
+  updated since the start of the previous successful background poll of that repository in the running server, or
+  62 days back on the first background poll after server start, capped at 10 pages of 50 PRs; it shall then set the
+  repository's last-polled time. A manual poll or a PR-list request never moves the background-poll cutoff.
 - FR5 [sync] — The background poll shall skip all repositories (one WARN per cycle) when no GitHub token is set, stop
   the cycle until the reset time when GitHub reports the rate limit exhausted, and log a failed repository and go on
   with the next one. It shall stop within 5 s of server shutdown.
@@ -92,7 +93,7 @@ Out of scope:
 - FR7 [api] — Windows in zone `tz`: `week` = [Monday 00:00 of the current week, next Monday 00:00);
   `last_week` = the week before; `30d` = [00:00 of today − 29 days, 00:00 of tomorrow). The previous window is the
   equally long window directly before. Data after "now" cannot exist, so `week` shows the week so far.
-- FR8 [api] — Population: a PR is a row when at least one DevDigest review of it was created in the window. The
+- FR8 [api] — Population: a PR is a row when at least one DevDigest review (kind `review`) of it was created in the window. The
   window snapshot of a row = the newest review per agent created in the window.
 - FR9 [api] — Per row the API shall return: repo name, number, title, author, status (merged/closed as stored, else
   derived as the PR list does), additions, deletions, files, size bucket, health, risk, findings counts by severity,
@@ -101,7 +102,7 @@ Out of scope:
 - FR10 [api] — Metrics: health = rounded mean of the snapshot scores; findings counts = Σ over snapshot findings
   (all statuses); open critical = snapshot CRITICAL findings with neither accepted nor dismissed time; rounds = the
   highest number of reviews any one agent wrote for the PR in the window; time to first review = first DevDigest
-  review ever − opened time; time to merge = merge time − opened time; cost = Σ cost of the PR's runs started in the
+  review ever − opened time; time to merge = merge time − opened time; cost = Σ cost of the PR's runs (any status, unknown cost = 0) started in the
   window; size = additions + deletions: S ≤ 100, M ≤ 400, L ≤ 1,000, XL > 1,000; risk from Σ weights
   (35 CRITICAL, 12 WARNING, 3 SUGGESTION) of non-dismissed snapshot findings: low < 30, medium 30–69, high ≥ 70.
 - FR11 [api] — KPIs for the window and the previous window: PRs reviewed (row count), merged (PRs with merge time in
@@ -169,7 +170,7 @@ DB error → 500 envelope. UI: request error → error state with Retry; the pag
 Kpis = { prs_reviewed, merged, avg_health|null, time_to_first_review_s|null, time_to_merge_s|null,
          critical_found, open_critical, review_cost_usd }
 Row = { pr_id, repo_id, repo, number, title, author, status, draft, additions, deletions, files_count,
-        size: S|M|L|XL, health, risk: low|medium|high, findings: {CRITICAL,WARNING,SUGGESTION}, open_critical,
+        size: S|M|L|XL|null, health|null, risk: low|medium|high, findings: {CRITICAL,WARNING,SUGGESTION}, open_critical,
         rounds, time_to_first_review_s|null, time_to_merge_s|null, open_age_s|null, cost_usd,
         new_commits_since_review, opened_at|null, merged_at|null,
         reviews: [{ review_id, agent_id, agent_name, score, findings: {CRITICAL,WARNING,SUGGESTION} }] }
@@ -182,7 +183,8 @@ Day = { date: YYYY-MM-DD, opened, merged, critical }
 ```
 Errors (envelope `{"error":{"code","message","details?"}}`): 422 `validation_error` for unknown `period`, unknown `tz`,
 `repo` neither `all` nor a UUID, or any other query key; 404 `not_found` for a repo id not in the workspace.
-Durations are whole seconds; money is a number rounded to 6 decimals. The UI's shared contract copy changes together
+`period.from/to/previous_*` are local times of `tz` with offset and milliseconds (`2026-10-19T00:00:00.000+03:00`); every
+other timestamp is UTC with milliseconds (`…Z`). Durations are whole seconds; money is a number rounded to 6 decimals. The UI's shared contract copy changes together
 with the backend (repository rule). GET `/repos` keeps its shape and already returns `last_polled_at`.
 
 ## 8. Data model
@@ -323,6 +325,7 @@ with the backend (repository rule). GET `/repos` keeps its shape and already ret
 - D14 — Q8 Poll interval and first-poll horizon → 15 min, 62 days, ≤ 10 pages per repo (user approved default, 2026-10-23).
 - D15 — Q9 Are draft PRs excluded from "no review yet" only, or from the whole page → only from "no review yet" (user approved default, 2026-10-23).
 - D16 — Q10 Closed (unmerged) PRs in the table → they appear when reviewed in the window, status "closed" (user approved default, 2026-10-23).
+- D17 — Spec change requests of the planner accepted (2026-10-23): nullable `health`/`size`, review = kind `review`, run time = run start, `period.*` with offset, background-poll cutoff kept per server process (spec author, 2026-10-23).
 
 ## 17. Open questions
 None — Q1–Q10 were resolved on 2026-10-23 by accepting their defaults (D7–D16).
