@@ -95,6 +95,7 @@ Done when = step tests [V1]/[V2]; every UI folder has a `*.test.tsx` [K16]; gate
 ### S20 — Component: poll [W4-r]
 - A `S/pr_poll_test.go`: pages, 1 s interval, rate limit, 500, token, stop ≤ 5 s
 - Covers: AC2–AC5
+- Deviation (accepted, W4): test seam `options.pollTick` in `S/app.go` (+ `spec.pollTick` in `S/main_test.go`), default 0 = poller's 1-min tick; a synctest bubble cannot span the real server sockets, so poll tests shorten the tick and move `spec.now`. Poll tests start their clock at the real now (Retry-After uses the wall clock, security r2 N3)
 ### S21 — Contract test [W5-s]
 - M `F/test/go-backend-contracts.test.ts` · Covers: AC13
 ### S22 — Manual [W5-t]

@@ -104,6 +104,10 @@ type spec struct {
 	evalCaseBudget time.Duration
 	runner         ciapp.RunnerBundle
 	artifactClient *http.Client
+
+	// pollTick is the background PR poll's check interval (0 = 1 min); the poll tests shorten it and
+	// drive the poller's clock through now.
+	pollTick time.Duration
 }
 
 // stack is a running server with its stubs.
@@ -186,6 +190,7 @@ func startStack(t testing.TB, sp spec) *stack {
 			o.now = sp.now
 			o.intentBudget, o.briefBudget, o.onboardingBudget = sp.intentBudget, sp.briefBudget, sp.onboardingBudget
 			o.evalCaseBudget, o.runner, o.artifactClient = sp.evalCaseBudget, sp.runner, sp.artifactClient
+			o.pollTick = sp.pollTick
 		},
 	}
 

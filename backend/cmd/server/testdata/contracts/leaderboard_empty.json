@@ -1,0 +1,138 @@
+{
+  "activity": {
+    "granularity": "day",
+    "points": [
+      {
+        "critical": 0,
+        "from": "2031-01-13",
+        "merged": 0,
+        "opened": 0,
+        "to": "2031-01-13"
+      },
+      {
+        "critical": 0,
+        "from": "2031-01-14",
+        "merged": 0,
+        "opened": 0,
+        "to": "2031-01-14"
+      },
+      {
+        "critical": 0,
+        "from": "2031-01-15",
+        "merged": 0,
+        "opened": 0,
+        "to": "2031-01-15"
+      },
+      {
+        "critical": 0,
+        "from": "2031-01-16",
+        "merged": 0,
+        "opened": 0,
+        "to": "2031-01-16"
+      },
+      {
+        "critical": 0,
+        "from": "2031-01-17",
+        "merged": 0,
+        "opened": 0,
+        "to": "2031-01-17"
+      },
+      {
+        "critical": 0,
+        "from": "2031-01-18",
+        "merged": 0,
+        "opened": 0,
+        "to": "2031-01-18"
+      },
+      {
+        "critical": 0,
+        "from": "2031-01-19",
+        "merged": 0,
+        "opened": 0,
+        "to": "2031-01-19"
+      }
+    ]
+  },
+  "awards": {
+    "cleanest": null,
+    "fastest_merge": null,
+    "hottest": null,
+    "monster": null,
+    "most_rounds": null,
+    "priciest": null
+  },
+  "health_by_size": [
+    {
+      "avg_findings": null,
+      "avg_health": null,
+      "prs": 0,
+      "size": "XS"
+    },
+    {
+      "avg_findings": null,
+      "avg_health": null,
+      "prs": 0,
+      "size": "S"
+    },
+    {
+      "avg_findings": null,
+      "avg_health": null,
+      "prs": 0,
+      "size": "M"
+    },
+    {
+      "avg_findings": null,
+      "avg_health": null,
+      "prs": 0,
+      "size": "L"
+    },
+    {
+      "avg_findings": null,
+      "avg_health": null,
+      "prs": 0,
+      "size": "XL"
+    }
+  ],
+  "hot_files": [],
+  "needs_attention": {
+    "items": [],
+    "total": 0
+  },
+  "period": {
+    "from": "2031-01-13T00:00:00.000+00:00",
+    "key": "week",
+    "previous_from": "2031-01-06T00:00:00.000+00:00",
+    "previous_to": "2031-01-13T00:00:00.000+00:00",
+    "to": "2031-01-20T00:00:00.000+00:00",
+    "tz": "UTC"
+  },
+  "previous_summary": null,
+  "repos": [
+    {
+      "full_name": "acme/api",
+      "id": "00000020-0000-4000-8000-000000000001",
+      "last_polled_at": "2026-10-22T11:55:00.000Z"
+    },
+    {
+      "full_name": "acme/ops",
+      "id": "00000020-0000-4000-8000-000000000003",
+      "last_polled_at": "2026-10-22T10:00:00.000Z"
+    },
+    {
+      "full_name": "acme/web",
+      "id": "00000020-0000-4000-8000-000000000002",
+      "last_polled_at": null
+    }
+  ],
+  "rows": [],
+  "summary": {
+    "avg_health": null,
+    "critical_found": 0,
+    "merged": 0,
+    "open_critical": 0,
+    "prs_reviewed": 0,
+    "review_cost_usd": 0,
+    "time_to_first_review_s": null,
+    "time_to_merge_s": null
+  }
+}

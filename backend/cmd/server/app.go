@@ -169,6 +169,9 @@ type options struct {
 	// artifactClient fetches the storage leg of a CI artifact download; nil = the GitHub client's
 	// default (tests point it at a TLS stub).
 	artifactClient *http.Client
+	// pollTick is how often the background PR poll checks which workspaces are due; 0 = the poller's
+	// own default (1 min). Tests shorten it and move the clock (now) instead of waiting.
+	pollTick time.Duration
 }
 
 // llmURLs are the base URLs of the provider adapters.
@@ -582,7 +585,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 			Store:     pullsStore,
 			Log:       log,
 			Now:       now,
-		}, pullsapp.PollerOptions{})
+		}, pullsapp.PollerOptions{Tick: o.pollTick})
 	}
 	return &wired{
 		echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs),

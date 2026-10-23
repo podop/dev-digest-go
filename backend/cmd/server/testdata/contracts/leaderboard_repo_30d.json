@@ -1,0 +1,596 @@
+{
+  "activity": {
+    "granularity": "week",
+    "points": [
+      {
+        "critical": 0,
+        "from": "2026-09-23",
+        "merged": 0,
+        "opened": 1,
+        "to": "2026-09-27"
+      },
+      {
+        "critical": 0,
+        "from": "2026-09-28",
+        "merged": 1,
+        "opened": 1,
+        "to": "2026-10-04"
+      },
+      {
+        "critical": 0,
+        "from": "2026-10-05",
+        "merged": 0,
+        "opened": 0,
+        "to": "2026-10-11"
+      },
+      {
+        "critical": 1,
+        "from": "2026-10-12",
+        "merged": 0,
+        "opened": 3,
+        "to": "2026-10-18"
+      },
+      {
+        "critical": 4,
+        "from": "2026-10-19",
+        "merged": 3,
+        "opened": 4,
+        "to": "2026-10-22"
+      }
+    ]
+  },
+  "awards": {
+    "cleanest": {
+      "number": 2,
+      "pr_id": "00000040-0000-4000-8000-000000000102",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "title": "Fix flaky test",
+      "value": 100
+    },
+    "fastest_merge": {
+      "number": 2,
+      "pr_id": "00000040-0000-4000-8000-000000000102",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "title": "Fix flaky test",
+      "value": 86400
+    },
+    "hottest": {
+      "number": 1,
+      "pr_id": "00000040-0000-4000-8000-000000000101",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "title": "Add payment retries",
+      "value": 4
+    },
+    "monster": {
+      "number": 3,
+      "pr_id": "00000040-0000-4000-8000-000000000103",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "title": "Refactor ledger",
+      "value": 500
+    },
+    "most_rounds": {
+      "number": 1,
+      "pr_id": "00000040-0000-4000-8000-000000000101",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "title": "Add payment retries",
+      "value": 3
+    },
+    "priciest": {
+      "number": 1,
+      "pr_id": "00000040-0000-4000-8000-000000000101",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "title": "Add payment retries",
+      "value": 10.25
+    }
+  },
+  "health_by_size": [
+    {
+      "avg_findings": 0,
+      "avg_health": 100,
+      "prs": 2,
+      "size": "XS"
+    },
+    {
+      "avg_findings": 4,
+      "avg_health": 77,
+      "prs": 2,
+      "size": "S"
+    },
+    {
+      "avg_findings": null,
+      "avg_health": null,
+      "prs": 0,
+      "size": "M"
+    },
+    {
+      "avg_findings": 1,
+      "avg_health": 90,
+      "prs": 1,
+      "size": "L"
+    },
+    {
+      "avg_findings": null,
+      "avg_health": null,
+      "prs": 0,
+      "size": "XL"
+    }
+  ],
+  "hot_files": [
+    {
+      "critical": 1,
+      "findings": 3,
+      "path": "src/retry.go",
+      "prs": [
+        1
+      ],
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001"
+    },
+    {
+      "critical": 2,
+      "findings": 2,
+      "path": "src/ledger.go",
+      "prs": [
+        1,
+        3
+      ],
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001"
+    },
+    {
+      "critical": 1,
+      "findings": 1,
+      "path": "src/queue.go",
+      "prs": [
+        1
+      ],
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001"
+    },
+    {
+      "critical": 0,
+      "findings": 1,
+      "path": "src/config.go",
+      "prs": [
+        1
+      ],
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001"
+    },
+    {
+      "critical": 0,
+      "findings": 1,
+      "path": "src/old.go",
+      "prs": [
+        9
+      ],
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001"
+    }
+  ],
+  "needs_attention": {
+    "items": [
+      {
+        "author": "octo",
+        "number": 1,
+        "opened_at": "2026-10-12T10:00:00.000Z",
+        "pr_id": "00000040-0000-4000-8000-000000000101",
+        "reasons": [
+          {
+            "count": 2,
+            "kind": "open_critical"
+          },
+          {
+            "kind": "new_commits"
+          },
+          {
+            "days": 10,
+            "kind": "open_long"
+          }
+        ],
+        "repo": "api",
+        "repo_id": "00000020-0000-4000-8000-000000000001",
+        "title": "Add payment retries"
+      },
+      {
+        "author": "mona",
+        "number": 3,
+        "opened_at": "2026-10-13T10:00:00.000Z",
+        "pr_id": "00000040-0000-4000-8000-000000000103",
+        "reasons": [
+          {
+            "count": 1,
+            "kind": "merged_open_critical"
+          }
+        ],
+        "repo": "api",
+        "repo_id": "00000020-0000-4000-8000-000000000001",
+        "title": "Refactor ledger"
+      },
+      {
+        "author": "octo",
+        "number": 10,
+        "opened_at": "2026-09-25T09:00:00.000Z",
+        "pr_id": "00000040-0000-4000-8000-000000000110",
+        "reasons": [
+          {
+            "days": 27,
+            "kind": "open_long"
+          }
+        ],
+        "repo": "api",
+        "repo_id": "00000020-0000-4000-8000-000000000001",
+        "title": "Long open"
+      }
+    ],
+    "total": 3
+  },
+  "period": {
+    "from": "2026-09-23T00:00:00.000+03:00",
+    "key": "30d",
+    "previous_from": null,
+    "previous_to": null,
+    "to": "2026-10-23T00:00:00.000+03:00",
+    "tz": "Europe/Kyiv"
+  },
+  "previous_summary": null,
+  "repos": [
+    {
+      "full_name": "acme/api",
+      "id": "00000020-0000-4000-8000-000000000001",
+      "last_polled_at": "2026-10-22T11:55:00.000Z"
+    }
+  ],
+  "rows": [
+    {
+      "additions": 30,
+      "author": "octo",
+      "cost_usd": 0.6,
+      "deletions": 10,
+      "draft": false,
+      "files_count": 2,
+      "findings": {
+        "CRITICAL": 0,
+        "SUGGESTION": 0,
+        "WARNING": 0
+      },
+      "health": 100,
+      "merged_at": "2026-10-20T08:00:00.000Z",
+      "new_commits_since_review": false,
+      "number": 2,
+      "open_age_s": null,
+      "open_critical": 0,
+      "opened_at": "2026-10-19T08:00:00.000Z",
+      "pr_id": "00000040-0000-4000-8000-000000000102",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "reviews": [
+        {
+          "agent_id": "00000030-0000-4000-8000-000000000002",
+          "agent_name": "beta",
+          "findings": {
+            "CRITICAL": 0,
+            "SUGGESTION": 0,
+            "WARNING": 0
+          },
+          "review_id": "00000050-0000-4000-8000-000000000007",
+          "score": 95
+        }
+      ],
+      "risk": "low",
+      "rounds": 1,
+      "size": "XS",
+      "status": "merged",
+      "time_to_first_review_s": 14400,
+      "time_to_merge_s": 86400,
+      "title": "Fix flaky test",
+      "top_findings": []
+    },
+    {
+      "additions": 0,
+      "author": "octo",
+      "cost_usd": 0,
+      "deletions": 0,
+      "draft": true,
+      "files_count": 0,
+      "findings": {
+        "CRITICAL": 0,
+        "SUGGESTION": 0,
+        "WARNING": 0
+      },
+      "health": 100,
+      "merged_at": null,
+      "new_commits_since_review": false,
+      "number": 6,
+      "open_age_s": null,
+      "open_critical": 0,
+      "opened_at": null,
+      "pr_id": "00000040-0000-4000-8000-000000000106",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "reviews": [
+        {
+          "agent_id": "00000030-0000-4000-8000-000000000001",
+          "agent_name": "alpha",
+          "findings": {
+            "CRITICAL": 0,
+            "SUGGESTION": 0,
+            "WARNING": 0
+          },
+          "review_id": "00000050-0000-4000-8000-000000000009",
+          "score": 80
+        }
+      ],
+      "risk": "low",
+      "rounds": 1,
+      "size": null,
+      "status": "reviewed",
+      "time_to_first_review_s": null,
+      "time_to_merge_s": null,
+      "title": "Add docs",
+      "top_findings": []
+    },
+    {
+      "additions": 20,
+      "author": "octo",
+      "cost_usd": 0,
+      "deletions": 5,
+      "draft": false,
+      "files_count": 1,
+      "findings": {
+        "CRITICAL": 0,
+        "SUGGESTION": 0,
+        "WARNING": 0
+      },
+      "health": 100,
+      "merged_at": null,
+      "new_commits_since_review": false,
+      "number": 10,
+      "open_age_s": 2343600,
+      "open_critical": 0,
+      "opened_at": "2026-09-25T09:00:00.000Z",
+      "pr_id": "00000040-0000-4000-8000-000000000110",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "reviews": [
+        {
+          "agent_id": "00000030-0000-4000-8000-000000000001",
+          "agent_name": "alpha",
+          "findings": {
+            "CRITICAL": 0,
+            "SUGGESTION": 0,
+            "WARNING": 0
+          },
+          "review_id": "00000050-0000-4000-8000-000000000013",
+          "score": 90
+        }
+      ],
+      "risk": "low",
+      "rounds": 1,
+      "size": "XS",
+      "status": "stale",
+      "time_to_first_review_s": 435600,
+      "time_to_merge_s": null,
+      "title": "Long open",
+      "top_findings": []
+    },
+    {
+      "additions": 60,
+      "author": "octo",
+      "cost_usd": 0,
+      "deletions": 40,
+      "draft": false,
+      "files_count": 3,
+      "findings": {
+        "CRITICAL": 0,
+        "SUGGESTION": 0,
+        "WARNING": 1
+      },
+      "health": 97,
+      "merged_at": "2026-09-30T10:00:00.000Z",
+      "new_commits_since_review": false,
+      "number": 9,
+      "open_age_s": null,
+      "open_critical": 0,
+      "opened_at": "2026-09-28T10:00:00.000Z",
+      "pr_id": "00000040-0000-4000-8000-000000000109",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "reviews": [
+        {
+          "agent_id": "00000030-0000-4000-8000-000000000002",
+          "agent_name": "beta",
+          "findings": {
+            "CRITICAL": 0,
+            "SUGGESTION": 0,
+            "WARNING": 1
+          },
+          "review_id": "00000050-0000-4000-8000-000000000012",
+          "score": 75
+        }
+      ],
+      "risk": "low",
+      "rounds": 1,
+      "size": "S",
+      "status": "merged",
+      "time_to_first_review_s": 93600,
+      "time_to_merge_s": 172800,
+      "title": "Old merged",
+      "top_findings": [
+        {
+          "agent_name": "beta",
+          "file": "src/old.go",
+          "finding_id": "00000060-0000-4000-8000-000000000014",
+          "severity": "WARNING",
+          "start_line": 3,
+          "state": "open",
+          "title": "Old warning"
+        }
+      ]
+    },
+    {
+      "additions": 400,
+      "author": "mona",
+      "cost_usd": 0,
+      "deletions": 100,
+      "draft": false,
+      "files_count": 10,
+      "findings": {
+        "CRITICAL": 1,
+        "SUGGESTION": 0,
+        "WARNING": 0
+      },
+      "health": 90,
+      "merged_at": "2026-10-21T10:00:00.000Z",
+      "new_commits_since_review": false,
+      "number": 3,
+      "open_age_s": null,
+      "open_critical": 1,
+      "opened_at": "2026-10-13T10:00:00.000Z",
+      "pr_id": "00000040-0000-4000-8000-000000000103",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "reviews": [
+        {
+          "agent_id": "00000030-0000-4000-8000-000000000001",
+          "agent_name": "alpha",
+          "findings": {
+            "CRITICAL": 1,
+            "SUGGESTION": 0,
+            "WARNING": 0
+          },
+          "review_id": "00000050-0000-4000-8000-000000000008",
+          "score": 80
+        }
+      ],
+      "risk": "medium",
+      "rounds": 1,
+      "size": "L",
+      "status": "merged",
+      "time_to_first_review_s": 180000,
+      "time_to_merge_s": 691200,
+      "title": "Refactor ledger",
+      "top_findings": [
+        {
+          "agent_name": "alpha",
+          "file": "src/ledger.go",
+          "finding_id": "00000060-0000-4000-8000-000000000011",
+          "severity": "CRITICAL",
+          "start_line": 5,
+          "state": "open",
+          "title": "Float used for money"
+        }
+      ]
+    },
+    {
+      "additions": 120,
+      "author": "octo",
+      "cost_usd": 10.25,
+      "deletions": 30,
+      "draft": false,
+      "files_count": 5,
+      "findings": {
+        "CRITICAL": 4,
+        "SUGGESTION": 1,
+        "WARNING": 2
+      },
+      "health": 57,
+      "merged_at": null,
+      "new_commits_since_review": true,
+      "number": 1,
+      "open_age_s": 871200,
+      "open_critical": 2,
+      "opened_at": "2026-10-12T10:00:00.000Z",
+      "pr_id": "00000040-0000-4000-8000-000000000101",
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001",
+      "reviews": [
+        {
+          "agent_id": null,
+          "agent_name": "Deleted agent",
+          "findings": {
+            "CRITICAL": 1,
+            "SUGGESTION": 0,
+            "WARNING": 0
+          },
+          "review_id": "00000050-0000-4000-8000-000000000005",
+          "score": 55
+        },
+        {
+          "agent_id": "00000030-0000-4000-8000-000000000001",
+          "agent_name": "alpha",
+          "findings": {
+            "CRITICAL": 3,
+            "SUGGESTION": 0,
+            "WARNING": 1
+          },
+          "review_id": "00000050-0000-4000-8000-000000000006",
+          "score": 85
+        },
+        {
+          "agent_id": "00000030-0000-4000-8000-000000000002",
+          "agent_name": "beta",
+          "findings": {
+            "CRITICAL": 0,
+            "SUGGESTION": 1,
+            "WARNING": 1
+          },
+          "review_id": "00000050-0000-4000-8000-000000000003",
+          "score": null
+        }
+      ],
+      "risk": "high",
+      "rounds": 3,
+      "size": "S",
+      "status": "needs_review",
+      "time_to_first_review_s": 169200,
+      "time_to_merge_s": null,
+      "title": "Add payment retries",
+      "top_findings": [
+        {
+          "agent_name": "Deleted agent",
+          "file": "src/queue.go",
+          "finding_id": "00000060-0000-4000-8000-000000000006",
+          "severity": "CRITICAL",
+          "start_line": 9,
+          "state": "open",
+          "title": "Queue lock held on panic"
+        },
+        {
+          "agent_name": "alpha",
+          "file": "src/retry.go",
+          "finding_id": "00000060-0000-4000-8000-000000000007",
+          "severity": "CRITICAL",
+          "start_line": 12,
+          "state": "open",
+          "title": "Unbounded retry loop"
+        },
+        {
+          "agent_name": "alpha",
+          "file": "src/ledger.go",
+          "finding_id": "00000060-0000-4000-8000-000000000008",
+          "severity": "CRITICAL",
+          "start_line": 40,
+          "state": "accepted",
+          "title": "Float used for money"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "avg_health": 91,
+    "critical_found": 5,
+    "merged": 4,
+    "open_critical": 3,
+    "prs_reviewed": 6,
+    "review_cost_usd": 10.85,
+    "time_to_first_review_s": 169200,
+    "time_to_merge_s": 129600
+  }
+}
