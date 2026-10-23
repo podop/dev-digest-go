@@ -7,6 +7,7 @@ import {
   ActiveRun,
   Agent,
   AgentColumn,
+  AgentEvalCase,
   AgentPeriodMetrics,
   AgentPerf,
   AgentPerfRow,
@@ -20,6 +21,11 @@ import {
   BriefMissingInput,
   CategoryCount,
   ChangedSymbol,
+  CiExport,
+  CiFile,
+  CiInstallation,
+  CiRefreshResult,
+  CiRun,
   CommunitySkill,
   ConnTestResult,
   ContextAttachments,
@@ -32,6 +38,22 @@ import {
   ConflictTake,
   CostSegment,
   DownstreamImpact,
+  EvalAgentDashboard,
+  EvalAgentOverview,
+  EvalCaseInputMeta,
+  EvalCaseLastResult,
+  EvalCaseResult,
+  EvalCompare,
+  EvalExpectation,
+  EvalOverview,
+  EvalPromptDiffLine,
+  EvalRecentRun,
+  EvalRegressionAlert,
+  EvalResultFinding,
+  EvalRunAllResponse,
+  EvalRunDetail,
+  EvalRunSummary,
+  EvalSparkPoint,
   FindingRecord,
   Intent,
   IntentSource,
@@ -94,7 +116,7 @@ import {
   UsageCount,
 } from "@devdigest/shared";
 
-// The Go backend's component tests record the response of every Phase-1 to Phase-4 route in
+// The Go backend's component tests record the response of every Phase-1 to Phase-6 route in
 // backend/cmd/server/testdata/contracts. This file parses each recording with the vendored
 // Zod contracts the UI uses, so a drift on either side fails here. The contracts themselves
 // are never edited (frontend/AGENTS.md: src/vendor/shared is the wire contract).
@@ -216,6 +238,88 @@ const agentStats = AgentStats.extend({
   findings_by_category: z.array(CategoryCount.strict()),
   run_history: z.array(
     RunHistoryItem.extend({ pr: z.object({ id: z.string(), repo_id: z.string(), number: z.number().int() }).strict().nullable() }).strict(),
+  ),
+}).strict();
+
+// ---- Phase 6: evals and export-to-CI (specs/eval-pipeline.md, specs/export-to-ci.md). Every nested
+// object is strict as well. EvalExpectation is a refined object, so it is rebuilt strict from its
+// inner object with the same end >= start rule. ----
+const evalExpectation = EvalExpectation.innerType()
+  .strict()
+  .refine((e) => e.end_line >= e.start_line, { message: "end_line must be >= start_line", path: ["end_line"] });
+const evalRunSummary = EvalRunSummary.strict();
+const agentEvalCase = AgentEvalCase.extend({
+  expectation: evalExpectation,
+  input_meta: EvalCaseInputMeta.strict(),
+  last_result: EvalCaseLastResult.strict().nullable(),
+}).strict();
+const evalRunDetail = EvalRunDetail.extend({
+  run: evalRunSummary,
+  results: z.array(
+    EvalCaseResult.extend({
+      expectation: evalExpectation,
+      findings: z.array(EvalResultFinding.strict()),
+    }).strict(),
+  ),
+}).strict();
+const evalRunList = z.object({ runs: z.array(evalRunSummary) }).strict();
+const evalCompareMetric = z.number().nullable();
+const evalCompare = EvalCompare.extend({
+  a: evalRunSummary,
+  b: evalRunSummary,
+  delta: z
+    .object({
+      recall: evalCompareMetric,
+      precision: evalCompareMetric,
+      citation_accuracy: evalCompareMetric,
+      cost_usd: evalCompareMetric,
+    })
+    .strict(),
+  cases: z.array(EvalCompare.shape.cases.element.strict()),
+  config_diff: EvalCompare.shape.config_diff
+    .extend({
+      system_prompt: z.array(EvalPromptDiffLine.strict()),
+      model: z.object({ a: z.string(), b: z.string() }).strict().nullable(),
+      strategy: z.object({ a: z.string(), b: z.string() }).strict().nullable(),
+    })
+    .strict(),
+}).strict();
+const evalOverview = EvalOverview.extend({
+  agents: z.array(
+    EvalAgentOverview.extend({
+      latest: evalRunSummary.nullable(),
+      sparkline: z.array(EvalSparkPoint.strict()).max(10),
+    }).strict(),
+  ),
+  recent_runs: z.array(EvalRecentRun.extend({ agent_name: z.string() }).strict()).max(20),
+}).strict();
+const evalAgentDashboard = EvalAgentDashboard.extend({
+  latest: evalRunSummary.nullable(),
+  previous: evalRunSummary.nullable(),
+  trend: z.array(evalRunSummary),
+  alert: EvalRegressionAlert.extend({
+    metrics: z.array(EvalRegressionAlert.shape.metrics.element.strict()),
+  })
+    .strict()
+    .nullable(),
+}).strict();
+const evalRunAll = EvalRunAllResponse.extend({
+  started: z.array(evalRunSummary),
+  skipped: z.array(EvalRunAllResponse.shape.skipped.element.strict()),
+}).strict();
+
+const ciRun = CiRun.strict();
+const ciInstallation = CiInstallation.extend({ last_run: ciRun.nullish() }).strict();
+const ciExport = CiExport.extend({
+  installation: ciInstallation.nullable(),
+  files: z.array(CiFile.strict()),
+}).strict();
+const ciRuns = z.object({ runs: z.array(ciRun) }).strict();
+const ciRefresh = CiRefreshResult.extend({
+  installations: z.array(
+    CiRefreshResult.shape.installations.element
+      .extend({ skipped: z.array(CiRefreshResult.shape.installations.element.shape.skipped.element.strict()) })
+      .strict(),
   ),
 }).strict();
 
@@ -344,6 +448,38 @@ const contracts: Record<string, z.ZodTypeAny> = {
   onboarding_stale: onboardingState,
   agents_performance: agentPerf,
   agent_stats: agentStats,
+
+  // ---- Phase 6: evals ----
+  eval_case_manual_agent: agentEvalCase,
+  eval_case_manual_skill: agentEvalCase,
+  eval_case_finding: agentEvalCase,
+  eval_case_updated: agentEvalCase,
+  eval_cases_list: z.object({ cases: z.array(agentEvalCase) }).strict(),
+  eval_run_started: evalRunSummary,
+  eval_skill_run_started: evalRunSummary,
+  eval_runs_list: evalRunList,
+  eval_skill_runs_list: evalRunList,
+  eval_run_detail: evalRunDetail,
+  eval_run_all: evalRunAll,
+  eval_compare: evalCompare,
+  eval_overview: evalOverview,
+  eval_overview_empty: evalOverview,
+  eval_agent_dashboard: evalAgentDashboard,
+  eval_agent_dashboard_7d: evalAgentDashboard,
+  eval_agent_dashboard_empty: evalAgentDashboard,
+
+  // ---- Phase 6: export-to-CI ----
+  ci_export_files: ciExport,
+  ci_export_open_pr: ciExport,
+  ci_installations: z.object({ installations: z.array(ciInstallation) }).strict(),
+  ci_runs_all: ciRuns,
+  ci_runs_agent: ciRuns,
+  ci_runs_after_agent_delete: ciRuns,
+  ci_refresh_runs: ciRuns,
+  ci_refresh: ciRefresh,
+  ci_refresh_skips: ciRefresh,
+  ci_refresh_errors: ciRefresh,
+  ci_refresh_not_checked: ciRefresh,
 };
 
 const read = (name: string): unknown =>
@@ -604,5 +740,109 @@ describe("Go backend golden responses", () => {
     expect(perf.agents.at(-1)).toMatchObject({ agent_id: null, agent_name: "Deleted agents" });
     const stats = read("agent_stats") as { agent_id: string; metrics: unknown };
     expect(stats.metrics).toEqual(perf.agents.find((a) => a.agent_id === stats.agent_id)?.metrics);
+  });
+
+  it("the eval start goldens are running agent and skill runs with no metrics yet", () => {
+    for (const name of ["eval_run_started", "eval_skill_run_started"]) {
+      expect(read(name), name).toMatchObject({
+        status: "running",
+        finished_at: null,
+        recall: null,
+        precision: null,
+        citation_accuracy: null,
+        cost_usd: null,
+        duration_ms: null,
+      });
+    }
+    expect(read("eval_run_started")).toMatchObject({ owner_kind: "agent", skill_id: null, skill_version: null });
+    const skillRun = read("eval_skill_run_started") as { skill_id: unknown; skill_version: unknown };
+    expect(uuid.safeParse(skillRun.skill_id).success).toBe(true);
+    expect(skillRun).toMatchObject({ owner_kind: "skill", skill_version: 1 });
+  });
+
+  it("the eval case goldens: an agent case, a skill case without an agent, a finding case and an edited one", () => {
+    expect(read("eval_case_manual_agent")).toMatchObject({ owner_kind: "agent", origin: "manual", content_edited_at: null });
+    expect(read("eval_case_manual_skill")).toMatchObject({ owner_kind: "skill", agent_id: null, origin: "manual" });
+    const fromFinding = read("eval_case_finding") as Record<string, unknown>;
+    expect(fromFinding.origin).toBe("finding");
+    expect(uuid.safeParse(fromFinding.source_finding_id).success).toBe(true);
+    expect(read("eval_case_updated")).toMatchObject({ content_edited_at: expect.any(String) });
+    const list = read("eval_cases_list") as { cases: { origin: string }[] };
+    expect(list.cases.map((c) => c.origin)).toEqual(["manual", "manual"]);
+  });
+
+  it("the eval run detail is a completed run with one result per case, passed and failed", () => {
+    const detail = read("eval_run_detail") as { run: { status: string; cases_total: number }; results: { status: string }[] };
+    expect(detail.run.status).toBe("completed");
+    expect(detail.results).toHaveLength(detail.run.cases_total);
+    expect(new Set(detail.results.map((r) => r.status))).toEqual(new Set(["passed", "failed"]));
+  });
+
+  it("run-all starts runs and skips agents with a reason; compare flags the flipped and absent cases", () => {
+    const all = read("eval_run_all") as { started: { status: string }[]; skipped: { reason: string }[] };
+    expect(all.started.every((r) => r.status === "running")).toBe(true);
+    expect(new Set(all.skipped.map((s) => s.reason))).toEqual(new Set(["no_cases", "run_active"]));
+
+    const compare = read("eval_compare") as { cases: { a: string; b: string; flipped: boolean }[] };
+    expect(compare.cases.map((c) => [c.a, c.b, c.flipped])).toEqual([
+      ["passed", "failed", true],
+      ["failed", "failed", false],
+      ["absent", "passed", true],
+    ]);
+  });
+
+  it("the eval dashboards: an empty workspace and agent, a regression alert and the 7d window", () => {
+    expect(read("eval_overview_empty")).toEqual({ agents: [], recent_runs: [] });
+    expect(read("eval_agent_dashboard_empty")).toMatchObject({
+      cases_total: 0,
+      latest: null,
+      previous: null,
+      trend: [],
+      alert: null,
+    });
+    for (const name of ["eval_agent_dashboard", "eval_agent_dashboard_7d"]) {
+      const dashboard = read(name) as { alert: { metrics: { metric: string }[] } | null; trend: unknown[] };
+      expect(dashboard.alert?.metrics.map((m) => m.metric), name).toEqual(["recall"]);
+      expect(dashboard.trend.length, name).toBeGreaterThan(0);
+    }
+    const overview = read("eval_overview") as { agents: { sparkline: unknown[] }[] };
+    expect(overview.agents.some((a) => a.sparkline.length === 10)).toBe(true);
+  });
+
+  it("the CI export goldens: files persist nothing, open_pr answers an installation and the PR url", () => {
+    const files = read("ci_export_files") as { installation: unknown; pr_url: unknown; files: unknown[] };
+    expect(files.installation).toBeNull();
+    expect(files.pr_url).toBeNull();
+    expect(files.files.length).toBeGreaterThan(0);
+    const openPr = read("ci_export_open_pr") as { installation: Record<string, unknown> | null; pr_url: unknown };
+    expect(openPr.installation).toMatchObject({ slug: "ci-reviewer", target_type: "gha" });
+    expect(openPr.pr_url).toEqual(expect.stringMatching(/^https:\/\/github\.com\/.+\/pull\/\d+$/));
+  });
+
+  it("the CI runs goldens: newest first lists, and runs of a deleted agent keep a null agent", () => {
+    const orphan = (read("ci_runs_after_agent_delete") as { runs: Record<string, unknown>[] }).runs[0];
+    expect(orphan).toMatchObject({ agent: null, agent_id: null, ci_installation_id: null, verdict: null });
+    for (const name of ["ci_runs_all", "ci_runs_agent", "ci_refresh_runs"]) {
+      expect((read(name) as { runs: unknown[] }).runs.length, name).toBeGreaterThan(0);
+    }
+  });
+
+  it("the CI refresh goldens cover every installation state, error code and skip reason", () => {
+    const names = ["ci_refresh", "ci_refresh_skips", "ci_refresh_errors", "ci_refresh_not_checked"];
+    const installations = names.flatMap(
+      (n) =>
+        (read(n) as { installations: { state: string; error_code?: string; skipped: { reason: string }[] }[] })
+          .installations,
+    );
+    expect(new Set(installations.map((i) => i.state))).toEqual(new Set(["ok", "not_installed", "error", "not_checked"]));
+    expect(new Set(installations.flatMap((i) => (i.error_code ? [i.error_code] : [])))).toEqual(
+      new Set(["github_permission_denied", "github_rate_limited", "github_unavailable"]),
+    );
+    expect(new Set(installations.flatMap((i) => i.skipped.map((s) => s.reason)))).toEqual(
+      new Set(["artifact_expired", "artifact_too_large", "artifact_invalid", "artifact_mismatch"]),
+    );
+    expect(read("ci_refresh_errors")).toMatchObject({ degraded: true, ingested: 0 });
+    expect(read("ci_refresh_not_checked")).toMatchObject({ degraded: true });
+    expect(read("ci_refresh")).toMatchObject({ degraded: false });
   });
 });

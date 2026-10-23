@@ -1,0 +1,41 @@
+{
+  "files": [
+    {
+      "contents": "name: \"CI Reviewer\"\nprovider: \"openrouter\"\nmodel: \"deepseek/deepseek-v4-flash\"\nsystem_prompt: \"Review the diff.\\n  Indented line: with a colon # and \\\"quotes\\\"\\n\\ttabbed line  \\n\"\nskills:\n  - \"error-handling\"\n  - \"api-design\"\nstrategy: \"single-pass\"\nci_fail_on: \"critical\"\nversion: 2\n",
+      "editable": false,
+      "path": ".devdigest/agents/ci-reviewer.yaml"
+    },
+    {
+      "contents": "Check every error.\nWrap with %w.\n",
+      "editable": false,
+      "path": ".devdigest/skills/error-handling.md"
+    },
+    {
+      "contents": "Keep the wire stable.",
+      "editable": false,
+      "path": ".devdigest/skills/api-design.md"
+    },
+    {
+      "contents": "",
+      "editable": false,
+      "path": ".devdigest/memory.jsonl"
+    },
+    {
+      "contents": "ZmFrZS1ydW5uZXItZXhlY3V0YWJsZQ==\n",
+      "editable": false,
+      "path": ".devdigest/runner/devdigest-runner-linux-amd64.gz.b64"
+    },
+    {
+      "contents": "4b2d20d402496e65ec3908d838e25374a8e84ca00dab843fcaf337027686dc3f  devdigest-runner\n",
+      "editable": false,
+      "path": ".devdigest/runner/devdigest-runner-linux-amd64.sha256"
+    },
+    {
+      "contents": "name: DevDigest Review · ci-reviewer\n\non:\n  pull_request:\n    types: [opened, reopened]\n\npermissions:\n  contents: read\n  pull-requests: write\n\njobs:\n  review:\n    name: DevDigest Review · ci-reviewer\n    if: github.event.pull_request.head.repo.full_name == github.repository\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Check out the pull request\n        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n          persist-credentials: false\n\n      - name: Run the DevDigest review\n        shell: bash\n        run: |\n          base64 -d .devdigest/runner/devdigest-runner-linux-amd64.gz.b64 | gzip -dc \u003e \"$RUNNER_TEMP/devdigest-runner\"\n          cd \"$RUNNER_TEMP\" \u0026\u0026 sha256sum --check --strict \"$GITHUB_WORKSPACE/.devdigest/runner/devdigest-runner-linux-amd64.sha256\"\n          chmod +x \"$RUNNER_TEMP/devdigest-runner\"\n          cd \"$GITHUB_WORKSPACE\" \u0026\u0026 \"$RUNNER_TEMP/devdigest-runner\"\n        env:\n          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          DEVDIGEST_AGENT: ci-reviewer\n          DEVDIGEST_POST_AS: pr_comment\n          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}\n\n      - name: Upload the review result\n        if: always()\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\n        with:\n          name: devdigest-result-ci-reviewer\n          path: devdigest-result.json\n",
+      "editable": true,
+      "path": ".github/workflows/devdigest-review-ci-reviewer.yml"
+    }
+  ],
+  "installation": null,
+  "pr_url": null
+}

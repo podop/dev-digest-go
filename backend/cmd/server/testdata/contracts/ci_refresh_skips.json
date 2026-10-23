@@ -1,0 +1,50 @@
+{
+  "degraded": false,
+  "ingested": 0,
+  "installations": [
+    {
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000001",
+      "repo": "acme/ci-one",
+      "skipped": [
+        {
+          "github_run_id": 301,
+          "reason": "artifact_expired"
+        },
+        {
+          "github_run_id": 302,
+          "reason": "artifact_too_large"
+        },
+        {
+          "github_run_id": 303,
+          "reason": "artifact_too_large"
+        },
+        {
+          "github_run_id": 304,
+          "reason": "artifact_too_large"
+        },
+        {
+          "github_run_id": 305,
+          "reason": "artifact_too_large"
+        },
+        {
+          "github_run_id": 306,
+          "reason": "artifact_invalid"
+        },
+        {
+          "github_run_id": 307,
+          "reason": "artifact_invalid"
+        },
+        {
+          "github_run_id": 308,
+          "reason": "artifact_mismatch"
+        },
+        {
+          "github_run_id": 309,
+          "reason": "artifact_mismatch"
+        }
+      ],
+      "state": "ok"
+    }
+  ]
+}

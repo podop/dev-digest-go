@@ -29,6 +29,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-23 — linking skills to an agent bumps agents.version (a fresh agent with skills is version 2, so its first CI export has manifest_version 2), and PUT /agents/:id accepts a partial body → tests read the version from the DB instead of assuming 1 (phase6_ci_test.go, phase6_evals_test.go)
 - 2026-10-23 — freezing concurrent writers of one unique key in a test: with INSERT … ON CONFLICT DO NOTHING the second writer waits on the first's xid, visible in pg_locks as locktype='transactionid' AND NOT granted (not 'advisory') → poll that to know it is blocked without sleeping (ci/adapters/postgres store_test.go TestRecordRun_ConcurrentRefreshes)
 - 2026-10-23 — jsonb columns: encoding/json writes U+0000 as the escape \u0000, which jsonb rejects (22P05) even though the text is valid JSON → rewrite that escape to U+FFFD after marshalling, scanning escape pairs so an escaped backslash + u0000 is left alone (evals/adapters/postgres rows.go marshal)
 - 2026-10-23 — internal/llm New: Options.Prices == nil does not mean 'no prices' — it starts a live-fed PriceBook (own goroutine + HTTP model listing) → a process that must not price or call out (the CI runner) passes a non-nil Pricer that returns nil (cmd/devdigest-runner noPrices)
@@ -86,6 +87,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Recurring Errors & Fixes
 <!-- error message → cause → fix -->
+- 2026-10-23 — cmd/server component tests: hand-inserted ci_runs rows are invisible to GET /ci/runs unless an agent_runs row (source 'ci') of the workspace exists — the lists inner-join agent_runs; and an export with the real ~10 MiB runner takes ~80 s under -race (gzip best compression) → insert both rows, raise the test client timeout (phase6_ops_test.go)
 - 2026-10-23 — parity golden generator: the OpenAI SDK sends concurrent map-reduce chunk requests in nondeterministic order, so a stub that answers by arrival order makes goldens differ between runs → answer per diff chunk (parity/testdata/gen/runner.mts byChunk)
 - 2026-10-23 — flaky cmd/server golden review_estimates: GET /runs/estimates orders agents by random UUID, so two agents with done runs (seed PR #483 demo gives the Security Reviewer one) flip the order → delete the demo run before that golden; agent_runs.pr_id is ON DELETE SET NULL, so deleting a PR leaves its runs (phase4_test.go, migrations/0001 baseline)
 - 2026-10-23 — repointel degraded-scan tests under -race (~10x slower) hit the default 30 s CallerScan.Timeout and silently answer the empty degraded result, which looks like missing data, not a timeout → set CallerScan.Timeout explicitly in heavy scan tests (blast_load_test.go)

@@ -54,6 +54,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-23 — Zod: a schema with .refine() is a ZodEffects, so .strict()/.extend() are not available on it → build a strict variant with Schema.innerType().strict().refine(<same rule>) (src/test/go-backend-contracts.test.ts evalExpectation)
 - 2026-10-22 — UI smoke checks without a browser setup: the home redirect is client-side (HomeView router.replace), so curl / returns 200 with no Location → render with the cached Playwright headless shell: ~/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell --no-sandbox --virtual-time-budget=15000 --dump-dom <url> and grep the hydrated DOM (title ended on 'Pull requests · DevDigest', AC95)
 - 2026-10-22 — pnpm test -- <file> runs through the package script and took >120 s here, while pnpm exec vitest run <file> finishes in ~5 s (src/test/go-backend-contracts.test.ts) → use pnpm exec vitest run <file> for a single file
 - 2026-10-16 — @devdigest/ui Donut (vendor/ui/charts/Donut.tsx): the legend hard-codes valuePrefix '$' + value.toFixed(2), so counts read '48.00' and sub-cent costs '$0.00'; vendor/ui is not edited → use DonutChart from components/agent-metrics (inline SVG, formatValue prop) for counts or CostText values

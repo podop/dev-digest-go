@@ -491,14 +491,17 @@ func TestSnapshots(t *testing.T) {
 	}
 }
 
-func TestAgentIDs_ByteOrderOfTheName(t *testing.T) {
+func TestAgentIDs_OrderOfGetAgents(t *testing.T) {
 	e := newEnv(t)
-	upper, lower := e.agent(t, e.ws, "Zeta"), e.agent(t, e.ws, "alpha")
+	first, upper, lower := e.agent(t, e.ws, "omega"), e.agent(t, e.ws, "Zeta"), e.agent(t, e.ws, "alpha")
+	e.exec(t, `UPDATE agents SET created_at = '2026-01-01T00:00:00Z' WHERE id = ?`, first)
+	e.exec(t, `UPDATE agents SET created_at = '2026-01-02T00:00:00Z' WHERE id IN (?, ?)`, upper, lower)
 	e.exec(t, `UPDATE agents SET enabled = false WHERE id = ?`, lower)
 	e.agent(t, e.workspace(t), "elsewhere")
 	got, err := e.store.AgentIDs(t.Context(), e.ws)
-	// COLLATE "C": uppercase sorts before lowercase, and a disabled agent is listed.
-	if want := []string{upper, lower}; err != nil || cmp.Diff(want, got) != "" {
+	// Creation time first (as GET /agents); a tie sorts by COLLATE "C" name, uppercase before
+	// lowercase; a disabled agent is listed.
+	if want := []string{first, upper, lower}; err != nil || cmp.Diff(want, got) != "" {
 		t.Errorf("AgentIDs() = %v, %v; want %v", got, err, want)
 	}
 }

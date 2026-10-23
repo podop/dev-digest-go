@@ -1,0 +1,61 @@
+{
+  "runs": [
+    {
+      "agent": "Alpha Reviewer",
+      "agent_id": "00000000-0000-4000-8000-000000000004",
+      "blockers": 0,
+      "ci_installation_id": "00000000-0000-4000-8000-000000000001",
+      "cost_usd": null,
+      "duration_s": null,
+      "findings_count": 0,
+      "github_url": "https://github.com/acme/ci-one/actions/runs/104",
+      "head_sha": "sha104",
+      "id": "00000000-0000-4000-8000-000000000003",
+      "manifest_version": 3,
+      "pr_number": 9,
+      "ran_at": "2026-01-01T00:00:00.000Z",
+      "repo": "acme/ci-one",
+      "source": "gha",
+      "status": "failed",
+      "verdict": null
+    },
+    {
+      "agent": "Alpha Reviewer",
+      "agent_id": "00000000-0000-4000-8000-000000000004",
+      "blockers": 1,
+      "ci_installation_id": "00000000-0000-4000-8000-000000000001",
+      "cost_usd": 0.0123,
+      "duration_s": 4.321,
+      "findings_count": 3,
+      "github_url": "https://github.com/acme/ci-one/actions/runs/101",
+      "head_sha": "sha101",
+      "id": "00000000-0000-4000-8000-000000000005",
+      "manifest_version": 2,
+      "pr_number": 7,
+      "ran_at": "2026-01-01T00:00:00.000Z",
+      "repo": "acme/ci-one",
+      "source": "gha",
+      "status": "succeeded",
+      "verdict": "blocked"
+    },
+    {
+      "agent": "Alpha Reviewer",
+      "agent_id": "00000000-0000-4000-8000-000000000004",
+      "blockers": 0,
+      "ci_installation_id": "00000000-0000-4000-8000-000000000001",
+      "cost_usd": null,
+      "duration_s": null,
+      "findings_count": 1,
+      "github_url": "https://github.com/acme/ci-one/actions/runs/102",
+      "head_sha": "sha102",
+      "id": "00000000-0000-4000-8000-000000000006",
+      "manifest_version": 3,
+      "pr_number": null,
+      "ran_at": "2026-01-01T00:00:00.000Z",
+      "repo": "acme/ci-one",
+      "source": "gha",
+      "status": "succeeded",
+      "verdict": "passed"
+    }
+  ]
+}

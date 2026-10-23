@@ -1,0 +1,78 @@
+{
+  "skipped": [
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000005",
+      "reason": "no_cases"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000006",
+      "reason": "no_cases"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000007",
+      "reason": "no_cases"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000008",
+      "reason": "no_cases"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000009",
+      "reason": "no_cases"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000010",
+      "reason": "run_active"
+    }
+  ],
+  "started": [
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000002",
+      "agent_name": "Zeta Disabled",
+      "agent_version": 1,
+      "cases_errored": 0,
+      "cases_finished": 0,
+      "cases_passed": 0,
+      "cases_total": 2,
+      "citation_accuracy": null,
+      "cost_usd": null,
+      "duration_ms": null,
+      "error": null,
+      "finished_at": null,
+      "id": "00000000-0000-4000-8000-000000000001",
+      "model": "model-zeta-disabled",
+      "owner_kind": "agent",
+      "precision": null,
+      "recall": null,
+      "skill_id": null,
+      "skill_version": null,
+      "started_at": "2026-01-01T00:00:00.000Z",
+      "status": "running",
+      "unlabeled_findings": 0
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000004",
+      "agent_name": "Zeta With Cases",
+      "agent_version": 1,
+      "cases_errored": 0,
+      "cases_finished": 0,
+      "cases_passed": 0,
+      "cases_total": 2,
+      "citation_accuracy": null,
+      "cost_usd": null,
+      "duration_ms": null,
+      "error": null,
+      "finished_at": null,
+      "id": "00000000-0000-4000-8000-000000000003",
+      "model": "model-zeta-with-cases",
+      "owner_kind": "agent",
+      "precision": null,
+      "recall": null,
+      "skill_id": null,
+      "skill_version": null,
+      "started_at": "2026-01-01T00:00:00.000Z",
+      "status": "running",
+      "unlabeled_findings": 0
+    }
+  ]
+}

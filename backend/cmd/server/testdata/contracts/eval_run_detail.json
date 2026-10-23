@@ -1,0 +1,294 @@
+{
+  "results": [
+    {
+      "case_id": "00000000-0000-4000-8000-000000000003",
+      "case_name": "Case 1 hit",
+      "cost_usd": 0.00042,
+      "dropped_count": 0,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 7,
+        "file": "src/middleware/ratelimit.ts",
+        "kind": "must_find",
+        "severity": null,
+        "start_line": 7,
+        "title": null
+      },
+      "findings": [
+        {
+          "category": "security",
+          "end_line": 7,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "hit",
+          "severity": "WARNING",
+          "start_line": 7,
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header"
+        },
+        {
+          "category": "perf",
+          "end_line": 4,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "unlabeled",
+          "severity": "SUGGESTION",
+          "start_line": 4,
+          "title": "Bucket map grows without eviction"
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case_id": "00000000-0000-4000-8000-000000000004",
+      "case_name": "Case 2 hit",
+      "cost_usd": 0.00042,
+      "dropped_count": 0,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 4,
+        "file": "src/middleware/ratelimit.ts",
+        "kind": "must_find",
+        "severity": null,
+        "start_line": 4,
+        "title": null
+      },
+      "findings": [
+        {
+          "category": "security",
+          "end_line": 7,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "unlabeled",
+          "severity": "WARNING",
+          "start_line": 7,
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header"
+        },
+        {
+          "category": "perf",
+          "end_line": 4,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "hit",
+          "severity": "SUGGESTION",
+          "start_line": 4,
+          "title": "Bucket map grows without eviction"
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case_id": "00000000-0000-4000-8000-000000000005",
+      "case_name": "Case 3 miss",
+      "cost_usd": 0.00042,
+      "dropped_count": 0,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 2,
+        "file": "src/middleware/ratelimit.ts",
+        "kind": "must_find",
+        "severity": null,
+        "start_line": 1,
+        "title": null
+      },
+      "findings": [
+        {
+          "category": "security",
+          "end_line": 7,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "unlabeled",
+          "severity": "WARNING",
+          "start_line": 7,
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header"
+        },
+        {
+          "category": "perf",
+          "end_line": 4,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "unlabeled",
+          "severity": "SUGGESTION",
+          "start_line": 4,
+          "title": "Bucket map grows without eviction"
+        }
+      ],
+      "status": "failed"
+    },
+    {
+      "case_id": "00000000-0000-4000-8000-000000000006",
+      "case_name": "Case 4 violation",
+      "cost_usd": 0.00042,
+      "dropped_count": 0,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 7,
+        "file": "src/middleware/ratelimit.ts",
+        "kind": "must_not_flag",
+        "severity": null,
+        "start_line": 7,
+        "title": null
+      },
+      "findings": [
+        {
+          "category": "security",
+          "end_line": 7,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "violation",
+          "severity": "WARNING",
+          "start_line": 7,
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header"
+        },
+        {
+          "category": "perf",
+          "end_line": 4,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "unlabeled",
+          "severity": "SUGGESTION",
+          "start_line": 4,
+          "title": "Bucket map grows without eviction"
+        }
+      ],
+      "status": "failed"
+    },
+    {
+      "case_id": "00000000-0000-4000-8000-000000000007",
+      "case_name": "Case 5 clean",
+      "cost_usd": 0.00042,
+      "dropped_count": 0,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 30,
+        "file": "src/middleware/ratelimit.ts",
+        "kind": "must_not_flag",
+        "severity": null,
+        "start_line": 20,
+        "title": null
+      },
+      "findings": [
+        {
+          "category": "security",
+          "end_line": 7,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "unlabeled",
+          "severity": "WARNING",
+          "start_line": 7,
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header"
+        },
+        {
+          "category": "perf",
+          "end_line": 4,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "unlabeled",
+          "severity": "SUGGESTION",
+          "start_line": 4,
+          "title": "Bucket map grows without eviction"
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case_id": "00000000-0000-4000-8000-000000000008",
+      "case_name": "Case 6 two hits",
+      "cost_usd": 0.00042,
+      "dropped_count": 0,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 8,
+        "file": "src/middleware/ratelimit.ts",
+        "kind": "must_find",
+        "severity": null,
+        "start_line": 4,
+        "title": null
+      },
+      "findings": [
+        {
+          "category": "security",
+          "end_line": 7,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "hit",
+          "severity": "WARNING",
+          "start_line": 7,
+          "title": "Rate-limit key trusts the spoofable X-Forwarded-For header"
+        },
+        {
+          "category": "perf",
+          "end_line": 4,
+          "file": "src/middleware/ratelimit.ts",
+          "match": "hit",
+          "severity": "SUGGESTION",
+          "start_line": 4,
+          "title": "Bucket map grows without eviction"
+        }
+      ],
+      "status": "passed"
+    },
+    {
+      "case_id": "00000000-0000-4000-8000-000000000009",
+      "case_name": "Case 7 other file",
+      "cost_usd": 0.00042,
+      "dropped_count": 2,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 3,
+        "file": "src/other.ts",
+        "kind": "must_find",
+        "severity": null,
+        "start_line": 1,
+        "title": null
+      },
+      "findings": [],
+      "status": "failed"
+    },
+    {
+      "case_id": "00000000-0000-4000-8000-000000000010",
+      "case_name": "Case 8 other clean",
+      "cost_usd": 0.00042,
+      "dropped_count": 2,
+      "duration_ms": 1,
+      "error": null,
+      "expectation": {
+        "category": null,
+        "end_line": 3,
+        "file": "src/other.ts",
+        "kind": "must_not_flag",
+        "severity": null,
+        "start_line": 1,
+        "title": null
+      },
+      "findings": [],
+      "status": "passed"
+    }
+  ],
+  "run": {
+    "agent_id": "00000000-0000-4000-8000-000000000002",
+    "agent_name": "Run Agent",
+    "agent_version": 1,
+    "cases_errored": 0,
+    "cases_finished": 8,
+    "cases_passed": 5,
+    "cases_total": 8,
+    "citation_accuracy": 0.75,
+    "cost_usd": 0.00336,
+    "duration_ms": 1,
+    "error": null,
+    "finished_at": "2026-01-01T00:00:00.000Z",
+    "id": "00000000-0000-4000-8000-000000000001",
+    "model": "model-run-agent",
+    "owner_kind": "agent",
+    "precision": 0.8,
+    "recall": 0.6,
+    "skill_id": null,
+    "skill_version": null,
+    "started_at": "2026-01-01T00:00:00.000Z",
+    "status": "completed",
+    "unlabeled_findings": 7
+  }
+}

@@ -92,11 +92,12 @@ func (s *Store) Skill(ctx context.Context, workspaceID, skillID string) (domain.
 }
 
 // AgentIDs returns every agent id of the workspace, disabled included, in the order of GET
-// /agents (name COLLATE "C", then id).
+// /agents (creation time, name COLLATE "C", then id; Node's unordered listIds read them in
+// insertion order).
 func (s *Store) AgentIDs(ctx context.Context, workspaceID string) ([]string, error) {
 	ids := []string{}
 	err := s.conn(ctx).Table("agents").Where("workspace_id = ?", workspaceID).
-		Order(`name COLLATE "C", id`).Pluck("id", &ids).Error
+		Order(`created_at, name COLLATE "C", id`).Pluck("id", &ids).Error
 	if err != nil {
 		return nil, fmt.Errorf("select agent ids: %w", err)
 	}

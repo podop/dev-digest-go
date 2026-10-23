@@ -1,0 +1,20 @@
+{
+  "degraded": false,
+  "ingested": 2,
+  "installations": [
+    {
+      "ingested": 2,
+      "installation_id": "00000000-0000-4000-8000-000000000001",
+      "repo": "acme/ci-one",
+      "skipped": [],
+      "state": "ok"
+    },
+    {
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000002",
+      "repo": "acme/ci-two",
+      "skipped": [],
+      "state": "not_installed"
+    }
+  ]
+}

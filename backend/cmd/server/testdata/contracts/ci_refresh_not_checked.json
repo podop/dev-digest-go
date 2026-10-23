@@ -1,0 +1,27 @@
+{
+  "degraded": true,
+  "ingested": 1,
+  "installations": [
+    {
+      "ingested": 1,
+      "installation_id": "00000000-0000-4000-8000-000000000001",
+      "repo": "acme/slow-1",
+      "skipped": [],
+      "state": "ok"
+    },
+    {
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000002",
+      "repo": "acme/slow-2",
+      "skipped": [],
+      "state": "not_checked"
+    },
+    {
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000003",
+      "repo": "acme/slow-3",
+      "skipped": [],
+      "state": "not_checked"
+    }
+  ]
+}

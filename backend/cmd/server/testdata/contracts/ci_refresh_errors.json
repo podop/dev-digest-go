@@ -1,0 +1,46 @@
+{
+  "degraded": true,
+  "ingested": 0,
+  "installations": [
+    {
+      "error_code": "github_rate_limited",
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000001",
+      "repo": "acme/err-1",
+      "skipped": [],
+      "state": "error"
+    },
+    {
+      "error_code": "github_rate_limited",
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000002",
+      "repo": "acme/err-2",
+      "skipped": [],
+      "state": "error"
+    },
+    {
+      "error_code": "github_permission_denied",
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000003",
+      "repo": "acme/err-3",
+      "skipped": [],
+      "state": "error"
+    },
+    {
+      "error_code": "github_permission_denied",
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000004",
+      "repo": "acme/err-4",
+      "skipped": [],
+      "state": "error"
+    },
+    {
+      "error_code": "github_unavailable",
+      "ingested": 0,
+      "installation_id": "00000000-0000-4000-8000-000000000005",
+      "repo": "acme/err-5",
+      "skipped": [],
+      "state": "error"
+    }
+  ]
+}

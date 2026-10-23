@@ -1,0 +1,31 @@
+{
+  "agent_id": "00000000-0000-4000-8000-000000000002",
+  "content_edited_at": "2026-01-01T00:00:00.000Z",
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "expectation": {
+    "category": null,
+    "end_line": 3,
+    "file": "src/a.ts",
+    "kind": "must_find",
+    "severity": "WARNING",
+    "start_line": 2,
+    "title": null
+  },
+  "id": "00000000-0000-4000-8000-000000000001",
+  "input_diff": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -0,0 +1,10 @@\n+line 1 of the change\n+line 2 of the change\n+line 3 of the change\n+line 4 of the change\n+line 5 of the change\n+line 6 of the change\n+line 7 of the change\n+line 8 of the change\n+line 9 of the change\n+line 10 of the change",
+  "input_meta": {
+    "head_sha": null,
+    "pr_description": null,
+    "pr_number": null,
+    "pr_title": "Original",
+    "repo": null
+  },
+  "last_result": null,
+  "name": "Renamed",
+  "notes": "a note",
+  "origin": "manual",
+  "owner_id": "00000000-0000-4000-8000-000000000002",
+  "owner_kind": "agent",
+  "source_finding_id": null,
+  "source_pr_id": null
+}

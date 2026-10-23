@@ -1,0 +1,62 @@
+{
+  "installations": [
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000002",
+      "id": "00000000-0000-4000-8000-000000000001",
+      "installed_at": "2026-01-01T00:00:00.000Z",
+      "last_run": {
+        "agent": "Alpha Reviewer",
+        "agent_id": "00000000-0000-4000-8000-000000000002",
+        "blockers": 2,
+        "ci_installation_id": "00000000-0000-4000-8000-000000000001",
+        "cost_usd": 0.5,
+        "duration_s": 90.5,
+        "findings_count": 5,
+        "github_url": "https://github.com/acme/payments-api/actions/runs/1002",
+        "head_sha": "aaa2",
+        "id": "00000000-0000-4000-8000-000000000003",
+        "manifest_version": 2,
+        "pr_number": 8,
+        "ran_at": "2026-01-01T00:00:00.000Z",
+        "repo": "acme/payments-api",
+        "source": "gha",
+        "status": "succeeded",
+        "verdict": "blocked"
+      },
+      "manifest_version": 2,
+      "repo": "acme/payments-api",
+      "slug": "alpha-reviewer",
+      "target_type": "gha",
+      "workflow_path": ".github/workflows/devdigest-review-alpha-reviewer.yml"
+    },
+    {
+      "agent_id": "00000000-0000-4000-8000-000000000002",
+      "id": "00000000-0000-4000-8000-000000000004",
+      "installed_at": "2026-01-01T00:00:00.000Z",
+      "last_run": {
+        "agent": "Alpha Reviewer",
+        "agent_id": "00000000-0000-4000-8000-000000000002",
+        "blockers": null,
+        "ci_installation_id": "00000000-0000-4000-8000-000000000004",
+        "cost_usd": null,
+        "duration_s": null,
+        "findings_count": 0,
+        "github_url": "https://github.com/acme/other-repo/actions/runs/1003",
+        "head_sha": "aaa3",
+        "id": "00000000-0000-4000-8000-000000000005",
+        "manifest_version": 1,
+        "pr_number": null,
+        "ran_at": "2026-01-01T00:00:00.000Z",
+        "repo": "acme/other-repo",
+        "source": "gha",
+        "status": "no_findings",
+        "verdict": "passed"
+      },
+      "manifest_version": 1,
+      "repo": "acme/other-repo",
+      "slug": "alpha-reviewer",
+      "target_type": "gha",
+      "workflow_path": ".github/workflows/devdigest-review-alpha-reviewer.yml"
+    }
+  ]
+}
