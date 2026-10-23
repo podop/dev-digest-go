@@ -29,18 +29,30 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 
 ## Conventions (non-default)
 - Layout: `cmd/server/` is the composition root (config, wiring, migrate → seed → jobs → listen,
-  shutdown). Startup reaps (conventions scans, review runs) are non-fatal. Shutdown order: the
-  review executor cancels live runs (≤ 5 s) and completes the run buses so SSE streams end, in
-  parallel with the intent, brief and onboarding services cancelling their in-flight generations
-  (≤ 5 s; Echo never cancels the context of a request in flight, so `platform/inflight` is stopped
-  before Echo) and with the job runner (10 s); only then does Echo (own start context) drain HTTP
-  (20 s). The SSE route `GET /runs/:id/events` is exempt from rate limiting; `POST /pulls/:id/review`
-  and `POST /pulls/:id/intent/refresh` have a 10/min bucket each. Phase 5 contexts: `intent`,
+  shutdown). Startup reaps (conventions scans, review runs, eval runs) are non-fatal. Shutdown
+  order: the review executor cancels live runs (≤ 5 s) and completes the run buses so SSE streams
+  end, in parallel with the eval executor (aborts its runs, ≤ 5 s; `ErrNotDrained` = warning, the
+  next start reaps them), the intent, brief and onboarding services cancelling their in-flight
+  generations (≤ 5 s; Echo never cancels the context of a request in flight, so
+  `platform/inflight` is stopped before Echo) and the job runner (10 s); only then does Echo (own
+  start context) drain HTTP (20 s). The SSE route `GET /runs/:id/events` is exempt from rate
+  limiting; `POST /pulls/:id/review` and `POST /pulls/:id/intent/refresh` have a 10/min bucket
+  each; `POST /agents/:id/eval-runs` and `POST /skills/:id/eval-runs` share ONE bucket
+  (`eval-run-start`, 10/min per workspace, `httpx.Bucket.Name` + `Key`), `POST /eval-runs/run-all`
+  has its own per-IP bucket (`evalshttp.RateLimitBuckets()`). Phase 5 contexts: `intent`,
   `smartdiff`, `blast`, `brief`, `onboarding`, `performance` (brief and the review hook reach
   intent, blast, documents and roles through peers adapters). `REVIEW_INTENT_ENABLED` (default on,
   off only on `false`) decides whether `cmd` wires `executor.Deps.Intent`; off leaves it nil, which
   is Phase 4 behaviour exactly. Test seams in `cmd/server`: `options.now` (clock) and
-  `intentBudget` / `briefBudget` / `onboardingBudget`. Features live in
+  `intentBudget` / `briefBudget` / `onboardingBudget` / `evalCaseBudget`, `runner` (a fake
+  `ciapp.RunnerBundle`) and `artifactClient` (TLS stub of the artifact storage leg). Phase 6
+  contexts: `evals` (cases, runs, executor) and `ci` (export, ingest; `ci/runner` is the CI runner
+  program, `cmd/devdigest-runner`). The CI runner is compiled by the image build (cgo off,
+  reproducible) into `internal/ci/adapters/runnerbin/` and embedded in the server with
+  `-tags devdigest_runner` (`runnerbin.Default()`); an untagged build (tests, `go build ./...`)
+  has no runner and the export answers `500 runner_bundle_missing`. `DEVDIGEST_BUILD_ID` (12 hex
+  of a clean HEAD, else `dev`; set by the `Makefile`, a compose build arg) stamps the runner.
+  Features live in
   `internal/<context>/{domain,app,adapters/<tech>,transport/http}`;
   shared plumbing in `internal/platform/<what>` (httpx, postgres, apperr, secrets, gitcli, github,
   retry, logging). Dependencies point inward only.
@@ -49,7 +61,11 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   Phase 5 contexts (`intent`, `brief`, `onboarding`): the JS-parity text helpers, `Intent` /
   `RenderIntent` and the untrusted-text wrapping live there. Otherwise contexts reach each other only
   through consumer-side ports wired in `cmd/` (peers adapters may import another context's
-  app/domain types); adapters never import other adapters (`cmd/` binds them, e.g. `newLLMCaller`).
+  app/domain types); adapters never import other adapters (`cmd/` binds them, e.g. `newLLMCaller`,
+  `newEvalLLMCaller`). Phase 6 adds two more engine consumers: `evals` (domain run input,
+  `app/executor`, the providers peer) and `ci/runner` (domain, app) may import `reviewer/*` (the one
+  engine `reviewer/app.Run` runs reviews, evals and the CI runner); `evals` and `ci` reach agents, skills, repos and GitHub only through
+  consumer-side ports (`ci/adapters/peers` adapts the agents, skills and repos use cases).
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

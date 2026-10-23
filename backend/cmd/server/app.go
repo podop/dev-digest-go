@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"sync"
 	"time"
 
@@ -28,11 +29,22 @@ import (
 	briefpg "dev-digest-go/backend/internal/brief/adapters/postgres"
 	briefapp "dev-digest-go/backend/internal/brief/app"
 	briefhttp "dev-digest-go/backend/internal/brief/transport/http"
+	cipeers "dev-digest-go/backend/internal/ci/adapters/peers"
+	cipg "dev-digest-go/backend/internal/ci/adapters/postgres"
+	"dev-digest-go/backend/internal/ci/adapters/runnerbin"
+	"dev-digest-go/backend/internal/ci/adapters/zipentry"
+	ciapp "dev-digest-go/backend/internal/ci/app"
+	cihttp "dev-digest-go/backend/internal/ci/transport/http"
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/conventions/adapters/clonefiles"
 	conventionspg "dev-digest-go/backend/internal/conventions/adapters/postgres"
 	conventionsapp "dev-digest-go/backend/internal/conventions/app"
 	conventionshttp "dev-digest-go/backend/internal/conventions/transport/http"
+	evalspeers "dev-digest-go/backend/internal/evals/adapters/peers"
+	evalspg "dev-digest-go/backend/internal/evals/adapters/postgres"
+	evalsapp "dev-digest-go/backend/internal/evals/app"
+	evalsexec "dev-digest-go/backend/internal/evals/app/executor"
+	evalshttp "dev-digest-go/backend/internal/evals/transport/http"
 	"dev-digest-go/backend/internal/health"
 	intentpeers "dev-digest-go/backend/internal/intent/adapters/peers"
 	intentpg "dev-digest-go/backend/internal/intent/adapters/postgres"
@@ -145,6 +157,14 @@ type options struct {
 	// intentBudget, briefBudget and onboardingBudget bound one intent derivation, brief generation
 	// and tour generation; 0 = each domain's own budget (120 s).
 	intentBudget, briefBudget, onboardingBudget time.Duration
+	// evalCaseBudget bounds one eval case; 0 = the domain's budget (120 s).
+	evalCaseBudget time.Duration
+	// runner is the CI runner the export ships; nil = runnerbin.Default(), the runner embedded by the
+	// image build (a build without the devdigest_runner tag has none and answers runner_bundle_missing).
+	runner ciapp.RunnerBundle
+	// artifactClient fetches the storage leg of a CI artifact download; nil = the GitHub client's
+	// default (tests point it at a TLS stub).
+	artifactClient *http.Client
 }
 
 // llmURLs are the base URLs of the provider adapters.
@@ -156,7 +176,7 @@ func withGetenv(getenv func(string) string) option { return func(o *options) { o
 func withLogOutput(w io.Writer) option             { return func(o *options) { o.logOut = w } }
 
 // serve runs the API until ctx ends: migrate, seed, start jobs, listen; on stop it cancels the live
-// review runs (up to 5 s to record themselves) in parallel with the job runner (up to 10 s), then
+// review and eval runs (up to 5 s to record themselves) in parallel with the job runner (up to 10 s), then
 // drains HTTP (up to 20 s) and closes the database.
 func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	o := options{getenv: func(string) string { return "" }, logOut: io.Discard}
@@ -200,6 +220,11 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	if _, err := w.reviews.FailInterrupted(ctx); err != nil {
 		log.ErrorContext(ctx, "interrupted review runs not failed", "error", err)
 	}
+	// Eval runs left running by a crash fail as "interrupted"; the use case logs the count. Non-fatal
+	// for the same reason.
+	if _, err := w.evalRuns.FailInterrupted(ctx); err != nil {
+		log.ErrorContext(ctx, "interrupted eval runs not failed", "error", err)
+	}
 	// Repos cloned before repo-intel existed get one index job each (D3005). Like the reap above,
 	// a failure is logged once and startup goes on (FR3008, Phase 1 AC33).
 	if n, err := w.backfill.Run(ctx); err != nil {
@@ -239,7 +264,9 @@ type wired struct {
 	conventions *conventionsapp.Service
 	backfill    *intelapp.Backfill
 	reviews     reviewsapp.Lifecycle
-	executor    *executor.Executor // shut down by listen before HTTP drains
+	executor    *executor.Executor  // shut down by listen before HTTP drains
+	evalRuns    evalsapp.Runs       // reaps the eval runs a crash left running
+	evalExec    *evalsexec.Executor // shut down by listen next to the review executor
 	// intent, brief and onboarding run generations on detached contexts; listen stops them before
 	// HTTP drains, because Echo never cancels the context of a request in flight (P2).
 	intent     intentapp.Stopper
@@ -286,9 +313,11 @@ func llmAdapters(cfg config.Config, urls llmURLs, log *slog.Logger) map[llm.Prov
 // wire builds the adapters, use cases, job handlers and routes.
 func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs.Runner, log *slog.Logger) (*wired, error) {
 	sec := secrets.New(filepath.Join(cfg.DataDir, secrets.FileName), o.getenv)
+	githubToken := func() string { return sec.Get(secrets.GitHubToken) }
 	gh := github.New(github.Options{
-		BaseURL: o.githubBaseURL,
-		Token:   func() string { return sec.Get(secrets.GitHubToken) },
+		BaseURL:        o.githubBaseURL,
+		Token:          githubToken,
+		ArtifactClient: o.artifactClient,
 	})
 	git, err := gitcli.New(gitcli.Options{
 		Binary:    o.gitBinary,
@@ -458,6 +487,36 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Budget:      o.onboardingBudget,
 	})
 
+	// Evals: the executor is the launcher of the run service; its engine and LLM port are the
+	// review engine's, bound to the run's own provider and model.
+	evalsStore := evalspg.NewStore(db)
+	evalExec := evalsexec.New(evalsexec.Deps{
+		Store:     evalsStore,
+		Providers: evalspeers.NewProviders(llmClient, newEvalLLMCaller(llmClient)),
+		Engine:    reviewerapp.Run,
+		Clock:     now,
+		Log:       log,
+	}, evalsexec.Options{CaseBudget: o.evalCaseBudget})
+	evalCases := evalsapp.NewCaseService(evalsStore, evalsStore, now, log)
+	evalRuns := evalsapp.NewRunService(evalsapp.RunDeps{
+		Cases: evalsStore, Runs: evalsStore, Snapshots: evalsStore, Launcher: evalExec, Now: now, Log: log,
+	})
+
+	// CI export and ingest: the directories read agents, skills and repos through their use cases.
+	ciAgents := cipeers.NewAgents(agentsSvc, skillsSvc)
+	ciStore := cipg.NewStore(db)
+	ciGitHub := cipeers.NewGitHub(gh, githubToken)
+	runnerBundle := o.runner
+	if runnerBundle == nil {
+		runnerBundle = runnerbin.Default()
+	}
+	ciExport := ciapp.NewExportService(ciapp.ExportDeps{
+		Agents: ciAgents, Repos: cipeers.NewRepos(reposSvc), Store: ciStore, Runner: runnerBundle, GitHub: ciGitHub, Log: log,
+	})
+	ciIngest := ciapp.NewIngestService(ciapp.IngestDeps{
+		Agents: ciAgents, Store: ciStore, GitHub: ciGitHub, Zip: zipentry.New(), Clock: now, Log: log,
+	})
+
 	limits := skillshttp.BodyLimits()
 	maps.Copy(limits, pchttp.BodyLimits())
 	e := httpx.New(httpx.Options{
@@ -467,9 +526,13 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		BodyLimits:   limits,
 		RateLimit: httpx.RateLimit{
 			Enabled: cfg.RateLimitEnabled,
-			Buckets: append(settingshttp.RateLimitBuckets(),
-				httpx.Bucket{Method: http.MethodPost, Path: "/pulls/:id/review", Limit: 10},
-				httpx.Bucket{Method: http.MethodPost, Path: intenthttp.RefreshPath, Limit: 10}),
+			Buckets: slices.Concat(settingshttp.RateLimitBuckets(),
+				[]httpx.Bucket{
+					{Method: http.MethodPost, Path: "/pulls/:id/review", Limit: 10},
+					{Method: http.MethodPost, Path: intenthttp.RefreshPath, Limit: 10},
+				},
+				// The two eval run starts share one counter per workspace; run-all counts per IP.
+				evalshttp.RateLimitBuckets()),
 			// A live run stream is long-lived and reconnects on its own: it never counts.
 			Exempt: []httpx.Route{{Method: http.MethodGet, Path: "/runs/:id/events"}},
 		},
@@ -492,16 +555,18 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	onboardinghttp.AddRoutes(e, onbSvc, resolver)
 	// GET /agents/performance is a static route, so it wins over GET /agents/:id.
 	performancehttp.AddRoutes(e, perfapp.NewService(perfpg.NewStore(db), now), resolver)
+	evalshttp.AddRoutes(e, evalCases, evalRuns, resolver)
+	cihttp.AddRoutes(e, ciExport, ciIngest, resolver)
 	return &wired{
 		echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs),
-		reviews: reviewsSvc, executor: reviewsExec, intent: intentSvc, brief: briefSvc, onboarding: onbSvc,
+		reviews: reviewsSvc, executor: reviewsExec, evalRuns: evalRuns, evalExec: evalExec, intent: intentSvc, brief: briefSvc, onboarding: onbSvc,
 	}, nil
 }
 
 // listen serves w.echo until ctx ends. On stop the review executor shuts down first (every live
 // run is cancelled, up to 5 s to record itself, then every run bus completes so the SSE streams
-// end) in parallel with the intent, brief and onboarding generations (cancelled, up to 5 s to
-// return) and the job runner (10 s); only then does Echo get its stop signal and drain
+// end) in parallel with the eval executor (the same drain), the intent, brief and onboarding
+// generations (cancelled, up to 5 s to return) and the job runner (10 s); only then does Echo get its stop signal and drain
 // the remaining requests (20 s grace, FR43, FR4042). Echo runs on its own context for that
 // reason: the signal context would stop it before the runs could finish. A server that cannot
 // drain within the grace period makes the process fail; runs and jobs that do not settle in time
@@ -527,6 +592,15 @@ func listen(ctx context.Context, cfg config.Config, o options, w *wired, runner 
 					log.Warn("review runs did not finish recording; the next start reaps them", "error", err)
 				} else {
 					log.Error("review executor shutdown", "error", err)
+				}
+			}
+		})
+		stopping.Go(func() {
+			if err := w.evalExec.Shutdown(context.WithoutCancel(ctx)); err != nil {
+				if errors.Is(err, evalsexec.ErrNotDrained) {
+					log.Warn("eval runs did not finish recording; the next start reaps them", "error", err)
+				} else {
+					log.Error("eval executor shutdown", "error", err)
 				}
 			}
 		})
@@ -596,6 +670,16 @@ func newLLMCaller(client llmcall.Structured) peers.CallerFactory {
 	return func(c peers.CallerConfig) reviewerapp.LLM {
 		return llmcall.New(llmcall.Config{
 			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, SessionID: c.SessionID, OnUsage: c.OnUsage,
+		})
+	}
+}
+
+// newEvalLLMCaller binds the review engine's LLM adapter to the LLM client for the evals context's
+// provider resolver, like newLLMCaller does for reviews; a case has no session id.
+func newEvalLLMCaller(client llmcall.Structured) evalspeers.CallerFactory {
+	return func(c evalspeers.CallerConfig) reviewerapp.LLM {
+		return llmcall.New(llmcall.Config{
+			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, OnUsage: c.OnUsage,
 		})
 	}
 }

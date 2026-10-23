@@ -70,6 +70,14 @@ func (s *RunService) begin(ctx context.Context, nr domain.NewRun) (run domain.Ru
 	if errors.Is(err, domain.ErrRunActive) {
 		return domain.Run{}, true, nil
 	}
+	// The owner was deleted between the snapshot and the insert (foreign key): the 404 of a start
+	// that had arrived a moment later.
+	if errors.Is(err, domain.ErrNotFound) {
+		if nr.OwnerKind == domain.OwnerSkill {
+			return domain.Run{}, false, apperr.NotFound(msgSkillNotFound)
+		}
+		return domain.Run{}, false, apperr.NotFound(msgAgentNotFound)
+	}
 	if err != nil {
 		return domain.Run{}, false, fmt.Errorf("create run: %w", err)
 	}

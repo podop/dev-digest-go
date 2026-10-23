@@ -288,6 +288,7 @@ type fakeRuns struct {
 	recent    []domain.RecentRun
 	reaped    int
 	reapErr   error
+	createErr error // returned by CreateRun when set
 	queries   []finishedQuery
 	nextID    int
 }
@@ -300,6 +301,9 @@ func newFakeRuns() *fakeRuns {
 }
 
 func (f *fakeRuns) CreateRun(_ context.Context, n domain.NewRun) (domain.Run, error) {
+	if f.createErr != nil {
+		return domain.Run{}, f.createErr
+	}
 	key := ownerKey{n.OwnerKind, n.AgentID}
 	if n.OwnerKind == domain.OwnerSkill {
 		key.id = *n.SkillID

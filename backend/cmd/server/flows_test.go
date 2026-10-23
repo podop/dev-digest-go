@@ -51,13 +51,17 @@ var securityHeaders = map[string]string{
 func TestHTTP_UnknownRoutes(t *testing.T) { // AC1, AC2, AC20, AC201
 	s := startStack(t, spec{})
 
-	resp := s.get("/eval/dashboard")
-	want := map[string]any{"error": map[string]any{"code": "not_found", "message": "Route GET /eval/dashboard not found"}}
+	// Every Node route is served since Phase 6; GET /eval/dashboard was the last one outside the scope.
+	resp := s.get("/eval/nope")
+	want := map[string]any{"error": map[string]any{"code": "not_found", "message": "Route GET /eval/nope not found"}}
 	if resp.Status != http.StatusNotFound {
-		t.Errorf("GET /eval/dashboard status = %d, want 404", resp.Status)
+		t.Errorf("GET /eval/nope status = %d, want 404", resp.Status)
 	}
 	if diff := cmp.Diff(want, resp.JSON(t)); diff != "" {
-		t.Errorf("GET /eval/dashboard body mismatch (-want +got):\n%s", diff)
+		t.Errorf("GET /eval/nope body mismatch (-want +got):\n%s", diff)
+	}
+	if resp := s.get("/eval/dashboard"); resp.Status != http.StatusOK {
+		t.Errorf("GET /eval/dashboard = %d (%s), want 200 (the evals overview)", resp.Status, resp.Body)
 	}
 
 	resp = s.post("/health?x=1", nil)
@@ -702,8 +706,7 @@ var phase2Routes = []string{
 	"POST /repos/:id/context/files/rename", "DELETE /repos/:id/context/files",
 }
 
-// AC201: every Phase 2 route is registered; the routes outside the scope still answer the
-// router's 404 envelope (the review routes left that list in Phase 4).
+// AC201: every Phase 2 route is registered; unknown routes still answer the router's 404 envelope.
 func TestHTTP_Phase2RoutesRegistered(t *testing.T) {
 	if len(phase2Routes) != 38 {
 		t.Fatalf("phase2Routes has %d entries, want 38", len(phase2Routes))
@@ -731,7 +734,7 @@ func TestHTTP_Phase2RoutesRegistered(t *testing.T) {
 		}
 	}
 
-	for _, route := range []string{"GET /eval/dashboard"} {
+	for _, route := range []string{"GET /eval/nope"} {
 		method, path, _ := strings.Cut(route, " ")
 		var body any
 		if method == http.MethodPost {
@@ -741,6 +744,40 @@ func TestHTTP_Phase2RoutesRegistered(t *testing.T) {
 		want := "Route " + route + " not found"
 		if msg, _ := resp.errorMessage(t); resp.Status != http.StatusNotFound || msg != want {
 			t.Errorf("%s = %d %q, want 404 %q", route, resp.Status, msg, want)
+		}
+	}
+}
+
+// phase6Routes are the 20 routes Phase 6 adds (16 evals, 4 ci); :id is replaced by a UUID.
+var phase6Routes = []string{
+	// evals
+	"POST /findings/:id/eval-case", "GET /agents/:id/eval-cases", "POST /agents/:id/eval-cases",
+	"GET /skills/:id/eval-cases", "POST /skills/:id/eval-cases", "PATCH /eval-cases/:id", "DELETE /eval-cases/:id",
+	"POST /agents/:id/eval-runs", "GET /agents/:id/eval-runs", "POST /skills/:id/eval-runs", "GET /skills/:id/eval-runs",
+	"GET /eval-runs/compare", "GET /eval-runs/:id", "POST /eval-runs/run-all", "GET /eval/dashboard",
+	"GET /agents/:id/eval/dashboard",
+	// ci
+	"POST /agents/:id/export-ci", "GET /agents/:id/ci-installations", "GET /ci/runs", "POST /ci/refresh",
+}
+
+// TestHTTP_Phase6RoutesRegistered: every Phase 6 route is wired in cmd (FR6013 wiring); the shapes
+// and statuses are the component tests'.
+func TestHTTP_Phase6RoutesRegistered(t *testing.T) {
+	if len(phase6Routes) != 20 {
+		t.Fatalf("phase6Routes has %d entries, want 20", len(phase6Routes))
+	}
+	s := startStack(t, spec{})
+	const id = "00000000-0000-4000-8000-000000000001"
+	for _, route := range phase6Routes {
+		method, path, _ := strings.Cut(route, " ")
+		path = strings.ReplaceAll(path, ":id", id)
+		var body any
+		if method != http.MethodGet && method != http.MethodDelete {
+			body = map[string]any{}
+		}
+		resp := s.do(method, path, body)
+		if msg, _ := resp.errorMessage(t); strings.HasPrefix(msg, "Route ") && strings.HasSuffix(msg, " not found") {
+			t.Errorf("%s = %d %q, want the route registered", route, resp.Status, msg)
 		}
 	}
 }

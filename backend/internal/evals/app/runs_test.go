@@ -107,6 +107,16 @@ func TestStartAgent_Errors(t *testing.T) {
 			t.Errorf("launched = %d, want 1 (the refused start launches nothing)", len(env.launcher.runs))
 		}
 	})
+	t.Run("agent deleted before the insert", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.addCases(domain.OwnerAgent, "a-1", "c1")
+		env.runs.createErr = domain.ErrNotFound
+		_, err := env.svc.StartAgent(t.Context(), ws, "a-1")
+		wantApp(t, err, apperr.KindNotFound, "not_found", "Agent not found")
+		if len(env.launcher.runs) != 0 {
+			t.Errorf("launched = %d, want 0", len(env.launcher.runs))
+		}
+	})
 	t.Run("store failure", func(t *testing.T) {
 		env := newRunEnv(t)
 		env.cases.err = errBoom
@@ -170,6 +180,13 @@ func TestStartSkill_Errors(t *testing.T) {
 		}
 		_, err := env.svc.StartSkill(t.Context(), ws, "s-1", "a-1")
 		wantApp(t, err, apperr.KindConflict, "eval_run_active", "An eval run is already in progress for this skill")
+	})
+	t.Run("owner deleted before the insert", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.addCases(domain.OwnerSkill, "s-1", "c1")
+		env.runs.createErr = domain.ErrNotFound
+		_, err := env.svc.StartSkill(t.Context(), ws, "s-1", "a-1")
+		wantApp(t, err, apperr.KindNotFound, "not_found", "Skill not found")
 	})
 	t.Run("a skill run and an agent run of the same host both start", func(t *testing.T) {
 		env := newRunEnv(t)

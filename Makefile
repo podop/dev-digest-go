@@ -15,6 +15,14 @@ SERVICE ?=
 BACKEND := backend
 FRONTEND := frontend
 
+# The source commit the backend image stamps into the CI runner it embeds (12 hex of HEAD, only when
+# the working tree is clean, else "dev"). Compose passes it as the DEVDIGEST_BUILD_ID build arg;
+# a plain `docker compose build` without make builds "dev". Override: make DEVDIGEST_BUILD_ID=… up
+ifndef DEVDIGEST_BUILD_ID
+DEVDIGEST_BUILD_ID := $(shell [ -z "$$(git status --porcelain 2>/dev/null)" ] && git rev-parse --short=12 HEAD 2>/dev/null || echo dev)
+endif
+export DEVDIGEST_BUILD_ID
+
 .PHONY: help
 help: ## List the targets
 	@awk 'BEGIN {FS = ":.*## "} /^##@/ {printf "\n\033[1m%s\033[0m\n", substr($$0, 5)} \

@@ -19,6 +19,7 @@ import (
 
 	"gorm.io/gorm"
 
+	ciapp "dev-digest-go/backend/internal/ci/app"
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/jobs"
 	"dev-digest-go/backend/internal/llm"
@@ -95,6 +96,12 @@ type spec struct {
 	// budgets of one intent derivation, brief generation and tour generation (0 = 120 s each).
 	now                                         func() time.Time
 	intentBudget, briefBudget, onboardingBudget time.Duration
+
+	// Phase 6 seams: the budget of one eval case (0 = 120 s), the CI runner the export ships (nil =
+	// the untagged build's none, so runner_bundle_missing) and the client of the artifact storage leg.
+	evalCaseBudget time.Duration
+	runner         ciapp.RunnerBundle
+	artifactClient *http.Client
 }
 
 // stack is a running server with its stubs.
@@ -176,6 +183,7 @@ func startStack(t testing.TB, sp spec) *stack {
 			o.noRepoIntelJobs = sp.noIntelJobs
 			o.now = sp.now
 			o.intentBudget, o.briefBudget, o.onboardingBudget = sp.intentBudget, sp.briefBudget, sp.onboardingBudget
+			o.evalCaseBudget, o.runner, o.artifactClient = sp.evalCaseBudget, sp.runner, sp.artifactClient
 		},
 	}
 

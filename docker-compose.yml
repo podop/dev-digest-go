@@ -29,6 +29,10 @@ services:
       # Build-time only: parallel downloads (go mod, npm) get reset on the default bridge
       # network under WSL2; the running containers still use the compose network.
       network: host
+      args:
+        # Source commit stamped into the embedded CI runner (12 hex, set by `make`, which passes it
+        # only for a clean tree); anything else builds "dev".
+        DEVDIGEST_BUILD_ID: ${DEVDIGEST_BUILD_ID:-dev}
     restart: unless-stopped
     env_file:
       - path: .env          # optional: LLM keys, GITHUB_TOKEN (see .env.example)
