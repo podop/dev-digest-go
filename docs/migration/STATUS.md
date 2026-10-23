@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-23 · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-23 (night: PR Leaderboard section below) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -14,6 +14,64 @@ plan `docs/plans/2026-10-22-go-backend-phase-5.md` (+ `.context.md`, S1–S38, W
 `docs/plans/2026-10-23-go-backend-phase-6.md` (+ `.context.md`, S1–S38, W0–W4, 24 lanes; W4 split into
 parallel lanes by the user). Backend gate after Phase 6: `make backend-check` exit 0, 128 packages;
 frontend contract test 148/148.
+
+## After the migration — PR Leaderboard (in progress) and Settings (specs only) · 2026-10-23 night
+**PR Leaderboard** (new feature, not Node parity). Spec `specs/2026-10-23-pr-leaderboard.md` (+D18–D26), plan
+`docs/plans/2026-10-23-pr-leaderboard.md` (+`.context.md`, A1, A2, declared deviations under S25 and
+before S21). Every step S1–S26 is implemented and committed: spec `eacb860`, plan `7ee5012`, waves
+`a519fc9` (W0), `9ef3155` (W1), `ce05e58` (W2–W3, A1/A2, S26), `1b0d73e` (W3b: S25 + r1 fixes),
+`a497bfe` (W4), `2b7c5d1` (W5). Gate on `2b7c5d1`: `make check` exit 0 (132 backend packages, 954 frontend tests).
+
+Review gate (reports in `.sdd/review/2026-10-23-pr-leaderboard/`, git-ignored):
+| Reviewer | r1 (working tree W0–W3) | r2 |
+|---|---|---|
+| Architecture | PASS, 1 MEDIUM (Raw SQL) + 1 LOW | **PASS**; MEDIUM closed in `1b0d73e`; W4 delta PASS, its LOW (AGENTS seam list) fixed in `2b7c5d1` |
+| Security | PASS, LOW F1 (secondary rate limit) | **PASS**; F1 closed; INFO N1–N3 (follow-ups below) |
+| Plan verification | 105 PASS / 0 FAIL, rest pending | 106 PASS / 0 FAIL; 39 container rows settled by `make check` on `2b7c5d1`; delta for S21/S22 + fix r1 still to run |
+| Manual S22 (`s22-manual.md`) | — | AC20 PASS (Playwright, 0 errors); AC12 no-writes PASS; **AC12 latency FAIL**: 30d/all p95 5.7 s (limit 500 ms) at NFR1 volume, because `qWindowFindings` scans ~104k findings into Go |
+
+**In flight when the session stopped: fix round r1 for AC12.** The user chose SQL aggregation with no wire or
+spec change. Brief: `.sdd/review/2026-10-23-pr-leaderboard/fix-r1-ac12-brief.md`. Throwaway-stack assets (override,
+NFR1 seed, measure scripts, EXPLAINs, Playwright script): `.sdd/review/2026-10-23-pr-leaderboard/s22-assets/`.
+The brief points at the old session scratchpad, so use these copies.
+- Move the per-PR counts, the top-3 findings (P13 order) and the hot-files aggregation into SQL, so the rows sent
+  to Go are O(rows), not O(findings).
+- The S19 goldens must pass unchanged.
+- Re-measure on the throwaway project `devdigest-go-s22` (API 3211, DB 5436).
+- Uncommitted work in `backend/internal/leaderboard/**` (11 files) when this was written; not reviewed, not committed.
+
+To resume:
+1. `git status`: check whether the fix round left a report (no commit) or partial code.
+2. If partial, either finish it with an implementer, using the same goal plus the S22 assets, or
+   `git restore backend/internal/leaderboard` and record AC12 as a follow-up (user's choice).
+3. `docker compose ls`: if `devdigest-go-s22` is still up, `docker compose -p devdigest-go-s22 down -v
+   --rmi local`. Only that project; check `config | sed -n '/^volumes:/,$p'` first.
+4. Then run the gate: `make check`, arch delta (`architecture-reviewer`), security delta (read-only `general-purpose`
+   agent with skill `engineering-paved-path:security` — user decision 2026-10-23, no longer the Datarim
+   `security` agent), plan-verifier delta (S21, S22, fix r1), then INSIGHTS wrap-up and this section.
+
+Leaderboard follow-ups (not fixed):
+- Backfill slot use:
+  - security N1 / lane x: a PR with real 0/0/0 stats, or one whose stats fetch keeps failing, takes one of the 20
+    backfill slots every cycle. Fix: remember `(pr.ID, updated_at)` after a zero result or an error.
+  - Stats are backfilled only after that repo's PR pages succeed.
+- Code hygiene:
+  - N2: add `workspace_id` to the `SetDiffStats` WHERE.
+  - N3: `Retry-After` uses the wall clock, not the injected clock.
+  - arch LOW: `leaderboard/domain/rows_test.go` imports `pulls/domain` (test-only drift guard).
+- UI:
+  - At 1600 px the table scrolls sideways and an expanded row hides the title column (S22).
+  - Agent run errors show only "OpenRouter … returned 402" and drop OpenRouter's own message; check Node parity.
+    The user hit this on 2026-10-23: the Security Reviewer on claude-sonnet-5.5 ran out of OpenRouter credit.
+- Load-sensitive tests: `repointel` `TestExtractSymbols_Hostile` and `TestBuild_SubstitutionFanoutIsBounded`
+  failed once at load average ≈ 45; they pass on a quiet host.
+
+**Settings** (next feature, not started). Design `docs/design/2026-10-23-settings-first-run.md` (accepted) and
+specs A–D (`specs/2026-10-23-settings-*.md`, ready-for-planning), commit `74c6ebf`.
+- Order: A, then B ∥ C (C uses the leaderboard poller), then D.
+- Start only after the leaderboard gate closes (user: one feature at a time). First step:
+  `sdd-engineering:implementation-planner` on slice A (`specs/2026-10-23-settings-first-run-setup.md`).
+- Before slice B, confirm Q4: does "reset run history" also delete learnings?
 
 ## Phase 6 review gate (reports in `.sdd/review/2026-10-23-go-backend-phase-6/`, git-ignored)
 | Reviewer | r1 (`4735965`) | r2 (fix delta `95da9b9`) |
