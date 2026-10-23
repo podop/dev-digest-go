@@ -23,6 +23,12 @@ var (
 	// ErrSlugTaken is returned by Store.UpsertInstallation when (repo, slug) belongs to another
 	// agent: a lost race against the pre-check.
 	ErrSlugTaken = errors.New("ci slug taken")
+	// ErrNotStorable is returned by Store.RecordRun and Store.UpsertInstallation, before any
+	// write, when a value cannot be held by its column: an integer outside the column's range, a
+	// cost that overflows numeric(12,6), or text with a NUL or invalid UTF-8. The ingest maps it
+	// to the skip reason artifact_invalid, so a hostile artifact cannot make every refresh fail
+	// with a database error.
+	ErrNotStorable = errors.New("ci value not storable")
 	// ErrArtifactTooLarge is returned by GitHub.DownloadArtifact when the body exceeds maxBytes.
 	ErrArtifactTooLarge = errors.New("artifact too large")
 	// ErrEntryTooLarge is returned by ArtifactReader.Entry when the entry is declared or inflates
@@ -94,6 +100,7 @@ type Store interface {
 	StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[domain.RunKey]bool, error)
 	// RecordRun writes the ci_runs and agent_runs rows in one transaction with ON CONFLICT
 	// (github_run_id, run_attempt) DO NOTHING; false when another refresh stored the run first.
+	// ErrNotStorable (checked before anything is written) when a value cannot be held.
 	RecordRun(ctx context.Context, run domain.NewRun) (bool, error)
 	// ListRuns returns the runs of the workspace, newest ran_at first, at most f.Limit.
 	ListRuns(ctx context.Context, workspaceID string, f RunFilter) ([]domain.Run, error)

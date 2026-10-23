@@ -1,0 +1,77 @@
+{
+  "handWritten": true,
+  "note": "Known differences between the Node CI domain (goldens/ci.json) and the Go one that are decisions, not bugs: ingest hardening of the artifact integers and cost (NFR6003/NFR6004, security note of the W1 contract notes) and the zip integrity check. TestCIArtifactParity and TestCIZipParity fail when a listed case starts to agree, when an unlisted case disagrees and when a listed value changes. Consumer: ci_test.go.",
+  "spec": [
+    "AC6046",
+    "FR6056",
+    "NFR6001"
+  ],
+  "deviations": [
+    {
+      "key": "artifacts/counts 1e21 are integers",
+      "category": "ingest hardening",
+      "node": {
+        "ok": true,
+        "artifact": {
+          "findings_count": 1e+21,
+          "cost_usd": 0,
+          "agent": "A"
+        }
+      },
+      "go": {
+        "ok": false,
+        "reason": "artifact_invalid"
+      },
+      "reason": "Go-only hardening (NFR6003, ingest): integer fields are limited to JavaScript's safe range (2^53-1) because they are stored in integer columns; Node's zod int() accepts 1e21. The artifact is skipped as artifact_invalid instead of failing the insert on every refresh."
+    },
+    {
+      "key": "artifacts/counts above 2^53",
+      "category": "ingest hardening",
+      "node": {
+        "ok": true,
+        "artifact": {
+          "findings_count": 9007199254740992,
+          "cost_usd": 0,
+          "agent": "A"
+        }
+      },
+      "go": {
+        "ok": false,
+        "reason": "artifact_invalid"
+      },
+      "reason": "Same hardening as 'counts 1e21': integers above 2^53-1 are refused so a hostile artifact cannot make the insert fail on every refresh."
+    },
+    {
+      "key": "artifacts/cost 1e400 overflows to infinity",
+      "category": "ingest hardening",
+      "node": {
+        "ok": true,
+        "artifact": {
+          "findings_count": 0,
+          "cost_usd": {
+            "$number": "Infinity"
+          },
+          "agent": "A"
+        }
+      },
+      "go": {
+        "ok": false,
+        "reason": "artifact_invalid"
+      },
+      "reason": "Go-only hardening: a cost that overflows to infinity is refused (it cannot be stored in the numeric cost column); Node's parse yields Infinity, which its schema accepts."
+    },
+    {
+      "key": "zips-entry/zip with a corrupted body",
+      "category": "zip integrity",
+      "node": {
+        "kind": "entry",
+        "len": 48,
+        "sha": "9079dfbb90f87bd78a4350defccd4d6ab8da32dbe69e83600165fa99528437e3"
+      },
+      "go": {
+        "kind": "invalid_or_missing"
+      },
+      "reason": "Node does not check the CRC-32 of an entry and returns the corrupted bytes (which then fail the schema: artifact_invalid); the Go reader verifies length and CRC-32 and refuses the entry. The artifact outcome is the same (zips/ case agrees)."
+    }
+  ]
+}

@@ -2,9 +2,6 @@
 // exported GitHub Actions workflow runs in someone else's repository to review a pull request
 // with the backend's review engine. It reads secrets from the environment only, never links the
 // secrets-file store, a database, Echo, git or cgo (see closure_test.go), and prices nothing.
-//
-// This file is the build smoke of the runner (spec 7.8.1): the LLM layer and the review engine
-// are wired, the review itself is added by the runner steps.
 package main
 
 import (
@@ -14,8 +11,12 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"dev-digest-go/backend/internal/ci/runner/adapters/env"
+	"dev-digest-go/backend/internal/ci/runner/adapters/ghapi"
+	runnerapp "dev-digest-go/backend/internal/ci/runner/app"
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
 	"dev-digest-go/backend/internal/platform/keynames"
@@ -35,18 +36,12 @@ type endpoints struct {
 }
 
 func defaultEndpoints() endpoints {
-	return endpoints{OpenRouter: openaicompat.DefaultOpenRouterBaseURL, GitHub: "https://api.github.com"}
+	return endpoints{OpenRouter: openaicompat.DefaultOpenRouterBaseURL, GitHub: ghapi.DefaultBaseURL}
 }
-
-// The review engine and its LLM port are the ones local reviews and evals use.
-var (
-	_ reviewerapp.LLM = (*llmcall.Caller)(nil)
-	_                 = reviewerapp.Run
-)
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := run(ctx, os.Getenv, os.Stderr, defaultEndpoints())
+	code := run(ctx, os.LookupEnv, os.Stdout, os.Stderr, defaultEndpoints())
 	stop()
 	os.Exit(code)
 }
@@ -80,15 +75,39 @@ func newClient(getenv func(string) string, stderr io.Writer, ep endpoints) *llm.
 	})
 }
 
-// run is the runner. It returns the process exit code.
-func run(_ context.Context, getenv func(string) string, stderr io.Writer, ep endpoints) int {
+// reviewLLM binds the engine's LLM port to the client for one model: OpenRouter, no session id.
+type reviewLLM struct{ client *llm.Client }
+
+func (r reviewLLM) For(model string) reviewerapp.LLM {
+	return llmcall.New(llmcall.Config{Client: r.client, Provider: llm.OpenRouter, Model: model, RunID: "ci-runner"})
+}
+
+// run is the runner. It returns the process exit code. The review is the one engine local reviews
+// and evals run (reviewer/app.Run), over the OpenRouter client of newClient.
+func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr io.Writer, ep endpoints) (code int) {
+	getenv := func(name string) string { v, _ := lookup(name); return v }
+	out := env.NewOut(stdout, stderr)
+	defer func() {
+		// A panic is a bug, not a review result; it still must not leave a key in the job log.
+		if r := recover(); r != nil {
+			msg := fmt.Sprint(r)
+			for _, name := range []string{keynames.OpenRouterKey, keynames.GitHubToken} {
+				if v := getenv(name); len(v) >= 8 {
+					msg = strings.ReplaceAll(msg, v, "[REDACTED]")
+				}
+			}
+			out.Stderr("[agent-runner] fatal error: " + msg)
+			code = runnerapp.ExitFailed
+		}
+	}()
+
 	client := newClient(getenv, stderr, ep)
 	defer client.Close()
-	fmt.Fprintf(stderr, "[agent-runner] trace build=%s\n", buildID)
-	if err := client.Ready(llm.OpenRouter); err != nil {
-		fmt.Fprintf(stderr, "[agent-runner] FAILED: %s\n", err.Error())
-		return 1
-	}
-	fmt.Fprintln(stderr, "[agent-runner] FAILED: the review is not implemented in this build")
-	return 1
+	return runnerapp.Run(ctx, runnerapp.Config{BuildID: buildID}, runnerapp.Deps{
+		Env:    env.Process{LookupEnv: lookup},
+		Files:  env.Files{},
+		GitHub: ghapi.New(ghapi.Options{BaseURL: ep.GitHub}),
+		LLM:    reviewLLM{client: client},
+		Out:    out,
+	})
 }

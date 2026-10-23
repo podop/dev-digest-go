@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 
 	"dev-digest-go/backend/internal/ci/adapters/runnerbin"
@@ -64,5 +65,24 @@ func TestBundle_NoRunner(t *testing.T) {
 				t.Error("Runner() ok = true for an empty executable, want false")
 			}
 		})
+	}
+}
+
+func TestBundle_RunnerConcurrentFirstUse(t *testing.T) {
+	b := runnerbin.New(bytes.Repeat([]byte("exe"), 4096), "dev")
+	const callers = 8
+	results := make([]string, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Go(func() {
+			a, _ := b.Runner()
+			results[i] = a.Encoded
+		})
+	}
+	wg.Wait()
+	for i, r := range results {
+		if r == "" || r != results[0] {
+			t.Errorf("caller %d got a different or empty encoding", i)
+		}
 	}
 }

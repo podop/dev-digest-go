@@ -17,7 +17,8 @@ type ExportRequest struct {
 	Action   domain.ExportAction
 	PostAs   domain.PostAs
 	Triggers []string
-	// Workflow is the edited workflow; nil or empty = generate it.
+	// Workflow is the edited workflow; nil (absent or null) = generate it. An empty string is
+	// text like any other and is refused by the workflow rules as invalid_yaml (Node `??`).
 	Workflow *string
 }
 

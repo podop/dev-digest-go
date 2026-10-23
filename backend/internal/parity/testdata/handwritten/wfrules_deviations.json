@@ -1,0 +1,94 @@
+{
+  "handWritten": true,
+  "note": "Cases of goldens/wfrules.json on which wfrules.Check (yaml.v3 underneath) is expected to differ from the Node checkWorkflow (yaml 2.9): YAML categories the two parsers read differently (README.md, 'Parity traps': directives, tags, control characters, line breaks). They are not chased (plan S32); TestWorkflowRulesParity fails when a listed case starts to agree, when an unlisted case disagrees and when the listed verdicts change. Duplicate keys, the alias budget and the JS regex/string semantics are implemented in the rules and agree on every case of the corpus. Consumer: wfrules_test.go.",
+  "spec": [
+    "AC6038",
+    "NFR6001"
+  ],
+  "deviations": [
+    {
+      "name": "syntax: directive %YAML 1.2",
+      "category": "directive",
+      "node": {
+        "ok": true
+      },
+      "go": {
+        "ok": false,
+        "rule": "invalid_yaml"
+      },
+      "reason": "yaml.v3 (libyaml) implements YAML 1.1 and refuses a %YAML 1.2 directive; Node's yaml 2.x accepts it. Stricter in Go (fails closed), so a harmless workflow is refused."
+    },
+    {
+      "name": "syntax: directive %YAML 1.1",
+      "category": "directive",
+      "node": {
+        "ok": false,
+        "rule": "forbidden_trigger"
+      },
+      "go": {
+        "ok": true
+      },
+      "reason": "A %YAML 1.1 directive makes `on` a boolean key in Node, so the trigger rule fails; the Go loader resolves plain scalars by the 1.2 core schema whatever the directive says, reads `on` as the string key and passes. Lenient in Go (reported to the security review); BuildWorkflow never writes a directive."
+    },
+    {
+      "name": "syntax: cr only line endings",
+      "category": "line break",
+      "node": {
+        "ok": false,
+        "rule": "invalid_yaml"
+      },
+      "go": {
+        "ok": true
+      },
+      "reason": "A document with lone CR line breaks is a parse error in Node and valid YAML to yaml.v3. Lenient in Go for this line-break form."
+    },
+    {
+      "name": "syntax: nul character",
+      "category": "control character",
+      "node": {
+        "ok": true
+      },
+      "go": {
+        "ok": false,
+        "rule": "invalid_yaml"
+      },
+      "reason": "Node accepts a NUL inside a comment; yaml.v3 refuses control characters anywhere. Stricter in Go (fails closed)."
+    },
+    {
+      "name": "syntax: control character in a comment",
+      "category": "control character",
+      "node": {
+        "ok": true
+      },
+      "go": {
+        "ok": false,
+        "rule": "invalid_yaml"
+      },
+      "reason": "Node accepts control characters in a comment; yaml.v3 refuses them. Stricter in Go (fails closed)."
+    },
+    {
+      "name": "tag: !!set",
+      "category": "tag",
+      "node": {
+        "ok": true
+      },
+      "go": {
+        "ok": false,
+        "rule": "invalid_yaml"
+      },
+      "reason": "yaml.v3 rejects a !!set tag on a mapping that does not fit the tag's kind; Node only warns about tags it cannot resolve. Stricter in Go (fails closed)."
+    },
+    {
+      "name": "tag: !!omap",
+      "category": "tag",
+      "node": {
+        "ok": true
+      },
+      "go": {
+        "ok": false,
+        "rule": "invalid_yaml"
+      },
+      "reason": "Same as !!set: yaml.v3 refuses the tag on a mapping, Node accepts it. Stricter in Go (fails closed)."
+    }
+  ]
+}

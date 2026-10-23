@@ -119,7 +119,7 @@ Prefixes in [C0]. Tests per file; Go [K24]; DB tests pgtest. Done when = `go tes
 ## Execution
 - W0: Z S1 ∥ Y S2 ∥ X S3 ∥ W S4
 - W1: A S5 ∥ B S6 ∥ C S7→S9 ∥ E S10→S12 ∥ F S13 ∥ G S14→S15 ∥ K S16→S17 ∥ L S18
-- W2: M S19→S20 ∥ N S21 ∥ O S22→S23 ∥ P S24 ∥ Q S25→S26 ∥ R S27 ∥ S S28→S29 ∥ T S30→S31 ∥ U S32 · W3: V S33 · W4: X S34→S38
+- W2: M S19→S20 ∥ N S21 ∥ O S22→S23 ∥ P S24 ∥ Q S25→S26 ∥ R S27 ∥ S S28→S29 ∥ T S30→S31 ∥ U S32 · W3: V S33 · W4 (split by the user, 2026-10-23): X1 S34 ∥ X2 S35 ∥ X3 S36, then X4 S37 ∥ X5 S38
 
 ## Contracts & migrations
 None (go.mod: `yaml.v3` direct).
