@@ -11,6 +11,7 @@
  *  - contracts/platform   Settings, ConnTestResult, Repo, PrMeta/PrDetail, …
  *  - contracts/project-context  ContextDoc, ContextList, ContextAttachments, RunTrace.project_context
  *  - contracts/onboarding  OnboardingTour, OnboardingTourState (GET/POST /repos/:id/onboarding)
+ *  - contracts/leaderboard  Leaderboard (GET /leaderboard): rows, KPIs, awards, attention, charts
  *  - adapters             adapter interfaces + ModelInfo
  *  - constants/feature-models  zod-free FEATURE_MODELS registry (re-exported by
  *                         contracts/platform; import the subpath from bundles
@@ -41,4 +42,5 @@ export * from './contracts/observability.js';
 export * from './contracts/productionize.js';
 export * from './contracts/project-context.js';
 export * from './contracts/onboarding.js';
+export * from './contracts/leaderboard.js';
 export * from './adapters.js';

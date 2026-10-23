@@ -123,6 +123,21 @@ func TestLoad(t *testing.T) {
 	}
 }
 
+// baselineFS holds only migration 0001. The Node-parity tests are pinned to it: later
+// versions intentionally add to the schema the Node migrations 0000-0020 produce.
+func baselineFS(t *testing.T) fs.FS {
+	t.Helper()
+	out := fstest.MapFS{}
+	for _, name := range []string{"0001_baseline.up.sql", "0001_baseline.down.sql"} {
+		body, err := fs.ReadFile(migrations.FS, name)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		out[name] = &fstest.MapFile{Data: body}
+	}
+	return out
+}
+
 func newMigrator(t *testing.T, db *sql.DB, fsys fs.FS) *migrate.Migrator {
 	t.Helper()
 	m, err := migrate.New(db, fsys, discard())
@@ -144,7 +159,7 @@ func sqlDBOf(t *testing.T, d *pgtest.Database) *sql.DB {
 func TestUp_MatchesNodeSchema(t *testing.T) {
 	want := referenceSnapshot(t)
 	d := pgtest.Empty(t)
-	m := newMigrator(t, sqlDBOf(t, d), migrations.FS)
+	m := newMigrator(t, sqlDBOf(t, d), baselineFS(t))
 
 	n, err := m.Up(t.Context())
 	if err != nil || n != 1 {
@@ -192,6 +207,10 @@ func TestUp_Idempotent(t *testing.T) {
 }
 
 func TestUp_ConcurrentMigratorsApplyOnce(t *testing.T) {
+	all, err := migrate.Load(migrations.FS)
+	if err != nil {
+		t.Fatalf("Load(migrations.FS) error = %v", err)
+	}
 	d := pgtest.Empty(t)
 	db := sqlDBOf(t, d)
 	var wg sync.WaitGroup
@@ -215,8 +234,8 @@ func TestUp_ConcurrentMigratorsApplyOnce(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	if total != 1 {
-		t.Errorf("versions applied across 3 concurrent Up calls = %d, want 1", total)
+	if total != len(all) {
+		t.Errorf("versions applied across 3 concurrent Up calls = %d, want %d", total, len(all))
 	}
 }
 
@@ -224,7 +243,7 @@ func TestDown_ThenUpRestoresSchema(t *testing.T) {
 	want := referenceSnapshot(t)
 	d := pgtest.Empty(t)
 	db := sqlDBOf(t, d)
-	m := newMigrator(t, db, migrations.FS)
+	m := newMigrator(t, db, baselineFS(t))
 	if _, err := m.Up(t.Context()); err != nil {
 		t.Fatalf("Up() error = %v", err)
 	}
@@ -277,10 +296,72 @@ func TestDown_ThenUpRestoresSchema(t *testing.T) {
 	}
 }
 
+// TestMigration0002_PRMergeState: Up adds merged_at, closed_at and draft to pull_requests,
+// one Down removes exactly those three columns (the rest equals the baseline), Up restores them.
+func TestMigration0002_PRMergeState(t *testing.T) {
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+
+	base := newMigrator(t, db, baselineFS(t))
+	if _, err := base.Up(t.Context()); err != nil {
+		t.Fatalf("Up() baseline error = %v", err)
+	}
+	baseline := catalog(t, db)
+
+	m := newMigrator(t, db, migrations.FS)
+	n, err := m.Up(t.Context())
+	if err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 2 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+	added := onlyIn(afterUp, baseline)
+	want := []string{
+		"column pull_requests.closed_at #19 timestamp with time zone default=<none> generated= identity=",
+		"column pull_requests.draft #20 boolean NOT NULL default=false generated= identity=",
+		"column pull_requests.merged_at #18 timestamp with time zone default=<none> generated= identity=",
+	}
+	if diff := cmp.Diff(want, added); diff != "" {
+		t.Errorf("objects added by 0002 mismatch (-want +got):\n%s", diff)
+	}
+	if removed := onlyIn(baseline, afterUp); len(removed) != 0 {
+		t.Errorf("objects removed by 0002 = %v, want none", removed)
+	}
+
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 2 {
+		t.Fatalf("Down() = %d, %v, %v, want 2, true, nil", v, ok, err)
+	}
+	if diff := cmp.Diff(baseline, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0002 differs from baseline (-baseline +got):\n%s", diff)
+	}
+
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+}
+
+// onlyIn returns the entries of a that are not in b (both sorted).
+func onlyIn(a, b []string) []string {
+	have := make(map[string]bool, len(b))
+	for _, s := range b {
+		have[s] = true
+	}
+	var out []string
+	for _, s := range a {
+		if !have[s] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
 func TestStatus(t *testing.T) {
 	d := pgtest.Empty(t)
 	db := sqlDBOf(t, d)
-	m := newMigrator(t, db, migrations.FS)
+	m := newMigrator(t, db, baselineFS(t))
 
 	got, err := m.Status(t.Context())
 	if err != nil {
@@ -374,7 +455,7 @@ func TestUp_LogsEachAppliedVersion(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&buf, nil))
 	d := pgtest.Empty(t)
-	m, err := migrate.New(sqlDBOf(t, d), migrations.FS, log)
+	m, err := migrate.New(sqlDBOf(t, d), baselineFS(t), log)
 	if err != nil {
 		t.Fatal(err)
 	}
