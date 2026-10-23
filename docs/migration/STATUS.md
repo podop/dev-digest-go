@@ -3,18 +3,40 @@
 Last updated: 2026-10-23 · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
-**Phases 1–5 are implemented and passed the review gate.** Phase 5 (intent + review intent hook,
-smart diff, blast, brief, onboarding, performance — 11 routes) was finished on 2026-10-23. **Phase 6**
-(evals, ci, Go CI runner — 20 routes, the last phase) has an approved spec and plan; implementation
-starts with W0. Still open (user, credentials needed): Phase 1 AC97 (GitHub token), Phase 2 AC301,
-Phase 4 AC4077 real-key half and Phase 5 AC5070 (OpenAI/OpenRouter key).
+**All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
+parity with the UI).** Phase 6 (evals 16 routes, ci 4 routes, Go CI runner — README D8/D17) finished
+on 2026-10-23. Still open (user, credentials needed): Phase 1 AC97 (GitHub token), Phase 2 AC301,
+Phase 4 AC4077 real-key half, Phase 5 AC5070 and Phase 6 AC6062/AC6063 (real GitHub + OpenRouter key).
 
 Phase 5: spec `specs/2026-10-22-go-backend-phase-5.md` (FR5001–FR5057, AC5001–AC5072, D5001–D5021);
 plan `docs/plans/2026-10-22-go-backend-phase-5.md` (+ `.context.md`, S1–S38, W0–W4). Phase 6: spec
-`specs/2026-10-23-go-backend-phase-6.md` (FR6001–FR6057, AC6001–AC6068, D6001–D6025); plan
-`docs/plans/2026-10-23-go-backend-phase-6.md` (+ `.context.md`, S1–S38, W0–W4, 24 lanes).
-Backend gate after Phase 5: `db-tests-r2.log` 5,930 PASS / 0 SKIP / 0 FAIL, 73 packages; frontend contract
-test 111/111. Stack rebuilt 2026-10-23 with Phase 5 (`/health/ready` true).
+`specs/2026-10-23-go-backend-phase-6.md` (FR6001–FR6057, AC6001–AC6068, D6001–D6026); plan
+`docs/plans/2026-10-23-go-backend-phase-6.md` (+ `.context.md`, S1–S38, W0–W4, 24 lanes; W4 split into
+parallel lanes by the user). Backend gate after Phase 6: `make backend-check` exit 0, 128 packages;
+frontend contract test 148/148.
+
+## Phase 6 review gate (reports in `.sdd/review/2026-10-23-go-backend-phase-6/`, git-ignored)
+| Reviewer | r1 (`4735965`) | r2 (fix delta `95da9b9`) |
+|---|---|---|
+| Architecture | **PASS**, 0 findings | not re-run (fixes local to the runner, ci ingest, postgres pool and one evals query — Phase 5 precedent) |
+| Security | **PASS**, 3 LOW: F1 runner FAILED line could print model text, uncapped; F2 `##[`/`::` workflow-command injection in the job log; F3 a fork-PR run with a forged artifact was ingested (Node does the same) + 14 INFO | **PASS** — F1–F3 closed (class-only, 1,200 B cap; `::stop-commands::<random>` + `BreakCommands`; runs whose head repository ≠ repository are never inspected); 6 new INFO, the spec wording one fixed in `db63264` |
+| Plan verification | 137 PASS · **5 FAIL** (4 undeclared deviations → spec amendment D6026; AC6057 golden missing) · 10 CANNOT_VERIFY | r2: 152 PASS · 0 FAIL (AC6060 pending); r3 (`verify-r3.md`): **155 PASS · 0 FAIL** · 3 CANNOT_VERIFY (AC6062/AC6063 user, skills row = architecture) |
+
+Manual checks (`s38-manual.md`, `ac6060-r2.md`): AC6047 runner static, cgo off, 7.9 MB, reproducible
+SHA-256 — PASS; AC6058 golden generator byte-identical, `../dev-digest` clean — PASS; AC6061 Echo/GORM
+placement, no migration — PASS; **AC6060** (throwaway stack, 50 agents / 10,000 cases / 2,000 runs /
+400,000 results) r1 FAIL (overview dashboard p95 453 ms from a per-agent `SELECT *`; a 50-start burst hit
+Postgres "too many clients" because the pool was uncapped) → fixed in `95da9b9` (`DB_MAX_OPEN_CONNS`,
+default 20; one window query for the overview) → r2 PASS: GET worst p95 178 ms (overview 85/103 ms),
+start p95 25 ms isolated / 380 ms in 5×50 bursts, second `files` 0.02 s, 0 connection failures in 470 runs.
+
+Phase 6 decisions worth knowing (details in the spec, D6001–D6026): one engine (`reviewer/app.Run`) for
+reviews, evals and the CI runner; the runner is embedded only with `-tags devdigest_runner` (image build),
+untagged builds answer `500 runner_bundle_missing`; the eval-start bucket is shared by agent and skill
+starts (10/min per workspace) and counts before validation; evals `head_sha` is `""` where Node had null;
+the workflow rules differ from Node only on the yaml.v3 cases in `wfrules_deviations.json`; ingest refuses
+fork-PR runs; the backend DB pool is capped (`DB_MAX_OPEN_CONNS`, 1–90, default 20) — inside an `InTx`
+body every store call must use `postgres.Conn(ctx, db)`; the PR #483 eval demo is seeded.
 
 ## Phase 5 review gate (reports in `.sdd/review/2026-10-22-go-backend-phase-5/`, git-ignored)
 | Reviewer | r1 (`3551565`) | r2 (fix delta `6f5028f`) |
@@ -140,8 +162,18 @@ swaps every provider for a deterministic mock with a startup warning (D214).
    symbols only for kept callers, slimmer row scans, cheaper brief read validation; an index only via a
    new up/down migration — D5012 allows it now that NFR5007 failed); `blastFlights` not stopped at
    shutdown (security INFO 7); user walkthrough AC5070.
-6. **Phase 6** (evals 16 + ci 4 routes, Go CI runner — README D8/D16): implement W0 → W4 per the plan,
-   then the review gate.
+6. Phase 6 follow-ups (optional, security r1/r2 INFO): the runner follows symlinks when reading
+   skill/manifest files (`O_NOFOLLOW` or `Lstat` + regular-file check; a committed
+   `skills/x.md → /proc/self/environ` would send the job env to the model — repo writers only); no
+   bucket on `POST /agents/:id/export-ci` (each `open_pr` uploads ~5.6 MB) and the publish runs on the
+   request context (no stopper); global cap on concurrent eval cases (D6014 accepted); line cap on the
+   compare diff and a `notes` max length; stored eval jsonb checked for shape, not enums; workflow rules
+   accept `%YAML 1.1` (GitHub's reading, not a bypass); skipped CI runs are re-inspected and the fork-run
+   WARN repeats on every refresh; optional `statement_timeout` / idle-in-transaction timeout on the DSN.
+   User walkthroughs **AC6062** (export-ci `open_pr` + a real workflow run + refresh) and **AC6063**
+   (evals with a real OpenRouter key). A private repo needs a token whose repository access includes it
+   (a fine-grained token without it answers 403 "Write access to repository not granted").
+7. Ship: push the branch and open the PR to `master` (not done — ask the user first).
 Recipe for a fresh-volume check without touching the real volumes: an override file that renames
 `pgdata`/`backend_data` (e.g. `devdigest_go_ac_*`), `WEB_PORT=3200 API_PORT=3201 DB_PORT=5434`,
 `docker compose -p devdigest-go-ac -f docker-compose.yml -f <override> …`; confirm with
@@ -163,4 +195,5 @@ r2 security LOWs (Host port validation, `ALLOWED_HOSTS` fail-closed) fixed in `7
   `7c4609d` (W3), `4d1a2b3` (W4), review fixes `c7de1c0`.
 - Phase 5: spec `54f2b7e`, plan `0ab8d5b`, waves `946d1e8` (W0), `dd31aae` (W1), `8ec87d0` (W2),
   `778605c` (W3), `3551565` (W4), review fixes `6f5028f`, `c668ede`.
-- Phase 6: spec `58226c0`, plan `d2440e0`.
+- Phase 6: spec `58226c0`, plan `d2440e0`, waves `bdb0da4` (W0), `5c34dff` (W1), `9cc4efd` (W2),
+  `c512bec` (W3), `4735965` (W4), review fixes `95da9b9`, `db63264`.
