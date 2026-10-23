@@ -11,6 +11,11 @@ describe("activeKeyFor", () => {
     expect(activeKeyFor("/onboarding")).toBe("");
   });
 
+  it("highlights the PR Leaderboard on /leaderboard and not Pull Requests", () => {
+    expect(activeKeyFor("/leaderboard")).toBe("pr-leaderboard");
+    expect(activeKeyFor("/leaderboard?period=30d")).toBe("pr-leaderboard");
+  });
+
   it("keeps the other repo routes", () => {
     expect(activeKeyFor("/repos/r1/context")).toBe("context");
     expect(activeKeyFor("/repos/r1/pulls")).toBe("pulls");
@@ -18,6 +23,17 @@ describe("activeKeyFor", () => {
 });
 
 describe("NAV", () => {
+  it("lists the PR Leaderboard directly below Pull Requests in WORKSPACE", () => {
+    const group = NAV.find((g) => g.section === "WORKSPACE");
+    const keys = group?.items.map((i) => i.key) ?? [];
+    expect(keys.indexOf("pr-leaderboard")).toBe(keys.indexOf("pulls") + 1);
+    expect(group?.items.find((i) => i.key === "pr-leaderboard")).toMatchObject({
+      label: "PR Leaderboard",
+      icon: "Trophy",
+      href: "/leaderboard",
+    });
+  });
+
   it("lists the onboarding tour in the workspace group", () => {
     const items = NAV.flatMap((g) => g.items);
     expect(items.find((i) => i.key === "onboarding-tour")?.href).toBe("/repos/:repoId/onboarding");

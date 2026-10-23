@@ -48,3 +48,15 @@ describe("shell navigation and the leave guard", () => {
     expect(confirm).not.toHaveBeenCalled();
   });
 });
+
+describe("shell palette", () => {
+  it("offers 'Go to PR Leaderboard' that navigates to /leaderboard", () => {
+    const { result } = renderHook(() => useShellCommands(), { wrapper });
+    const cmd = result.current.find((c) => c.id === "pr-leaderboard")!;
+
+    expect(cmd.label).toBe("Go to PR Leaderboard");
+    expect(cmd.group).toBe("WORKSPACE");
+    cmd.run();
+    expect(push).toHaveBeenCalledWith("/leaderboard");
+  });
+});

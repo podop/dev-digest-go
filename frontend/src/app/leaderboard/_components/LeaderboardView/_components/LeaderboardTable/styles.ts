@@ -1,0 +1,47 @@
+import type { CSSProperties } from "react";
+
+export const s = {
+  card: { border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg-elevated)", overflow: "hidden" } satisfies CSSProperties,
+  header: { margin: 0, padding: "12px 16px", fontSize: 13.5, fontWeight: 700, borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
+  scroll: { overflowX: "auto" } satisfies CSSProperties,
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 } satisfies CSSProperties,
+  th: {
+    padding: "10px 12px",
+    textAlign: "left",
+    fontSize: 10.5,
+    fontWeight: 700,
+    textTransform: "uppercase",
+    background: "var(--bg-surface)",
+    letterSpacing: "0.04em",
+    color: "var(--text-muted)",
+    borderBottom: "1px solid var(--border)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  sortButton: {
+    all: "unset",
+    cursor: "pointer",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 4,
+    font: "inherit",
+    letterSpacing: "inherit",
+    textTransform: "inherit",
+  } satisfies CSSProperties,
+  arrow: { width: 10, display: "inline-block" } satisfies CSSProperties,
+  hidden: {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    overflow: "hidden",
+    clip: "rect(0 0 0 0)",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  footer: { display: "flex", justifyContent: "center", padding: 10, borderTop: "1px solid var(--border)" } satisfies CSSProperties,
+  more: {
+    all: "unset",
+    cursor: "pointer",
+    fontSize: 12.5,
+    fontWeight: 600,
+    color: "var(--accent-text)",
+  } satisfies CSSProperties,
+} as const;

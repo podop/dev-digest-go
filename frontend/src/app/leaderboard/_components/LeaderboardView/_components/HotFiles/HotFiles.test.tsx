@@ -1,0 +1,37 @@
+import { describe, expect, it } from "vitest";
+import type { LeaderboardHotFile } from "@devdigest/shared";
+import { renderWithProviders, screen, within } from "@/test/render";
+import { HotFiles } from "./HotFiles";
+
+const files: LeaderboardHotFile[] = [
+  { path: "internal/billing/invoice.go", repo_id: "id-acme/api", repo: "acme/api", findings: 5, critical: 2, prs: [41, 44] },
+  { path: "web/src/header.tsx", repo_id: "id-acme/web", repo: "acme/web", findings: 1, critical: 0, prs: [7] },
+];
+
+describe("HotFiles", () => {
+  it("shows path, repo and PR numbers, findings, and the critical count only where there is one", () => {
+    renderWithProviders(<HotFiles files={files} />);
+
+    const rows = within(screen.getByRole("list", { name: "Hot files" })).getAllByRole("listitem");
+    expect(rows).toHaveLength(2);
+
+    const hot = within(rows[0]!);
+    expect(hot.getByText("internal/billing/invoice.go")).toBeInTheDocument();
+    expect(hot.getByText("acme/api · #41, #44")).toBeInTheDocument();
+    expect(hot.getByText("5 findings")).toBeInTheDocument();
+    expect(hot.getByText("2 critical")).toBeInTheDocument();
+    expect(rows[0]).toHaveAttribute("data-critical", "true");
+
+    const calm = within(rows[1]!);
+    expect(calm.getByText("1 finding")).toBeInTheDocument();
+    expect(calm.queryByText(/critical/)).not.toBeInTheDocument();
+    expect(rows[1]).not.toHaveAttribute("data-critical");
+  });
+
+  it("shows the empty state without files", () => {
+    renderWithProviders(<HotFiles files={[]} />);
+
+    expect(screen.getByText("No hot files")).toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
+  });
+});

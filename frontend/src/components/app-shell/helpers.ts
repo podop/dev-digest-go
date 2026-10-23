@@ -30,6 +30,7 @@ export function activeKeyFor(pathname: string): string {
   if (pathname.startsWith("/repos/") && pathname.includes("/onboarding")) return "onboarding-tour";
   if (pathname.includes("/context")) return "context";
   if (pathname.includes("/conventions")) return "conventions";
+  if (pathname.startsWith("/leaderboard")) return "pr-leaderboard";
   if (pathname.includes("/pulls")) return "pulls";
   if (pathname.startsWith("/skills")) return "skills";
   if (pathname.startsWith("/agents")) return "agents";

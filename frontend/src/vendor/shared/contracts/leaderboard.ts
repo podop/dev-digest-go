@@ -111,6 +111,7 @@ export type LeaderboardRow = z.infer<typeof LeaderboardRow>;
 /** An award winner; `value` is a score, count, seconds, lines or USD by award. */
 export const LeaderboardAward = z.object({
   pr_id: z.string(),
+  repo_id: z.string(),
   repo: z.string(),
   number: z.number().int(),
   title: z.string(),
@@ -147,6 +148,7 @@ export type LeaderboardAttentionReason = z.infer<typeof LeaderboardAttentionReas
 
 export const LeaderboardAttention = z.object({
   pr_id: z.string(),
+  repo_id: z.string(),
   repo: z.string(),
   number: z.number().int(),
   title: z.string(),
@@ -165,6 +167,7 @@ export type LeaderboardNeedsAttention = z.infer<typeof LeaderboardNeedsAttention
 
 export const LeaderboardHotFile = z.object({
   path: z.string(),
+  repo_id: z.string(),
   repo: z.string(),
   findings: z.number().int(),
   critical: z.number().int(),

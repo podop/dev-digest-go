@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ const (
 
 	maxResponseBytes = 64 << 20
 	maxMessageBytes  = 1000
+	maxResetSeconds  = 1 << 40 // far beyond any real reset; keeps time.Unix well inside its range
 )
 
 // ErrNoToken is returned when no GitHub token is configured at call time.
@@ -42,6 +44,9 @@ type StatusError struct {
 	Message string
 	// RateLimitRemaining is GitHub's x-ratelimit-remaining header, "" when the response had none.
 	RateLimitRemaining string
+	// RateLimitReset is when GitHub's x-ratelimit-reset header says the window renews; the zero
+	// time when the response had no valid one.
+	RateLimitReset time.Time
 }
 
 func (e *StatusError) Error() string {
@@ -250,7 +255,17 @@ func statusError(resp *http.Response, token string) error {
 		Status:             resp.StatusCode,
 		Message:            msg,
 		RateLimitRemaining: strings.TrimSpace(resp.Header.Get("X-RateLimit-Remaining")),
+		RateLimitReset:     parseReset(resp.Header.Get("X-RateLimit-Reset")),
 	}
+}
+
+// parseReset reads x-ratelimit-reset (Unix seconds); an absent or malformed value is the zero time.
+func parseReset(v string) time.Time {
+	secs, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+	if err != nil || secs <= 0 || secs > maxResetSeconds {
+		return time.Time{}
+	}
+	return time.Unix(secs, 0).UTC()
 }
 
 // errorDetails flattens GitHub's "errors" array (strings or objects with a

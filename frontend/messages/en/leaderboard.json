@@ -1,0 +1,34 @@
+{
+  "title": "PR Leaderboard",
+  "metaTitle": "PR Leaderboard",
+  "crumb": "PR Leaderboard",
+  "subtitle": "How pull requests fared in review — health, findings, speed and cost",
+  "loading": "Loading the leaderboard",
+  "loadError": "Could not load the leaderboard",
+  "empty": {
+    "title": "No repositories yet",
+    "body": "Add a repository to see its pull requests ranked.",
+    "cta": "Add a repository"
+  },
+  "header": {
+    "window": {
+      "week": "Week of {range} · compared with {previous}",
+      "range": "{range} · compared with {previous}"
+    },
+    "period": {
+      "label": "Period",
+      "week": "This week",
+      "last_week": "Last week",
+      "30d": "30d"
+    },
+    "repo": {
+      "label": "Repository",
+      "all": "All repositories"
+    },
+    "sync": {
+      "label": "Repository sync",
+      "synced": "synced {when}",
+      "never": "never polled"
+    }
+  }
+}

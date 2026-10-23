@@ -70,6 +70,9 @@ type Listed struct {
 	Status    string // open | closed | merged
 	OpenedAt  *time.Time
 	UpdatedAt *time.Time
+	MergedAt  *time.Time // nil unless merged
+	ClosedAt  *time.Time // nil while open; set for closed and merged PRs
+	Draft     bool
 }
 
 // DiffStats are the size fields the detail endpoint fills.

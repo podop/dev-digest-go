@@ -1,0 +1,54 @@
+{
+  "kpi": {
+    "prs_reviewed": "PRs reviewed",
+    "merged": "Merged",
+    "avg_health": "Avg health",
+    "time_to_first_review_s": "Time to first review",
+    "time_to_merge_s": "Time to merge",
+    "critical_found": "Critical found",
+    "open_critical": "Open critical",
+    "review_cost_usd": "Review cost"
+  },
+  "delta": {
+    "up": "↑ {amount}",
+    "down": "↓ {amount}",
+    "same": "no change",
+    "hint": "Change vs the previous period",
+    "better": "better than the previous period",
+    "worse": "worse than the previous period"
+  },
+  "duration": {
+    "seconds": "{s}s",
+    "minutes": "{m}m",
+    "hoursMinutes": "{h}h {m}m",
+    "daysHours": "{d}d {h}h"
+  },
+  "awards": {
+    "label": "Awards",
+    "none": "—",
+    "cleanest": {
+      "title": "Cleanest PR",
+      "unit": "health"
+    },
+    "hottest": {
+      "title": "Hottest PR",
+      "unit": "critical"
+    },
+    "fastest_merge": {
+      "title": "Fastest Merge",
+      "unit": "to merge"
+    },
+    "most_rounds": {
+      "title": "Most Rounds",
+      "unit": "{count, plural, one {round} other {rounds}}"
+    },
+    "monster": {
+      "title": "Monster PR",
+      "unit": "{count, plural, one {line} other {lines}}"
+    },
+    "priciest": {
+      "title": "Priciest Review",
+      "unit": "spent"
+    }
+  }
+}

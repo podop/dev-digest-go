@@ -1,0 +1,51 @@
+{
+  "needsAttention": {
+    "title": "Needs attention",
+    "shown": "Showing {shown} of {total}",
+    "emptyTitle": "Nothing needs attention",
+    "emptyBody": "No open critical findings, unreviewed or stale pull requests.",
+    "reason": {
+      "merged_open_critical": "merged with {count} open critical",
+      "open_critical": "{count} open critical",
+      "no_review": "no review yet",
+      "new_commits": "new commits since last review",
+      "open_long": "open {days}d"
+    }
+  },
+  "hotFiles": {
+    "title": "Hot files",
+    "subtitle": "Files with the most findings",
+    "findings": "{count, plural, one {# finding} other {# findings}}",
+    "critical": "{count} critical",
+    "location": "{repo} · {prs}",
+    "emptyTitle": "No hot files",
+    "emptyBody": "No findings landed on a file in this period."
+  },
+  "healthBySize": {
+    "title": "Health by PR size",
+    "subtitle": "Smaller PRs ship cleaner.",
+    "size": {
+      "S": "S",
+      "M": "M",
+      "L": "L",
+      "XL": "XL"
+    },
+    "summary": "{prs, plural, one {# PR} other {# PRs}} · {findings} findings",
+    "summaryHint": "Average findings per PR",
+    "healthLabel": "Size {size}: average health {health}",
+    "emptyBucket": "—",
+    "emptyTitle": "No PRs by size",
+    "emptyBody": "No pull requests with a known size in this period."
+  },
+  "dailyActivity": {
+    "title": "Daily activity",
+    "subtitle": "Pull requests opened and merged per day",
+    "opened": "Opened",
+    "merged": "Merged",
+    "critical": "Critical",
+    "dayLabel": "{day}: {opened} opened, {merged} merged, {critical} critical",
+    "criticalHint": "Critical findings found that day",
+    "emptyTitle": "No activity",
+    "emptyBody": "No pull requests were opened or merged in this period."
+  }
+}

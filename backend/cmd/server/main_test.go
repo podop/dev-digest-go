@@ -23,9 +23,11 @@ import (
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/jobs"
 	"dev-digest-go/backend/internal/llm"
+	"dev-digest-go/backend/internal/platform/postgres/migrate"
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
 	"dev-digest-go/backend/internal/settings/adapters/providers"
 	"dev-digest-go/backend/internal/skills/adapters/urlfetch"
+	"dev-digest-go/backend/migrations"
 )
 
 func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
@@ -572,10 +574,15 @@ func TestStartup_EmptyDatabaseMigratesAndSeedsBeforeListening(t *testing.T) { //
 	}
 
 	applied := logLines(t, s.logs, "migration applied")
-	if len(applied) != 1 || applied[0]["version"] != float64(1) {
-		t.Errorf("migration log lines = %v, want one line for version 1", applied)
-	} else if _, ok := applied[0]["duration_ms"]; !ok {
-		t.Errorf("migration log line %v has no duration_ms", applied[0])
+	versions := migrationCount(t)
+	if len(applied) != versions || applied[0]["version"] != float64(1) {
+		t.Errorf("migration log lines = %v, want one line per version 1..%d", applied, versions)
+	} else {
+		for _, line := range applied {
+			if _, ok := line["duration_ms"]; !ok {
+				t.Errorf("migration log line %v has no duration_ms", line)
+			}
+		}
 	}
 	seeded := logLines(t, s.logs, "seed complete")
 	if len(seeded) != 1 || seeded[0]["repos"] != float64(1) || seeded[0]["pull_requests"] != float64(2) {
@@ -660,8 +667,9 @@ func TestRun_OperatorCommands(t *testing.T) { // AC27-AC30 wiring, FR17
 	if out, err := runCmd("migrate", "status"); err != nil || !strings.Contains(out, "pending") {
 		t.Errorf("migrate status on an empty database = %q, %v; want a pending version", out, err)
 	}
-	if out, err := runCmd("migrate", "up"); err != nil || !strings.Contains(out, "1 version(s) applied") {
-		t.Errorf("migrate up = %q, %v; want 1 version applied", out, err)
+	versions := migrationCount(t)
+	if out, err := runCmd("migrate", "up"); err != nil || !strings.Contains(out, fmt.Sprintf("%d version(s) applied", versions)) {
+		t.Errorf("migrate up = %q, %v; want %d version(s) applied", out, err, versions)
 	}
 	if out, err := runCmd("migrate", "up"); err != nil || !strings.Contains(out, "0 version(s) applied") {
 		t.Errorf("second migrate up = %q, %v; want 0 versions applied", out, err)
@@ -672,8 +680,11 @@ func TestRun_OperatorCommands(t *testing.T) { // AC27-AC30 wiring, FR17
 	if out, err := runCmd("seed"); err != nil || !strings.Contains(out, "row(s) inserted") {
 		t.Errorf("seed = %q, %v; want a row count", out, err)
 	}
-	if out, err := runCmd("migrate", "down"); err != nil || !strings.Contains(out, "reverted version 1") {
-		t.Errorf("migrate down = %q, %v; want version 1 reverted", out, err)
+	for v := versions; v >= 1; v-- {
+		want := fmt.Sprintf("reverted version %d", v)
+		if out, err := runCmd("migrate", "down"); err != nil || !strings.Contains(out, want) {
+			t.Errorf("migrate down = %q, %v; want %s", out, err, want)
+		}
 	}
 	if got := tableNames(t, db.DB); len(got) != 1 || got[0] != "schema_migrations" {
 		t.Errorf("tables after migrate down = %v, want only schema_migrations", got)
@@ -684,4 +695,15 @@ func TestRun_OperatorCommands(t *testing.T) { // AC27-AC30 wiring, FR17
 	if _, err := runCmd("migrate"); err == nil {
 		t.Error("run(migrate) without a subcommand = nil, want an error")
 	}
+}
+
+// migrationCount is the number of embedded migration versions; tests that run the whole set must
+// not assume it is 1.
+func migrationCount(t *testing.T) int {
+	t.Helper()
+	all, err := migrate.Load(migrations.FS)
+	if err != nil {
+		t.Fatalf("migrate.Load(migrations.FS) = %v", err)
+	}
+	return len(all)
 }

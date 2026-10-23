@@ -134,6 +134,70 @@ func TestUpsertListed_insertThenUpdateOnlyListFields(t *testing.T) {
 	}
 }
 
+type mergeState struct {
+	MergedAt *time.Time
+	ClosedAt *time.Time
+	Draft    bool
+}
+
+func readMergeState(t *testing.T, f fixture, number int) mergeState {
+	t.Helper()
+	var got mergeState
+	scan(t, f.db, &got, `SELECT merged_at, closed_at, draft FROM pull_requests WHERE repo_id = ? AND number = ?`, f.repoID, number)
+	return got
+}
+
+func TestUpsertListed_writesMergeStateOnInsertAndUpdate(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	base := domain.Listed{Number: 31, Title: "t", Author: "a", Branch: "b", Base: "main", HeadSHA: "h", UpdatedAt: day(2, 9)}
+	open := base
+	open.Status, open.Draft = "open", true
+	if err := f.store.UpsertListed(ctx, f.wsID, f.repoID, []domain.Listed{open}); err != nil {
+		t.Fatalf("UpsertListed(open draft) error = %v", err)
+	}
+	if diff := cmp.Diff(mergeState{Draft: true}, readMergeState(t, f, 31), timeEqual); diff != "" {
+		t.Errorf("merge state after insert mismatch (-want +got):\n%s", diff)
+	}
+
+	merged := base
+	merged.Status, merged.MergedAt, merged.ClosedAt, merged.UpdatedAt = "merged", day(3, 9), day(3, 9), day(3, 9)
+	insertMerged := merged
+	insertMerged.Number = 32
+	if err := f.store.UpsertListed(ctx, f.wsID, f.repoID, []domain.Listed{merged, insertMerged}); err != nil {
+		t.Fatalf("UpsertListed(merged) error = %v", err)
+	}
+	want := mergeState{MergedAt: day(3, 9), ClosedAt: day(3, 9)}
+	for _, n := range []int{31, 32} { // 31 updated in place, 32 inserted already merged
+		if diff := cmp.Diff(want, readMergeState(t, f, n), timeEqual); diff != "" {
+			t.Errorf("merge state of #%d mismatch (-want +got):\n%s", n, diff)
+		}
+	}
+
+	// A repeat of the same sync changes nothing.
+	if err := f.store.UpsertListed(ctx, f.wsID, f.repoID, []domain.Listed{merged}); err != nil {
+		t.Fatalf("UpsertListed(repeat) error = %v", err)
+	}
+	if diff := cmp.Diff(want, readMergeState(t, f, 31), timeEqual); diff != "" {
+		t.Errorf("merge state after repeat mismatch (-want +got):\n%s", diff)
+	}
+	var count int
+	scan(t, f.db, &count, `SELECT count(*) FROM pull_requests WHERE repo_id = ? AND number = 31`, f.repoID)
+	if count != 1 {
+		t.Errorf("rows for #31 after repeat = %d, want 1", count)
+	}
+
+	// A reopened PR clears the stored merge and close times.
+	reopened := base
+	reopened.Status, reopened.UpdatedAt = "open", day(4, 9)
+	if err := f.store.UpsertListed(ctx, f.wsID, f.repoID, []domain.Listed{reopened}); err != nil {
+		t.Fatalf("UpsertListed(reopened) error = %v", err)
+	}
+	if diff := cmp.Diff(mergeState{}, readMergeState(t, f, 31), timeEqual); diff != "" {
+		t.Errorf("merge state after reopen mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestUpsertListed_duplicateNumberInOneCall(t *testing.T) {
 	f := seeded(t)
 	l := func(title string) domain.Listed {

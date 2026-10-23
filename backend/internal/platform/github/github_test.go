@@ -82,6 +82,7 @@ func newClient(s *stub, opts github.Options) *github.Client {
 func prJSON(n int, state string, mergedAt any, user any) map[string]any {
 	return map[string]any{
 		"number": n, "title": fmt.Sprintf("PR %d", n), "user": user, "state": state, "merged_at": mergedAt,
+		"closed_at": nil, "draft": false,
 		"head": map[string]any{"ref": "feat", "sha": "abc123"}, "base": map[string]any{"ref": "main"},
 		"created_at": "2026-10-01T10:00:00Z", "updated_at": "2026-10-02T11:30:00Z",
 		"body": "closes #99", "additions": 7, "deletions": 3, "changed_files": 2,
@@ -91,11 +92,13 @@ func prJSON(n int, state string, mergedAt any, user any) map[string]any {
 func TestListPullRequests(t *testing.T) {
 	t.Parallel()
 	s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, []any{
-			prJSON(3, "open", nil, map[string]any{"login": "octo"}),
-			prJSON(2, "closed", "2026-10-02T00:00:00Z", map[string]any{"login": "merger"}),
-			prJSON(1, "closed", nil, nil),
-		})
+		draft := prJSON(3, "open", nil, map[string]any{"login": "octo"})
+		draft["draft"] = true
+		merged := prJSON(2, "closed", "2026-10-02T00:00:00Z", map[string]any{"login": "merger"})
+		merged["closed_at"] = "2026-10-02T00:00:00Z"
+		closed := prJSON(1, "closed", nil, nil)
+		closed["closed_at"] = "2026-10-03T08:00:00Z"
+		writeJSON(w, 200, []any{draft, merged, closed})
 	})
 	got, err := newClient(s, github.Options{}).ListPullRequests(t.Context(), "acme", "api")
 	if err != nil {
@@ -103,10 +106,12 @@ func TestListPullRequests(t *testing.T) {
 	}
 	opened := time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC)
 	updated := time.Date(2026, 10, 2, 11, 30, 0, 0, time.UTC)
+	mergedAt := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	closedAt := time.Date(2026, 10, 3, 8, 0, 0, 0, time.UTC)
 	want := []github.PullSummary{
-		{Number: 3, Title: "PR 3", Author: "octo", Branch: "feat", Base: "main", HeadSHA: "abc123", Status: "open", OpenedAt: opened, UpdatedAt: updated},
-		{Number: 2, Title: "PR 2", Author: "merger", Branch: "feat", Base: "main", HeadSHA: "abc123", Status: "merged", OpenedAt: opened, UpdatedAt: updated},
-		{Number: 1, Title: "PR 1", Author: "unknown", Branch: "feat", Base: "main", HeadSHA: "abc123", Status: "closed", OpenedAt: opened, UpdatedAt: updated},
+		{Number: 3, Title: "PR 3", Author: "octo", Branch: "feat", Base: "main", HeadSHA: "abc123", Status: "open", OpenedAt: opened, UpdatedAt: updated, Draft: true},
+		{Number: 2, Title: "PR 2", Author: "merger", Branch: "feat", Base: "main", HeadSHA: "abc123", Status: "merged", OpenedAt: opened, UpdatedAt: updated, MergedAt: &mergedAt, ClosedAt: &mergedAt},
+		{Number: 1, Title: "PR 1", Author: "unknown", Branch: "feat", Base: "main", HeadSHA: "abc123", Status: "closed", OpenedAt: opened, UpdatedAt: updated, ClosedAt: &closedAt},
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ListPullRequests() mismatch (-want +got):\n%s", diff)
@@ -128,17 +133,96 @@ func TestListPullRequests(t *testing.T) {
 	}
 }
 
+func TestListPullRequestsPage(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name          string
+		page, perPage int
+		wantQuery     map[string][]string
+	}{
+		{"first page", 1, 50, map[string][]string{"state": {"all"}, "sort": {"updated"}, "direction": {"desc"}, "per_page": {"50"}}},
+		{"third page", 3, 20, map[string][]string{"state": {"all"}, "sort": {"updated"}, "direction": {"desc"}, "per_page": {"20"}, "page": {"3"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+				writeJSON(w, 200, []any{prJSON(4, "open", nil, map[string]any{"login": "octo"})})
+			})
+			got, err := newClient(s, github.Options{}).ListPullRequestsPage(t.Context(), "acme", "api", tc.page, tc.perPage)
+			if err != nil || len(got) != 1 || got[0].Number != 4 {
+				t.Fatalf("ListPullRequestsPage(%d, %d) = (%v, %v), want PR 4 and nil", tc.page, tc.perPage, got, err)
+			}
+			req, _ := s.request(0)
+			if diff := cmp.Diff(tc.wantQuery, map[string][]string(req.URL.Query())); diff != "" {
+				t.Errorf("ListPullRequestsPage(%d, %d) query mismatch (-want +got):\n%s", tc.page, tc.perPage, diff)
+			}
+		})
+	}
+}
+
+func TestListPullRequestsPage_rejectsOutOfRangePaging(t *testing.T) {
+	t.Parallel()
+	s := newStub(t, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, []any{}) })
+	c := newClient(s, github.Options{})
+	for _, tc := range []struct{ page, perPage int }{{0, 50}, {-1, 50}, {1, 0}, {1, github.PageSize + 1}} {
+		if _, err := c.ListPullRequestsPage(t.Context(), "o", "r", tc.page, tc.perPage); err == nil {
+			t.Errorf("ListPullRequestsPage(%d, %d) error = nil, want a range error", tc.page, tc.perPage)
+		}
+	}
+	if n := s.count(); n != 0 {
+		t.Errorf("out-of-range paging sent %d requests, want 0", n)
+	}
+}
+
+func TestStatusError_carriesRateLimitReset(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name, reset string
+		want        time.Time
+	}{
+		{"unix seconds", "1790000000", time.Unix(1790000000, 0).UTC()},
+		{"absent", "", time.Time{}},
+		{"malformed", "soon", time.Time{}},
+		{"negative", "-5", time.Time{}},
+		{"absurd", "99999999999999999", time.Time{}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-RateLimit-Remaining", "0")
+				if tc.reset != "" {
+					w.Header().Set("X-RateLimit-Reset", tc.reset)
+				}
+				writeJSON(w, 403, map[string]any{"message": "API rate limit exceeded"})
+			})
+			c := newClient(s, github.Options{Retry: &retry.Options{}})
+			_, err := c.ListPullRequestsPage(t.Context(), "o", "r", 1, 50)
+			var se *github.StatusError
+			if !errors.As(err, &se) {
+				t.Fatalf("ListPullRequestsPage() error = %v, want a StatusError", err)
+			}
+			if !se.RateLimited() || !se.RateLimitReset.Equal(tc.want) {
+				t.Errorf("ListPullRequestsPage() StatusError = {limited %v, reset %v}, want {true, %v}", se.RateLimited(), se.RateLimitReset, tc.want)
+			}
+			if strings.Contains(err.Error(), testToken) {
+				t.Errorf("error leaks the token: %v", err)
+			}
+		})
+	}
+}
+
 func TestClient_noToken(t *testing.T) {
 	t.Parallel()
 	s := newStub(t, func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, []any{}) })
 	c := newClient(s, github.Options{Token: func() string { return "  " }})
 
 	calls := map[string]func() error{
-		"ListPullRequests":  func() error { _, err := c.ListPullRequests(t.Context(), "o", "r"); return err },
-		"GetPullRequest":    func() error { _, err := c.GetPullRequest(t.Context(), "o", "r", 1); return err },
-		"GetIssue":          func() error { _, err := c.GetIssue(t.Context(), "o", "r", 1); return err },
-		"CurrentLogin":      func() error { _, err := c.CurrentLogin(t.Context()); return err },
-		"ListReviewComment": func() error { _, err := c.ListReviewComments(t.Context(), "o", "r", 1); return err },
+		"ListPullRequests":     func() error { _, err := c.ListPullRequests(t.Context(), "o", "r"); return err },
+		"ListPullRequestsPage": func() error { _, err := c.ListPullRequestsPage(t.Context(), "o", "r", 1, 50); return err },
+		"GetPullRequest":       func() error { _, err := c.GetPullRequest(t.Context(), "o", "r", 1); return err },
+		"GetIssue":             func() error { _, err := c.GetIssue(t.Context(), "o", "r", 1); return err },
+		"CurrentLogin":         func() error { _, err := c.CurrentLogin(t.Context()); return err },
+		"ListReviewComment":    func() error { _, err := c.ListReviewComments(t.Context(), "o", "r", 1); return err },
 		"CreateReviewComment": func() error {
 			_, err := c.CreateReviewComment(t.Context(), "o", "r", 1, github.CommentInput{Body: "x"})
 			return err
@@ -352,6 +436,7 @@ func TestGetPullRequest_mapsFields(t *testing.T) {
 			})
 		default:
 			pr := prJSON(5, "closed", "2026-10-03T00:00:00Z", map[string]any{"login": "octo"})
+			pr["closed_at"] = "2026-10-03T00:00:00Z"
 			pr["body"] = nil
 			writeJSON(w, 200, pr)
 		}
@@ -362,10 +447,12 @@ func TestGetPullRequest_mapsFields(t *testing.T) {
 	}
 	p12 := "p1\np2"
 	date := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
+	mergedAt := time.Date(2026, 10, 3, 0, 0, 0, 0, time.UTC)
 	want := github.PullDetail{
 		PullSummary: github.PullSummary{
 			Number: 5, Title: "PR 5", Author: "octo", Branch: "feat", Base: "main", HeadSHA: "abc123", Status: "merged",
 			OpenedAt: time.Date(2026, 10, 1, 10, 0, 0, 0, time.UTC), UpdatedAt: time.Date(2026, 10, 2, 11, 30, 0, 0, time.UTC),
+			MergedAt: &mergedAt, ClosedAt: &mergedAt,
 		},
 		Additions: 7, Deletions: 3, FilesCount: 2,
 		Files: []github.File{

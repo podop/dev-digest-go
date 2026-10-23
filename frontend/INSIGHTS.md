@@ -16,6 +16,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
+- 2026-10-23 — component tests with renderWithProviders + Avatar: the avatar's initials are a text node, so getByText('M') for a one-letter badge (size S/M/L) matched the author 'marisa' too (LeaderboardTableRow.test.tsx) → use fixture authors whose initials can't collide, or scope the query with within(cell)
 - 2026-10-15 — 2026-10-15 — src/vendor/ui/nav.ts (lab 07 worktrees): two branches that each add a sidebar item merged WITHOUT a git conflict, yet B's 'CI Runs' landed in SKILLS LAB while A had created the GLOBAL group the spec put it in (verified on the merge of feat/multi-agents into feat/export-to-ci) → after merging parallel branches that touch NAV, read the merged NAV array section by section instead of trusting a clean auto-merge
 - 2026-10-01 — src/test/render.tsx renderWithProviders: it always mounts ToastProvider, which renders a role="status" live region, so getByRole('status') in a component test can match the toast region instead of your own notice, and 'renders nothing' checks on container never pass (container is never empty) → scope with within(screen.getByRole('region', {name})) and assert absence with queryByRole on a concrete control (BlastRadiusCard.test.tsx, PriorPrs.test.tsx)
 - 2026-09-25 — testing hover-to-child in jsdom: user-event's hover dispatches mouseout with relatedTarget=null, so React fires onMouseLeave on the parent even when the pointer moves into its own child (verified with a probe test) → don't assert 'stays open when hovering the popover' via user.hover; pin the layout fix instead (e.g. toHaveStyle paddingTop)
@@ -54,6 +55,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-23 — pnpm exec vitest run <name>: the filter is a substring of the file path, so 'helpers' or 'helpers.test' ran ~49 unrelated files → filter by a folder fragment without route brackets (e.g. 'LeaderboardView/helpers', 'leaderboard/_components/LeaderboardView/_components/LeaderboardTable')
 - 2026-10-23 — Zod: a schema with .refine() is a ZodEffects, so .strict()/.extend() are not available on it → build a strict variant with Schema.innerType().strict().refine(<same rule>) (src/test/go-backend-contracts.test.ts evalExpectation)
 - 2026-10-22 — UI smoke checks without a browser setup: the home redirect is client-side (HomeView router.replace), so curl / returns 200 with no Location → render with the cached Playwright headless shell: ~/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell --no-sandbox --virtual-time-budget=15000 --dump-dom <url> and grep the hydrated DOM (title ended on 'Pull requests · DevDigest', AC95)
 - 2026-10-22 — pnpm test -- <file> runs through the package script and took >120 s here, while pnpm exec vitest run <file> finishes in ~5 s (src/test/go-backend-contracts.test.ts) → use pnpm exec vitest run <file> for a single file

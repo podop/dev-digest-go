@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strconv"
 	"time"
@@ -19,6 +20,9 @@ type PullSummary struct {
 	Status    string // open | closed | merged
 	OpenedAt  time.Time
 	UpdatedAt time.Time
+	MergedAt  *time.Time // nil unless merged
+	ClosedAt  *time.Time // nil while open; set for closed and merged PRs
+	Draft     bool
 }
 
 // File is one changed file of a pull request. Patch is nil when GitHub gives
@@ -75,6 +79,8 @@ type apiPull struct {
 	} `json:"base"`
 	State        string     `json:"state"`
 	MergedAt     *time.Time `json:"merged_at"`
+	ClosedAt     *time.Time `json:"closed_at"`
+	Draft        bool       `json:"draft"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	Body         *string    `json:"body"`
@@ -138,12 +144,25 @@ func (p apiPull) summary() PullSummary {
 		Status:    mapStatus(p.State, p.MergedAt),
 		OpenedAt:  p.CreatedAt,
 		UpdatedAt: p.UpdatedAt,
+		MergedAt:  p.MergedAt,
+		ClosedAt:  p.ClosedAt,
+		Draft:     p.Draft,
 	}
 }
 
 // ListPullRequests returns one page of up to 50 pull requests of any state,
 // most recently updated first.
 func (c *Client) ListPullRequests(ctx context.Context, owner, name string) ([]PullSummary, error) {
+	return c.ListPullRequestsPage(ctx, owner, name, 1, 50)
+}
+
+// ListPullRequestsPage returns page `page` (1-based) of `perPage` (1..100) pull
+// requests of any state, most recently updated first. A page shorter than
+// perPage is the last one.
+func (c *Client) ListPullRequestsPage(ctx context.Context, owner, name string, page, perPage int) ([]PullSummary, error) {
+	if page < 1 || perPage < 1 || perPage > PageSize {
+		return nil, fmt.Errorf("github list pull requests: page %d and per_page %d out of range (page >= 1, per_page 1..%d)", page, perPage, PageSize)
+	}
 	token, err := c.currentToken()
 	if err != nil {
 		return nil, err
@@ -152,7 +171,10 @@ func (c *Client) ListPullRequests(ctx context.Context, owner, name string) ([]Pu
 		"state":     {"all"},
 		"sort":      {"updated"},
 		"direction": {"desc"},
-		"per_page":  {"50"},
+		"per_page":  {strconv.Itoa(perPage)},
+	}
+	if page > 1 {
+		q.Set("page", strconv.Itoa(page))
 	}
 	pulls, err := getJSON[[]apiPull](ctx, c, token, repoPath(owner, name)+"/pulls", q)
 	if err != nil {

@@ -44,6 +44,9 @@ type pullRow struct {
 	Body            *string    `gorm:"column:body"`
 	OpenedAt        *time.Time `gorm:"column:opened_at"`
 	UpdatedAt       *time.Time `gorm:"column:updated_at;autoUpdateTime:false"`
+	MergedAt        *time.Time `gorm:"column:merged_at"`
+	ClosedAt        *time.Time `gorm:"column:closed_at"`
+	Draft           bool       `gorm:"column:draft"`
 }
 
 func (pullRow) TableName() string { return "pull_requests" }
@@ -171,7 +174,7 @@ func (s *Store) ListPulls(ctx context.Context, workspaceID, repoID string) ([]do
 }
 
 // UpsertListed inserts the listed PRs and, for PRs that exist (by repo and number), updates only
-// title, head_sha, status and updated_at. Rows are never deleted.
+// title, head_sha, status, updated_at, merged_at, closed_at and draft. Rows are never deleted.
 func (s *Store) UpsertListed(ctx context.Context, workspaceID, repoID string, listed []domain.Listed) error {
 	if len(listed) == 0 {
 		return nil
@@ -190,12 +193,13 @@ func (s *Store) UpsertListed(ctx context.Context, workspaceID, repoID string, li
 			WorkspaceID: workspaceID, RepoID: repoID, Number: l.Number, Title: l.Title,
 			Author: l.Author, Branch: l.Branch, Base: l.Base, HeadSHA: l.HeadSHA,
 			Status: l.Status, OpenedAt: l.OpenedAt, UpdatedAt: l.UpdatedAt,
+			MergedAt: l.MergedAt, ClosedAt: l.ClosedAt, Draft: l.Draft,
 		})
 	}
 	err := s.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "repo_id"}, {Name: "number"}},
-			DoUpdates: clause.AssignmentColumns([]string{"title", "head_sha", "status", "updated_at"}),
+			DoUpdates: clause.AssignmentColumns([]string{"title", "head_sha", "status", "updated_at", "merged_at", "closed_at", "draft"}),
 		}).
 		CreateInBatches(&rows, insertBatch).Error
 	if err != nil {

@@ -77,6 +77,7 @@ import {
   TrendingUp,
   TrendingDown,
   Workflow,
+  Trophy,
   PanelRight,
   CornerDownRight,
   type LucideIcon,
@@ -160,6 +161,7 @@ export const Icon = {
   TrendingUp,
   TrendingDown,
   Workflow,
+  Trophy,
   PanelRight,
   CornerDownRight,
 } satisfies Record<string, LucideIcon>;

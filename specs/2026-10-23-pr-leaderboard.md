@@ -174,10 +174,10 @@ Row = { pr_id, repo_id, repo, number, title, author, status, draft, additions, d
         rounds, time_to_first_review_s|null, time_to_merge_s|null, open_age_s|null, cost_usd,
         new_commits_since_review, opened_at|null, merged_at|null,
         reviews: [{ review_id, agent_id, agent_name, score, findings: {CRITICAL,WARNING,SUGGESTION} }] }
-Award = { pr_id, repo, number, title, value }                        // value: score | count | seconds | lines | usd
-Attention = { pr_id, repo, number, title, author, opened_at,
+Award = { pr_id, repo_id, repo, number, title, value }                        // value: score | count | seconds | lines | usd
+Attention = { pr_id, repo_id, repo, number, title, author, opened_at,
               reasons: [{ kind: merged_open_critical|open_critical|no_review|new_commits|open_long, count? , days? }] }
-HotFile = { path, repo, findings, critical, prs: [number] }
+HotFile = { path, repo_id, repo, findings, critical, prs: [number] }
 SizeBucket = { size, prs, avg_health|null, avg_findings|null }
 Day = { date: YYYY-MM-DD, opened, merged, critical }
 ```

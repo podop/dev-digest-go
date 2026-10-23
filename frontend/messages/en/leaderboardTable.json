@@ -1,0 +1,63 @@
+{
+  "title": "Leaderboard · ranked by health · {count, plural, one {# PR} other {# PRs}}",
+  "tableLabel": "Pull requests ranked by health",
+  "showAll": "Show all {count}",
+  "showTop": "Show top {count}",
+  "noValue": "—",
+  "columns": {
+    "rank": "#",
+    "pr": "PR",
+    "status": "Status",
+    "size": "Size",
+    "risk": "Risk",
+    "health": "Health",
+    "findings": "Findings",
+    "rounds": "Rnds",
+    "time": "Time",
+    "cost": "Cost",
+    "expand": "Details"
+  },
+  "status": {
+    "needs_review": "Needs review",
+    "reviewed": "Reviewed",
+    "stale": "Stale",
+    "open": "Open",
+    "closed": "Closed",
+    "merged": "Merged"
+  },
+  "risk": {
+    "low": "low",
+    "medium": "medium",
+    "high": "high"
+  },
+  "draft": "Draft",
+  "sizeStats": "<add>+{additions}</add> <del>-{deletions}</del> · {files}f",
+  "findings": {
+    "label": "{critical} critical, {warning} warning, {suggestion} suggestion",
+    "critical": "C {count}",
+    "warning": "W {count}",
+    "suggestion": "S {count}"
+  },
+  "time": {
+    "review": "→ review {value}",
+    "merge": "→ merge {value}",
+    "open": "open {value}"
+  },
+  "duration": {
+    "hours": "{value} h",
+    "days": "{value} d"
+  },
+  "openAge": {
+    "hours": "{value}h",
+    "days": "{value}d"
+  },
+  "row": {
+    "toggle": "Show reviews of {pr}"
+  },
+  "detail": {
+    "heading": "Reviews in this window",
+    "empty": "No reviews in this window",
+    "score": "Score {score}",
+    "openPr": "Open PR {pr}"
+  }
+}

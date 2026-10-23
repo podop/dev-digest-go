@@ -39,7 +39,7 @@ func reply(status int, v any) http.HandlerFunc {
 func TestListPullRequests_mapsFields(t *testing.T) {
 	a := newAdapter(t, "tok", reply(200, []map[string]any{{
 		"number": 3, "title": "T", "user": nil, "head": map[string]string{"ref": "f", "sha": "s"}, "base": map[string]string{"ref": "main"},
-		"state": "closed", "merged_at": "2026-10-02T00:00:00Z", "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-03T00:00:00Z",
+		"state": "closed", "merged_at": "2026-10-02T00:00:00Z", "closed_at": "2026-10-02T00:00:01Z", "draft": true, "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-03T00:00:00Z",
 	}}))
 	got, err := a.ListPullRequests(t.Context(), "acme", "api")
 	if err != nil {
@@ -50,6 +50,11 @@ func TestListPullRequests_mapsFields(t *testing.T) {
 	}
 	g := got[0]
 	opened := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	merged := time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	closed := time.Date(2026, 10, 2, 0, 0, 1, 0, time.UTC)
+	if g.MergedAt == nil || !g.MergedAt.Equal(merged) || g.ClosedAt == nil || !g.ClosedAt.Equal(closed) || !g.Draft {
+		t.Errorf("ListPullRequests()[0] merged/closed/draft = %v/%v/%v, want %v/%v/true", g.MergedAt, g.ClosedAt, g.Draft, merged, closed)
+	}
 	if g.Number != 3 || g.Author != "unknown" || g.Status != "merged" || g.Branch != "f" || g.Base != "main" || g.HeadSHA != "s" ||
 		g.OpenedAt == nil || !g.OpenedAt.Equal(opened) || g.UpdatedAt == nil {
 		t.Errorf("ListPullRequests()[0] = %+v, want mapped fields with author unknown and status merged", g)
@@ -85,7 +90,7 @@ func TestGetPullRequest_mergesAndMaps(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/acme/api/pulls/7", reply(200, map[string]any{
 		"number": 7, "title": "T", "user": map[string]string{"login": "u"}, "head": map[string]string{"ref": "f", "sha": "s"},
-		"base": map[string]string{"ref": "main"}, "state": "open", "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-03T00:00:00Z",
+		"base": map[string]string{"ref": "main"}, "state": "open", "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-03T00:00:00Z", "draft": true,
 		"body": "b", "additions": 9, "deletions": 2, "changed_files": 2,
 	}))
 	mux.HandleFunc("/repos/acme/api/pulls/7/files", reply(200, []map[string]any{
@@ -102,6 +107,9 @@ func TestGetPullRequest_mergesAndMaps(t *testing.T) {
 	}
 	if got.Additions != 9 || got.Deletions != 2 || got.FilesCount != 2 || got.Body == nil || *got.Body != "b" || got.Status != "open" {
 		t.Errorf("GetPullRequest() scalars = %+v", got)
+	}
+	if !got.Draft || got.MergedAt != nil || got.ClosedAt != nil {
+		t.Errorf("GetPullRequest() draft/merged/closed = %v/%v/%v, want true/nil/nil", got.Draft, got.MergedAt, got.ClosedAt)
 	}
 	patch := "p1\np2"
 	if len(got.Files) != 1 || got.Files[0].Additions != 3 || got.Files[0].Patch == nil || *got.Files[0].Patch != patch {

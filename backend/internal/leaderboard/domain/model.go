@@ -16,7 +16,7 @@
 //	open      := Reader.OpenState(ctx, ws, repoIDs)
 //	cur, prev := BuildRows(win, facts, now)       // rows of the window / of the previous window
 //	Rank(cur); Rank(prev)
-//	Kpis(cur-span, cur, facts), Kpis(prev-span, prev, facts), Awards(cur), Attention(cur, open, now),
+//	Kpis(cur-span, cur, facts), Kpis(prev-span, prev, facts), Awards(cur-span, cur), Attention(cur, open, now),
 //	HotFiles(cur), HealthBySize(cur), Daily(win, cur, facts.Pulls)
 //
 // # Function signatures (implemented in W1, one file per lane; NOT in this file)
@@ -35,7 +35,7 @@
 //	// kpis.go (S8): span is [From, To) of the window the rows belong to
 //	func Kpis(span Span, rows []Row, f Facts) KpiSet
 //	// awards.go (S8): rows must already be ranked; ties keep the lower table rank
-//	func Awards(rows []Row) AwardSet
+//	func Awards(span Span, rows []Row) AwardSet
 //	// attention.go (S8): total counts all items, items is capped at AttentionLimit
 //	func Attention(rows []Row, open []OpenPull, now time.Time) (total int, items []AttentionItem)
 //	// files.go (S8)
@@ -440,6 +440,7 @@ type KpiSet struct {
 // USD, depending on the award.
 type Award struct {
 	PRID   string
+	RepoID string
 	Repo   string
 	Number int
 	Title  string
@@ -468,6 +469,7 @@ type AttentionReason struct {
 // AttentionItem is a PR that needs attention with all its reasons (in (a)..(e) order).
 type AttentionItem struct {
 	PRID     string
+	RepoID   string
 	Repo     string
 	Number   int
 	Title    string
@@ -486,6 +488,7 @@ type AttentionList struct {
 // HotFile is a file with many snapshot findings (dismissed excluded).
 type HotFile struct {
 	Path     string
+	RepoID   string
 	Repo     string
 	Findings int
 	Critical int

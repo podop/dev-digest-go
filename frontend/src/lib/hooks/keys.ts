@@ -177,3 +177,11 @@ export const performanceKeys = {
   /** GET /agents/:id/stats?period=… */
   agentStats: (agentId: Id, period: string) => [...performanceKeys.all, "agent", agentId, period] as const,
 };
+
+/** PR Leaderboard (specs/2026-10-23-pr-leaderboard.md §7). Period, repo filter and the browser
+ *  zone are part of the key, so every combination is its own cache entry (no stale numbers). */
+export const leaderboardKeys = {
+  all: ["leaderboard"] as const,
+  /** GET /leaderboard?period=&tz=&repo= */
+  view: (period: string, repo: string, tz: string) => [...leaderboardKeys.all, "view", period, repo, tz] as const,
+};

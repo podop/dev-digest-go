@@ -18,3 +18,4 @@ export * from "./evals";
 export * from "./ci";
 export * from "./multi-agent";
 export * from "./performance";
+export * from "./leaderboard";
