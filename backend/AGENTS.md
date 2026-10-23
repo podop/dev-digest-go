@@ -49,7 +49,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   off only on `false`) decides whether `cmd` wires `executor.Deps.Intent`; off leaves it nil, which
   is Phase 4 behaviour exactly. Test seams in `cmd/server`: `options.now` (clock) and
   `intentBudget` / `briefBudget` / `onboardingBudget` / `evalCaseBudget`, `runner` (a fake
-  `ciapp.RunnerBundle`) and `artifactClient` (TLS stub of the artifact storage leg). Phase 6
+  `ciapp.RunnerBundle`), `artifactClient` (TLS stub of the artifact storage leg) and `pollTick`
+  (the PR poller's due-check tick, 0 = 1 min; poll tests shorten it and move `now`). Phase 6
   contexts: `evals` (cases, runs, executor) and `ci` (export, ingest; `ci/runner` is the CI runner
   program, `cmd/devdigest-runner`). The CI runner is compiled by the image build (cgo off,
   reproducible) into `internal/ci/adapters/runnerbin/` and embedded in the server with

@@ -58,6 +58,23 @@ import {
   Intent,
   IntentSource,
   IntentTrace,
+  Leaderboard,
+  LeaderboardActivity,
+  LeaderboardActivityPoint,
+  LeaderboardAttention,
+  LeaderboardAttentionReason,
+  LeaderboardAward,
+  LeaderboardAwards,
+  LeaderboardHotFile,
+  LeaderboardKpis,
+  LeaderboardNeedsAttention,
+  LeaderboardPeriod,
+  LeaderboardRepo,
+  LeaderboardRow,
+  LeaderboardRowReview,
+  LeaderboardSeverityCounts,
+  LeaderboardSizeBucket,
+  LeaderboardTopFinding,
   ModelInfo,
   MultiAgentRun,
   MultiAgentRunSummary,
@@ -323,6 +340,39 @@ const ciRefresh = CiRefreshResult.extend({
   ),
 }).strict();
 
+// ---- PR Leaderboard (specs/2026-10-23-pr-leaderboard.md, GET /leaderboard). Every nested object is
+// strict: an extra key anywhere is a drift. ----
+const severityCounts = LeaderboardSeverityCounts.strict();
+const leaderboardKpis = LeaderboardKpis.strict();
+const leaderboardAward = LeaderboardAward.strict().nullable();
+const leaderboard = Leaderboard.extend({
+  period: LeaderboardPeriod.strict(),
+  repos: z.array(LeaderboardRepo.strict()),
+  summary: leaderboardKpis,
+  previous_summary: leaderboardKpis.nullable(),
+  awards: LeaderboardAwards.extend({
+    cleanest: leaderboardAward,
+    hottest: leaderboardAward,
+    fastest_merge: leaderboardAward,
+    most_rounds: leaderboardAward,
+    monster: leaderboardAward,
+    priciest: leaderboardAward,
+  }).strict(),
+  rows: z.array(
+    LeaderboardRow.extend({
+      findings: severityCounts,
+      reviews: z.array(LeaderboardRowReview.extend({ findings: severityCounts }).strict()),
+      top_findings: z.array(LeaderboardTopFinding.strict()).max(3),
+    }).strict(),
+  ),
+  needs_attention: LeaderboardNeedsAttention.extend({
+    items: z.array(LeaderboardAttention.extend({ reasons: z.array(LeaderboardAttentionReason.strict()) }).strict()),
+  }).strict(),
+  hot_files: z.array(LeaderboardHotFile.strict()),
+  health_by_size: z.array(LeaderboardSizeBucket.strict()),
+  activity: LeaderboardActivity.extend({ points: z.array(LeaderboardActivityPoint.strict()) }).strict(),
+}).strict();
+
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
   health: z.object({ status: z.literal("ok") }).strict(),
@@ -481,6 +531,11 @@ const contracts: Record<string, z.ZodTypeAny> = {
   ci_refresh_skips: ciRefresh,
   ci_refresh_errors: ciRefresh,
   ci_refresh_not_checked: ciRefresh,
+
+  // ---- PR Leaderboard ----
+  leaderboard_week: leaderboard,
+  leaderboard_repo_30d: leaderboard,
+  leaderboard_empty: leaderboard,
 };
 
 const read = (name: string): unknown =>
@@ -846,5 +901,89 @@ describe("Go backend golden responses", () => {
     expect(read("ci_refresh_errors")).toMatchObject({ degraded: true, ingested: 0 });
     expect(read("ci_refresh_not_checked")).toMatchObject({ degraded: true });
     expect(read("ci_refresh")).toMatchObject({ degraded: false });
+  });
+
+  // These three goldens hold real fixed ids and times (the backend does not run them through its
+  // placeholder normalizer), so the wire rules of contracts/leaderboard.ts are checked on the raw values.
+  describe("leaderboard goldens", () => {
+    type Board = {
+      period: Record<string, string | null>;
+      repos: { id: string; full_name: string }[];
+      previous_summary: unknown;
+      awards: Record<string, { repo: string; repo_id: string } | null>;
+      rows: { repo: string; repo_id: string; opened_at: string | null; merged_at: string | null }[];
+      needs_attention: { total: number; items: { repo: string }[] };
+      hot_files: { repo: string; repo_id: string }[];
+      health_by_size: { size: string }[];
+      activity: { granularity: string; points: { from: string; to: string }[] };
+    };
+    const localTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$/;
+    const utcTime = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+    const localDate = /^\d{4}-\d{2}-\d{2}$/;
+    const names = ["leaderboard_week", "leaderboard_repo_30d", "leaderboard_empty"];
+
+    it.each(names)("%s: period times are local with an offset, other times UTC, dates local", (name) => {
+      const board = read(name) as Board;
+      for (const key of ["from", "to"]) expect(board.period[key], key).toMatch(localTime);
+      for (const key of ["previous_from", "previous_to"]) {
+        const value = board.period[key];
+        if (value !== null) expect(value, key).toMatch(localTime);
+      }
+      for (const row of board.rows) {
+        for (const value of [row.opened_at, row.merged_at]) if (value !== null) expect(value).toMatch(utcTime);
+      }
+      expect(board.activity.points.length).toBeGreaterThan(0);
+      for (const point of board.activity.points) {
+        expect(point.from).toMatch(localDate);
+        expect(point.to).toMatch(localDate);
+      }
+      expect(board.health_by_size.map((b) => b.size)).toEqual(["XS", "S", "M", "L", "XL"]);
+    });
+
+    it.each(names)("%s: repo fields are the short name, repos[].full_name is owner/name", (name) => {
+      const board = read(name) as Board;
+      const byId = new Map(board.repos.map((r) => [r.id, r.full_name]));
+      for (const repo of board.repos) expect(repo.full_name).toMatch(/^[^/]+\/[^/]+$/);
+      const linked = [
+        ...board.rows,
+        ...board.hot_files,
+        ...Object.values(board.awards).filter((a) => a !== null),
+      ];
+      for (const item of linked) {
+        expect(item.repo, item.repo).not.toContain("/");
+        expect(byId.get(item.repo_id)?.endsWith(`/${item.repo}`), item.repo).toBe(true);
+      }
+      for (const item of board.needs_attention.items) expect(item.repo).not.toContain("/");
+    });
+
+    it("the week golden is a day-granular window with a previous window and rows", () => {
+      const board = read("leaderboard_week") as Board;
+      expect(board.period).toMatchObject({ key: "week", tz: "UTC" });
+      expect(board.period.previous_from).not.toBeNull();
+      expect(board.previous_summary).not.toBeNull();
+      expect(board.activity.granularity).toBe("day");
+      expect(board.activity.points).toHaveLength(7);
+      expect(board.rows.length).toBeGreaterThan(0);
+      expect(board.repos).toHaveLength(3);
+    });
+
+    it("the repo + 30d golden has no previous window (D19), week granularity and one repo", () => {
+      const board = read("leaderboard_repo_30d") as Board;
+      expect(board.period).toMatchObject({ key: "30d", tz: "Europe/Kyiv", previous_from: null, previous_to: null });
+      expect(board.previous_summary).toBeNull();
+      expect(board.activity.granularity).toBe("week");
+      expect(board.repos).toHaveLength(1);
+      expect(new Set(board.rows.map((r) => r.repo_id))).toEqual(new Set([board.repos[0]?.id]));
+    });
+
+    it("the empty golden has no rows, null awards, an empty attention list and a previous window", () => {
+      const board = read("leaderboard_empty") as Board;
+      expect(board.rows).toEqual([]);
+      expect(Object.values(board.awards).every((a) => a === null)).toBe(true);
+      expect(board.needs_attention).toEqual({ total: 0, items: [] });
+      expect(board.hot_files).toEqual([]);
+      expect(board.period.previous_from).not.toBeNull();
+      expect(board.previous_summary).toBeNull();
+    });
   });
 });
