@@ -4,6 +4,12 @@
   "showAll": "Show all {count}",
   "showTop": "Show top {count}",
   "noValue": "—",
+  "resetSort": "Reset to rank",
+  "healthInfo": {
+    "label": "How health is scored",
+    "formula": "100 − Σ weight − 3 × (rounds − 1)",
+    "body": "Weights: critical 10 · warning 3 · suggestion 1. Floored at 0. Dismissed findings don't count — they were false positives, not the PR's fault."
+  },
   "columns": {
     "rank": "#",
     "pr": "PR",
@@ -34,6 +40,7 @@
   "sizeStats": "<add>+{additions}</add> <del>-{deletions}</del> · {files}f",
   "findings": {
     "label": "{critical} critical, {warning} warning, {suggestion} suggestion",
+    "labelOpen": "{critical} critical ({open} still open), {warning} warning, {suggestion} suggestion",
     "critical": "C {count}",
     "warning": "W {count}",
     "suggestion": "S {count}"
@@ -52,12 +59,21 @@
     "days": "{value}d"
   },
   "row": {
-    "toggle": "Show reviews of {pr}"
+    "toggle": "Show findings of {pr}"
   },
   "detail": {
-    "heading": "Reviews in this window",
-    "empty": "No reviews in this window",
-    "score": "Score {score}",
-    "openPr": "Open PR {pr}"
+    "heading": "Top findings",
+    "empty": "No notable findings recorded.",
+    "finding": "<sev>{severity}</sev> · {title}"
+  },
+  "severity": {
+    "CRITICAL": "Critical",
+    "WARNING": "Warning",
+    "SUGGESTION": "Suggestion"
+  },
+  "findingState": {
+    "open": "open",
+    "accepted": "accepted",
+    "dismissed": "dismissed"
   }
 }

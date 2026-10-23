@@ -25,11 +25,9 @@ type Reader interface {
 	// domain.RepoAll (every repository of the workspace, possibly none) or a repository UUID;
 	// an id that is not in the workspace is domain.ErrNotFound.
 	RepoScope(ctx context.Context, workspaceID, repo string) ([]domain.RepoRef, error)
-	// WindowFacts returns the facts of the repositories for [from, to) (the caller passes
-	// Window.PrevFrom and Window.To so one read serves both windows). The membership each slice
-	// of domain.Facts must satisfy is documented on domain.Facts. repoIDs is never empty.
-	WindowFacts(ctx context.Context, workspaceID string, repoIDs []string, from, to time.Time) (domain.Facts, error)
-	// OpenState returns the current state of the open PRs (stored status neither merged nor
-	// closed) of the repositories, independent of any window. repoIDs is never empty.
-	OpenState(ctx context.Context, workspaceID string, repoIDs []string) ([]domain.OpenPull, error)
+	// WindowFacts returns the facts of the repositories for [win.ReadFrom(), win.To): one read
+	// serves the window and its previous window. The membership each slice of domain.Facts must
+	// satisfy is documented on domain.Facts; win.From splits the range into the two windows so
+	// the store can return only the findings of the two snapshots. repoIDs is never empty.
+	WindowFacts(ctx context.Context, workspaceID string, repoIDs []string, win domain.Window) (domain.Facts, error)
 }

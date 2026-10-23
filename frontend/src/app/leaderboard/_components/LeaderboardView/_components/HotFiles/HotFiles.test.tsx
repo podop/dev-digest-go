@@ -17,7 +17,7 @@ describe("HotFiles", () => {
 
     const hot = within(rows[0]!);
     expect(hot.getByText("internal/billing/invoice.go")).toBeInTheDocument();
-    expect(hot.getByText("acme/api · #41, #44")).toBeInTheDocument();
+    expect(hot.getByText(/^acme\/api ·/)).toHaveTextContent("acme/api · #41, #44");
     expect(hot.getByText("5 findings")).toBeInTheDocument();
     expect(hot.getByText("2 critical")).toBeInTheDocument();
     expect(rows[0]).toHaveAttribute("data-critical", "true");
@@ -26,6 +26,17 @@ describe("HotFiles", () => {
     expect(calm.getByText("1 finding")).toBeInTheDocument();
     expect(calm.queryByText(/critical/)).not.toBeInTheDocument();
     expect(rows[1]).not.toHaveAttribute("data-critical");
+  });
+
+  it("links every PR number to that PR's page in its repository (AC22)", () => {
+    renderWithProviders(
+      <HotFiles files={[{ path: "a.go", repo_id: "id with/slash", repo: "acme/api", findings: 1, critical: 0, prs: [41, 1044] }]} />,
+    );
+
+    const row = within(screen.getByRole("list", { name: "Hot files" })).getByRole("listitem");
+    expect(within(row).getByRole("link", { name: "#41" })).toHaveAttribute("href", "/repos/id%20with%2Fslash/pulls/41");
+    expect(within(row).getByRole("link", { name: "#1044" })).toHaveAttribute("href", "/repos/id%20with%2Fslash/pulls/1044");
+    expect(within(row).getAllByRole("link")).toHaveLength(2);
   });
 
   it("shows the empty state without files", () => {

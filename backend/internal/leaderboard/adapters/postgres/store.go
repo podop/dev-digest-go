@@ -1,7 +1,7 @@
 // Package postgres reads the data of the leaderboard context with GORM. Nothing here writes: the
 // store runs SELECTs over repos, pull_requests, reviews, findings, agents and agent_runs with
 // row types declared in this package, every query scoped to one workspace. A request costs at
-// most eight set-based queries (RepoScope 1, WindowFacts 4, OpenState 2) and no query depends on
+// most eight set-based queries (RepoScope 1, WindowFacts 5) and no query depends on
 // the number of PRs. Every method takes its handle from platformpg.Conn, so a store called inside
 // a transaction joins the caller's transaction.
 package postgres
@@ -59,13 +59,14 @@ func (s *Store) RepoScope(ctx context.Context, workspaceID, repo string) ([]doma
 	return out, nil
 }
 
-// WindowFacts implements app.Reader: four queries (pulls, reviews, findings, runs).
-func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []string, from, to time.Time) (domain.Facts, error) {
-	facts := domain.Facts{From: from, To: to}
+// WindowFacts implements app.Reader: five queries (pulls, reviews, findings, runs, open
+// criticals) over [win.ReadFrom(), win.To).
+func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []string, win domain.Window) (domain.Facts, error) {
+	facts := domain.Facts{From: win.ReadFrom(), To: win.To}
 	if len(repoIDs) == 0 {
 		return facts, nil
 	}
-	args := queryArgs(workspaceID, repoIDs, from, to)
+	args := queryArgs(workspaceID, repoIDs, facts.From, facts.To, win.From)
 	db := s.conn(ctx)
 
 	var pulls []pullRow
@@ -84,6 +85,14 @@ func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []s
 	if err := db.Raw(qWindowRuns, args...).Scan(&runs).Error; err != nil {
 		return domain.Facts{}, fmt.Errorf("select window runs: %w", err)
 	}
+	var critical []openCriticalRow
+	if err := db.Raw(qOpenCritical, args...).Scan(&critical).Error; err != nil {
+		return domain.Facts{}, fmt.Errorf("select open criticals: %w", err)
+	}
+	openCritical := make(map[string]int, len(critical))
+	for _, c := range critical {
+		openCritical[c.PRID] = c.N
+	}
 
 	facts.Pulls = make([]domain.PullFact, len(pulls))
 	for i, p := range pulls {
@@ -93,6 +102,7 @@ func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []s
 			Status: p.Status, Draft: p.Draft, LastReviewedSHA: p.LastReviewedSHA,
 			OpenedAt: utcPtr(p.OpenedAt), UpdatedAt: utcPtr(p.UpdatedAt),
 			MergedAt: utcPtr(p.MergedAt), ClosedAt: utcPtr(p.ClosedAt), FirstReviewAt: utcPtr(p.FirstReviewAt),
+			OpenCritical: openCritical[p.ID],
 		}
 	}
 	facts.Reviews = make([]domain.ReviewFact, len(reviews))
@@ -105,7 +115,8 @@ func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []s
 	facts.Findings = make([]domain.FindingFact, len(findings))
 	for i, f := range findings {
 		facts.Findings[i] = domain.FindingFact{
-			ReviewID: f.ReviewID, File: f.File, Severity: f.Severity,
+			FindingID: f.ID, ReviewID: f.ReviewID, File: f.File, StartLine: f.StartLine,
+			Severity: f.Severity, Title: f.Title,
 			AcceptedAt: utcPtr(f.AcceptedAt), DismissedAt: utcPtr(f.DismissedAt),
 		}
 	}
@@ -116,43 +127,10 @@ func (s *Store) WindowFacts(ctx context.Context, workspaceID string, repoIDs []s
 	return facts, nil
 }
 
-// OpenState implements app.Reader: two queries (open pulls, open critical counts).
-func (s *Store) OpenState(ctx context.Context, workspaceID string, repoIDs []string) ([]domain.OpenPull, error) {
-	if len(repoIDs) == 0 {
-		return nil, nil
-	}
-	args := []any{sql.Named("ws", workspaceID), sql.Named("repos", repoIDs)}
-	db := s.conn(ctx)
-
-	var pulls []pullRow
-	if err := db.Raw(qOpenPulls, args...).Scan(&pulls).Error; err != nil {
-		return nil, fmt.Errorf("select open pulls: %w", err)
-	}
-	var critical []openCriticalRow
-	if err := db.Raw(qOpenCritical, args...).Scan(&critical).Error; err != nil {
-		return nil, fmt.Errorf("select open criticals: %w", err)
-	}
-	byPR := make(map[string]int, len(critical))
-	for _, c := range critical {
-		byPR[c.PRID] = c.N
-	}
-
-	out := make([]domain.OpenPull, len(pulls))
-	for i, p := range pulls {
-		out[i] = domain.OpenPull{
-			PRID: p.ID, RepoID: p.RepoID, Repo: p.Repo, Number: p.Number, Title: p.Title, Author: p.Author,
-			HeadSHA: p.HeadSHA, LastReviewedSHA: p.LastReviewedSHA, Draft: p.Draft,
-			OpenedAt: utcPtr(p.OpenedAt), UpdatedAt: utcPtr(p.UpdatedAt),
-			Reviewed: p.Reviewed, OpenCritical: byPR[p.ID],
-		}
-	}
-	return out, nil
-}
-
-func queryArgs(workspaceID string, repoIDs []string, from, to time.Time) []any {
+func queryArgs(workspaceID string, repoIDs []string, from, to, split time.Time) []any {
 	return []any{
 		sql.Named("ws", workspaceID), sql.Named("repos", repoIDs),
-		sql.Named("from", from), sql.Named("to", to),
+		sql.Named("from", from), sql.Named("to", to), sql.Named("split", split),
 	}
 }
 

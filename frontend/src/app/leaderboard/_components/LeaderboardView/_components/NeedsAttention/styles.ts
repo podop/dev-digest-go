@@ -26,7 +26,7 @@ export const s = {
     borderTop: "1px solid var(--border)",
   } satisfies CSSProperties,
   head: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 } satisfies CSSProperties,
-  ref: { flexShrink: 0, fontSize: 12.5, color: "var(--text-secondary)" } satisfies CSSProperties,
+  ref: { flexShrink: 0, fontSize: 12.5, color: "var(--accent-text)", textDecoration: "none" } satisfies CSSProperties,
   prTitle: {
     flex: 1,
     minWidth: 0,
@@ -39,11 +39,20 @@ export const s = {
   } satisfies CSSProperties,
   author: { display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
   reasons: { display: "flex", flexWrap: "wrap", gap: 6 } satisfies CSSProperties,
+  /** Outlined badge; neutral by default, red for the reasons that mean an open critical finding. */
   reason: {
-    color: "var(--crit)",
+    color: "var(--text-secondary)",
     background: "transparent",
-    border: "1px solid var(--crit)",
+    border: "1px solid var(--border-strong)",
     fontWeight: 500,
+    fontSize: 11.5,
+    padding: "1px 8px",
+  } satisfies CSSProperties,
+  reasonCritical: {
+    color: "var(--crit)",
+    background: "var(--crit-bg)",
+    border: "1px solid var(--crit)",
+    fontWeight: 600,
     fontSize: 11.5,
     padding: "1px 8px",
   } satisfies CSSProperties,

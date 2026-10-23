@@ -42,17 +42,15 @@ function round(kind: KpiKind, value: number): number {
   return value;
 }
 
+/** A move smaller than this (in the KPI's unit, FR19) reads "no change". */
+const NO_CHANGE_BELOW = 0.05;
+
 /** Change against the previous window; null when either side is unknown (no delta is shown then). */
 export function kpiDelta(spec: KpiSpec, current: number | null, previous: number | null): KpiDelta | null {
   if (current == null || previous == null) return null;
   const diff = Number((round(spec.kind, current) - round(spec.kind, previous)).toFixed(6));
-  if (diff === 0) return { direction: "same", amount: 0, good: null };
+  if (Math.abs(diff) < NO_CHANGE_BELOW) return { direction: "same", amount: 0, good: null };
   return { direction: diff > 0 ? "up" : "down", amount: Math.abs(diff), good: spec.higherIsBetter ? diff > 0 : diff < 0 };
-}
-
-/** A previous window with no PRs at all has nothing to compare with: no tile shows a delta. */
-export function previousWindowIsEmpty(previous: LeaderboardKpis): boolean {
-  return previous.prs_reviewed === 0 && previous.merged === 0;
 }
 
 /** Plain score for a tile or award: 1 decimal at most, no trailing ".0". */

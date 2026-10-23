@@ -27,6 +27,7 @@ function props(over: Partial<HeaderProps> = {}): HeaderProps {
     repo: "all",
     repos: REPOS,
     window: WINDOW,
+    compared: true,
     syncRepos: null,
     onPeriodChange: vi.fn(),
     onRepoChange: vi.fn(),
@@ -57,24 +58,36 @@ describe("Header", () => {
     await pickOption(user, select, "acme/web");
     expect(p.onRepoChange).toHaveBeenCalledWith("r2");
 
-    // 30d: no "Week of" prefix.
+    // 30d: no "Week of" prefix and no comparison (D19).
     rerender(
       <Header
         {...p}
         period="30d"
         repo="r2"
+        compared={false}
         window={{
           ...WINDOW,
           key: "30d",
           from: "2026-09-05T00:00:00.000+03:00",
-          previous_from: "2026-08-06T00:00:00.000+03:00",
-          previous_to: "2026-09-05T00:00:00.000+03:00",
+          previous_from: null,
+          previous_to: null,
         }}
       />,
     );
-    expect(screen.getByText("Sep 5 – Oct 4 · compared with Aug 6 – Sep 4")).toBeInTheDocument();
+    expect(screen.getByText("Sep 5 – Oct 4")).toBeInTheDocument();
+    expect(screen.queryByText(/compared with/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "30d" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("combobox", { name: "Repository" })).toHaveTextContent("acme/web");
+  });
+
+  it("names the compared window only when the response has a previous summary (AC22)", () => {
+    const { rerender } = renderWithProviders(<Header {...props({ compared: true })} />);
+    expect(screen.getByText("Week of Sep 28 – Oct 4 · compared with Sep 21 – 27")).toBeInTheDocument();
+
+    // The previous week had no rows: the window has dates, the response has no previous summary.
+    rerender(<Header {...props({ compared: false })} />);
+    expect(screen.getByText("Week of Sep 28 – Oct 4")).toBeInTheDocument();
+    expect(screen.queryByText(/compared with/)).not.toBeInTheDocument();
   });
 
   it("has no label and a disabled repo select while loading", () => {

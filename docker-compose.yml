@@ -53,6 +53,8 @@ services:
       REPO_INTEL_ENABLED: ${REPO_INTEL_ENABLED:-true}
       # Review intent pre-work (one extra LLM call per review on a cache miss). Off only on the literal `false`.
       REVIEW_INTENT_ENABLED: ${REVIEW_INTENT_ENABLED:-true}
+      # Background PR poll for the leaderboard (interval = Settings polling_interval_min). Off only on the literal `false`.
+      PR_POLL_ENABLED: ${PR_POLL_ENABLED:-true}
       # LLM mock for demos and tests (empty = real providers; the only other value is `mock`),
       # its per-call delay in ms, and the project-context file globs (empty = built-in default).
       LLM_PROVIDER_OVERRIDE: ${LLM_PROVIDER_OVERRIDE:-}

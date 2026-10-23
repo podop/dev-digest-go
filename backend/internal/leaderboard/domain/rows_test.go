@@ -26,6 +26,7 @@ func rowsWindow() domain.Window {
 		Location: time.UTC,
 		From:     rowsAt(19, 0, 0),
 		To:       rowsAt(26, 0, 0),
+		HasPrev:  true,
 		PrevFrom: rowsAt(12, 0, 0),
 		PrevTo:   rowsAt(19, 0, 0),
 		Days:     7,
@@ -76,17 +77,17 @@ func TestBuildRows_Fixture(t *testing.T) {
 	accepted := rowsPtr(rowsAt(21, 11, 0))
 	dismissed := rowsPtr(rowsAt(21, 12, 0))
 	f.Findings = []domain.FindingFact{
-		{ReviewID: "r0", File: "old.go", Severity: domain.SeverityWarning},
+		{FindingID: "f0", ReviewID: "r0", File: "old.go", StartLine: 3, Title: "Old", Severity: domain.SeverityWarning},
 		// r1 is not a snapshot review: ignored
 		rowsFinding("r1", domain.SeverityCritical), rowsFinding("r1", domain.SeverityCritical),
 		// r3: open critical, accepted critical, dismissed warning, suggestion
-		{ReviewID: "r3", File: "a.go", Severity: domain.SeverityCritical},
-		{ReviewID: "r3", File: "b.go", Severity: domain.SeverityCritical, AcceptedAt: accepted},
-		{ReviewID: "r3", File: "a.go", Severity: domain.SeverityWarning, DismissedAt: dismissed},
-		{ReviewID: "r3", File: "c.go", Severity: domain.SeveritySuggestion},
+		{FindingID: "f1", ReviewID: "r3", File: "a.go", StartLine: 10, Title: "Open critical", Severity: domain.SeverityCritical},
+		{FindingID: "f2", ReviewID: "r3", File: "b.go", StartLine: 20, Title: "Accepted critical", Severity: domain.SeverityCritical, AcceptedAt: accepted},
+		{FindingID: "f3", ReviewID: "r3", File: "a.go", StartLine: 30, Title: "Dismissed warning", Severity: domain.SeverityWarning, DismissedAt: dismissed},
+		{FindingID: "f4", ReviewID: "r3", File: "c.go", StartLine: 40, Title: "Suggestion", Severity: domain.SeveritySuggestion},
 		// r2: accepted and later dismissed critical (EC7), open warning
-		{ReviewID: "r2", File: "d.go", Severity: domain.SeverityCritical, AcceptedAt: accepted, DismissedAt: dismissed},
-		{ReviewID: "r2", File: "d.go", Severity: domain.SeverityWarning},
+		{FindingID: "f5", ReviewID: "r2", File: "d.go", StartLine: 50, Title: "Dismissed critical", Severity: domain.SeverityCritical, AcceptedAt: accepted, DismissedAt: dismissed},
+		{FindingID: "f6", ReviewID: "r2", File: "d.go", StartLine: 60, Title: "Warning", Severity: domain.SeverityWarning},
 		// r4: two suggestions
 		rowsFinding("r4", domain.SeveritySuggestion), rowsFinding("r4", domain.SeveritySuggestion),
 	}
@@ -101,15 +102,17 @@ func TestBuildRows_Fixture(t *testing.T) {
 
 	cur, prev := domain.BuildRows(rowsWindow(), f, rowsNow())
 
-	// Hand computation, window: snapshot = r3 (Alpha 60), r2 (Beta 71), r4 (Deleted agent, no
-	// score); health = round((60+71)/2 = 65.5) = 66; rounds = 2 (Alpha); findings C=2+1=3,
-	// W=1+1=2, S=1+2=3; open critical = 1 (r3 first; r2's is dismissed); risk points =
-	// 35+35+3 (r3) + 12 (r2) + 6 (r4) = 91 -> high; lines 200 -> M; cost = .25+.125 = .375;
-	// first review 47 h after opening = 169200 s; open age = 10 d 2 h = 871200 s.
+	// Hand computation, window: snapshot = r3 (Alpha), r2 (Beta), r4 (Deleted agent); rounds = 2
+	// (Alpha); findings C=2+1=3, W=1+1=2, S=1+2=3 (every status); non-dismissed: r3 C+C+S =
+	// 10+10+1, r2 W = 3 (its critical is dismissed), r4 S+S = 2 -> 26, so health = 100 - 26 -
+	// 3*(2-1) = 71; open critical = 1 (r3 first; r2's is dismissed); risk points = 35+35+3 (r3) +
+	// 12 (r2) + 6 (r4) = 91 -> high; lines 200 -> M; cost = .25+.125 = .375; first review 47 h
+	// after opening = 169200 s; open age = 10 d 2 h = 871200 s. Top findings: the three
+	// criticals, open before accepted before dismissed.
 	wantCur := domain.Row{
 		PRID: "p1", RepoID: "r-api", Repo: "api", Number: 7, Title: "Add cache", Author: "ann",
 		Status: domain.StatusNeedsReview, Additions: 120, Deletions: 80, FilesCount: 5, Size: domain.SizeM,
-		Health: rowsPtr(66), Risk: domain.RiskHigh,
+		Health: rowsPtr(71), Risk: domain.RiskHigh,
 		Findings:           domain.FindingCounts{Critical: 3, Warning: 2, Suggestion: 3},
 		OpenCritical:       1,
 		Rounds:             2,
@@ -120,6 +123,11 @@ func TestBuildRows_Fixture(t *testing.T) {
 		FirstReviewAt:      rowsPtr(rowsAt(14, 9, 0)),
 
 		NewCommitsSinceReview: true,
+		TopFindings: []domain.TopFinding{
+			{FindingID: "f1", Severity: domain.SeverityCritical, Title: "Open critical", File: "a.go", StartLine: 10, AgentName: "Alpha", State: domain.FindingOpen},
+			{FindingID: "f2", Severity: domain.SeverityCritical, Title: "Accepted critical", File: "b.go", StartLine: 20, AgentName: "Alpha", State: domain.FindingAccepted},
+			{FindingID: "f5", Severity: domain.SeverityCritical, Title: "Dismissed critical", File: "d.go", StartLine: 50, AgentName: "Beta", State: domain.FindingDismissed},
+		},
 		Reviews: []domain.RowReview{
 			{
 				ReviewID: "r3", AgentID: rowsPtr("a-alpha"), AgentName: "Alpha", Score: rowsPtr(60),
@@ -156,9 +164,13 @@ func TestBuildRows_Fixture(t *testing.T) {
 		t.Errorf("BuildRows() current rows mismatch (-want +got):\n%s", diff)
 	}
 
-	// Previous window: only r0 (Alpha 10, one warning = 12 points -> low), cost 1.
+	// Previous window: only r0 (Alpha, one warning: health 100 - 3 = 97; 12 risk points -> low),
+	// cost 1.
 	wantPrev := wantCur
-	wantPrev.Health = rowsPtr(10)
+	wantPrev.Health = rowsPtr(97)
+	wantPrev.TopFindings = []domain.TopFinding{
+		{FindingID: "f0", Severity: domain.SeverityWarning, Title: "Old", File: "old.go", StartLine: 3, AgentName: "Alpha", State: domain.FindingOpen},
+	}
 	wantPrev.Risk = domain.RiskLow
 	wantPrev.Findings = domain.FindingCounts{Warning: 1}
 	wantPrev.OpenCritical = 0
@@ -222,40 +234,206 @@ func TestBuildRows_Empty(t *testing.T) {
 	}
 }
 
-// TestBuildRows_Health: mean of the snapshot scores, rounded half up; reviews without a score
-// do not count; no score at all gives no health (null).
+// TestBuildRows_Health: max(0, 100 - (10·C + 3·W + 1·S of the non-dismissed snapshot findings) -
+// 3·(rounds - 1)); review scores play no part.
 func TestBuildRows_Health(t *testing.T) {
+	type fnd struct {
+		sev       string
+		dismissed bool
+		accepted  bool
+		oldRound  bool // on the first review of the agent, which is not the snapshot review
+	}
+	rep := func(n int, f fnd) []fnd {
+		out := make([]fnd, n)
+		for i := range out {
+			out[i] = f
+		}
+		return out
+	}
+	c, w, s := fnd{sev: domain.SeverityCritical}, fnd{sev: domain.SeverityWarning}, fnd{sev: domain.SeveritySuggestion}
 	tests := []struct {
 		name   string
-		scores []*int // one agent each
-		want   *int
+		rounds int
+		in     []fnd
+		want   int
 	}{
-		{"one score", []*int{rowsPtr(73)}, rowsPtr(73)},
-		{"half rounds up", []*int{rowsPtr(80), rowsPtr(71)}, rowsPtr(76)},                      // 75.5
-		{"exact mean", []*int{rowsPtr(80), rowsPtr(70)}, rowsPtr(75)},                          // 75
-		{"below half rounds down", []*int{rowsPtr(80), rowsPtr(70), rowsPtr(71)}, rowsPtr(74)}, // 73.67 -> 74
-		{"one third", []*int{rowsPtr(1), rowsPtr(0), rowsPtr(0)}, rowsPtr(0)},                  // 0.33 -> 0
-		{"unscored review is skipped", []*int{rowsPtr(90), nil}, rowsPtr(90)},
-		{"no score at all", []*int{nil, nil}, nil},
+		{"clean first round", 1, nil, 100},
+		{"weights 10, 3 and 1", 1, append(append(rep(1, c), rep(2, w)...), rep(3, s)...), 81},
+		{"dismissed findings do not count", 1, append(rep(1, fnd{sev: domain.SeverityCritical, dismissed: true}), rep(1, w)...), 97},
+		{"accepted findings still count", 1, rep(1, fnd{sev: domain.SeverityCritical, accepted: true}), 90},
+		{"each extra round costs 3", 4, nil, 91},
+		{"rounds and findings", 3, rep(2, c), 74},
+		{"findings of older rounds are not in the snapshot", 3, rep(5, fnd{sev: domain.SeverityCritical, oldRound: true}), 94},
+		{"floored at 0", 1, rep(11, c), 0},
+		{"floored at 0 with rounds", 40, rep(1, c), 0},
+		{"exactly 0", 1, rep(10, c), 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			f := rowsFacts()
 			f.Pulls = []domain.PullFact{{PRID: "p", Repo: "api", Number: 1, Status: "open"}}
-			for i, s := range tc.scores {
-				id := fmt.Sprintf("agent-%d", i)
+			for i := 0; i < tc.rounds; i++ {
 				f.Reviews = append(f.Reviews, domain.ReviewFact{
-					ReviewID: fmt.Sprintf("r%d", i), PRID: "p", AgentID: id, AgentName: id, Score: s, CreatedAt: rowsAt(20, 9, i),
+					ReviewID: fmt.Sprintf("r%d", i), PRID: "p", AgentID: "a", AgentName: "A",
+					Score: rowsPtr(5), CreatedAt: rowsAt(20, 1+i%20, 0),
 				})
 			}
-			cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
-			if len(cur) != 1 {
-				t.Fatalf("BuildRows() = %d rows, want 1", len(cur))
+			newest := fmt.Sprintf("r%d", tc.rounds-1)
+			for _, x := range tc.in {
+				ff := domain.FindingFact{ReviewID: newest, File: "f.go", Severity: x.sev}
+				if x.oldRound {
+					ff.ReviewID = "r0"
+				}
+				if x.dismissed {
+					ff.DismissedAt = rowsPtr(rowsAt(21, 9, 0))
+				}
+				if x.accepted {
+					ff.AcceptedAt = rowsPtr(rowsAt(21, 9, 0))
+				}
+				f.Findings = append(f.Findings, ff)
 			}
-			if diff := cmp.Diff(tc.want, cur[0].Health); diff != "" {
-				t.Errorf("BuildRows() health for scores %v mismatch (-want +got):\n%s", tc.scores, diff)
+			cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
+			if len(cur) != 1 || cur[0].Health == nil {
+				t.Fatalf("BuildRows() = %+v, want one row with a health", cur)
+			}
+			if got := *cur[0].Health; got != tc.want {
+				t.Errorf("BuildRows() health for %s = %d, want %d", tc.name, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestBuildRows_HealthSumsAgents: findings of every agent's snapshot review count, the rounds
+// penalty uses the busiest agent only.
+func TestBuildRows_HealthSumsAgents(t *testing.T) {
+	f := rowsFacts()
+	f.Pulls = []domain.PullFact{{PRID: "p", Repo: "api", Number: 1, Status: "open"}}
+	f.Reviews = []domain.ReviewFact{
+		{ReviewID: "a1", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 9, 0)},
+		{ReviewID: "a2", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 10, 0)},
+		{ReviewID: "b1", PRID: "p", AgentID: "b", AgentName: "B", CreatedAt: rowsAt(20, 9, 0)},
+	}
+	f.Findings = []domain.FindingFact{
+		{ReviewID: "a2", Severity: domain.SeverityCritical},
+		{ReviewID: "b1", Severity: domain.SeverityWarning},
+		{ReviewID: "b1", Severity: domain.SeveritySuggestion},
+	}
+	cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
+	// 100 - (10 + 3 + 1) - 3*(2-1) = 83
+	if got := cur[0].Health; got == nil || *got != 83 {
+		t.Errorf("BuildRows() health = %v, want 83", got)
+	}
+}
+
+// TestBuildRows_NoPreviousWindow: a window without a previous one (30d) has no previous rows.
+func TestBuildRows_NoPreviousWindow(t *testing.T) {
+	win := rowsWindow()
+	win.Key, win.From, win.HasPrev, win.PrevFrom, win.PrevTo = domain.Period30d, rowsAt(1, 0, 0), false, time.Time{}, time.Time{}
+	f := rowsFacts()
+	f.Pulls = []domain.PullFact{{PRID: "p", Repo: "api", Number: 1, Status: "open"}}
+	f.Reviews = []domain.ReviewFact{
+		{ReviewID: "r", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 9, 0)},
+		{ReviewID: "old", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(14, 9, 0)},
+	}
+	cur, prev := domain.BuildRows(win, f, rowsNow())
+	if len(cur) != 1 || cur[0].Rounds != 2 {
+		t.Errorf("BuildRows(30d) current = %+v, want one row with 2 rounds", cur)
+	}
+	if prev != nil {
+		t.Errorf("BuildRows(30d) previous = %+v, want nil", prev)
+	}
+}
+
+// TestBuildRows_TopFindings: at most 3, CRITICAL > WARNING > SUGGESTION, then open > accepted >
+// dismissed, then file, start line and finding id; the agent is the snapshot review's agent.
+func TestBuildRows_TopFindings(t *testing.T) {
+	at := rowsPtr(rowsAt(21, 9, 0))
+	fnd := func(id, review, sev, file string, line int) domain.FindingFact {
+		return domain.FindingFact{FindingID: id, ReviewID: review, Severity: sev, File: file, StartLine: line, Title: "t-" + id}
+	}
+	withAccepted := func(f domain.FindingFact) domain.FindingFact { f.AcceptedAt = at; return f }
+	withDismissed := func(f domain.FindingFact) domain.FindingFact { f.DismissedAt = at; return f }
+	both := func(f domain.FindingFact) domain.FindingFact { f.AcceptedAt, f.DismissedAt = at, at; return f }
+	tests := []struct {
+		name string
+		in   []domain.FindingFact
+		want []string
+	}{
+		{"none", nil, []string{}},
+		{"fewer than three", []domain.FindingFact{fnd("f1", "r", "SUGGESTION", "a.go", 1)}, []string{"f1"}},
+		{
+			"severity, state, file, line",
+			[]domain.FindingFact{
+				fnd("f1", "r", "WARNING", "z.go", 1), fnd("f2", "r", "SUGGESTION", "a.go", 1),
+				withDismissed(fnd("f3", "r", "CRITICAL", "b.go", 5)), withAccepted(fnd("f4", "r", "CRITICAL", "b.go", 3)),
+				fnd("f5", "r", "CRITICAL", "c.go", 9), fnd("f6", "r", "CRITICAL", "c.go", 2),
+				withAccepted(fnd("f7", "r", "WARNING", "a.go", 1)),
+			},
+			[]string{"f6", "f5", "f4"},
+		},
+		{
+			"warnings by file then line",
+			[]domain.FindingFact{
+				fnd("f8", "r", "WARNING", "b.go", 4), fnd("f9", "r", "WARNING", "b.go", 1),
+				fnd("f10", "r", "WARNING", "a.go", 7), fnd("f11", "r", "SUGGESTION", "a.go", 1),
+			},
+			[]string{"f10", "f9", "f8"},
+		},
+		{"dismissed wins over accepted and sorts last", []domain.FindingFact{
+			both(fnd("f1", "r", "CRITICAL", "a.go", 1)), withAccepted(fnd("f2", "r", "CRITICAL", "z.go", 1)),
+		}, []string{"f2", "f1"}},
+		{"equal keys: finding id", []domain.FindingFact{
+			fnd("f-b", "r", "CRITICAL", "a.go", 1), fnd("f-a", "r", "CRITICAL", "a.go", 1),
+		}, []string{"f-a", "f-b"}},
+		{"findings of non-snapshot reviews are not top findings", []domain.FindingFact{
+			fnd("old", "r0", "CRITICAL", "a.go", 1), fnd("new", "r", "SUGGESTION", "a.go", 1),
+		}, []string{"new"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := rowsFacts()
+			f.Pulls = []domain.PullFact{{PRID: "p", Repo: "api", Number: 1, Status: "open"}}
+			f.Reviews = []domain.ReviewFact{
+				{ReviewID: "r0", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 9, 0)},
+				{ReviewID: "r", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 10, 0)},
+			}
+			f.Findings = tc.in
+			cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
+			got := []string{}
+			for _, tf := range cur[0].TopFindings {
+				got = append(got, tf.FindingID)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("BuildRows() top findings for %s mismatch (-want +got):\n%s", tc.name, diff)
+			}
+			if cur[0].TopFindings == nil {
+				t.Errorf("BuildRows() top findings = nil, want a non-nil slice")
+			}
+		})
+	}
+}
+
+// TestBuildRows_TopFindingAgentAndState: the agent name of the snapshot review ("Deleted agent"
+// for a deleted agent) and the state of the finding (dismissed wins).
+func TestBuildRows_TopFindingAgentAndState(t *testing.T) {
+	at := rowsPtr(rowsAt(21, 9, 0))
+	f := rowsFacts()
+	f.Pulls = []domain.PullFact{{PRID: "p", Repo: "api", Number: 1, Status: "open"}}
+	f.Reviews = []domain.ReviewFact{
+		{ReviewID: "r1", PRID: "p", AgentID: "a", AgentName: "Alpha", CreatedAt: rowsAt(20, 9, 0)},
+		{ReviewID: "r2", PRID: "p", CreatedAt: rowsAt(20, 9, 0)},
+	}
+	f.Findings = []domain.FindingFact{
+		{FindingID: "f1", ReviewID: "r1", Severity: domain.SeverityCritical, File: "a.go", StartLine: 7, Title: "X", AcceptedAt: at, DismissedAt: at},
+		{FindingID: "f2", ReviewID: "r2", Severity: domain.SeverityWarning, File: "b.go", StartLine: 8, Title: "Y", AcceptedAt: at},
+	}
+	cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
+	want := []domain.TopFinding{ // severity first: the dismissed critical, then the accepted warning
+		{FindingID: "f1", Severity: domain.SeverityCritical, Title: "X", File: "a.go", StartLine: 7, AgentName: "Alpha", State: domain.FindingDismissed},
+		{FindingID: "f2", Severity: domain.SeverityWarning, Title: "Y", File: "b.go", StartLine: 8, AgentName: domain.DeletedAgentName, State: domain.FindingAccepted},
+	}
+	if diff := cmp.Diff(want, cur[0].TopFindings); diff != "" {
+		t.Errorf("BuildRows() top findings mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -370,7 +548,8 @@ func TestBuildRows_OpenCritical(t *testing.T) {
 	}
 }
 
-// TestBuildRows_Size: lines = additions + deletions; zero lines, zero files = unknown (EC9).
+// TestBuildRows_Size: lines = additions + deletions; zero lines, zero files = unknown (EC9);
+// XS < 50, S < 200, M < 500, L < 1000, XL from 1000.
 func TestBuildRows_Size(t *testing.T) {
 	tests := []struct {
 		name            string
@@ -378,14 +557,17 @@ func TestBuildRows_Size(t *testing.T) {
 		want            domain.Size
 	}{
 		{"all zero", 0, 0, 0, domain.SizeNone},
-		{"files only", 0, 0, 1, domain.SizeS},
-		{"100 lines", 60, 40, 2, domain.SizeS},
-		{"101 lines", 100, 1, 2, domain.SizeM},
-		{"400 lines", 399, 1, 2, domain.SizeM},
-		{"401 lines", 1, 400, 2, domain.SizeL},
-		{"1000 lines", 1000, 0, 2, domain.SizeL},
+		{"files only", 0, 0, 1, domain.SizeXS},
+		{"lines without files", 5, 0, 0, domain.SizeXS},
+		{"49 lines", 30, 19, 2, domain.SizeXS},
+		{"50 lines", 30, 20, 2, domain.SizeS},
+		{"199 lines", 100, 99, 2, domain.SizeS},
+		{"200 lines", 100, 100, 2, domain.SizeM},
+		{"499 lines", 499, 0, 2, domain.SizeM},
+		{"500 lines", 1, 499, 2, domain.SizeL},
+		{"999 lines", 0, 999, 2, domain.SizeL},
+		{"1000 lines", 1000, 0, 2, domain.SizeXL},
 		{"1001 lines", 0, 1001, 2, domain.SizeXL},
-		{"lines without files", 5, 0, 0, domain.SizeS},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

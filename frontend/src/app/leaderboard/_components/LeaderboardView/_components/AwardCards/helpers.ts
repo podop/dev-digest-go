@@ -1,5 +1,5 @@
 /** Pure parts of the award cards (specs/2026-10-23-pr-leaderboard.md FR12, FR20). */
-import type { LeaderboardAwards, LeaderboardRepo } from "@devdigest/shared";
+import type { LeaderboardAward, LeaderboardAwards } from "@devdigest/shared";
 import type { IconName } from "@devdigest/ui";
 import { prDetailPath } from "@/lib/pr-urls";
 
@@ -25,10 +25,9 @@ export const AWARD_SPECS: readonly AwardSpec[] = [
   { key: "priciest", kind: "usd", icon: "DollarSign", color: "var(--warn)", bg: "var(--warn-bg)" },
 ];
 
-/** Link to the PR detail page; the award carries the repository name only, so the id comes from the filter's repos. */
-export function awardHref(repos: readonly LeaderboardRepo[], repo: string, number: number): string | null {
-  const found = repos.find((r) => r.full_name === repo);
-  return found ? prDetailPath(encodeURIComponent(found.id), number) : null;
+/** Link to the winner's PR detail page. */
+export function awardHref(award: LeaderboardAward): string {
+  return prDetailPath(encodeURIComponent(award.repo_id), award.number);
 }
 
 /** Whole number with thousands separators ("12,400"). */

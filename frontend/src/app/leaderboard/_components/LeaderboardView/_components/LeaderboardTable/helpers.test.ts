@@ -20,6 +20,9 @@ describe("sortRows", () => {
     expect(ids(sortRows(rows, { key: "health", dir: "desc" }))).toEqual(["c", "a", "b"]);
     expect(ids(sortRows(rows, { key: "health", dir: "asc" }))).toEqual(["a", "c", "b"]);
     expect(ids(sortRows(rows, { key: "size", dir: "desc" }))).toEqual(["a", "c", "b"]);
+    // XS is the smallest bucket
+    const withXs = rankRows([row({ pr_id: "s", size: "S" }), row({ pr_id: "x", size: "XS" }), row({ pr_id: "l", size: "XL" })]);
+    expect(ids(sortRows(withXs, { key: "size", dir: "asc" }))).toEqual(["x", "s", "l"]);
     expect(ids(sortRows(rows, { key: "rounds", dir: "asc" }))).toEqual(["a", "c", "b"]);
     expect(ids(sortRows(rows, { key: "cost", dir: "desc" }))).toEqual(["c", "a", "b"]);
     expect(ids(sortRows(rows, { key: "findings", dir: "desc" }))).toEqual(["b", "c", "a"]);
@@ -36,6 +39,15 @@ describe("nextSort", () => {
     expect(second).toEqual({ key: "cost", dir: "asc" });
     expect(nextSort(second, "cost")).toBeNull();
     expect(nextSort(second, "size")).toEqual({ key: "size", dir: "desc" });
+  });
+
+  it("starts Time ascending, then flips to descending, then back to the server rank", () => {
+    const first = nextSort(null, "time");
+    expect(first).toEqual({ key: "time", dir: "asc" });
+    const second = nextSort(first, "time");
+    expect(second).toEqual({ key: "time", dir: "desc" });
+    expect(nextSort(second, "time")).toBeNull();
+    expect(nextSort(second, "cost")).toEqual({ key: "cost", dir: "desc" });
   });
 });
 

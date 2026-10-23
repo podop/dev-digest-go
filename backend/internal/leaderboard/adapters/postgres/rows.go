@@ -32,7 +32,6 @@ type pullRow struct {
 	MergedAt        *time.Time `gorm:"column:merged_at"`
 	ClosedAt        *time.Time `gorm:"column:closed_at"`
 	FirstReviewAt   *time.Time `gorm:"column:first_review_at"`
-	Reviewed        bool       `gorm:"column:reviewed"`
 }
 
 type reviewRow struct {
@@ -45,9 +44,12 @@ type reviewRow struct {
 }
 
 type findingRow struct {
+	ID          string     `gorm:"column:id"`
 	ReviewID    string     `gorm:"column:review_id"`
 	File        string     `gorm:"column:file"`
+	StartLine   int        `gorm:"column:start_line"`
 	Severity    string     `gorm:"column:severity"`
+	Title       string     `gorm:"column:title"`
 	AcceptedAt  *time.Time `gorm:"column:accepted_at"`
 	DismissedAt *time.Time `gorm:"column:dismissed_at"`
 }

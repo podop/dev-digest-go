@@ -53,8 +53,8 @@ func TestResolveWindow(t *testing.T) {
 		},
 		{
 			name: "30d Kyiv", key: domain.Period30d, loc: kyiv, now: "2026-10-22T12:00:00Z",
-			from: "2026-09-23T00:00:00+03:00", to: "2026-10-23T00:00:00+03:00",
-			prevFrom: "2026-08-24T00:00:00+03:00", prevTo: "2026-09-23T00:00:00+03:00", days: 30, wantKey: domain.Period30d,
+			from: "2026-09-23T00:00:00+03:00", to: "2026-10-23T00:00:00+03:00", // D19: no previous window
+			days: 30, wantKey: domain.Period30d,
 		},
 		{
 			name: "week UTC on a Monday midnight is that Monday", key: domain.PeriodWeek, loc: time.UTC, now: "2026-10-19T00:00:00Z",
@@ -76,7 +76,7 @@ func TestResolveWindow(t *testing.T) {
 			// 22:30Z is already Friday 01:30 in Kyiv: the local day decides, not the UTC day.
 			name: "local date differs from UTC date", key: domain.Period30d, loc: kyiv, now: "2026-10-22T22:30:00Z",
 			from: "2026-09-24T00:00:00+03:00", to: "2026-10-24T00:00:00+03:00",
-			prevFrom: "2026-08-25T00:00:00+03:00", prevTo: "2026-09-24T00:00:00+03:00", days: 30, wantKey: domain.Period30d,
+			days: 30, wantKey: domain.Period30d,
 		},
 		{
 			name: "week in a zone behind UTC", key: domain.PeriodWeek, loc: windowTestZone(t, "America/Los_Angeles"),
@@ -109,16 +109,26 @@ func TestResolveWindow(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			now := windowTestUTC(t, tc.now)
 			w := domain.ResolveWindow(tc.key, tc.loc, now)
-			got := [4]string{rfc(w.From), rfc(w.To), rfc(w.PrevFrom), rfc(w.PrevTo)}
-			want := [4]string{tc.from, tc.to, tc.prevFrom, tc.prevTo}
-			if got != want {
-				t.Errorf("ResolveWindow(%s, %v, %s) from/to/prevFrom/prevTo = %v, want %v", tc.key, tc.loc, tc.now, got, want)
+			if got := [2]string{rfc(w.From), rfc(w.To)}; got != [2]string{tc.from, tc.to} {
+				t.Errorf("ResolveWindow(%s, %v, %s) from/to = %v, want %v", tc.key, tc.loc, tc.now, got, [2]string{tc.from, tc.to})
 			}
 			if w.Days != tc.days || w.Key != tc.wantKey {
 				t.Errorf("ResolveWindow(%s, %v, %s) Days/Key = %d/%s, want %d/%s", tc.key, tc.loc, tc.now, w.Days, w.Key, tc.days, tc.wantKey)
 			}
-			if !w.PrevTo.Equal(w.From) {
-				t.Errorf("ResolveWindow PrevTo = %s, want it equal to From %s", rfc(w.PrevTo), rfc(w.From))
+			if tc.prevFrom == "" {
+				if w.HasPrev || !w.PrevFrom.IsZero() || !w.PrevTo.IsZero() || w.ReadFrom() != w.From || w.Prev().Contains(w.From) {
+					t.Errorf("ResolveWindow(%s, %v, %s) = %+v, want no previous window and ReadFrom == From", tc.key, tc.loc, tc.now, w)
+				}
+				return
+			}
+			if !w.HasPrev {
+				t.Fatalf("ResolveWindow(%s, %v, %s) HasPrev = false, want a previous window", tc.key, tc.loc, tc.now)
+			}
+			if got := [2]string{rfc(w.PrevFrom), rfc(w.PrevTo)}; got != [2]string{tc.prevFrom, tc.prevTo} {
+				t.Errorf("ResolveWindow(%s, %v, %s) prevFrom/prevTo = %v, want %v", tc.key, tc.loc, tc.now, got, [2]string{tc.prevFrom, tc.prevTo})
+			}
+			if !w.PrevTo.Equal(w.From) || w.ReadFrom() != w.PrevFrom {
+				t.Errorf("ResolveWindow PrevTo = %s, ReadFrom = %s, want PrevTo == From %s and ReadFrom == PrevFrom", rfc(w.PrevTo), rfc(w.ReadFrom()), rfc(w.From))
 			}
 			if w.Prev().To != w.PrevTo || w.Cur().From != w.From {
 				t.Errorf("Cur()/Prev() do not mirror the window fields: %+v", w)
@@ -134,15 +144,15 @@ func TestResolveWindow_DSTDaysKeepTheirLength(t *testing.T) {
 		key      domain.PeriodKey
 		now      string
 		wantSpan time.Duration
-		wantPrev time.Duration
+		wantPrev time.Duration // 0: no previous window
 	}{
 		// 2026-03-29 has 23 h (spring forward), 2026-10-25 has 25 h (fall back).
 		{"week with a 23 h day", domain.PeriodWeek, "2026-03-25T10:00:00Z", 7*24*time.Hour - time.Hour, 7 * 24 * time.Hour},
 		{"week with a 25 h day", domain.PeriodWeek, "2026-10-22T10:00:00Z", 7*24*time.Hour + time.Hour, 7 * 24 * time.Hour},
 		{"week after the 25 h day has a 25 h previous week", domain.PeriodWeek, "2026-10-28T10:00:00Z", 7 * 24 * time.Hour, 7*24*time.Hour + time.Hour},
 		{"last_week with a 23 h day", domain.PeriodLastWeek, "2026-04-02T10:00:00Z", 7*24*time.Hour - time.Hour, 7 * 24 * time.Hour},
-		{"30d across the 23 h day", domain.Period30d, "2026-04-05T10:00:00Z", 30*24*time.Hour - time.Hour, 30 * 24 * time.Hour},
-		{"30d across the 25 h day", domain.Period30d, "2026-10-30T10:00:00Z", 30*24*time.Hour + time.Hour, 30 * 24 * time.Hour},
+		{"30d across the 23 h day", domain.Period30d, "2026-04-05T10:00:00Z", 30*24*time.Hour - time.Hour, 0},
+		{"30d across the 25 h day", domain.Period30d, "2026-10-30T10:00:00Z", 30*24*time.Hour + time.Hour, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -181,7 +191,10 @@ func TestWindowDayIndex_HalfOpenBounds(t *testing.T) {
 					t.Errorf("%s window DayIndex(%s) [%s] = %d, want %d", key, rfc(tc.at), tc.name, got, tc.want)
 				}
 			}
-			if !w.Cur().Contains(w.From) || w.Cur().Contains(w.To) || !w.Prev().Contains(w.PrevFrom) || w.Prev().Contains(w.From) {
+			if !w.Cur().Contains(w.From) || w.Cur().Contains(w.To) {
+				t.Errorf("%s window span is not half-open: cur %+v", key, w.Cur())
+			}
+			if w.HasPrev && (!w.Prev().Contains(w.PrevFrom) || w.Prev().Contains(w.From)) {
 				t.Errorf("%s window spans are not half-open: cur %+v prev %+v", key, w.Cur(), w.Prev())
 			}
 		})

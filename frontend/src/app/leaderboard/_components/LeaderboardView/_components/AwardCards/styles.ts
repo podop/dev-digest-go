@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 export const s = {
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 14 } satisfies CSSProperties,
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(165px, 1fr))", gap: 14 } satisfies CSSProperties,
   card: {
     background: "var(--bg-elevated)",
     border: "1px solid var(--border)",
@@ -28,6 +28,5 @@ export const s = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   } satisfies CSSProperties,
-  ref: { fontSize: 12.5, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
   prTitle: { fontSize: 13, color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
 } as const;

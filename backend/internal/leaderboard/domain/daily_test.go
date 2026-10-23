@@ -18,30 +18,105 @@ func aggRowReviews(reviews ...domain.RowReview) domain.Row {
 	return r
 }
 
-func TestDailyOnePointPerDay(t *testing.T) {
-	got := domain.Daily(aggWindow(), nil, nil)
-	if len(got) != 7 {
-		t.Fatalf("Daily(week) returned %d days, want 7", len(got))
+func aggDayPoint(date string, opened, merged, critical int) domain.ActivityPoint {
+	return domain.ActivityPoint{From: date, To: date, Opened: opened, Merged: merged, Critical: critical}
+}
+
+func aggPoints(points []domain.ActivityPoint) []string {
+	var out []string
+	for _, p := range points {
+		out = append(out, p.From+".."+p.To)
 	}
-	if got[0].Date != "2026-10-05" || got[6].Date != "2026-10-11" {
-		t.Errorf("Daily(week) dates = %s..%s, want 2026-10-05..2026-10-11", got[0].Date, got[6].Date)
+	return out
+}
+
+func TestActivityWeekHasOnePointPerDay(t *testing.T) {
+	got := domain.Activity(aggWindow(), nil, nil)
+	if got.Granularity != domain.GranularityDay {
+		t.Errorf("Activity(week) granularity = %q, want %q", got.Granularity, domain.GranularityDay)
 	}
-	for _, d := range got {
-		if d.Opened != 0 || d.Merged != 0 || d.Critical != 0 {
-			t.Errorf("Daily(no data) day %s = %+v, want zeros", d.Date, d)
-		}
+	want := []domain.ActivityPoint{
+		aggDayPoint("2026-10-05", 0, 0, 0), aggDayPoint("2026-10-06", 0, 0, 0), aggDayPoint("2026-10-07", 0, 0, 0),
+		aggDayPoint("2026-10-08", 0, 0, 0), aggDayPoint("2026-10-09", 0, 0, 0), aggDayPoint("2026-10-10", 0, 0, 0),
+		aggDayPoint("2026-10-11", 0, 0, 0),
+	}
+	if diff := cmp.Diff(want, got.Points); diff != "" {
+		t.Errorf("Activity(week, no data) points mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestDaily30Days(t *testing.T) {
+func TestActivity30dHasMondayWeeksClippedToTheWindow(t *testing.T) {
+	tests := []struct {
+		name string
+		win  domain.Window
+		want []string
+	}{
+		{
+			// Sun 2026-09-06 .. Mon 2026-10-05: a one-day first and a one-day last week.
+			"starts on a Sunday",
+			domain.Window{Key: domain.Period30d, Location: time.UTC, From: aggAt(-29), To: aggAt(1), Days: 30},
+			[]string{"2026-09-06..2026-09-06", "2026-09-07..2026-09-13", "2026-09-14..2026-09-20", "2026-09-21..2026-09-27", "2026-09-28..2026-10-04", "2026-10-05..2026-10-05"},
+		},
+		{
+			// Mon 2026-09-07 .. Tue 2026-10-06: five weeks, the last one clipped.
+			"starts on a Monday",
+			domain.Window{Key: domain.Period30d, Location: time.UTC, From: aggAt(-28), To: aggAt(2), Days: 30},
+			[]string{"2026-09-07..2026-09-13", "2026-09-14..2026-09-20", "2026-09-21..2026-09-27", "2026-09-28..2026-10-04", "2026-10-05..2026-10-06"},
+		},
+		{
+			// Tue 2026-09-08 .. Wed 2026-10-07.
+			"starts on a Tuesday",
+			domain.Window{Key: domain.Period30d, Location: time.UTC, From: aggAt(-27), To: aggAt(3), Days: 30},
+			[]string{"2026-09-08..2026-09-13", "2026-09-14..2026-09-20", "2026-09-21..2026-09-27", "2026-09-28..2026-10-04", "2026-10-05..2026-10-07"},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := domain.Activity(tc.win, nil, nil)
+			if got.Granularity != domain.GranularityWeek {
+				t.Errorf("Activity(30d) granularity = %q, want %q", got.Granularity, domain.GranularityWeek)
+			}
+			if diff := cmp.Diff(tc.want, aggPoints(got.Points)); diff != "" {
+				t.Errorf("Activity(30d) points mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestActivity30dBucketsIntoWeeks(t *testing.T) {
 	win := domain.Window{Key: domain.Period30d, Location: time.UTC, From: aggAt(-29), To: aggAt(1), Days: 30}
-	got := domain.Daily(win, nil, nil)
-	if len(got) != 30 || got[0].Date != "2026-09-06" || got[29].Date != "2026-10-05" {
-		t.Errorf("Daily(30d) = %d days %s..%s, want 30 days 2026-09-06..2026-10-05", len(got), got[0].Date, got[len(got)-1].Date)
+	pulls := []domain.PullFact{
+		{PRID: "a", OpenedAt: aggPtr(aggAt(-29, 23)), MergedAt: aggPtr(aggAt(-26))}, // Sun Sep 6 / Wed Sep 9
+		{PRID: "b", OpenedAt: aggPtr(aggAt(-1)), MergedAt: aggPtr(aggAt(0, 5))},     // Sun Oct 4 / Mon Oct 5
+		{PRID: "before", OpenedAt: aggPtr(aggAt(-29).Add(-time.Second))},            // before the window
+		{PRID: "after", OpenedAt: aggPtr(aggAt(1))},                                 // exactly To
+	}
+	rows := []domain.Row{
+		aggRowReviews(domain.RowReview{CreatedAt: aggAt(-8, 12), Findings: domain.FindingCounts{Critical: 3}}), // Sun Sep 27
+		aggRowReviews(domain.RowReview{CreatedAt: aggAt(-7), Findings: domain.FindingCounts{Critical: 2}}),     // Mon Sep 28
+	}
+	got := domain.Activity(win, rows, pulls)
+	want := []domain.ActivityPoint{
+		{From: "2026-09-06", To: "2026-09-06", Opened: 1},
+		{From: "2026-09-07", To: "2026-09-13", Merged: 1},
+		{From: "2026-09-14", To: "2026-09-20"},
+		{From: "2026-09-21", To: "2026-09-27", Critical: 3},
+		{From: "2026-09-28", To: "2026-10-04", Opened: 1, Critical: 2},
+		{From: "2026-10-05", To: "2026-10-05", Merged: 1},
+	}
+	if diff := cmp.Diff(want, got.Points); diff != "" {
+		t.Errorf("Activity(30d) points mismatch (-want +got):\n%s", diff)
+	}
+	var sum int
+	for _, p := range got.Points {
+		sum += p.Critical
+	}
+	if kpi := domain.Kpis(domain.Span{From: win.From, To: win.To}, rows, domain.Facts{}); sum != kpi.CriticalFound {
+		t.Errorf("Σ Activity(30d).Critical = %d, Kpis.CriticalFound = %d, want equal", sum, kpi.CriticalFound)
 	}
 }
 
-func TestDailyBucketsOpenedMergedCritical(t *testing.T) {
+func TestActivityBucketsOpenedMergedCritical(t *testing.T) {
 	pulls := []domain.PullFact{
 		{PRID: "a", OpenedAt: aggPtr(aggAt(0, 23)), MergedAt: aggPtr(aggAt(2, 1))},
 		{PRID: "b", OpenedAt: aggPtr(aggAt(0, 1))}, // opened but never reviewed: counts (Q7)
@@ -57,22 +132,22 @@ func TestDailyBucketsOpenedMergedCritical(t *testing.T) {
 		),
 		aggRowReviews(domain.RowReview{CreatedAt: aggAt(1, 20), Findings: domain.FindingCounts{Critical: 4}}),
 	}
-	got := domain.Daily(aggWindow(), rows, pulls)
-	want := []domain.Day{
-		{Date: "2026-10-05", Opened: 2, Merged: 1},
-		{Date: "2026-10-06", Critical: 6},
-		{Date: "2026-10-07", Merged: 2},
-		{Date: "2026-10-08", Critical: 1},
-		{Date: "2026-10-09"},
-		{Date: "2026-10-10"},
-		{Date: "2026-10-11"},
+	got := domain.Activity(aggWindow(), rows, pulls)
+	want := []domain.ActivityPoint{
+		aggDayPoint("2026-10-05", 2, 1, 0),
+		aggDayPoint("2026-10-06", 0, 0, 6),
+		aggDayPoint("2026-10-07", 0, 2, 0),
+		aggDayPoint("2026-10-08", 0, 0, 1),
+		aggDayPoint("2026-10-09", 0, 0, 0),
+		aggDayPoint("2026-10-10", 0, 0, 0),
+		aggDayPoint("2026-10-11", 0, 0, 0),
 	}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("Daily(week) mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, got.Points); diff != "" {
+		t.Errorf("Activity(week) points mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestDailyCriticalSumEqualsCriticalFound(t *testing.T) {
+func TestActivityCriticalSumEqualsCriticalFound(t *testing.T) {
 	rows := []domain.Row{
 		aggRowReviews(
 			domain.RowReview{CreatedAt: aggAt(0), Findings: domain.FindingCounts{Critical: 3}}, // exactly From: in
@@ -81,25 +156,25 @@ func TestDailyCriticalSumEqualsCriticalFound(t *testing.T) {
 		aggRowReviews(domain.RowReview{CreatedAt: aggAt(4, 12), Findings: domain.FindingCounts{Critical: 7, Suggestion: 3}}),
 	}
 	var sum int
-	for _, d := range domain.Daily(aggWindow(), rows, nil) {
-		sum += d.Critical
+	for _, p := range domain.Activity(aggWindow(), rows, nil).Points {
+		sum += p.Critical
 	}
 	kpi := domain.Kpis(aggSpan(), rows, domain.Facts{})
 	if sum != kpi.CriticalFound || sum != 12 {
-		t.Errorf("Σ Daily(rows).Critical = %d, Kpis(rows).CriticalFound = %d, want both 12", sum, kpi.CriticalFound)
+		t.Errorf("Σ Activity(rows).Critical = %d, Kpis(rows).CriticalFound = %d, want both 12", sum, kpi.CriticalFound)
 	}
 }
 
-func TestDailyReviewAtExactlyToBelongsToTheNextWindow(t *testing.T) {
+func TestActivityReviewAtExactlyToBelongsToTheNextWindow(t *testing.T) {
 	rows := []domain.Row{aggRowReviews(domain.RowReview{CreatedAt: aggAt(7), Findings: domain.FindingCounts{Critical: 5}})}
-	for _, d := range domain.Daily(aggWindow(), rows, nil) {
-		if d.Critical != 0 {
-			t.Errorf("Daily(review at To) day %s critical = %d, want 0", d.Date, d.Critical)
+	for _, p := range domain.Activity(aggWindow(), rows, nil).Points {
+		if p.Critical != 0 {
+			t.Errorf("Activity(review at To) day %s critical = %d, want 0", p.From, p.Critical)
 		}
 	}
 }
 
-func TestDailyFollowsLocalMidnightsAcrossDST(t *testing.T) {
+func TestActivityFollowsLocalMidnightsAcrossDST(t *testing.T) {
 	ny, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		t.Skipf("no zone database: %v", err)
@@ -112,16 +187,16 @@ func TestDailyFollowsLocalMidnightsAcrossDST(t *testing.T) {
 	earlySunday := time.Date(2026, time.November, 1, 0, 30, 0, 0, ny)
 	pulls := []domain.PullFact{{PRID: "a", OpenedAt: &lateSunday, MergedAt: &earlySunday}}
 
-	got := domain.Daily(win, nil, pulls)
+	got := domain.Activity(win, nil, pulls).Points
 	wantDates := []string{"2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30", "2026-10-31", "2026-11-01"}
 	var dates []string
-	for _, d := range got {
-		dates = append(dates, d.Date)
+	for _, p := range got {
+		dates = append(dates, p.From)
 	}
 	if diff := cmp.Diff(wantDates, dates); diff != "" {
-		t.Fatalf("Daily(DST week) dates mismatch (-want +got):\n%s", diff)
+		t.Fatalf("Activity(DST week) dates mismatch (-want +got):\n%s", diff)
 	}
 	if last := got[6]; last.Opened != 1 || last.Merged != 1 {
-		t.Errorf("Daily(DST week) last day = %+v, want opened 1 and merged 1", last)
+		t.Errorf("Activity(DST week) last day = %+v, want opened 1 and merged 1", last)
 	}
 }

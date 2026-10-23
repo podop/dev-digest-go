@@ -4,6 +4,7 @@ import { renderWithProviders, screen, within } from "@/test/render";
 import { HealthBySize } from "./HealthBySize";
 
 const buckets: LeaderboardSizeBucket[] = [
+  { size: "XS", prs: 3, avg_health: 80, avg_findings: 1 },
   { size: "S", prs: 4, avg_health: 91.4, avg_findings: 0.5 },
   { size: "M", prs: 1, avg_health: 62, avg_findings: 3 },
   { size: "L", prs: 2, avg_health: 30.2, avg_findings: 7.25 },
@@ -16,24 +17,29 @@ describe("HealthBySize", () => {
 
     expect(screen.getByText("Smaller PRs ship cleaner.")).toBeInTheDocument();
     const rows = within(screen.getByRole("list", { name: "Health by PR size" })).getAllByRole("listitem");
-    expect(rows.map((r) => r.getAttribute("data-series"))).toEqual(["S", "M", "L", "XL"]);
+    expect(rows.map((r) => r.getAttribute("data-series"))).toEqual(["XS", "S", "M", "L", "XL"]);
 
-    const s = within(rows[0]!);
+    // 85 / 60 bands: 80 is warn (it would be ok under CircularScore's 75 band)
+    const xs = within(rows[0]!);
+    expect(xs.getByText("3 PRs · 1 findings")).toBeInTheDocument();
+    expect(xs.getByRole("img", { name: "Size XS: average health 80" }).firstElementChild).toHaveStyle({ background: "var(--warn)" });
+
+    const s = within(rows[1]!);
     expect(s.getByText("91")).toBeInTheDocument();
     expect(s.getByText("4 PRs · 0.5 findings")).toBeInTheDocument();
     const sBar = s.getByRole("img", { name: "Size S: average health 91" });
     expect(sBar.firstElementChild).toHaveStyle({ width: "91.4%", background: "var(--ok)" });
 
-    const m = within(rows[1]!);
+    const m = within(rows[2]!);
     expect(m.getByText("1 PR · 3 findings")).toBeInTheDocument();
     expect(m.getByRole("img").firstElementChild).toHaveStyle({ background: "var(--warn)" });
 
-    const l = within(rows[2]!);
+    const l = within(rows[3]!);
     expect(l.getByText("30")).toBeInTheDocument();
     expect(l.getByText("2 PRs · 7.3 findings")).toBeInTheDocument();
     expect(l.getByRole("img").firstElementChild).toHaveStyle({ background: "var(--crit)" });
 
-    const xl = within(rows[3]!);
+    const xl = within(rows[4]!);
     expect(xl.getByText("—")).toBeInTheDocument();
     expect(xl.queryByRole("img")).not.toBeInTheDocument();
     expect(xl.queryByText(/PRs/)).not.toBeInTheDocument();

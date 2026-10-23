@@ -60,7 +60,7 @@ func HotFiles(rows []Row) []HotFile {
 	return out[:min(len(out), HotFilesLimit)]
 }
 
-// HealthBySize returns the four size buckets S, M, L, XL in order (spec FR15). Rows of unknown
+// HealthBySize returns the five size buckets XS, S, M, L, XL in order (spec FR15). Rows of unknown
 // size (EC9) are left out. AvgHealth is the rounded mean over the bucket's rows that have a
 // health; AvgFindings is the mean number of snapshot findings per PR with one decimal. Both are
 // nil when there is nothing to average (no rows; for health also no row with a health).

@@ -1,5 +1,5 @@
 /* Test fixtures for the leaderboard table folder. */
-import type { LeaderboardRow, LeaderboardRowReview } from "@devdigest/shared";
+import type { LeaderboardRow, LeaderboardRowReview, LeaderboardTopFinding } from "@devdigest/shared";
 
 export function review(o: Partial<LeaderboardRowReview> = {}): LeaderboardRowReview {
   return {
@@ -8,6 +8,19 @@ export function review(o: Partial<LeaderboardRowReview> = {}): LeaderboardRowRev
     agent_name: "Security agent",
     score: 82,
     findings: { CRITICAL: 1, WARNING: 0, SUGGESTION: 2 },
+    ...o,
+  };
+}
+
+export function finding(o: Partial<LeaderboardTopFinding> = {}): LeaderboardTopFinding {
+  return {
+    finding_id: "f1",
+    severity: "CRITICAL",
+    title: "SQL injection in the invoice query",
+    file: "internal/billing/invoice.go",
+    start_line: 88,
+    agent_name: "Security agent",
+    state: "open",
     ...o,
   };
 }
@@ -39,6 +52,7 @@ export function row(o: Partial<LeaderboardRow> = {}): LeaderboardRow {
     opened_at: "2026-10-19T08:00:00.000Z",
     merged_at: "2026-10-19T10:00:00.000Z",
     reviews: [review()],
+    top_findings: [],
     ...o,
   };
 }

@@ -8,6 +8,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Works
 <!-- approaches and solutions that worked here -->
+- 2026-10-23 — cmd/server component tests of the PR poller (leaderboard_wiring_test.go TestPoll_StartsWhenEnabled): pre-insert a repo 'o/r' into pgtest.Migrated, start with noSeed and PRPollEnabled set in spec.config — the shared GitHub stub serves any owner except acme/ and the poller's first round runs at start, so no tick or sleep is needed; a GET /leaderboard test that must be empty sets spec.now years after the seed instead of skipping the seed, because without the seeded workspace + user rows the tenancy resolver returns 500 → copy this setup for poller/leaderboard component tests
 
 ## What Doesn't Work
 <!-- dead ends and anti-patterns — the most valuable section -->
@@ -30,6 +31,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-23 — internal/tenancy/tenancy.go:48 + internal/seed/seed.go:178: every request resolves its workspace by the fixed name tenancy.DefaultWorkspaceName ('default'), and the startup seed creates a 'default' workspace when none has that name → never let a user-facing rename write workspaces.name; keep the lookup key and store the display name separately (or change both lookup and seed), or after the next restart all requests land in a new empty workspace (Slice B spec G1)
 - 2026-10-23 — pulls/adapters/postgres UpsertListed: only the columns named in the ON CONFLICT DoUpdates list are refreshed on existing PRs — a pullRow field outside it is written on insert only, which is how GitHub merged_at stayed missing → add new synced PR columns to DoUpdates and test insert + update (TestUpsertListed_writesMergeStateOnInsertAndUpdate)
 - 2026-10-23 — migrations + platform/postgres/migrate/migrate_test.go: the Node-parity tests (TestUp_MatchesNodeSchema, Down→Up, Status, applied-version log) assumed migrations.FS holds only 0001 and broke once 0002_pr_merge_state was added → run them on baselineFS(t) (fstest.MapFS with 0001 only) and count versions via len(Load(migrations.FS)); every other package's pgtest DB gets the full schema
 - 2026-10-23 — CI runner (cmd/devdigest-runner) output lands in the GitHub job log, which parses '::cmd::' / '##[cmd]' lines: model and repo text is printed between '::stop-commands::<random token>' and the matching resume line (commandSafeWriter), and FAILED lines are capped (MaxFailureBytes). CI ingest skips runs whose head repository differs from the base repo (fork PR could forge the artifact) — WARN 'ci refresh: run not inspected' reason=head_repository_differs.

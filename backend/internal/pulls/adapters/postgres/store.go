@@ -142,6 +142,24 @@ func (s *Store) MarkPolled(ctx context.Context, workspaceID, repoID string, at t
 	return nil
 }
 
+// ListPollTargets returns every repository of every workspace for the background poll, grouped by
+// workspace and ordered by full name inside it.
+func (s *Store) ListPollTargets(ctx context.Context) ([]domain.PollTarget, error) {
+	var rows []repoRow
+	err := s.db.WithContext(ctx).
+		Select("id", "workspace_id", "owner", "name").
+		Order("workspace_id, full_name, id").
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("list poll targets: %w", err)
+	}
+	out := make([]domain.PollTarget, len(rows))
+	for i, r := range rows {
+		out[i] = domain.PollTarget{WorkspaceID: r.WorkspaceID, Repo: domain.Repo{ID: r.ID, Owner: r.Owner, Name: r.Name}}
+	}
+	return out, nil
+}
+
 // FindPull returns a PR of the workspace, or domain.ErrPullNotFound.
 func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.Pull, error) {
 	var row pullRow

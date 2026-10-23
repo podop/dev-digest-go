@@ -36,6 +36,7 @@ func TestLoad(t *testing.T) {
 				AutoSeed:               true,
 				RepoIntelEnabled:       true,
 				ReviewIntentEnabled:    true,
+				PRPollEnabled:          true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -68,6 +69,7 @@ func TestLoad(t *testing.T) {
 				AutoSeed:               false,
 				RepoIntelEnabled:       true,
 				ReviewIntentEnabled:    true,
+				PRPollEnabled:          true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -94,6 +96,7 @@ func TestLoad(t *testing.T) {
 				AutoSeed:               true,
 				RepoIntelEnabled:       true,
 				ReviewIntentEnabled:    true,
+				PRPollEnabled:          true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -122,6 +125,7 @@ func TestLoad(t *testing.T) {
 				AutoSeed:               true,
 				RepoIntelEnabled:       true,
 				ReviewIntentEnabled:    true,
+				PRPollEnabled:          true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -152,6 +156,7 @@ func TestLoad(t *testing.T) {
 				LLMMockDelay:           1500 * time.Millisecond,
 				RepoIntelEnabled:       true,
 				ReviewIntentEnabled:    true,
+				PRPollEnabled:          true,
 				ProjectContextGlobs:    []string{"docs/*.md", "{a,b}/**/*.md"},
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -177,6 +182,7 @@ func TestLoad(t *testing.T) {
 				LLMMockDelay:           60 * time.Second,
 				RepoIntelEnabled:       true,
 				ReviewIntentEnabled:    true,
+				PRPollEnabled:          true,
 				ProjectContextGlobs:    defaultGlobs,
 				ReviewAgentConcurrency: 4,
 				ReviewMapConcurrency:   3,
@@ -299,6 +305,39 @@ func TestLoadReviewIntentEnabled(t *testing.T) {
 			}
 			if got.ReviewIntentEnabled != tc.want {
 				t.Errorf("Load(REVIEW_INTENT_ENABLED=%q).ReviewIntentEnabled = %t, want %t", tc.value, got.ReviewIntentEnabled, tc.want)
+			}
+		})
+	}
+}
+
+// Leaderboard FR3 (amended): PR_POLL_ENABLED is off only when its trimmed value is exactly "false".
+func TestLoadPRPollEnabled(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		set   bool
+		want  bool
+	}{
+		{name: "unset", want: true},
+		{name: "empty", set: true, value: "", want: true},
+		{name: "true", set: true, value: "true", want: true},
+		{name: "upper case FALSE", set: true, value: "FALSE", want: true},
+		{name: "false with spaces", set: true, value: " false ", want: false},
+		{name: "false", set: true, value: "false", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			env := map[string]string{"DATABASE_URL": "x"}
+			if tc.set {
+				env["PR_POLL_ENABLED"] = tc.value
+			}
+			got, err := config.Load(func(k string) string { return env[k] })
+			if err != nil {
+				t.Fatalf("Load(PR_POLL_ENABLED=%q) error: %v", tc.value, err)
+			}
+			if got.PRPollEnabled != tc.want {
+				t.Errorf("Load(PR_POLL_ENABLED=%q).PRPollEnabled = %t, want %t", tc.value, got.PRPollEnabled, tc.want)
 			}
 		})
 	}

@@ -1,5 +1,5 @@
 import { LEADERBOARD_PERIODS, type LeaderboardPeriod, type LeaderboardPeriodKey } from "@devdigest/shared";
-import { ALL_REPOS, DEFAULT_PERIOD, REPO_ID_PATTERN } from "./constants";
+import { ALL_REPOS, DEFAULT_PERIOD, HEALTH_OK_MIN, HEALTH_WARN_MIN, REPO_ID_PATTERN } from "./constants";
 
 type RawParam = string | string[] | undefined;
 
@@ -32,6 +32,12 @@ export function leaderboardHref(period: LeaderboardPeriodKey, repo: string): str
   return `/leaderboard?period=${period}&repo=${encodeURIComponent(repo)}`;
 }
 
+/** Colour token of a health score: ≥ 85 ok, ≥ 60 warn, else crit (FR21). */
+export function healthColor(health: number): string {
+  if (health >= HEALTH_OK_MIN) return "var(--ok)";
+  return health >= HEALTH_WARN_MIN ? "var(--warn)" : "var(--crit)";
+}
+
 const YMD = /^(\d{4})-(\d{2})-(\d{2})/;
 const MS_PER_DAY = 86_400_000;
 const monthFormat = new Intl.DateTimeFormat("en", { month: "short", timeZone: "UTC" });
@@ -59,17 +65,21 @@ const lastDay = (exclusiveEnd: number): number => exclusiveEnd - MS_PER_DAY;
 
 /**
  * The date ranges of the header label (FR18) for a resolved window: `range` is the current window,
- * `previous` the one it is compared with. Dates are the calendar days of the response's local
- * times (`to` is exclusive), so the label does not depend on the browser's zone. Null when a time
- * does not parse.
+ * `previous` the one it is compared with, null when the window has none (`30d`, D19) or when nothing
+ * was compared (`compared` false: the response's `previous_summary` is null, FR25/D25). Dates are the
+ * calendar days of the response's local times (`to` is exclusive), so the label does not depend on
+ * the browser's zone. Null when a time does not parse.
  */
-export function windowRanges(period: LeaderboardPeriod): { range: string; previous: string } | null {
+export function windowRanges(period: LeaderboardPeriod, compared: boolean): { range: string; previous: string | null } | null {
   const from = calendarDay(period.from);
   const to = calendarDay(period.to);
+  if (from === null || to === null) return null;
+  const range = formatDays(from, lastDay(to));
+  if (!compared || period.previous_from === null || period.previous_to === null) return { range, previous: null };
   const prevFrom = calendarDay(period.previous_from);
   const prevTo = calendarDay(period.previous_to);
-  if (from === null || to === null || prevFrom === null || prevTo === null) return null;
-  return { range: formatDays(from, lastDay(to)), previous: formatDays(prevFrom, lastDay(prevTo)) };
+  if (prevFrom === null || prevTo === null) return null;
+  return { range, previous: formatDays(prevFrom, lastDay(prevTo)) };
 }
 
 const RELATIVE_UNITS: readonly (readonly [Intl.RelativeTimeFormatUnit, number])[] = [

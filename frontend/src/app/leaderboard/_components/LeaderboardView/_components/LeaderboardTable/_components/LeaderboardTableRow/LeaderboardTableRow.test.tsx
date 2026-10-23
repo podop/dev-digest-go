@@ -1,15 +1,15 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderWithProviders, screen, cleanup } from "@/test/render";
-import { row } from "../../fixtures";
+import { finding, row } from "../../fixtures";
 import { LeaderboardTableRow } from "./LeaderboardTableRow";
 
 afterEach(cleanup);
 
-function renderRow(o: Parameters<typeof row>[0] = {}, onToggle = () => {}, open = false) {
+function renderRow(o: Parameters<typeof row>[0] = {}, handlers: { onToggle?: () => void; onOpen?: () => void } = {}, open = false) {
   return renderWithProviders(
     <table>
       <tbody>
-        <LeaderboardTableRow row={row(o)} rank={3} open={open} onToggle={onToggle} />
+        <LeaderboardTableRow row={row(o)} rank={3} open={open} onToggle={handlers.onToggle ?? (() => {})} onOpen={handlers.onOpen ?? (() => {})} />
       </tbody>
     </table>,
   );
@@ -29,6 +29,7 @@ describe("LeaderboardTableRow", () => {
     expect(screen.getByText("low")).toBeInTheDocument();
     expect(screen.getByText("90")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "0 critical, 2 warning, 0 suggestion" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "acme/api#12" })).toHaveAttribute("href", "/repos/r1/pulls/12");
     expect(screen.getByText("→ review 0.8 h")).toBeInTheDocument();
     expect(screen.getByText("→ merge 1.9 h")).toBeInTheDocument();
     expect(screen.getByText("$0.0039")).toBeInTheDocument();
@@ -42,17 +43,39 @@ describe("LeaderboardTableRow", () => {
     expect(screen.getAllByText("—")).toHaveLength(2);
   });
 
-  it("toggles from the chevron button and from a click on the row, not from the PR link", async () => {
+  it("shows the XS size bucket, and the open critical chip with its outline", () => {
+    renderRow({ size: "XS", additions: 20, deletions: 5, files_count: 1, findings: { CRITICAL: 2, WARNING: 0, SUGGESTION: 0 }, open_critical: 1 });
+    expect(screen.getByText("XS")).toBeInTheDocument();
+    expect(screen.getByText("C 2").style.borderColor).toBe("var(--crit)");
+    expect(screen.getByRole("img", { name: "2 critical (1 still open), 0 warning, 0 suggestion" })).toBeInTheDocument();
+  });
+
+  it("opens the PR from a click on the row, and only expands from the chevron", async () => {
     const onToggle = vi.fn();
-    const { user } = renderRow({}, onToggle, true);
-    const chevron = screen.getByRole("button", { name: "Show reviews of acme/api#12" });
+    const onOpen = vi.fn();
+    const { user } = renderRow({}, { onToggle, onOpen }, true);
+
+    const chevron = screen.getByRole("button", { name: "Show findings of acme/api#12" });
     expect(chevron).toHaveAttribute("aria-expanded", "true");
     await user.click(chevron);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+    expect(onOpen).not.toHaveBeenCalled();
+
     await user.click(screen.getByText("Add rate limiting"));
-    expect(onToggle).toHaveBeenCalledTimes(2);
-    const link = screen.getByRole("link", { name: "Open PR acme/api#12" });
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    const link = screen.getByRole("link", { name: "acme/api#12" });
     link.addEventListener("click", (e) => e.preventDefault()); // jsdom cannot navigate
     await user.click(link);
-    expect(onToggle).toHaveBeenCalledTimes(2);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the top findings of an expanded row, or the empty text", () => {
+    const { unmount } = renderRow({ top_findings: [finding({ title: "SQL injection" })] }, {}, true);
+    expect(screen.getByText("internal/billing/invoice.go:88")).toBeInTheDocument();
+    unmount();
+    renderRow({ top_findings: [] }, {}, true);
+    expect(screen.getByText("No notable findings recorded.")).toBeInTheDocument();
   });
 });

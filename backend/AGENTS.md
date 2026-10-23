@@ -34,14 +34,18 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   end, in parallel with the eval executor (aborts its runs, ≤ 5 s; `ErrNotDrained` = warning, the
   next start reaps them), the intent, brief and onboarding services cancelling their in-flight
   generations (≤ 5 s; Echo never cancels the context of a request in flight, so
-  `platform/inflight` is stopped before Echo) and the job runner (10 s); only then does Echo (own
+  `platform/inflight` is stopped before Echo) and the job runner (10 s) and the PR poller (`PR_POLL_ENABLED`, runs on the stop ctx, returns ≤ 5 s;
+  `listen` waits for it before `serve` closes the DB); only then does Echo (own
   start context) drain HTTP (20 s). The SSE route `GET /runs/:id/events` is exempt from rate
   limiting; `POST /pulls/:id/review` and `POST /pulls/:id/intent/refresh` have a 10/min bucket
   each; `POST /agents/:id/eval-runs` and `POST /skills/:id/eval-runs` share ONE bucket
   (`eval-run-start`, 10/min per workspace, `httpx.Bucket.Name` + `Key`), `POST /eval-runs/run-all`
   has its own per-IP bucket (`evalshttp.RateLimitBuckets()`). Phase 5 contexts: `intent`,
   `smartdiff`, `blast`, `brief`, `onboarding`, `performance` (brief and the review hook reach
-  intent, blast, documents and roles through peers adapters). `REVIEW_INTENT_ENABLED` (default on,
+  intent, blast, documents and roles through peers adapters). `PR_POLL_ENABLED` (default on, off only on `false`; the zero `config.Config` of the component tests is off)
+  starts the background PR poll (`pulls/app.Poller`, its own non-retrying GitHub client; interval = each
+  workspace's Settings `polling_interval_min`, read through `settingsIntervals` in `cmd/server/poll.go`).
+  `REVIEW_INTENT_ENABLED` (default on,
   off only on `false`) decides whether `cmd` wires `executor.Deps.Intent`; off leaves it nil, which
   is Phase 4 behaviour exactly. Test seams in `cmd/server`: `options.now` (clock) and
   `intentBudget` / `briefBudget` / `onboardingBudget` / `evalCaseBudget`, `runner` (a fake

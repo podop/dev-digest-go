@@ -1,7 +1,8 @@
 import type { CSSProperties } from "react";
 
 export const s = {
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 14 } satisfies CSSProperties,
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: 14 } satisfies CSSProperties,
+  alert: { color: "var(--crit)" } satisfies CSSProperties,
   delta: { position: "relative", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" } satisfies CSSProperties,
   srOnly: {
     position: "absolute",

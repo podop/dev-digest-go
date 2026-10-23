@@ -3,24 +3,22 @@
    No winner = a muted "—". Presentational. */
 "use client";
 
-import React from "react";
+import type React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { LeaderboardAward } from "@devdigest/shared";
 import { Icon } from "@devdigest/ui";
 import { CostText } from "@/components/cost-text";
 import { formatDuration, formatScore } from "../KpiTiles/helpers";
-import { formatCount, type AwardSpec } from "./helpers";
+import { awardHref, formatCount, type AwardSpec } from "./helpers";
 import { s } from "./styles";
 
 export interface AwardCardProps {
   spec: AwardSpec;
   award: LeaderboardAward | null;
-  /** PR detail page of the winner; null when the repository is unknown (the reference is plain text). */
-  href: string | null;
 }
 
-export function AwardCard({ spec, award, href }: AwardCardProps) {
+export function AwardCard({ spec, award }: AwardCardProps) {
   const t = useTranslations("leaderboardHighlights");
   const AwardIcon = Icon[spec.icon];
   const title = t(`awards.${spec.key}.title`);
@@ -57,15 +55,9 @@ export function AwardCard({ spec, award, href }: AwardCardProps) {
             </span>
             <span style={s.unit}>{t(`awards.${spec.key}.unit`, { count: award.value })}</span>
           </div>
-          {href ? (
-            <Link href={href} className="mono" title={reference ?? undefined} style={s.link}>
-              {reference}
-            </Link>
-          ) : (
-            <span className="mono" title={reference ?? undefined} style={s.ref}>
-              {reference}
-            </span>
-          )}
+          <Link href={awardHref(award)} className="mono" title={reference ?? undefined} style={s.link}>
+            {reference}
+          </Link>
           <span title={award.title} style={s.prTitle}>
             {award.title}
           </span>

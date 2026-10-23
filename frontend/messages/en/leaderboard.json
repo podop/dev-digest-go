@@ -5,6 +5,11 @@
   "subtitle": "How pull requests fared in review — health, findings, speed and cost",
   "loading": "Loading the leaderboard",
   "loadError": "Could not load the leaderboard",
+  "tableEmpty": {
+    "title": "No PRs were reviewed in this period",
+    "body": "Try another period or repository.",
+    "cta": "Go to Pull Requests"
+  },
   "empty": {
     "title": "No repositories yet",
     "body": "Add a repository to see its pull requests ranked.",
@@ -13,7 +18,9 @@
   "header": {
     "window": {
       "week": "Week of {range} · compared with {previous}",
-      "range": "{range} · compared with {previous}"
+      "range": "{range} · compared with {previous}",
+      "weekAlone": "Week of {range}",
+      "rangeAlone": "{range}"
     },
     "period": {
       "label": "Period",

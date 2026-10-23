@@ -8,7 +8,7 @@ const data: LeaderboardNeedsAttention = {
   items: [
     {
       pr_id: "p1",
-      repo_id: "id-p1",
+      repo_id: "r-1",
       repo: "acme/api",
       number: 41,
       title: "Rewrite the whole billing pipeline so invoices are generated lazily",
@@ -21,7 +21,7 @@ const data: LeaderboardNeedsAttention = {
     },
     {
       pr_id: "p2",
-      repo_id: "id-p2",
+      repo_id: "r 2",
       repo: "acme/web",
       number: 7,
       title: "Fix header",
@@ -48,24 +48,30 @@ describe("NeedsAttention", () => {
     expect(items).toHaveLength(2);
 
     const first = within(items[0]!);
-    expect(first.getByText("acme/api#41")).toBeInTheDocument();
+    expect(first.getByRole("link", { name: "acme/api#41" })).toHaveAttribute("href", "/repos/r-1/pulls/41");
     expect(first.getByText(data.items[0]!.title)).toBeInTheDocument();
     expect(first.getByText("dana-lee")).toBeInTheDocument();
     expect(first.getByText("DL")).toBeInTheDocument();
     expect(first.getByText("merged with 1 open critical")).toBeInTheDocument();
     expect(first.getByText("new commits since last review")).toBeInTheDocument();
+    // critical reasons are red, the others outlined neutral
+    expect(first.getByText("merged with 1 open critical")).toHaveStyle({ color: "var(--crit)" });
+    expect(first.getByText("new commits since last review")).not.toHaveStyle({ color: "var(--crit)" });
 
     const second = within(items[1]!);
-    expect(second.getByText("acme/web#7")).toBeInTheDocument();
+    expect(second.getByRole("link", { name: "acme/web#7" })).toHaveAttribute("href", "/repos/r%202/pulls/7");
     expect(second.getByText("2 open critical")).toBeInTheDocument();
     expect(second.getByText("open 6d")).toBeInTheDocument();
     expect(second.getByText("no review yet")).toBeInTheDocument();
+    expect(second.getByText("2 open critical")).toHaveStyle({ color: "var(--crit)" });
+    expect(second.getByText("open 6d")).toHaveStyle({ color: "var(--text-secondary)" });
+    expect(second.getByText("no review yet")).not.toHaveStyle({ color: "var(--crit)" });
   });
 
   it("shows the empty state and no cap note when nothing needs attention", () => {
     renderWithProviders(<NeedsAttention data={{ total: 0, items: [] }} />);
 
-    expect(screen.getByText("Nothing needs attention")).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs you this week")).toBeInTheDocument();
     expect(screen.queryByRole("list")).not.toBeInTheDocument();
     expect(screen.queryByText(/Showing/)).not.toBeInTheDocument();
   });

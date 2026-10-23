@@ -1,11 +1,12 @@
 /* HealthBySize — the leaderboard's "Health by PR size" card (FR22, mockup): one row per size bucket
-   with a bar coloured by average health (same 75 / 50 bands as CircularScore), the number and
+   with a bar coloured by average health (the 85 / 60 bands of the table's health rings), the number and
    "N PRs · X findings"; an empty bucket shows "—" and an empty track. */
 "use client";
 
 import { useTranslations } from "next-intl";
 import type { LeaderboardSizeBucket } from "@devdigest/shared";
 import { Card } from "@devdigest/ui";
+import { healthColor } from "../../helpers";
 import { s } from "./styles";
 
 export interface HealthBySizeProps {
@@ -13,7 +14,6 @@ export interface HealthBySizeProps {
 }
 
 const clamp = (n: number) => Math.min(100, Math.max(0, n));
-const healthColor = (h: number) => (h >= 75 ? "var(--ok)" : h >= 50 ? "var(--warn)" : "var(--crit)");
 const oneDecimal = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1 });
 
 function Row({ bucket }: { bucket: LeaderboardSizeBucket }) {

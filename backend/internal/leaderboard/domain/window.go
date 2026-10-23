@@ -10,8 +10,8 @@ import "time"
 //	last_week [the Monday before, this Monday)
 //	30d       [00:00 of today - 29 days, 00:00 of tomorrow)
 //
-// The previous window is the same number of calendar days directly before From (PrevTo ==
-// From). An unknown key resolves as week; a nil loc as UTC. In a zone whose local midnight
+// week and last_week have a previous window, the same number of calendar days directly before
+// From (PrevTo == From); 30d has none (HasPrev false, spec D19). An unknown key resolves as week; a nil loc as UTC. In a zone whose local midnight
 // does not exist on a day (a DST gap at 00:00) time.Date picks one of the two valid instants.
 func ResolveWindow(key PeriodKey, loc *time.Location, now time.Time) Window {
 	if loc == nil {
@@ -32,15 +32,19 @@ func ResolveWindow(key PeriodKey, loc *time.Location, now time.Time) Window {
 		startDay, days = -sinceMonday, 7
 	}
 	from := midnight(startDay)
-	return Window{
+	w := Window{
 		Key:      key,
 		Location: loc,
 		From:     from,
 		To:       midnight(startDay + days),
-		PrevFrom: midnight(startDay - days),
-		PrevTo:   from,
 		Days:     days,
 	}
+	if key != Period30d {
+		w.HasPrev = true
+		w.PrevFrom = midnight(startDay - days)
+		w.PrevTo = from
+	}
+	return w
 }
 
 // DayIndex is the zero-based calendar day of t inside the window, counted in the window's zone

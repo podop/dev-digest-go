@@ -125,3 +125,32 @@ Done when = step tests [V1]/[V2]; every UI folder has a `*.test.tsx` [K16]; gate
 - Q8 Attention: (c) never reviewed; (d) reviewed sha ≠ head; (e) updated ≤ now−7 d
 - Q9 Size null when additions, deletions, files all 0 · Q10 new commits = reviewed sha set ≠ head
 - Q11 Rate limit ends the cycle · Q12 env name (P8)
+
+## Amendment A1 — spec D18–D23 (user, 2026-10-23)
+Prototype alignment and the Settings poll interval. Supersedes the listed parts of S7, S8, S9, S15, S16, S17, S18.
+- P8′ (replaces P8) Poll interval = Settings `polling_interval_min` of each workspace (1–1,440 min, default 5), read before each cycle through a consumer-side port in `P/app` implemented over the settings store; env `PR_POLL_ENABLED` (default true) is the only switch; test configs set it false.
+- P12 Health/size/rank/attention/activity per spec FR10, FR13, FR15, FR16, FR21 (D20–D23); `previous_summary` and `period.previous_*` null for 30d or a previous week without rows (FR7, FR11).
+- P13 Top findings: snapshot findings ordered CRITICAL > WARNING > SUGGESTION, then open > accepted > dismissed, then file, start_line; ≤ 3 per row; facts gain finding id, title, start_line and the review's agent name.
+- P14 Attention population = window PRs (opened, reviewed or merged in it), current state; the store returns current-review open critical for those PRs (not only open ones).
+
+### S23 — Backend rework [W2b-u] (after S15)
+- M `L/domain/{model,rows,rank,kpis,awards,attention,files,daily}{,_test}.go`, `L/adapters/postgres/**`, `L/app/service{,_test}.go`, `L/transport/http/{dto,handlers_test}.go`
+- Change: P12–P14; `Daily` → activity with granularity day|week; DTO per spec §7 (amended)
+- Covers: AC6, AC8–AC11 (amended) · Done when: `go test -race ./internal/leaderboard/...`
+### S24 — Frontend rework [W2b-v] (after S17)
+- M `F/vendor/shared/contracts/leaderboard.ts` (§7 amended), `C/{LeaderboardTable,KpiTiles,AwardCards,NeedsAttention,HealthBySize,DailyActivity}/**`, `V/LeaderboardView.tsx`, `V/_components/Header/*`, message files
+- Change: FR18, FR19, FR21, FR22 (amended): no comparison for 30d, "no change" < 0.05, 85/60 health bands + info tooltip, sort cycle + "Reset to rank", row click → PR, top findings, XS bucket, weekly activity labels, empty texts
+- Covers: AC15–AC18 (amended)
+### S16′ — Poller [W2b-w] (replaces S16)
+- As S16 plus P8′: `IntervalSource` port (`Interval(ctx, workspaceID) (time.Duration, error)`), per-workspace due time, a 1-minute tick, interval change takes effect on the next cycle; the leaderboard spec AC3 (amended) with synctest
+### S18′ — Composition root
+- As S18 with `PR_POLL_ENABLED` instead of `PR_POLL_INTERVAL_SECONDS`; wires the settings-backed `IntervalSource`
+
+## Amendment A2 — spec FR24–FR26, D24–D26 (user, 2026-10-23), after W3
+### S25 — Poller diff-stat backfill [W3b-x]
+- M `P/app/poller{,_test}.go`, `P/app/ports.go` (stats fetch port; reuse the PR-list backfill's GitHub call), `P/adapters/postgres/store{,_test}.go` (PRs without stats, updated ≥ now−62 d, newest first, limit 20), `S/app.go` wiring if the port needs it
+- Covers: FR24, NFR3, AC21
+### S26 — Header compare + Hot files links [W3b-y]
+- M `V/helpers{,.test}.ts` / `C/Header/*` (FR25), `C/HotFiles/*` + `E/leaderboardPanels.json` (FR26, rich tag)
+- Covers: FR25, FR26, AC22
+

@@ -12,12 +12,11 @@
 //	q, issues := ParseQuery(values)               // transport, before any use case runs
 //	win       := ResolveWindow(q.Period, q.Location, now)
 //	repos     := Reader.RepoScope(ctx, ws, q.Repo)
-//	facts     := Reader.WindowFacts(ctx, ws, repoIDs, win.PrevFrom, win.To)   // ONE read, both windows
-//	open      := Reader.OpenState(ctx, ws, repoIDs)
-//	cur, prev := BuildRows(win, facts, now)       // rows of the window / of the previous window
+//	facts     := Reader.WindowFacts(ctx, ws, repoIDs, win)   // ONE read, window and previous window
+//	cur, prev := BuildRows(win, facts, now)       // rows of the window / of the previous window (nil without one)
 //	Rank(cur); Rank(prev)
-//	Kpis(cur-span, cur, facts), Kpis(prev-span, prev, facts), Awards(cur-span, cur), Attention(cur, open, now),
-//	HotFiles(cur), HealthBySize(cur), Daily(win, cur, facts.Pulls)
+//	Kpis(cur-span, cur, facts), Kpis(prev-span, prev, facts) (only when prev has rows), Awards(cur-span, cur),
+//	Attention(cur-span, cur, facts.Pulls, now), HotFiles(cur), HealthBySize(cur), Activity(win, cur, facts.Pulls)
 //
 // # Function signatures (implemented in W1, one file per lane; NOT in this file)
 //
@@ -28,21 +27,22 @@
 //	// window.go (S6)
 //	func ResolveWindow(key PeriodKey, loc *time.Location, now time.Time) Window
 //	func (w Window) DayIndex(t time.Time) int          // -1 when t is outside [From, To)
-//	// rows.go (S7): rows of both windows from one Facts (Facts covers [PrevFrom, To))
+//	func (w Window) ReadFrom() time.Time               // start of the facts range
+//	// rows.go (S7): rows of both windows from one Facts (Facts covers [ReadFrom, To))
 //	func BuildRows(win Window, f Facts, now time.Time) (cur, prev []Row)
-//	// rank.go (S7): sorts in place by health desc, CRITICAL asc, repo, number (nil health last)
+//	// rank.go (S7): sorts in place by health desc, PR number asc, repo (nil health last)
 //	func Rank(rows []Row)
 //	// kpis.go (S8): span is [From, To) of the window the rows belong to
 //	func Kpis(span Span, rows []Row, f Facts) KpiSet
 //	// awards.go (S8): rows must already be ranked; ties keep the lower table rank
 //	func Awards(span Span, rows []Row) AwardSet
 //	// attention.go (S8): total counts all items, items is capped at AttentionLimit
-//	func Attention(rows []Row, open []OpenPull, now time.Time) (total int, items []AttentionItem)
+//	func Attention(span Span, rows []Row, pulls []PullFact, now time.Time) (total int, items []AttentionItem)
 //	// files.go (S8)
 //	func HotFiles(rows []Row) []HotFile
 //	func HealthBySize(rows []Row) []SizeBucket
-//	// daily.go (S8): one Day per calendar day of win (win.Days points)
-//	func Daily(win Window, rows []Row, pulls []PullFact) []Day
+//	// daily.go (S8, the activity chart): one point per day (week, last_week) or per clipped Monday-started week (30d)
+//	func Activity(win Window, rows []Row, pulls []PullFact) ActivityChart
 //
 // Conventions shared by all of them: durations are whole seconds (int64); money is float64
 // USD; every time instant is a time.Time (the transport formats it); "unknown" is a nil
@@ -90,12 +90,13 @@ const (
 	AttentionLimit = 20
 	// HotFilesLimit is the number of hot files returned.
 	HotFilesLimit = 6
-	// NoReviewGrace: an open PR counts as "no review" only when opened longer ago than this.
-	NoReviewGrace = 24 * time.Hour
-	// OpenLongAfter: an open PR not updated for this long (or longer) is "open long".
-	OpenLongAfter = 7 * 24 * time.Hour
-	// StaleAfter is the PR list's stale threshold (same value as OpenLongAfter).
+	// OpenLongDays: an open PR opened at least this many days ago is "open long" (FR13 e); so is
+	// a stale one (derived status stale).
+	OpenLongDays = 5
+	// StaleAfter is the PR list's stale threshold.
 	StaleAfter = 7 * 24 * time.Hour
+	// TopFindingsLimit is the number of top findings per row (FR21, D23).
+	TopFindingsLimit = 3
 	// MoneyDecimals is the number of decimals money is rounded to.
 	MoneyDecimals = 6
 	// DeletedAgentName names the reviews whose agent was deleted (agent_id NULL); all of them
@@ -110,6 +111,16 @@ const (
 	SeveritySuggestion = "SUGGESTION"
 )
 
+// Health weights per non-dismissed snapshot finding and per extra review round (spec FR10, D20):
+// health = max(0, 100 - (10·C + 3·W + 1·S) - 3·(rounds - 1)).
+const (
+	HealthBase          = 100
+	HealthCritical      = 10
+	HealthWarning       = 3
+	HealthSuggestion    = 1
+	HealthPerExtraRound = 3
+)
+
 // Risk weights per non-dismissed snapshot finding (spec FR10) and the thresholds on their sum.
 const (
 	WeightCritical   = 35
@@ -120,12 +131,13 @@ const (
 	RiskHighFrom   = 70
 )
 
-// Size bucket upper bounds in changed lines (additions + deletions): S <= 100, M <= 400,
-// L <= 1000, XL above.
+// Size bucket bounds in changed lines (additions + deletions), exclusive upper bounds
+// (spec FR10, D20): XS < 50, S < 200, M < 500, L < 1000, XL from 1000.
 const (
-	SizeMaxS = 100
-	SizeMaxM = 400
-	SizeMaxL = 1000
+	SizeBelowS  = 50
+	SizeBelowM  = 200
+	SizeBelowL  = 500
+	SizeBelowXL = 1000
 )
 
 // Size is the size bucket of a PR. SizeNone ("") means unknown: additions, deletions and files
@@ -136,14 +148,15 @@ type Size string
 // The size buckets in display order.
 const (
 	SizeNone Size = ""
+	SizeXS   Size = "XS"
 	SizeS    Size = "S"
 	SizeM    Size = "M"
 	SizeL    Size = "L"
 	SizeXL   Size = "XL"
 )
 
-// Sizes lists the real buckets in display order (health-by-size always returns all four).
-var Sizes = [...]Size{SizeS, SizeM, SizeL, SizeXL}
+// Sizes lists the real buckets in display order (health-by-size always returns all five).
+var Sizes = [...]Size{SizeXS, SizeS, SizeM, SizeL, SizeXL}
 
 // Risk is the risk level of a row.
 type Risk string
@@ -172,11 +185,11 @@ type ReasonKind string
 
 // The reasons in their display and ordering priority (a)..(e).
 const (
-	ReasonMergedOpenCritical ReasonKind = "merged_open_critical" // (a) merged row with open criticals; Count
-	ReasonOpenCritical       ReasonKind = "open_critical"        // (b) open PR, open criticals in current reviews; Count
-	ReasonNoReview           ReasonKind = "no_review"            // (c) open, non-draft, never reviewed, opened > 24 h ago
-	ReasonNewCommits         ReasonKind = "new_commits"          // (d) open, head differs from the last reviewed sha
-	ReasonOpenLong           ReasonKind = "open_long"            // (e) open, not updated for >= 7 days; Days
+	ReasonMergedOpenCritical ReasonKind = "merged_open_critical" // (a) merged, open criticals in the current reviews; Count
+	ReasonOpenCritical       ReasonKind = "open_critical"        // (b) not merged, open criticals in the current reviews; Count
+	ReasonNewCommits         ReasonKind = "new_commits"          // (c) open, head differs from the last reviewed sha
+	ReasonNoReview           ReasonKind = "no_review"            // (d) open, non-draft, never reviewed
+	ReasonOpenLong           ReasonKind = "open_long"            // (e) open and stale or opened >= 5 days ago; Days
 )
 
 // Query is the validated request: ParseQuery applies the defaults.
@@ -205,12 +218,14 @@ type Span struct {
 // Contains reports whether t lies in [From, To).
 func (s Span) Contains(t time.Time) bool { return !t.Before(s.From) && t.Before(s.To) }
 
-// Window is a resolved period in the viewer's zone (spec FR7). The previous window is the
-// equally long window directly before (PrevTo == From). All ranges are [from, to).
+// Window is a resolved period in the viewer's zone (spec FR7). week and last_week have a
+// previous window, the week directly before (PrevTo == From); 30d has none (HasPrev false,
+// PrevFrom and PrevTo are the zero time). All ranges are [from, to).
 type Window struct {
 	Key      PeriodKey
 	Location *time.Location
 	From, To time.Time
+	HasPrev  bool
 	PrevFrom time.Time
 	PrevTo   time.Time
 	// Days is the number of calendar days of the window in Location: 7 for week and last_week,
@@ -222,8 +237,22 @@ type Window struct {
 // Cur is the window as a Span.
 func (w Window) Cur() Span { return Span{From: w.From, To: w.To} }
 
-// Prev is the previous window as a Span.
-func (w Window) Prev() Span { return Span{From: w.PrevFrom, To: w.PrevTo} }
+// Prev is the previous window as a Span; the empty span (it contains no instant) without one.
+func (w Window) Prev() Span {
+	if !w.HasPrev {
+		return Span{}
+	}
+	return Span{From: w.PrevFrom, To: w.PrevTo}
+}
+
+// ReadFrom is the start of the range one fact read covers: the previous window's start when
+// there is one, else the window's own start. The range ends at To.
+func (w Window) ReadFrom() time.Time {
+	if w.HasPrev {
+		return w.PrevFrom
+	}
+	return w.From
+}
 
 // RepoRef is a repository in the filter.
 type RepoRef struct {
@@ -235,9 +264,9 @@ type RepoRef struct {
 	LastPolledAt *time.Time
 }
 
-// Facts is everything one window read returns, covering [From, To) = [Window.PrevFrom,
-// Window.To): both the window and the previous window, so the folds can compute deltas without
-// a second read. Every slice is in no particular order. Rows of the two windows are told apart
+// Facts is everything one window read returns, covering [From, To) = [Window.ReadFrom(),
+// Window.To): the window and, when it has one, the previous window, so the folds can compute
+// deltas without a second read. Every slice is in no particular order. Rows of the two windows are told apart
 // by the review / merge / run instants against the Window, never by the store.
 //
 // Membership (the store guarantees at least this, it may return more; the folds ignore what
@@ -249,6 +278,8 @@ type RepoRef struct {
 //     current window OR inside the previous window (the two snapshots). Findings of other
 //     reviews are not needed and ignored by the folds. "Agent" here is Review.AgentID, and
 //     reviews of deleted agents ("") are one agent.
+//   - Every PullFact carries OpenCritical, the CRITICAL findings without accepted or dismissed
+//     time in the PR's current reviews (the newest review per agent, ever), for the PRs above.
 //   - Runs: every agent run with a PR whose RanAt lies in the range (any status; CI-ingested
 //     runs have no PR and are absent).
 type Facts struct {
@@ -289,6 +320,10 @@ type PullFact struct {
 	// FirstReviewAt is the creation time of the PR's first review of kind "review" EVER
 	// (including before the range), nil when it has none.
 	FirstReviewAt *time.Time
+	// OpenCritical counts CRITICAL findings, neither accepted nor dismissed, in the PR's current
+	// reviews: the newest review of kind review per agent, ever (deleted agents are one agent).
+	// It is the current state, independent of any window (spec FR13 a, b).
+	OpenCritical int
 }
 
 // ReviewFact is one review of kind "review".
@@ -306,8 +341,11 @@ type ReviewFact struct {
 
 // FindingFact is one finding of a snapshot review.
 type FindingFact struct {
-	ReviewID string
-	File     string
+	FindingID string
+	ReviewID  string
+	File      string
+	StartLine int
+	Title     string
 	// Severity is SeverityCritical, SeverityWarning or SeveritySuggestion.
 	Severity string
 	// AcceptedAt and DismissedAt are the triage times; accepting and dismissing clear each
@@ -323,27 +361,6 @@ type RunFact struct {
 	RanAt time.Time
 	// CostUSD is nil when the cost is unknown; the folds count it as 0 (plan Q3).
 	CostUSD *float64
-}
-
-// OpenPull is the current state of an open PR (stored status neither merged nor closed),
-// independent of any window (spec FR13 b-e).
-type OpenPull struct {
-	PRID            string
-	RepoID          string
-	Repo            string
-	Number          int
-	Title           string
-	Author          string
-	HeadSHA         string
-	LastReviewedSHA *string
-	Draft           bool
-	OpenedAt        *time.Time
-	UpdatedAt       *time.Time
-	// Reviewed reports whether the PR has any review of kind "review", ever.
-	Reviewed bool
-	// OpenCritical counts CRITICAL findings, neither accepted nor dismissed, in the PR's
-	// current reviews (the newest review per agent, ever; deleted agents are one agent).
-	OpenCritical int
 }
 
 // FindingCounts are counts per severity.
@@ -369,7 +386,8 @@ type Row struct {
 	Deletions  int
 	FilesCount int
 	Size       Size // SizeNone when unknown (wire null)
-	// Health is the rounded mean of the snapshot scores, nil when no snapshot review has one.
+	// Health is max(0, 100 - (10·C + 3·W + 1·S of the non-dismissed snapshot findings) - 3·(rounds
+	// - 1)), nil when rounds is 0 (spec FR10).
 	Health *int
 	Risk   Risk
 	// Findings sums all snapshot findings of the row, whatever their triage status.
@@ -395,6 +413,9 @@ type Row struct {
 	// Reviews is the window snapshot: the newest review per agent created in the window,
 	// ordered by AgentName, then ReviewID.
 	Reviews []RowReview
+	// TopFindings are at most TopFindingsLimit snapshot findings: CRITICAL before WARNING before
+	// SUGGESTION, then open before accepted before dismissed, then file, start line, finding id.
+	TopFindings []TopFinding
 
 	// FirstReviewAt is the first review ever (domain only; KPI "time to first review" takes
 	// the rows whose first review lies in the window).
@@ -409,7 +430,7 @@ type RowReview struct {
 	Score     *int
 	Findings  FindingCounts
 
-	// CreatedAt is the review's time (domain only; the daily chart buckets CRITICAL findings
+	// CreatedAt is the review's time (domain only; the activity chart buckets CRITICAL findings
 	// by the day of their review).
 	CreatedAt time.Time
 	// Items are the review's findings (domain only; hot files group them by file).
@@ -422,6 +443,26 @@ type FindingItem struct {
 	Severity    string
 	AcceptedAt  *time.Time
 	DismissedAt *time.Time
+}
+
+// Finding states of a top finding.
+const (
+	FindingOpen      = "open"
+	FindingAccepted  = "accepted"
+	FindingDismissed = "dismissed"
+)
+
+// TopFinding is one of the findings an expanded row shows (spec FR21, D23).
+type TopFinding struct {
+	FindingID string
+	Severity  string
+	Title     string
+	File      string
+	StartLine int
+	// AgentName is the name of the snapshot review's agent (DeletedAgentName when deleted).
+	AgentName string
+	// State is FindingOpen, FindingAccepted or FindingDismissed (dismissed wins over accepted).
+	State string
 }
 
 // KpiSet is the KPIs of one window (spec FR11). Nil means "not computable" (no value).
@@ -505,24 +546,40 @@ type SizeBucket struct {
 	AvgFindings *float64
 }
 
-// Day is one calendar day of the window in the viewer's zone.
-type Day struct {
-	Date     string // YYYY-MM-DD
+// Activity granularities.
+const (
+	GranularityDay  = "day"
+	GranularityWeek = "week"
+)
+
+// ActivityPoint is one point of the activity chart: a calendar day (From == To) or a
+// Monday-started week clipped to the window, in the viewer's zone. Both dates are inclusive.
+type ActivityPoint struct {
+	From     string // YYYY-MM-DD
+	To       string // YYYY-MM-DD
 	Opened   int
 	Merged   int
 	Critical int
 }
 
+// ActivityChart is the activity chart (spec FR16, D22): one point per day for a week window, one per
+// clipped Monday-started week for 30d.
+type ActivityChart struct {
+	Granularity string
+	Points      []ActivityPoint
+}
+
 // Leaderboard is the use case's answer: everything the page shows.
 type Leaderboard struct {
-	Window          Window
-	Repos           []RepoRef
-	Summary         KpiSet
-	PreviousSummary KpiSet
+	Window  Window
+	Repos   []RepoRef
+	Summary KpiSet
+	// PreviousSummary is nil for 30d and for a previous window without rows (spec FR11).
+	PreviousSummary *KpiSet
 	Awards          AwardSet
 	Rows            []Row
 	NeedsAttention  AttentionList
 	HotFiles        []HotFile
 	HealthBySize    []SizeBucket
-	Daily           []Day
+	Activity        ActivityChart
 }

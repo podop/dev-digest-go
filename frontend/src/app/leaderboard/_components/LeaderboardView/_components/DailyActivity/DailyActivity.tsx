@@ -1,17 +1,18 @@
-/* DailyActivity — the leaderboard's "Daily activity" card (FR22, mockup): per day two grouped bars
+/* DailyActivity — the leaderboard's activity card (FR22, D22, mockup): per point two grouped bars
    (opened = blue, merged = green) scaled to the busiest value, the counts above the bars, a red
-   circle with the day's critical count below, the day label ("Mon 28") and a legend. Colour is never
-   the only carrier: counts are text, and each day has an accessible sentence. */
+   circle with the point's critical count below, its label and a legend. A point is a day ("Mon 28")
+   for `week` / `last_week` and a week ("Wk of Oct 5") for `30d`; the title follows. Colour is never
+   the only carrier: counts are text, and each point has an accessible sentence. */
 "use client";
 
 import { useTranslations } from "next-intl";
-import type { LeaderboardDay } from "@devdigest/shared";
+import type { LeaderboardActivity, LeaderboardActivityPoint } from "@devdigest/shared";
 import { Card } from "@devdigest/ui";
-import { formatDay } from "./helpers";
+import { formatDay, formatMonthDay } from "./helpers";
 import { BAR_AREA, s } from "./styles";
 
 export interface DailyActivityProps {
-  days: readonly LeaderboardDay[];
+  activity: LeaderboardActivity;
 }
 
 const OPENED = "var(--accent)";
@@ -30,24 +31,24 @@ function Bar({ value, max, color, kind }: { value: number; max: number; color: s
   );
 }
 
-function Day({ day, max }: { day: LeaderboardDay; max: number }) {
+function Point({ point, granularity, max }: { point: LeaderboardActivityPoint; granularity: LeaderboardActivity["granularity"]; max: number }) {
   const t = useTranslations("leaderboardPanels.dailyActivity");
-  const label = formatDay(day.date);
+  const label = granularity === "week" ? t("weekLabel", { date: formatMonthDay(point.from) }) : formatDay(point.from);
   return (
     <div
-      data-series={day.date}
+      data-series={point.from}
       role="img"
-      aria-label={t("dayLabel", { day: label, opened: day.opened, merged: day.merged, critical: day.critical })}
+      aria-label={t("pointLabel", { label, opened: point.opened, merged: point.merged, critical: point.critical })}
       style={s.column}
     >
       <div style={s.bars}>
-        <Bar value={day.opened} max={max} color={OPENED} kind="opened" />
-        <Bar value={day.merged} max={max} color={MERGED} kind="merged" />
+        <Bar value={point.opened} max={max} color={OPENED} kind="opened" />
+        <Bar value={point.merged} max={max} color={MERGED} kind="merged" />
       </div>
-      <div style={s.criticalSlot} title={day.critical > 0 ? t("criticalHint") : undefined}>
-        {day.critical > 0 && (
+      <div style={s.criticalSlot} title={point.critical > 0 ? t("criticalHint") : undefined}>
+        {point.critical > 0 && (
           <span className="tnum" style={s.critical}>
-            {day.critical}
+            {point.critical}
           </span>
         )}
       </div>
@@ -56,22 +57,23 @@ function Day({ day, max }: { day: LeaderboardDay; max: number }) {
   );
 }
 
-export function DailyActivity({ days }: DailyActivityProps) {
+export function DailyActivity({ activity }: DailyActivityProps) {
   const t = useTranslations("leaderboardPanels.dailyActivity");
-  const max = Math.max(0, ...days.map((d) => Math.max(d.opened, d.merged)));
-  const active = days.some((d) => d.opened > 0 || d.merged > 0 || d.critical > 0);
+  const { granularity, points } = activity;
+  const max = Math.max(0, ...points.map((p) => Math.max(p.opened, p.merged)));
+  const active = points.some((p) => p.opened > 0 || p.merged > 0 || p.critical > 0);
   return (
     <Card style={s.card}>
       <div style={s.header}>
-        <h3 style={s.title}>{t("title")}</h3>
-        <span style={s.subtitle}>{t("subtitle")}</span>
+        <h3 style={s.title}>{t(granularity === "week" ? "weeklyTitle" : "title")}</h3>
+        <span style={s.subtitle}>{t(granularity === "week" ? "weeklySubtitle" : "subtitle")}</span>
       </div>
       {active ? (
         <>
           <div style={s.scroll}>
             <div style={s.chart}>
-              {days.map((d) => (
-                <Day key={d.date} day={d} max={max} />
+              {points.map((p) => (
+                <Point key={p.from} point={p} granularity={granularity} max={max} />
               ))}
             </div>
           </div>

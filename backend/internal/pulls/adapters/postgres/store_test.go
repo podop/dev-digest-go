@@ -472,3 +472,49 @@ func TestRollups_unknownCostStaysNil(t *testing.T) {
 		t.Errorf("cost_usd with only unpriced runs = %v, want nil", *got[f.prID].CostUSD)
 	}
 }
+
+func TestListPollTargets_everyRepoOfEveryWorkspace(t *testing.T) {
+	f := seeded(t)
+	var otherWS, otherRepo string
+	scan(t, f.db, &otherWS, `INSERT INTO workspaces (name) VALUES ('other') RETURNING id`)
+	scan(t, f.db, &otherRepo, `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES (?, 'zed', 'tool', 'zed/tool') RETURNING id`, otherWS)
+
+	got, err := f.store.ListPollTargets(t.Context())
+	if err != nil {
+		t.Fatalf("ListPollTargets() error = %v", err)
+	}
+	var seededRepos int
+	scan(t, f.db, &seededRepos, `SELECT count(*) FROM repos WHERE workspace_id = ?`, f.wsID)
+	if len(got) != seededRepos+1 {
+		t.Fatalf("ListPollTargets() = %d targets, want %d (seeded repos + 1)", len(got), seededRepos+1)
+	}
+	var sawSeeded, sawOther bool
+	byWorkspace := map[string]int{} // changes of workspace along the list; grouped means one run each
+	prev := ""
+	for _, tg := range got {
+		if tg.WorkspaceID != prev {
+			byWorkspace[tg.WorkspaceID]++
+			prev = tg.WorkspaceID
+		}
+		switch tg.Repo.ID {
+		case f.repoID:
+			sawSeeded = true
+			if want := (domain.PollTarget{WorkspaceID: f.wsID, Repo: domain.Repo{ID: f.repoID, Owner: "acme", Name: "payments-api"}}); tg != want {
+				t.Errorf("ListPollTargets() seeded target = %+v, want %+v", tg, want)
+			}
+		case otherRepo:
+			sawOther = true
+			if want := (domain.PollTarget{WorkspaceID: otherWS, Repo: domain.Repo{ID: otherRepo, Owner: "zed", Name: "tool"}}); tg != want {
+				t.Errorf("ListPollTargets() other target = %+v, want %+v", tg, want)
+			}
+		}
+	}
+	if !sawSeeded || !sawOther {
+		t.Errorf("ListPollTargets() seeded=%v other=%v, want both workspaces' repos", sawSeeded, sawOther)
+	}
+	for ws, runs := range byWorkspace {
+		if runs != 1 {
+			t.Errorf("ListPollTargets() workspace %s appears in %d separate runs, want grouped", ws, runs)
+		}
+	}
+}

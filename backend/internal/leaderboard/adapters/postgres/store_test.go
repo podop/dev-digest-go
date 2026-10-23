@@ -38,12 +38,12 @@ var (
 //	1  open, draft=false; reviews: alpha before the range, alpha at from, alpha at from+3d,
 //	   beta at from+1d, two reviews of the deleted agent, a summary review; runs of every status
 //	2  review exactly at `to` (out of the range), nothing else
-//	3  merged inside the range, never reviewed
+//	3  merged inside the range, reviewed once before the range (two open criticals, one dismissed)
 //	4  opened exactly at `to` and merged one millisecond before `from` (out on both sides)
 //	5  opened exactly at `from`, draft, status needs_review
 //	6  only a review of kind summary in the range
 //	7  merged without merged_at (status merged, NULL)
-//	8  closed, reviewed in the range
+//	8  closed, reviewed in the range (one open critical)
 //
 // repoB #1 has a review in the range; repoX #1 (other workspace) too.
 type world struct {
@@ -97,9 +97,12 @@ func newWorld(t *testing.T) *world {
 	w.review(t, "summary", w.pr[1], &w.alpha, "summary", from.Add(4*day), nil, fnd("CRITICAL", "finding", "pending", "sum.go"))
 	w.exec(t, `DELETE FROM agents WHERE id = ?`, w.doomedAgent)
 
+	w.review(t, "mergedBefore", w.pr[3], &w.alpha, "review", from.Add(-3*day), ptr(20),
+		fnd("CRITICAL", "finding", "pending", "m.go"), fnd("CRITICAL", "finding", "pending", "m.go"),
+		fnd("CRITICAL", "finding", "dismissed", "m.go"))
 	w.review(t, "atTo", w.pr[2], &w.alpha, "review", to, ptr(70), fnd("WARNING", "finding", "pending", "t.go"))
 	w.review(t, "onlySummary", w.pr[6], &w.alpha, "summary", from.Add(day), nil)
-	w.review(t, "closed", w.pr[8], &w.beta, "review", from.Add(2*day), ptr(90))
+	w.review(t, "closed", w.pr[8], &w.beta, "review", from.Add(2*day), ptr(90), fnd("CRITICAL", "finding", "pending", "c.go"))
 	w.review(t, "repoB", w.prB, &w.alpha, "review", from.Add(day), ptr(10), fnd("SUGGESTION", "finding", "pending", "w.go"))
 	w.review(t, "repoX", w.prX, &gamma, "review", from.Add(day), ptr(10), fnd("CRITICAL", "finding", "pending", "x.go"))
 
@@ -172,7 +175,7 @@ func (w *world) review(t *testing.T, name, pr string, agent *string, kind string
 	id := w.insert(t, `INSERT INTO reviews (workspace_id, pr_id, agent_id, kind, score, created_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
 		ws, pr, agent, kind, score, at)
 	w.reviews[name] = id
-	for _, f := range fs {
+	for i, f := range fs {
 		var accepted, dismissed *time.Time
 		switch f.state {
 		case "accepted":
@@ -184,7 +187,8 @@ func (w *world) review(t *testing.T, name, pr string, agent *string, kind string
 		}
 		w.exec(t, `INSERT INTO findings (review_id, file, start_line, end_line, severity, category, title, rationale, confidence,
 				kind, accepted_at, dismissed_at)
-			VALUES (?, ?, 1, 2, ?, 'bug', 't', 'r', 0.5, ?, ?, ?)`, id, f.file, f.severity, f.kind, accepted, dismissed)
+			VALUES (?, ?, ?, ?, ?, 'bug', ?, 'r', 0.5, ?, ?, ?)`,
+			id, f.file, i+1, i+2, f.severity, "t "+f.file, f.kind, accepted, dismissed)
 	}
 }
 
@@ -206,6 +210,9 @@ func numbers(pulls []domain.PullFact) []string {
 	sort.Strings(out)
 	return out
 }
+
+// win is a window without a previous one over [from, to): the whole range is the current window.
+func win(from, to time.Time) domain.Window { return domain.Window{From: from, To: to} }
 
 func itoa(n int) string { return string(rune('0' + n)) }
 
@@ -269,7 +276,7 @@ func TestRepoScope(t *testing.T) {
 
 func TestWindowFacts_Membership(t *testing.T) {
 	w := newWorld(t)
-	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA}, from, to)
+	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA}, win(from, to))
 	if err != nil {
 		t.Fatalf("WindowFacts() error = %v", err)
 	}
@@ -291,13 +298,18 @@ func TestWindowFacts_Membership(t *testing.T) {
 		want := map[int]domain.PullFact{
 			1: {PRID: w.pr[1], RepoID: w.repoA, Repo: "api", Number: 1, Title: "title open", Author: "dev", HeadSHA: "head1",
 				Status: "open", LastReviewedSHA: ptr("old1"), OpenedAt: &opened, UpdatedAt: &opened,
-				FirstReviewAt: ptr(from.Add(-10 * day))},
+				FirstReviewAt: ptr(from.Add(-10 * day)),
+				// current reviews, ever: alpha2 (1 open: a.go; accepted, dismissed and both are not
+				// open), beta (the open secret_leak), the deleted agent's newest review (1); older
+				// reviews and the summary review do not count.
+				OpenCritical: 3},
 			3: {PRID: w.pr[3], RepoID: w.repoA, Repo: "api", Number: 3, Title: "title merged", Author: "dev", HeadSHA: "sha",
-				Status: "merged", OpenedAt: &opened, UpdatedAt: &opened, MergedAt: ptr(from.Add(5 * day)), ClosedAt: ptr(from.Add(5 * day))},
+				Status: "merged", OpenedAt: &opened, UpdatedAt: &opened, MergedAt: ptr(from.Add(5 * day)), ClosedAt: ptr(from.Add(5 * day)),
+				FirstReviewAt: ptr(from.Add(-3 * day)), OpenCritical: 2}, // a merged PR keeps its open criticals
 			5: {PRID: w.pr[5], RepoID: w.repoA, Repo: "api", Number: 5, Title: "title needs_review", Author: "dev", HeadSHA: "sha",
 				Additions: 10, Deletions: 5, FilesCount: 2, Status: "needs_review", Draft: true, OpenedAt: ptr(from), UpdatedAt: ptr(from)},
 			8: {PRID: w.pr[8], RepoID: w.repoA, Repo: "api", Number: 8, Title: "title closed", Author: "dev", HeadSHA: "sha",
-				Status: "closed", ClosedAt: ptr(from.Add(day)), FirstReviewAt: ptr(from.Add(2 * day))},
+				Status: "closed", ClosedAt: ptr(from.Add(day)), FirstReviewAt: ptr(from.Add(2 * day)), OpenCritical: 1},
 		}
 		if diff := cmp.Diff(want, byNumber, cmpopts.EquateApproxTime(0)); diff != "" {
 			t.Errorf("WindowFacts() pulls mismatch (-want +got):\n%s", diff)
@@ -334,7 +346,7 @@ func TestWindowFacts_Membership(t *testing.T) {
 			}
 		}
 	})
-	t.Run("findings: every kind and every triage state of the range's reviews, nothing else", func(t *testing.T) {
+	t.Run("findings: every kind and every triage state of the snapshot reviews, nothing else", func(t *testing.T) {
 		byID := map[string]string{}
 		for name, id := range w.reviews {
 			byID[id] = name
@@ -343,8 +355,10 @@ func TestWindowFacts_Membership(t *testing.T) {
 		for _, f := range got.Findings {
 			have[byID[f.ReviewID]]++
 		}
-		// alphaOld is before the range, summary has another kind, atTo is out of the range.
-		want := map[string]int{"alpha1": 1, "alpha2": 5, "beta": 1, "doomed1": 1, "doomed2": 1}
+		// With no previous window the range is one window: only the newest review per agent counts
+		// (alpha1 and doomed1 are superseded). alphaOld and mergedBefore are before the range,
+		// summary has another kind, atTo is out of the range.
+		want := map[string]int{"alpha2": 5, "beta": 1, "doomed2": 1, "closed": 1}
 		if diff := cmp.Diff(want, have); diff != "" {
 			t.Errorf("WindowFacts() findings per review mismatch (-want +got):\n%s", diff)
 		}
@@ -368,6 +382,21 @@ func TestWindowFacts_Membership(t *testing.T) {
 		wantStates := map[string]int{"CRITICAL:A": 1, "CRITICAL:D": 1, "CRITICAL:AD": 1, "WARNING:": 1}
 		if diff := cmp.Diff(wantStates, states); diff != "" {
 			t.Errorf("WindowFacts() triage states mismatch (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("finding columns", func(t *testing.T) {
+		for _, f := range got.Findings {
+			if f.ReviewID != w.reviews["beta"] {
+				continue
+			}
+			if f.FindingID == "" || f.Title != "t s.go" || f.File != "s.go" || f.StartLine != 1 || f.Severity != "CRITICAL" {
+				t.Errorf("WindowFacts() beta finding = %+v, want an id, title %q, s.go:1, CRITICAL", f, "t s.go")
+			}
+		}
+		for _, f := range got.Findings {
+			if f.ReviewID == w.reviews["alpha2"] && f.File == "b.go" && f.Severity == "WARNING" && f.StartLine != 5 {
+				t.Errorf("WindowFacts() alpha2 warning start line = %d, want 5 (fifth finding)", f.StartLine)
+			}
 		}
 	})
 	t.Run("runs: any status, PR runs in [from, to) only", func(t *testing.T) {
@@ -414,7 +443,7 @@ func TestWindowFacts_Bounds(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoA}, tc.from, tc.to)
+			got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoA}, win(tc.from, tc.to))
 			if err != nil {
 				t.Fatalf("WindowFacts() error = %v", err)
 			}
@@ -431,30 +460,37 @@ func TestWindowFacts_Bounds(t *testing.T) {
 	}
 }
 
-func TestWindowFacts_SnapshotReviewsAreSupersetOfBothWindows(t *testing.T) {
-	// The store sees only [PrevFrom, To). Whatever the boundary between the two windows is, the
-	// newest review per agent of each half must be in Reviews with all of its findings.
+// TestWindowFacts_FindingsOfBothSnapshots: with a previous window the store returns the findings
+// of the newest review per (PR, agent) in each half of the range, split at Window.From, and of no
+// other review. Reviews of deleted agents are one agent.
+func TestWindowFacts_FindingsOfBothSnapshots(t *testing.T) {
 	w := newWorld(t)
-	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA}, from, to)
+	split := from.Add(2 * day) // doomed1 sits exactly on the split: current half
+	window := domain.Window{From: split, To: to, HasPrev: true, PrevFrom: from, PrevTo: split}
+	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA}, window)
 	if err != nil {
 		t.Fatalf("WindowFacts() error = %v", err)
 	}
-	reviews := map[string]bool{}
-	for _, r := range got.Reviews {
-		reviews[r.ReviewID] = true
+	if !got.From.Equal(from) || !got.To.Equal(to) {
+		t.Errorf("WindowFacts() range = [%v, %v), want [%v, %v)", got.From, got.To, from, to)
 	}
-	findingsOf := map[string]int{}
+	byID := map[string]string{}
+	for name, id := range w.reviews {
+		byID[id] = name
+	}
+	have := map[string]int{}
 	for _, f := range got.Findings {
-		findingsOf[f.ReviewID]++
+		have[byID[f.ReviewID]]++
 	}
-	for _, name := range []string{"alpha1", "alpha2"} { // previous half: alpha1; current half: alpha2
-		id := w.reviews[name]
-		if !reviews[id] {
-			t.Errorf("WindowFacts() lacks review %s of the snapshots", name)
-		}
-		if findingsOf[id] == 0 {
-			t.Errorf("WindowFacts() lacks the findings of review %s", name)
-		}
+	// previous half [from, from+2d): alpha1 (alpha), beta; current half: the deleted agent's
+	// doomed2 (doomed1 is superseded), alpha2 (5 findings), closed (PR 8).
+	want := map[string]int{"alpha1": 1, "beta": 1, "doomed2": 1, "alpha2": 5, "closed": 1}
+	if diff := cmp.Diff(want, have); diff != "" {
+		t.Errorf("WindowFacts() findings per review mismatch (-want +got):\n%s", diff)
+	}
+	// ReadFrom is the previous window's start, so the reviews of both halves are returned.
+	if len(got.Reviews) != 6 {
+		t.Errorf("WindowFacts() reviews = %d, want the 6 of the range", len(got.Reviews))
 	}
 }
 
@@ -463,7 +499,7 @@ func TestWindowFacts_Isolation(t *testing.T) {
 	ctx := t.Context()
 
 	t.Run("a repo of another workspace yields nothing", func(t *testing.T) {
-		got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoX}, from, to)
+		got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoX}, win(from, to))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -472,7 +508,7 @@ func TestWindowFacts_Isolation(t *testing.T) {
 		}
 	})
 	t.Run("the other workspace sees only its own", func(t *testing.T) {
-		got, err := w.store.WindowFacts(ctx, w.other, []string{w.repoA, w.repoB, w.repoX}, from, to)
+		got, err := w.store.WindowFacts(ctx, w.other, []string{w.repoA, w.repoB, w.repoX}, win(from, to))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -484,7 +520,7 @@ func TestWindowFacts_Isolation(t *testing.T) {
 		}
 	})
 	t.Run("only the requested repos", func(t *testing.T) {
-		got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoB}, from, to)
+		got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoB}, win(from, to))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -496,7 +532,7 @@ func TestWindowFacts_Isolation(t *testing.T) {
 		}
 	})
 	t.Run("no repos", func(t *testing.T) {
-		got, err := w.store.WindowFacts(ctx, w.ws, nil, from, to)
+		got, err := w.store.WindowFacts(ctx, w.ws, nil, win(from, to))
 		if err != nil || len(got.Pulls) != 0 {
 			t.Errorf("WindowFacts(no repos) = %+v, %v, want empty", got, err)
 		}
@@ -506,7 +542,7 @@ func TestWindowFacts_Isolation(t *testing.T) {
 func TestWindowFacts_DeletedRepoLeavesNoPulls(t *testing.T) {
 	w := newWorld(t)
 	w.exec(t, `DELETE FROM repos WHERE id = ?`, w.repoA)
-	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA, w.repoB}, from, to)
+	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA, w.repoB}, win(from, to))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,60 +555,48 @@ func TestWindowFacts_DeletedRepoLeavesNoPulls(t *testing.T) {
 	}
 }
 
-func TestOpenState(t *testing.T) {
+func TestWindowFacts_OpenCritical(t *testing.T) {
 	w := newWorld(t)
 	ctx := t.Context()
-	got, err := w.store.OpenState(ctx, w.ws, []string{w.repoA})
-	if err != nil {
-		t.Fatalf("OpenState() error = %v", err)
-	}
-	opened := from.Add(-20 * day)
-	want := []domain.OpenPull{
-		// alpha's newest review has 1 open critical (accepted, dismissed and "both" excluded), beta
-		// has the open secret_leak, the two reviews of the deleted agent are ONE agent whose newest
-		// review holds 1; the older reviews, the summary review and PR 3/4/7/8 (merged, closed)
-		// do not count.
-		{PRID: w.pr[1], RepoID: w.repoA, Repo: "api", Number: 1, Title: "title open", Author: "dev", HeadSHA: "head1",
-			LastReviewedSHA: ptr("old1"), OpenedAt: &opened, UpdatedAt: &opened, Reviewed: true, OpenCritical: 3},
-		{PRID: w.pr[2], RepoID: w.repoA, Repo: "api", Number: 2, Title: "title needs_review", Author: "dev", HeadSHA: "sha",
-			Reviewed: true},
-		{PRID: w.pr[5], RepoID: w.repoA, Repo: "api", Number: 5, Title: "title needs_review", Author: "dev", HeadSHA: "sha",
-			Draft: true, OpenedAt: ptr(from), UpdatedAt: ptr(from)},
-		{PRID: w.pr[6], RepoID: w.repoA, Repo: "api", Number: 6, Title: "title reviewed", Author: "dev", HeadSHA: "sha"},
-	}
-	sort.Slice(got, func(i, j int) bool { return got[i].Number < got[j].Number })
-	if diff := cmp.Diff(want, got, cmpopts.EquateApproxTime(0)); diff != "" {
-		t.Errorf("OpenState() mismatch (-want +got):\n%s", diff)
+	critical := func(f domain.Facts) map[int]int {
+		out := map[int]int{}
+		for _, p := range f.Pulls {
+			out[p.Number] = p.OpenCritical
+		}
+		return out
 	}
 
-	t.Run("reviewed ignores the window and the summary kind", func(t *testing.T) {
-		for _, p := range got {
-			if p.Number == 6 && p.Reviewed {
-				t.Error("OpenState() PR 6 (summary review only) is Reviewed, want false")
-			}
-			if p.Number == 2 && !p.Reviewed {
-				t.Error("OpenState() PR 2 (review at `to`) is not Reviewed, want true")
-			}
+	got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoA}, win(from, to))
+	if err != nil {
+		t.Fatalf("WindowFacts() error = %v", err)
+	}
+	// PR 1 open (3: alpha2, beta, the deleted agent's newest), PR 3 merged (2), PR 5 draft without
+	// reviews (0), PR 8 closed (1). Whatever the status, the current reviews count.
+	if diff := cmp.Diff(map[int]int{1: 3, 3: 2, 5: 0, 8: 1}, critical(got)); diff != "" {
+		t.Errorf("WindowFacts() open criticals per PR mismatch (-want +got):\n%s", diff)
+	}
+
+	t.Run("current reviews are the newest ever, not the newest of the window", func(t *testing.T) {
+		// A newer review after the range supersedes alpha2 and turns the count into its own.
+		later := w.insert(t, `INSERT INTO reviews (workspace_id, pr_id, agent_id, kind, score, created_at) VALUES (?, ?, ?, 'review', 90, ?) RETURNING id`,
+			w.ws, w.pr[1], w.alpha, to.Add(day))
+		w.exec(t, `INSERT INTO findings (review_id, file, start_line, end_line, severity, category, title, rationale, confidence)
+			VALUES (?, 'n.go', 1, 1, 'WARNING', 'bug', 't', 'r', 0.5)`, later)
+		after, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoA}, win(from, to))
+		if err != nil {
+			t.Fatalf("WindowFacts() error = %v", err)
+		}
+		if got := critical(after)[1]; got != 2 { // beta and the deleted agent; alpha's newest has none
+			t.Errorf("WindowFacts() PR 1 open criticals = %d, want 2", got)
 		}
 	})
 	t.Run("isolation", func(t *testing.T) {
-		other, err := w.store.OpenState(ctx, w.other, []string{w.repoA, w.repoX})
+		other, err := w.store.WindowFacts(ctx, w.other, []string{w.repoA, w.repoX}, win(from, to))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(other) != 1 || other[0].Repo != "x" || other[0].OpenCritical != 1 {
-			t.Errorf("OpenState(other) = %+v, want only x#1 with 1 open critical", other)
-		}
-		none, err := w.store.OpenState(ctx, w.ws, nil)
-		if err != nil || len(none) != 0 {
-			t.Errorf("OpenState(no repos) = %v, %v, want empty", none, err)
-		}
-	})
-	t.Run("a removed repo has no open PRs", func(t *testing.T) {
-		w.exec(t, `DELETE FROM repos WHERE id = ?`, w.repoA)
-		after, err := w.store.OpenState(ctx, w.ws, []string{w.repoA})
-		if err != nil || len(after) != 0 {
-			t.Errorf("OpenState(removed repo) = %v, %v, want empty", after, err)
+		if len(other.Pulls) != 1 || other.Pulls[0].Repo != "x" || other.Pulls[0].OpenCritical != 1 {
+			t.Errorf("WindowFacts(other) pulls = %+v, want only x#1 with 1 open critical", other.Pulls)
 		}
 	})
 }
@@ -617,16 +641,16 @@ func TestStore_SetBasedReadOnlyAndBoundedQueries(t *testing.T) {
 		for i, r := range repos {
 			ids[i] = r.ID
 		}
-		if _, err := store.WindowFacts(ctx, w.ws, ids, from, to); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := store.OpenState(ctx, w.ws, ids); err != nil {
+		if _, err := store.WindowFacts(ctx, w.ws, ids, win(from, to)); err != nil {
 			t.Fatal(err)
 		}
 		return rec.take()
 	}
 
 	before := request()
+	if len(before) != 6 { // RepoScope 1, WindowFacts 5
+		t.Errorf("one request sent %d statements, want 6", len(before))
+	}
 	if len(before) > 8 {
 		t.Errorf("one request sent %d statements, want <= 8", len(before))
 	}

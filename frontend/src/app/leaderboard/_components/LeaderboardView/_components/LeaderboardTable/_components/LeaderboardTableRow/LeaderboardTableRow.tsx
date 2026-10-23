@@ -1,30 +1,37 @@
-/* LeaderboardTableRow — one ranked PR plus its expandable reviews row (FR21, D12). The chevron is a
-   real <button aria-expanded> (the keyboard toggle); a click anywhere else on the row toggles too,
-   except on links and buttons. Severity and risk always carry text, never colour only (NFR4).
-   Long titles are truncated with a native tooltip (EC15). */
+/* LeaderboardTableRow — one ranked PR plus its expandable top-findings row (FR21, D23). A click on the
+   row opens the PR (`onOpen`), except on links and buttons; `repo#number` is a real link for the
+   keyboard and for "open in new tab". The chevron is a <button aria-expanded> that only expands.
+   Severity and risk always carry text, never colour only (NFR4). Long titles are truncated with a
+   native tooltip (EC15). */
 "use client";
 
 import type React from "react";
 import { useTranslations } from "next-intl";
 import type { LeaderboardRow } from "@devdigest/shared";
-import { Avatar, Badge, CircularScore } from "@devdigest/ui";
+import Link from "next/link";
+import { Avatar, Badge } from "@devdigest/ui";
 import { STATUS_META } from "@/app/repos/[repoId]/pulls/constants";
 import { CostText } from "@/components/cost-text";
+import { prDetailPath } from "@/lib/pr-urls";
 import { COLUMN_COUNT, RISK_COLOR, SIZE_COLOR } from "../../constants";
 import { durationParts, openAgeParts, type DurationParts } from "../../helpers";
 import { FindingChips } from "../FindingChips";
-import { RowReviews } from "../RowReviews";
+import { HealthRing } from "../HealthRing";
+import { TopFindings } from "../TopFindings";
 import { s } from "./styles";
 
 export interface LeaderboardTableRowProps {
   row: LeaderboardRow;
   /** Position in the server rank (kept while the table is sorted). */
   rank: number;
+  /** Whether the top findings are expanded. */
   open: boolean;
   onToggle: () => void;
+  /** Opens the PR detail page (a click on the row). */
+  onOpen: () => void;
 }
 
-export function LeaderboardTableRow({ row, rank, open, onToggle }: LeaderboardTableRowProps) {
+export function LeaderboardTableRow({ row, rank, open, onToggle, onOpen }: LeaderboardTableRowProps) {
   const t = useTranslations("leaderboardTable");
   const status = STATUS_META[row.status] ?? STATUS_META.needs_review!;
   const pr = `${row.repo}#${row.number}`;
@@ -42,7 +49,7 @@ export function LeaderboardTableRow({ row, rank, open, onToggle }: LeaderboardTa
 
   const onRowClick = (e: React.MouseEvent<HTMLTableRowElement>) => {
     if ((e.target as HTMLElement).closest("a, button")) return;
-    onToggle();
+    onOpen();
   };
 
   return (
@@ -54,9 +61,9 @@ export function LeaderboardTableRow({ row, rank, open, onToggle }: LeaderboardTa
         <td style={{ ...s.td, ...s.prCell }}>
           <div style={s.prMeta}>
             <Avatar name={row.author} size={18} />
-            <span className="mono" style={s.repoNumber}>
+            <Link href={prDetailPath(encodeURIComponent(row.repo_id), row.number)} className="mono" style={s.repoNumber}>
               {pr}
-            </span>
+            </Link>
             <span>{row.author}</span>
             {row.draft && <span>{t("draft")}</span>}
           </div>
@@ -95,9 +102,9 @@ export function LeaderboardTableRow({ row, rank, open, onToggle }: LeaderboardTa
             {t(`risk.${row.risk}`)}
           </span>
         </td>
-        <td style={s.td}>{row.health === null ? dash : <CircularScore score={row.health} size={34} stroke={3} />}</td>
+        <td style={s.td}>{row.health === null ? dash : <HealthRing health={row.health} />}</td>
         <td style={s.td}>
-          <FindingChips counts={row.findings} />
+          <FindingChips counts={row.findings} openCritical={row.open_critical} />
         </td>
         <td className="tnum" style={s.td}>
           {row.rounds}
@@ -125,7 +132,7 @@ export function LeaderboardTableRow({ row, rank, open, onToggle }: LeaderboardTa
       {open && (
         <tr>
           <td colSpan={COLUMN_COUNT} style={s.detail}>
-            <RowReviews row={row} />
+            <TopFindings findings={row.top_findings} />
           </td>
         </tr>
       )}

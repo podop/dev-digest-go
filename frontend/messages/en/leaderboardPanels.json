@@ -2,8 +2,7 @@
   "needsAttention": {
     "title": "Needs attention",
     "shown": "Showing {shown} of {total}",
-    "emptyTitle": "Nothing needs attention",
-    "emptyBody": "No open critical findings, unreviewed or stale pull requests.",
+    "emptyTitle": "Nothing needs you this week",
     "reason": {
       "merged_open_critical": "merged with {count} open critical",
       "open_critical": "{count} open critical",
@@ -17,7 +16,8 @@
     "subtitle": "Files with the most findings",
     "findings": "{count, plural, one {# finding} other {# findings}}",
     "critical": "{count} critical",
-    "location": "{repo} · {prs}",
+    "location": "{repo} ·",
+    "prLink": "<link>#{number}</link>",
     "emptyTitle": "No hot files",
     "emptyBody": "No findings landed on a file in this period."
   },
@@ -25,6 +25,7 @@
     "title": "Health by PR size",
     "subtitle": "Smaller PRs ship cleaner.",
     "size": {
+      "XS": "XS",
       "S": "S",
       "M": "M",
       "L": "L",
@@ -40,11 +41,14 @@
   "dailyActivity": {
     "title": "Daily activity",
     "subtitle": "Pull requests opened and merged per day",
+    "weeklyTitle": "Weekly activity",
+    "weeklySubtitle": "Pull requests opened and merged per week",
+    "weekLabel": "Wk of {date}",
     "opened": "Opened",
     "merged": "Merged",
     "critical": "Critical",
-    "dayLabel": "{day}: {opened} opened, {merged} merged, {critical} critical",
-    "criticalHint": "Critical findings found that day",
+    "pointLabel": "{label}: {opened} opened, {merged} merged, {critical} critical",
+    "criticalHint": "Critical findings found",
     "emptyTitle": "No activity",
     "emptyBody": "No pull requests were opened or merged in this period."
   }

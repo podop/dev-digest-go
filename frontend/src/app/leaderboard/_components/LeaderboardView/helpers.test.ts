@@ -44,18 +44,22 @@ describe("URL state", () => {
 
 describe("windowRanges (FR18)", () => {
   it("formats a week and its predecessor within one month and across months", () => {
-    expect(windowRanges(window({}))).toEqual({ range: "Sep 28 – Oct 4", previous: "Sep 21 – 27" });
+    expect(windowRanges(window({}), true)).toEqual({ range: "Sep 28 – Oct 4", previous: "Sep 21 – 27" });
   });
 
-  it("formats a 30-day window", () => {
+  it("formats a 30-day window, which has no previous window", () => {
     const w = window({
       key: "30d",
       from: "2026-09-05T00:00:00.000+03:00",
       to: "2026-10-05T00:00:00.000+03:00",
-      previous_from: "2026-08-06T00:00:00.000+03:00",
-      previous_to: "2026-09-05T00:00:00.000+03:00",
+      previous_from: null,
+      previous_to: null,
     });
-    expect(windowRanges(w)).toEqual({ range: "Sep 5 – Oct 4", previous: "Aug 6 – Sep 4" });
+    expect(windowRanges(w, true)).toEqual({ range: "Sep 5 – Oct 4", previous: null });
+  });
+
+  it("leaves out the previous range when nothing was compared, even if the window has a previous one (FR25)", () => {
+    expect(windowRanges(window({}), false)).toEqual({ range: "Sep 28 – Oct 4", previous: null });
   });
 
   it("uses the local calendar days even when the offset changes inside the window, and shows years across a year", () => {
@@ -65,11 +69,12 @@ describe("windowRanges (FR18)", () => {
       previous_from: "2026-12-21T00:00:00.000+02:00",
       previous_to: "2026-12-28T00:00:00.000+02:00",
     });
-    expect(windowRanges(w)).toEqual({ range: "Dec 28, 2026 – Jan 3, 2027", previous: "Dec 21 – 27" });
+    expect(windowRanges(w, true)).toEqual({ range: "Dec 28, 2026 – Jan 3, 2027", previous: "Dec 21 – 27" });
   });
 
   it("returns null for a time that does not parse", () => {
-    expect(windowRanges(window({ from: "garbage" }))).toBeNull();
+    expect(windowRanges(window({ from: "garbage" }), true)).toBeNull();
+    expect(windowRanges(window({ previous_from: "garbage" }), true)).toBeNull();
   });
 });
 

@@ -19,6 +19,7 @@ export const s = {
     textOverflow: "ellipsis",
   } satisfies CSSProperties,
   location: { fontSize: 12, color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } satisfies CSSProperties,
+  prLink: { color: "inherit", textDecoration: "underline" } satisfies CSSProperties,
   counts: { display: "flex", alignItems: "center", gap: 8, flexShrink: 0 } satisfies CSSProperties,
   findings: { fontSize: 12.5, fontWeight: 600, color: "var(--text-secondary)" } satisfies CSSProperties,
   critical: { fontSize: 12.5, fontWeight: 600, color: "var(--crit)" } satisfies CSSProperties,

@@ -19,16 +19,26 @@ export interface HeaderProps {
   repos: readonly { id: string; full_name: string }[] | undefined;
   /** The resolved window of the loaded response; null while loading or failed (no label, no digits). */
   window: LeaderboardPeriod | null;
+  /** The response carries a previous summary: only then the label says what the week is compared with (FR25). */
+  compared: boolean;
   /** The repositories in the filter with their last-polled time; null until the response is loaded. */
   syncRepos: readonly LeaderboardRepo[] | null;
   onPeriodChange: (next: LeaderboardPeriodKey) => void;
   onRepoChange: (next: string) => void;
 }
 
-export function Header({ period, repo, repos, window, syncRepos, onPeriodChange, onRepoChange }: HeaderProps) {
+type Translate = ReturnType<typeof useTranslations<"leaderboard">>;
+
+/** "Week of Sep 28 – Oct 4 · compared with Sep 21 – 27"; without a previous summary (30d, or a previous week without rows) just the range (FR18, FR25). */
+function windowLabel(t: Translate, isWeek: boolean, ranges: { range: string; previous: string | null }): string {
+  if (ranges.previous === null) return t(isWeek ? "header.window.weekAlone" : "header.window.rangeAlone", { range: ranges.range });
+  return t(isWeek ? "header.window.week" : "header.window.range", { range: ranges.range, previous: ranges.previous });
+}
+
+export function Header({ period, repo, repos, window, compared, syncRepos, onPeriodChange, onRepoChange }: HeaderProps) {
   const t = useTranslations("leaderboard");
-  const ranges = window ? windowRanges(window) : null;
-  const label = ranges ? t(window?.key === "30d" ? "header.window.range" : "header.window.week", ranges) : null;
+  const ranges = window ? windowRanges(window, compared) : null;
+  const label = ranges ? windowLabel(t, window?.key === "week", ranges) : null;
 
   const options = React.useMemo(
     () => [

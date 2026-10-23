@@ -6,8 +6,8 @@ import (
 )
 
 // Rank sorts rows in place into table order (spec FR21): health descending with unknown
-// health last, then fewer CRITICAL findings, then repo name, then number. The repository id and
-// PR id only break ties between equal repo names and numbers, so the order is deterministic.
+// health last, then PR number ascending, then repo name. The repository id and PR id only break
+// ties between equal repo names and numbers, so the order is deterministic.
 func Rank(rows []Row) {
 	slices.SortStableFunc(rows, compareRankRows)
 }
@@ -15,9 +15,8 @@ func Rank(rows []Row) {
 func compareRankRows(a, b Row) int {
 	return cmp.Or(
 		compareRankHealth(a.Health, b.Health),
-		cmp.Compare(a.Findings.Critical, b.Findings.Critical),
-		cmp.Compare(a.Repo, b.Repo),
 		cmp.Compare(a.Number, b.Number),
+		cmp.Compare(a.Repo, b.Repo),
 		cmp.Compare(a.RepoID, b.RepoID),
 		cmp.Compare(a.PRID, b.PRID),
 	)

@@ -1,10 +1,13 @@
-/* HotFiles — the leaderboard's "Hot files" card (FR22, mockup): mono path, repo and #numbers on the
+/* HotFiles — the leaderboard's "Hot files" card (FR22, mockup): mono path, repo and #numbers (links to the PR, FR26) on the
    left, "N findings" and a red "N critical" on the right; rows with criticals get a reddish background. */
 "use client";
 
+import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { LeaderboardHotFile } from "@devdigest/shared";
 import { Card } from "@devdigest/ui";
+import { prDetailPath } from "@/lib/pr-urls";
 import { s } from "./styles";
 
 export interface HotFilesProps {
@@ -37,7 +40,22 @@ export function HotFiles({ files }: HotFilesProps) {
                 <span className="mono" style={s.path} title={f.path}>
                   {f.path}
                 </span>
-                <span style={s.location}>{t("location", { repo: f.repo, prs: f.prs.map((n) => `#${n}`).join(", ") })}</span>
+                <span style={s.location}>
+                  {t("location", { repo: f.repo })}{" "}
+                  {f.prs.map((n, i) => (
+                    <React.Fragment key={n}>
+                      {i > 0 && ", "}
+                      {t.rich("prLink", {
+                        number: String(n),
+                        link: (chunks) => (
+                          <Link href={prDetailPath(encodeURIComponent(f.repo_id), n)} style={s.prLink}>
+                            {chunks}
+                          </Link>
+                        ),
+                      })}
+                    </React.Fragment>
+                  ))}
+                </span>
               </div>
               <div style={s.counts}>
                 <span className="tnum" style={s.findings}>

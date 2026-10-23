@@ -55,6 +55,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-23 — src/app/leaderboard/…/HotFiles (next-intl t.rich): rich values cannot carry React elements, and a numeric ICU argument like {number} is locale-formatted (1044 → '1,044') → render per-item links through a rich message with the data inside the tag ('<link>#{number}</link>'), pass the number as String(n), and join the items in JSX (HotFiles.test.tsx asserts the #1044 link)
 - 2026-10-23 — pnpm exec vitest run <name>: the filter is a substring of the file path, so 'helpers' or 'helpers.test' ran ~49 unrelated files → filter by a folder fragment without route brackets (e.g. 'LeaderboardView/helpers', 'leaderboard/_components/LeaderboardView/_components/LeaderboardTable')
 - 2026-10-23 — Zod: a schema with .refine() is a ZodEffects, so .strict()/.extend() are not available on it → build a strict variant with Schema.innerType().strict().refine(<same rule>) (src/test/go-backend-contracts.test.ts evalExpectation)
 - 2026-10-22 — UI smoke checks without a browser setup: the home redirect is client-side (HomeView router.replace), so curl / returns 200 with no Location → render with the cached Playwright headless shell: ~/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell --no-sandbox --virtual-time-budget=15000 --dump-dom <url> and grep the hydrated DOM (title ended on 'Pull requests · DevDigest', AC95)

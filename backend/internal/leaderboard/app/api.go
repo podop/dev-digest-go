@@ -13,9 +13,9 @@ import (
 type API interface {
 	// Leaderboard answers GET /leaderboard: the window of q.Period in q.Location (resolved on
 	// the server clock), the repositories of q.Repo, KPIs of the window and of the previous
-	// window, the ranked rows, awards, needs-attention items, hot files, health by size and the
-	// daily activity. A repository id that is not in the workspace is 404 "Repo not found"; a
-	// workspace without repositories (q.Repo all) answers empty sections and zeroed KPIs
+	// window (none for 30d or when the previous window has no rows), the ranked rows, awards,
+	// needs-attention items, hot files, health by size and the activity chart. A repository id that is not in the
+	// workspace is 404 "Repo not found"; a workspace without repositories (q.Repo all) answers empty sections and zeroed KPIs
 	// without further reads; a database error is 500 internal_error.
 	Leaderboard(ctx context.Context, workspaceID string, q domain.Query) (domain.Leaderboard, error)
 }

@@ -1,10 +1,13 @@
 /* NeedsAttention — the leaderboard's "Needs attention" card (FR22, mockup): a count, then one row per
-   PR with mono repo#number, a truncated bold title, the author and red outlined reason badges. */
+   PR with mono repo#number (a link to the PR detail page), a truncated bold title, the author and outlined reason badges (red for the critical
+   reasons, neutral for the rest). */
 "use client";
 
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { LeaderboardAttention, LeaderboardAttentionReason, LeaderboardNeedsAttention } from "@devdigest/shared";
 import { Avatar, Badge, Card } from "@devdigest/ui";
+import { prDetailPath } from "@/lib/pr-urls";
 import { s } from "./styles";
 
 export interface NeedsAttentionProps {
@@ -28,13 +31,16 @@ function reasonLabel(t: Translate, r: LeaderboardAttentionReason): string {
   }
 }
 
+/** The reasons that mean an open critical finding (shown in red). */
+const isCriticalReason = (r: LeaderboardAttentionReason): boolean => r.kind === "merged_open_critical" || r.kind === "open_critical";
+
 function Item({ item, t }: { item: LeaderboardAttention; t: Translate }) {
   return (
     <li style={s.item} data-series={item.pr_id}>
       <div style={s.head}>
-        <span className="mono" style={s.ref}>
+        <Link href={prDetailPath(encodeURIComponent(item.repo_id), item.number)} className="mono" style={s.ref}>
           {item.repo}#{item.number}
-        </span>
+        </Link>
         <span style={s.prTitle} title={item.title}>
           {item.title}
         </span>
@@ -45,7 +51,7 @@ function Item({ item, t }: { item: LeaderboardAttention; t: Translate }) {
       </div>
       <div style={s.reasons}>
         {item.reasons.map((r) => (
-          <Badge key={r.kind} style={s.reason}>
+          <Badge key={r.kind} style={isCriticalReason(r) ? s.reasonCritical : s.reason}>
             {reasonLabel(t, r)}
           </Badge>
         ))}
@@ -67,7 +73,6 @@ export function NeedsAttention({ data }: NeedsAttentionProps) {
       {items.length === 0 ? (
         <div style={s.empty}>
           <strong style={s.emptyTitle}>{t("emptyTitle")}</strong>
-          <span>{t("emptyBody")}</span>
         </div>
       ) : (
         <ul style={s.list} aria-label={t("title")}>

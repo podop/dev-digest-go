@@ -121,7 +121,7 @@ func TestHealthBySize_Empty(t *testing.T) {
 	}
 }
 
-func TestHealthBySizeFourBucketsWithNulls(t *testing.T) {
+func TestHealthBySizeFiveBucketsWithNulls(t *testing.T) {
 	rows := []domain.Row{
 		aggSizeRow(domain.SizeS, aggPtr(90), domain.FindingCounts{Critical: 1}),
 		aggSizeRow(domain.SizeS, aggPtr(81), domain.FindingCounts{Warning: 1, Suggestion: 1}),
@@ -130,9 +130,11 @@ func TestHealthBySizeFourBucketsWithNulls(t *testing.T) {
 		aggSizeRow(domain.SizeNone, aggPtr(5), domain.FindingCounts{Critical: 9}), // unknown size is left out (EC9)
 		aggSizeRow(domain.SizeXL, aggPtr(40), domain.FindingCounts{}),
 		aggSizeRow(domain.SizeXL, nil, domain.FindingCounts{Suggestion: 1}), // nil health skipped in the mean
+		aggSizeRow(domain.SizeXS, aggPtr(100), domain.FindingCounts{}),
 	}
 	got := domain.HealthBySize(rows)
 	want := []domain.SizeBucket{
+		{Size: domain.SizeXS, PRs: 1, AvgHealth: aggPtr(100), AvgFindings: aggPtr(0.0)},
 		{Size: domain.SizeS, PRs: 3, AvgHealth: aggPtr(80), AvgFindings: aggPtr(2.3)},
 		{Size: domain.SizeM},
 		{Size: domain.SizeL, PRs: 1, AvgFindings: aggPtr(2.0)},
@@ -148,7 +150,7 @@ func TestHealthBySizeRoundsHealthHalfUp(t *testing.T) {
 		aggSizeRow(domain.SizeM, aggPtr(70), domain.FindingCounts{}),
 		aggSizeRow(domain.SizeM, aggPtr(71), domain.FindingCounts{}),
 	}
-	got := domain.HealthBySize(rows)[1]
+	got := domain.HealthBySize(rows)[2]
 	if got.AvgHealth == nil || *got.AvgHealth != 71 {
 		t.Errorf("HealthBySize(70, 71)[M].AvgHealth = %v, want 71", got.AvgHealth)
 	}

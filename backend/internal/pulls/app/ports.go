@@ -16,6 +16,10 @@ var ErrNoToken = errors.New("github token is not configured")
 type GitHubError struct {
 	Status  int
 	Message string
+	// RateLimited is true when GitHub said the rate limit is used up (remaining 0).
+	RateLimited bool
+	// RateLimitReset is when GitHub says the limit renews; the zero time when it said nothing valid.
+	RateLimitReset time.Time
 }
 
 func (e *GitHubError) Error() string {
@@ -53,4 +57,30 @@ type gitHub interface {
 	GetIssue(ctx context.Context, owner, name string, number int) (domain.Issue, error)
 	ListReviewComments(ctx context.Context, owner, name string, number int) ([]domain.ReviewComment, error)
 	CreateReviewComment(ctx context.Context, owner, name string, number int, in domain.CommentInput) (domain.ReviewComment, error)
+}
+
+// PollTargets lists the repositories the background poll refreshes: every repository of every
+// workspace, grouped by workspace.
+type PollTargets interface {
+	ListPollTargets(ctx context.Context) ([]domain.PollTarget, error)
+}
+
+// IntervalSource gives the background-poll interval of a workspace (its Settings
+// polling_interval_min). The poller reads it before every cycle, falls back to
+// domain.DefaultPollInterval on an error or a non-positive value and clamps it to 1 min .. 24 h.
+type IntervalSource interface {
+	Interval(ctx context.Context, workspaceID string) (time.Duration, error)
+}
+
+// PageLister reads one page (1-based) of a repository's PRs, newest update first. It fails with
+// ErrNoToken when no token is configured and with a *GitHubError for a non-2xx answer. The poller's
+// instance must not retry (a retry would break the 10 requests per repo bound).
+type PageLister interface {
+	ListPullRequestsPage(ctx context.Context, owner, name string, page, perPage int) ([]domain.Listed, error)
+}
+
+// PollStore is the persistence of the background poll.
+type PollStore interface {
+	UpsertListed(ctx context.Context, workspaceID, repoID string, listed []domain.Listed) error
+	MarkPolled(ctx context.Context, workspaceID, repoID string, at time.Time) error
 }

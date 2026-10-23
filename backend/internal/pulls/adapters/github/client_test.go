@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -121,4 +122,61 @@ func TestGetPullRequest_mergesAndMaps(t *testing.T) {
 	if got.Commits[0].CommittedAt == nil {
 		t.Errorf("commit committed_at = nil, want the date")
 	}
+}
+
+func TestListPullRequestsPage_requestsThePageAndMapsFields(t *testing.T) {
+	var query map[string][]string
+	a := newAdapter(t, "tok", func(w http.ResponseWriter, r *http.Request) {
+		query = r.URL.Query()
+		reply(200, []map[string]any{{
+			"number": 9, "title": "T", "user": map[string]string{"login": "u"}, "head": map[string]string{"ref": "f", "sha": "s"},
+			"base": map[string]string{"ref": "main"}, "state": "closed", "merged_at": "2026-10-02T00:00:00Z",
+			"closed_at": "2026-10-02T00:00:01Z", "draft": true, "updated_at": "2026-10-03T00:00:00Z",
+		}})(w, r)
+	})
+	got, err := a.ListPullRequestsPage(t.Context(), "acme", "api", 3, 20)
+	if err != nil {
+		t.Fatalf("ListPullRequestsPage(3, 20) error = %v", err)
+	}
+	wantQuery := map[string][]string{"state": {"all"}, "sort": {"updated"}, "direction": {"desc"}, "per_page": {"20"}, "page": {"3"}}
+	if diff := cmp.Diff(wantQuery, query); diff != "" {
+		t.Errorf("ListPullRequestsPage(3, 20) query mismatch (-want +got):\n%s", diff)
+	}
+	if len(got) != 1 || got[0].Number != 9 || got[0].Status != "merged" || !got[0].Draft || got[0].MergedAt == nil || got[0].ClosedAt == nil {
+		t.Errorf("ListPullRequestsPage(3, 20) = %+v, want PR 9 merged and draft with merged/closed times", got)
+	}
+}
+
+func TestListPullRequestsPage_translatesErrors(t *testing.T) {
+	t.Run("no token", func(t *testing.T) {
+		a := newAdapter(t, "", reply(200, []any{}))
+		if _, err := a.ListPullRequestsPage(t.Context(), "acme", "api", 1, 50); !errors.Is(err, app.ErrNoToken) {
+			t.Errorf("ListPullRequestsPage() error = %v, want app.ErrNoToken", err)
+		}
+	})
+	t.Run("rate limited keeps the reset", func(t *testing.T) {
+		reset := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+		a := newAdapter(t, "tok", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-RateLimit-Remaining", "0")
+			w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset.Unix(), 10))
+			reply(403, map[string]string{"message": "API rate limit exceeded"})(w, r)
+		})
+		_, err := a.ListPullRequestsPage(t.Context(), "acme", "api", 1, 50)
+		want := &app.GitHubError{Status: 403, Message: "API rate limit exceeded", RateLimited: true, RateLimitReset: reset}
+		var ge *app.GitHubError
+		if !errors.As(err, &ge) {
+			t.Fatalf("ListPullRequestsPage() error = %v, want *app.GitHubError", err)
+		}
+		if diff := cmp.Diff(want, ge, cmp.Comparer(time.Time.Equal)); diff != "" {
+			t.Errorf("ListPullRequestsPage() error mismatch (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("plain 500 is not rate limited", func(t *testing.T) {
+		a := newAdapter(t, "tok", reply(500, map[string]string{"message": "boom"}))
+		_, err := a.ListPullRequestsPage(t.Context(), "acme", "api", 1, 50)
+		var ge *app.GitHubError
+		if !errors.As(err, &ge) || ge.Status != 500 || ge.RateLimited || !ge.RateLimitReset.IsZero() {
+			t.Errorf("ListPullRequestsPage() error = %v, want a 500 without rate-limit state", err)
+		}
+	})
 }

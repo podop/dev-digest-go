@@ -15,6 +15,7 @@ import (
 // api is the part of *ghclient.Client the adapter calls.
 type api interface {
 	ListPullRequests(ctx context.Context, owner, name string) ([]ghclient.PullSummary, error)
+	ListPullRequestsPage(ctx context.Context, owner, name string, page, perPage int) ([]ghclient.PullSummary, error)
 	GetPullRequest(ctx context.Context, owner, name string, number int) (ghclient.PullDetail, error)
 	GetIssue(ctx context.Context, owner, name string, number int) (ghclient.Issue, error)
 	ListReviewComments(ctx context.Context, owner, name string, number int) ([]ghclient.ReviewComment, error)
@@ -32,6 +33,20 @@ func New(c *ghclient.Client) *Adapter { return &Adapter{api: c} }
 // ListPullRequests returns one page of up to 50 PRs, most recently updated first.
 func (a *Adapter) ListPullRequests(ctx context.Context, owner, name string) ([]domain.Listed, error) {
 	pulls, err := a.api.ListPullRequests(ctx, owner, name)
+	if err != nil {
+		return nil, mapErr(err)
+	}
+	out := make([]domain.Listed, len(pulls))
+	for i, p := range pulls {
+		out[i] = listed(p)
+	}
+	return out, nil
+}
+
+// ListPullRequestsPage returns page `page` (1-based) of `perPage` (1..100) PRs of any state, most
+// recently updated first. A page shorter than perPage is the last one.
+func (a *Adapter) ListPullRequestsPage(ctx context.Context, owner, name string, page, perPage int) ([]domain.Listed, error) {
+	pulls, err := a.api.ListPullRequestsPage(ctx, owner, name, page, perPage)
 	if err != nil {
 		return nil, mapErr(err)
 	}
@@ -120,15 +135,18 @@ func comment(c ghclient.ReviewComment) domain.ReviewComment {
 	}
 }
 
-// mapErr converts client errors to the app's: the missing token and non-2xx answers get their
-// own types, everything else (network, timeout, decoding) passes through unchanged.
+// mapErr converts client errors to the app's: the missing token and non-2xx answers (with the
+// rate-limit state) get their own types, everything else (network, timeout, decoding) passes through unchanged.
 func mapErr(err error) error {
 	if errors.Is(err, ghclient.ErrNoToken) {
 		return app.ErrNoToken
 	}
 	var se *ghclient.StatusError
 	if errors.As(err, &se) {
-		return &app.GitHubError{Status: se.Status, Message: se.Message}
+		return &app.GitHubError{
+			Status: se.Status, Message: se.Message,
+			RateLimited: se.RateLimited(), RateLimitReset: se.RateLimitReset,
+		}
 	}
 	return err
 }

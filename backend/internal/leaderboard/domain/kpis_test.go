@@ -9,7 +9,7 @@ import (
 	"dev-digest-go/backend/internal/leaderboard/domain"
 )
 
-// Shared fixtures of the aggregate tests (kpis, awards, attention, files, daily). Names carry an
+// Shared fixtures of the aggregate tests (kpis, awards, attention, files, activity). Names carry an
 // "agg" prefix: the other test files of this package are written in parallel.
 
 var aggBase = time.Date(2026, time.October, 5, 0, 0, 0, 0, time.UTC) // a Monday
@@ -29,7 +29,7 @@ func aggSpan() domain.Span { return domain.Span{From: aggAt(0), To: aggAt(7)} }
 func aggWindow() domain.Window {
 	return domain.Window{
 		Key: domain.PeriodWeek, Location: time.UTC,
-		From: aggAt(0), To: aggAt(7), PrevFrom: aggAt(-7), PrevTo: aggAt(0), Days: 7,
+		From: aggAt(0), To: aggAt(7), HasPrev: true, PrevFrom: aggAt(-7), PrevTo: aggAt(0), Days: 7,
 	}
 }
 

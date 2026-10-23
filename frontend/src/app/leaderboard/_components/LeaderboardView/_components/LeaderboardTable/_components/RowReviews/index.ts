@@ -1,1 +1,0 @@
-export { RowReviews } from "./RowReviews";

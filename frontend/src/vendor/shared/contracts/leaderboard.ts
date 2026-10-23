@@ -12,6 +12,9 @@ import { PrStatus } from './platform.js';
  *    Every other timestamp is UTC with milliseconds (`…Z`).
  *  - `health` and `size` of a row are nullable (no scored review / diff stats
  *    still 0); medians and means are null when there is nothing to average.
+ *  - `30d` has no previous window (D19): `period.previous_*` and `previous_summary`
+ *    are null; so is `previous_summary` for a previous week without rows (FR7, FR11).
+ *  - `activity.points` hold LOCAL calendar dates (`YYYY-MM-DD`) of `tz`, `to` inclusive.
  *  - Durations are whole seconds; money is a number rounded to 6 decimals.
  *
  * The backend (backend/internal/leaderboard) changes together with this file.
@@ -21,14 +24,14 @@ export const LEADERBOARD_PERIODS = ['week', 'last_week', '30d'] as const;
 export const LeaderboardPeriodKey = z.enum(LEADERBOARD_PERIODS);
 export type LeaderboardPeriodKey = z.infer<typeof LeaderboardPeriodKey>;
 
-/** The resolved window: local times of `tz` with offset, `to` exclusive. */
+/** The resolved window: local times of `tz` with offset, `to` exclusive; no previous window for `30d`. */
 export const LeaderboardPeriod = z.object({
   key: LeaderboardPeriodKey,
   tz: z.string(),
   from: z.string(),
   to: z.string(),
-  previous_from: z.string(),
-  previous_to: z.string(),
+  previous_from: z.string().nullable(),
+  previous_to: z.string().nullable(),
 });
 export type LeaderboardPeriod = z.infer<typeof LeaderboardPeriod>;
 
@@ -61,7 +64,7 @@ export const LeaderboardSeverityCounts = z.object({
 });
 export type LeaderboardSeverityCounts = z.infer<typeof LeaderboardSeverityCounts>;
 
-export const LeaderboardSize = z.enum(['S', 'M', 'L', 'XL']);
+export const LeaderboardSize = z.enum(['XS', 'S', 'M', 'L', 'XL']);
 export type LeaderboardSize = z.infer<typeof LeaderboardSize>;
 
 export const LeaderboardRisk = z.enum(['low', 'medium', 'high']);
@@ -77,6 +80,21 @@ export const LeaderboardRowReview = z.object({
   findings: LeaderboardSeverityCounts,
 });
 export type LeaderboardRowReview = z.infer<typeof LeaderboardRowReview>;
+
+export const LeaderboardFindingState = z.enum(['open', 'accepted', 'dismissed']);
+export type LeaderboardFindingState = z.infer<typeof LeaderboardFindingState>;
+
+/** A notable finding of a row (shown when the row expands); at most 3 per row, worst first. */
+export const LeaderboardTopFinding = z.object({
+  finding_id: z.string(),
+  severity: z.enum(['CRITICAL', 'WARNING', 'SUGGESTION']),
+  title: z.string(),
+  file: z.string(),
+  start_line: z.number().int(),
+  agent_name: z.string(),
+  state: LeaderboardFindingState,
+});
+export type LeaderboardTopFinding = z.infer<typeof LeaderboardTopFinding>;
 
 /** One ranked PR of the table. */
 export const LeaderboardRow = z.object({
@@ -105,6 +123,7 @@ export const LeaderboardRow = z.object({
   opened_at: z.string().nullable(),
   merged_at: z.string().nullable(),
   reviews: z.array(LeaderboardRowReview),
+  top_findings: z.array(LeaderboardTopFinding).max(3),
 });
 export type LeaderboardRow = z.infer<typeof LeaderboardRow>;
 
@@ -175,7 +194,7 @@ export const LeaderboardHotFile = z.object({
 });
 export type LeaderboardHotFile = z.infer<typeof LeaderboardHotFile>;
 
-/** One of the four size buckets; averages are null for an empty bucket. */
+/** One of the five size buckets (XS–XL); averages are null for an empty bucket. */
 export const LeaderboardSizeBucket = z.object({
   size: LeaderboardSize,
   prs: z.number().int(),
@@ -184,26 +203,34 @@ export const LeaderboardSizeBucket = z.object({
 });
 export type LeaderboardSizeBucket = z.infer<typeof LeaderboardSizeBucket>;
 
-/** One calendar day of the window in `tz` (`YYYY-MM-DD`). */
-export const LeaderboardDay = z.object({
-  date: z.string(),
+/** One bar group of the activity chart: a day or a Monday-started week clipped to the window; `YYYY-MM-DD` in `tz`, `to` inclusive. */
+export const LeaderboardActivityPoint = z.object({
+  from: z.string(),
+  to: z.string(),
   opened: z.number().int(),
   merged: z.number().int(),
   critical: z.number().int(),
 });
-export type LeaderboardDay = z.infer<typeof LeaderboardDay>;
+export type LeaderboardActivityPoint = z.infer<typeof LeaderboardActivityPoint>;
+
+/** Activity over the window: a point per day (`week`, `last_week`) or per week (`30d`). */
+export const LeaderboardActivity = z.object({
+  granularity: z.enum(['day', 'week']),
+  points: z.array(LeaderboardActivityPoint),
+});
+export type LeaderboardActivity = z.infer<typeof LeaderboardActivity>;
 
 /** Response of GET /leaderboard. */
 export const Leaderboard = z.object({
   period: LeaderboardPeriod,
   repos: z.array(LeaderboardRepo),
   summary: LeaderboardKpis,
-  previous_summary: LeaderboardKpis,
+  previous_summary: LeaderboardKpis.nullable(),
   awards: LeaderboardAwards,
   rows: z.array(LeaderboardRow),
   needs_attention: LeaderboardNeedsAttention,
   hot_files: z.array(LeaderboardHotFile),
   health_by_size: z.array(LeaderboardSizeBucket),
-  daily: z.array(LeaderboardDay),
+  activity: LeaderboardActivity,
 });
 export type Leaderboard = z.infer<typeof Leaderboard>;

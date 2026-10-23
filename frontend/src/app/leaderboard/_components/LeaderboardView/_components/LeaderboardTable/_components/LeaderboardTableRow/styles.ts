@@ -7,7 +7,7 @@ export const s = {
   rank: { color: "var(--text-muted)", fontWeight: 600 } satisfies CSSProperties,
   prCell: { maxWidth: 340 } satisfies CSSProperties,
   prMeta: { display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, color: "var(--text-muted)" } satisfies CSSProperties,
-  repoNumber: { color: "var(--text-secondary)", fontWeight: 600 } satisfies CSSProperties,
+  repoNumber: { color: "var(--text-secondary)", fontWeight: 600, textDecoration: "none" } satisfies CSSProperties,
   title: { fontWeight: 700, fontSize: 13.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 3 } satisfies CSSProperties,
   stack: { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4 } satisfies CSSProperties,
   sizeBadge: (color: string): CSSProperties => ({ border: `1px solid ${color}` }),

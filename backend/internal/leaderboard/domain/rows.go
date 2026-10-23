@@ -8,17 +8,21 @@ import (
 )
 
 // BuildRows folds one Facts read into the rows of the window (cur) and of the previous window
-// (prev), spec FR8-FR10. A PR is a row of a window when at least one of its reviews (kind
+// (prev; nil when the window has none, 30d), spec FR8-FR10. A PR is a row of a window when at least one of its reviews (kind
 // review) was created in the window's half-open range. The snapshot of a row is the newest
 // review per agent created in that range; reviews of deleted agents are one agent. The result
 // is not ranked: it is ordered by repo, number and PR id only so that equal input gives equal
 // output; call Rank to order it for the page.
 //
-// Facts must cover [win.PrevFrom, win.To); reviews, runs and findings outside a window's range
+// Facts must cover [win.ReadFrom(), win.To); reviews, runs and findings outside a window's range
 // are ignored by that window. now is the only clock (open age, derived status).
 func BuildRows(win Window, f Facts, now time.Time) (cur, prev []Row) {
 	in := newRowInput(f)
-	return in.rows(win.Cur(), now), in.rows(win.Prev(), now)
+	cur = in.rows(win.Cur(), now)
+	if win.HasPrev {
+		prev = in.rows(win.Prev(), now)
+	}
+	return cur, prev
 }
 
 // rowInput holds Facts indexed by the keys the folds join on.
@@ -106,7 +110,8 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 		Reviews:               make([]RowReview, 0, len(snapshot)),
 	}
 
-	var scoreSum, scoreN, riskPoints int
+	var healthPoints, riskPoints int
+	var top []TopFinding
 	for _, r := range snapshot {
 		rr := RowReview{
 			ReviewID:  r.ReviewID,
@@ -127,8 +132,18 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 				AcceptedAt:  fi.AcceptedAt,
 				DismissedAt: fi.DismissedAt,
 			})
+			top = append(top, TopFinding{
+				FindingID: fi.FindingID,
+				Severity:  fi.Severity,
+				Title:     fi.Title,
+				File:      fi.File,
+				StartLine: fi.StartLine,
+				AgentName: rr.AgentName,
+				State:     findingState(fi),
+			})
 			addSeverity(&rr.Findings, fi.Severity)
 			if fi.DismissedAt == nil {
+				healthPoints += healthWeight(fi.Severity)
 				riskPoints += severityWeight(fi.Severity)
 				if fi.Severity == SeverityCritical && fi.AcceptedAt == nil {
 					row.OpenCritical++
@@ -138,20 +153,17 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 		row.Findings.Critical += rr.Findings.Critical
 		row.Findings.Warning += rr.Findings.Warning
 		row.Findings.Suggestion += rr.Findings.Suggestion
-		if r.Score != nil {
-			scoreSum += *r.Score
-			scoreN++
-		}
 		row.Reviews = append(row.Reviews, rr)
 	}
 	slices.SortFunc(row.Reviews, func(a, b RowReview) int {
 		return cmp.Or(cmp.Compare(a.AgentName, b.AgentName), cmp.Compare(a.ReviewID, b.ReviewID))
 	})
 
-	if scoreN > 0 {
-		h := int(math.Round(float64(scoreSum) / float64(scoreN)))
+	if rounds > 0 {
+		h := max(0, HealthBase-healthPoints-HealthPerExtraRound*(rounds-1))
 		row.Health = &h
 	}
+	row.TopFindings = topFindings(top)
 	row.Risk = riskOfPoints(riskPoints)
 	row.TimeToFirstReviewS = rowSecondsBetween(p.OpenedAt, p.FirstReviewAt)
 	if row.Status == StatusMerged {
@@ -162,6 +174,55 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 		row.OpenAgeS = &age
 	}
 	return row
+}
+
+// findingState is the triage state of a finding; dismissed wins over accepted (EC7).
+func findingState(f FindingFact) string {
+	switch {
+	case f.DismissedAt != nil:
+		return FindingDismissed
+	case f.AcceptedAt != nil:
+		return FindingAccepted
+	}
+	return FindingOpen
+}
+
+// topFindings keeps the TopFindingsLimit most notable findings: severity (CRITICAL first), then
+// state (open, accepted, dismissed), then file, start line and finding id. It never returns nil.
+func topFindings(all []TopFinding) []TopFinding {
+	slices.SortFunc(all, func(a, b TopFinding) int {
+		return cmp.Or(
+			cmp.Compare(severityOrder(a.Severity), severityOrder(b.Severity)),
+			cmp.Compare(stateOrder(a.State), stateOrder(b.State)),
+			cmp.Compare(a.File, b.File),
+			cmp.Compare(a.StartLine, b.StartLine),
+			cmp.Compare(a.FindingID, b.FindingID),
+		)
+	})
+	n := min(len(all), TopFindingsLimit)
+	return append(make([]TopFinding, 0, n), all[:n]...)
+}
+
+func severityOrder(severity string) int {
+	switch severity {
+	case SeverityCritical:
+		return 0
+	case SeverityWarning:
+		return 1
+	case SeveritySuggestion:
+		return 2
+	}
+	return 3
+}
+
+func stateOrder(state string) int {
+	switch state {
+	case FindingOpen:
+		return 0
+	case FindingAccepted:
+		return 1
+	}
+	return 2
 }
 
 // windowSnapshot returns the newest review per agent (a later CreatedAt wins, then the larger
@@ -200,17 +261,20 @@ func rowStatus(p PullFact, now time.Time) string {
 	return StatusReviewed
 }
 
-// sizeOfPull buckets additions + deletions; SizeNone when all three stats are 0 (EC9).
+// sizeOfPull buckets additions + deletions (XS < 50, S < 200, M < 500, L < 1000, XL above);
+// SizeNone when all three stats are 0 (EC9).
 func sizeOfPull(p PullFact) Size {
 	if p.Additions == 0 && p.Deletions == 0 && p.FilesCount == 0 {
 		return SizeNone
 	}
 	switch lines := p.Additions + p.Deletions; {
-	case lines <= SizeMaxS:
+	case lines < SizeBelowS:
+		return SizeXS
+	case lines < SizeBelowM:
 		return SizeS
-	case lines <= SizeMaxM:
+	case lines < SizeBelowL:
 		return SizeM
-	case lines <= SizeMaxL:
+	case lines < SizeBelowXL:
 		return SizeL
 	default:
 		return SizeXL
@@ -227,6 +291,19 @@ func riskOfPoints(points int) Risk {
 	default:
 		return RiskLow
 	}
+}
+
+// healthWeight is what a non-dismissed finding takes off the health (spec FR10).
+func healthWeight(severity string) int {
+	switch severity {
+	case SeverityCritical:
+		return HealthCritical
+	case SeverityWarning:
+		return HealthWarning
+	case SeveritySuggestion:
+		return HealthSuggestion
+	}
+	return 0
 }
 
 func severityWeight(severity string) int {

@@ -2,7 +2,9 @@ import type { CSSProperties } from "react";
 
 export const s = {
   card: { border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg-elevated)", overflow: "hidden" } satisfies CSSProperties,
-  header: { margin: 0, padding: "12px 16px", fontSize: 13.5, fontWeight: 700, borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
+  header: { display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid var(--border)" } satisfies CSSProperties,
+  heading: { margin: 0, fontSize: 13.5, fontWeight: 700 } satisfies CSSProperties,
+  reset: { all: "unset", cursor: "pointer", marginLeft: "auto", fontSize: 12, color: "var(--accent-text)" } satisfies CSSProperties,
   scroll: { overflowX: "auto" } satisfies CSSProperties,
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 } satisfies CSSProperties,
   th: {

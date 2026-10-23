@@ -12,4 +12,16 @@ describe("FindingChips", () => {
     expect(screen.getByText("W 0").style.color).toBe("var(--text-muted)");
     expect(screen.getByText("S 1")).toBeInTheDocument();
   });
+
+  it("outlines the CRITICAL chip in red only while some critical findings are still open", () => {
+    const counts = { CRITICAL: 2, WARNING: 1, SUGGESTION: 0 };
+    const { rerender } = renderWithProviders(<FindingChips counts={counts} openCritical={1} />);
+    expect(screen.getByRole("img", { name: "2 critical (1 still open), 1 warning, 0 suggestion" })).toBeInTheDocument();
+    expect(screen.getByText("C 2").style.borderColor).toBe("var(--crit)");
+    expect(screen.getByText("W 1").style.borderColor).toBe("");
+
+    rerender(<FindingChips counts={counts} openCritical={0} />);
+    expect(screen.getByRole("img", { name: "2 critical, 1 warning, 0 suggestion" })).toBeInTheDocument();
+    expect(screen.getByText("C 2").style.borderColor).toBe("");
+  });
 });

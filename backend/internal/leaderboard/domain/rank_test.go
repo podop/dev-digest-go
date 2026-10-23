@@ -33,16 +33,16 @@ func TestRank(t *testing.T) {
 			want: []string{"c", "b", "a"},
 		},
 		{
-			name: "unknown health last, ordered among themselves by the tie-breakers",
+			name: "unknown health last, ordered among themselves by number, then repo",
 			in: []domain.Row{
-				rankRow("n1", nil, 3, "api", 1), rankRow("a", h(10), 9, "web", 9),
-				rankRow("n2", nil, 1, "web", 2), rankRow("n3", nil, 1, "api", 5),
+				rankRow("n1", nil, 3, "api", 4), rankRow("a", h(10), 9, "web", 9),
+				rankRow("n2", nil, 1, "web", 2), rankRow("n3", nil, 1, "api", 5), rankRow("n4", nil, 1, "api", 2),
 			},
-			want: []string{"a", "n3", "n2", "n1"},
+			want: []string{"a", "n4", "n2", "n1", "n3"},
 		},
 		{
-			name: "equal health: fewer critical first",
-			in:   []domain.Row{rankRow("a", h(80), 2, "api", 1), rankRow("b", h(80), 0, "api", 2), rankRow("c", h(80), 1, "api", 3)},
+			name: "equal health: PR number ascending, critical findings do not matter",
+			in:   []domain.Row{rankRow("a", h(80), 0, "api", 3), rankRow("b", h(80), 2, "api", 1), rankRow("c", h(80), 1, "api", 2)},
 			want: []string{"b", "c", "a"},
 		},
 		{
@@ -51,12 +51,12 @@ func TestRank(t *testing.T) {
 			want: []string{"b", "a"},
 		},
 		{
-			name: "equal health and critical: repo, then number",
+			name: "equal health and number: repo",
 			in: []domain.Row{
 				rankRow("a", h(80), 1, "web", 1), rankRow("b", h(80), 1, "api", 10),
-				rankRow("c", h(80), 1, "api", 2), rankRow("d", h(80), 1, "docs", 1),
+				rankRow("c", h(80), 1, "api", 1), rankRow("d", h(80), 1, "docs", 1),
 			},
-			want: []string{"c", "b", "d", "a"},
+			want: []string{"c", "d", "a", "b"},
 		},
 		{
 			name: "same repo name and number: repo id, then PR id",
@@ -87,7 +87,7 @@ func TestRank_InputOrderIndependent(t *testing.T) {
 		rankRow("a", h(80), 1, "api", 1), rankRow("b", h(80), 1, "api", 2), rankRow("c", nil, 0, "api", 3),
 		rankRow("d", h(95), 4, "web", 1), rankRow("e", h(80), 0, "web", 2),
 	}
-	want := []string{"d", "e", "a", "b", "c"}
+	want := []string{"d", "a", "b", "e", "c"}
 	for shift := range rows {
 		in := append(append([]domain.Row{}, rows[shift:]...), rows[:shift]...)
 		domain.Rank(in)

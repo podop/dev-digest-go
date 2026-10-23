@@ -56,6 +56,12 @@ type Config struct {
 	// zero value is off: a hand-built Config (the component tests' newConfig) runs reviews as
 	// Phase 4 did.
 	ReviewIntentEnabled bool
+	// PRPollEnabled is PR_POLL_ENABLED, off only on "false" (after trimming; empty or unset is on).
+	// It decides whether cmd starts the background poll of every repository's pull requests
+	// (leaderboard spec FR3). The interval is each workspace's Settings polling_interval_min, not
+	// an environment variable. The zero value is off: a hand-built Config (the component tests'
+	// newConfig) starts no poller.
+	PRPollEnabled bool
 
 	LLMProviderOverride string        // LLM_PROVIDER_OVERRIDE: "" or LLMProviderMock
 	LLMMockDelay        time.Duration // LLM_MOCK_DELAY_MS, 0 to 60 s
@@ -94,6 +100,7 @@ type Config struct {
 // DefaultProjectContextGlobs. REVIEW_AGENT_CONCURRENCY (integer 1-20, default 4) and
 // REVIEW_MAP_CONCURRENCY (integer 1-16, default 3) bound the parallelism of a review request; an
 // empty value counts as unset and any other value is an error naming the variable.
+// PR_POLL_ENABLED (default on, off only on "false") switches the background PR poll.
 // DB_MAX_OPEN_CONNS (integer 1-90, default 20) caps the connections of the Postgres pool; work
 // beyond the cap waits for a free connection (Postgres itself refuses clients above its
 // max_connections, 100 by default).
@@ -109,6 +116,7 @@ func Load(getenv func(string) string) (Config, error) {
 		RepoIntelEnabled: enabled(getenv("REPO_INTEL_ENABLED")),
 		// Spec 7.14: on unless the trimmed value is exactly "false".
 		ReviewIntentEnabled: enabled(getenv("REVIEW_INTENT_ENABLED")),
+		PRPollEnabled:       enabled(getenv("PR_POLL_ENABLED")),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

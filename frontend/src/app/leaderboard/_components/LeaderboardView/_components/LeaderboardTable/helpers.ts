@@ -1,7 +1,7 @@
 import type { LeaderboardRow } from "@devdigest/shared";
-import type { SortKey, SortState } from "./constants";
+import { firstSortDir, type SortKey, type SortState } from "./constants";
 
-const SIZE_ORDER: Record<NonNullable<LeaderboardRow["size"]>, number> = { S: 1, M: 2, L: 3, XL: 4 };
+const SIZE_ORDER: Record<NonNullable<LeaderboardRow["size"]>, number> = { XS: 0, S: 1, M: 2, L: 3, XL: 4 };
 
 /** A row with its position in the server order (the "#" column stays that rank while sorting). */
 export interface RankedRow {
@@ -43,10 +43,11 @@ function compareFindings(a: LeaderboardRow, b: LeaderboardRow): number {
   );
 }
 
-/** Next sort after a click on `key`: descending, then ascending, then back to the server rank. */
+/** Next sort after a click on `key`: descending, then ascending, then back to the server rank (Time: ascending first, then descending). */
 export function nextSort(current: SortState | null, key: SortKey): SortState | null {
-  if (current?.key !== key) return { key, dir: "desc" };
-  return current.dir === "desc" ? { key, dir: "asc" } : null;
+  const first = firstSortDir(key);
+  if (current?.key !== key) return { key, dir: first };
+  return current.dir === first ? { key, dir: first === "desc" ? "asc" : "desc" } : null;
 }
 
 /** Rows ordered by `sort` (null ⇒ server rank). Nulls last in both directions; ties keep the rank. */

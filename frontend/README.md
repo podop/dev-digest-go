@@ -35,6 +35,7 @@ flowchart TD
   CONV["/repos/:repoId/conventions<br/>rules + create-skill modal"]
   CTX["/repos/:repoId/context<br/>spec / doc / insight markdown, view-only"]
   TOUR["/repos/:repoId/onboarding<br/>five-part onboarding tour: generate, TOC, share"]
+  LB["/leaderboard<br/>PR leaderboard · ?period=week|last_week|30d · ?repo=all|id"]
   EVAL["/eval<br/>agents overview · ?agent=id runs, trend, compare"]
   MA["/multi-agent<br/>recent runs per repo"] --> MANEW["/multi-agent/new<br/>pick PR + 2+ agents, estimates"]
   MA --> MARUN["/multi-agent/:id<br/>agent columns, grouped findings, Learn"]
@@ -48,6 +49,8 @@ flowchart TD
   CONV -->|"/repos/:id/conventions · /extract · /skill · /conventions/:id"| API
   CTX -->|"/repos/:id/context · /repos/:id/context/doc?path="| API
   TOUR -->|"GET · POST /repos/:id/onboarding · /repos/:id/index-state"| API
+  LB -->|"GET /leaderboard?period=&tz=&repo= · /repos"| API
+  LB -.->|"PR links"| PR
   EVAL -->|"GET /eval/dashboard · /agents/:id/eval/dashboard · /agents/:id/eval-runs · /eval-runs/:id · /eval-runs/compare<br/>POST /agents/:id/eval-runs · /eval-runs/run-all"| API
   AGENT -->|"CI tab: /agents/:id/ci-installations · /ci/runs · POST /ci/refresh · POST /agents/:id/export-ci<br/>Stats tab: GET /agents/:id/stats?period="| API
   CIRUNS -->|"GET /ci/runs · POST /ci/refresh"| API

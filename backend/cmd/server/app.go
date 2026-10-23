@@ -52,6 +52,9 @@ import (
 	intenthttp "dev-digest-go/backend/internal/intent/transport/http"
 	"dev-digest-go/backend/internal/jobs"
 	jobspg "dev-digest-go/backend/internal/jobs/adapters/postgres"
+	lbpg "dev-digest-go/backend/internal/leaderboard/adapters/postgres"
+	lbapp "dev-digest-go/backend/internal/leaderboard/app"
+	leaderboardhttp "dev-digest-go/backend/internal/leaderboard/transport/http"
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/llm/adapters/anthropic"
 	"dev-digest-go/backend/internal/llm/adapters/mock"
@@ -70,6 +73,7 @@ import (
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/postgres"
 	"dev-digest-go/backend/internal/platform/postgres/migrate"
+	"dev-digest-go/backend/internal/platform/retry"
 	"dev-digest-go/backend/internal/platform/runbus"
 	"dev-digest-go/backend/internal/platform/secrets"
 	pcclone "dev-digest-go/backend/internal/projectcontext/adapters/clonedocs"
@@ -272,6 +276,9 @@ type wired struct {
 	intent     intentapp.Stopper
 	brief      briefapp.Lifecycle
 	onboarding onbapp.Lifecycle
+	// poller is the background PR poll; nil when PR_POLL_ENABLED=false. listen runs it on the stop
+	// context and waits for it (≤ 5 s) before serve closes the database.
+	poller *pullsapp.Poller
 }
 
 // intelHandlers are the three repo-intel job handlers.
@@ -389,7 +396,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	reposStore := reposdb.NewStore(db)
 	reposSvc := reposapp.NewService(reposStore, runner, git.Root())
 	repoJobs := reposapp.NewJobs(reposStore, git, reposapp.JobsOptions{RemoteBase: o.remoteBase, Log: log, Index: intelJobs})
-	pullsSvc := pullsapp.NewService(pullspg.NewStore(db), pullsgh.New(gh), log, nil)
+	pullsStore := pullspg.NewStore(db)
+	pullsSvc := pullsapp.NewService(pullsStore, pullsgh.New(gh), log, nil)
 
 	agentsSvc := agentsapp.NewService(agentsdb.NewStore(db), tx, llmClient, log)
 
@@ -557,9 +565,27 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	performancehttp.AddRoutes(e, perfapp.NewService(perfpg.NewStore(db), now), resolver)
 	evalshttp.AddRoutes(e, evalCases, evalRuns, resolver)
 	cihttp.AddRoutes(e, ciExport, ciIngest, resolver)
+	leaderboardhttp.AddRoutes(e, lbapp.NewService(lbpg.NewStore(db), now), resolver)
+
+	// The background PR poll: its GitHub client is its own and never retries, so a repo poll stays
+	// within its page bound (the shared client retries transient failures). The token is read from
+	// the same source as the shared client's, and the interval from each workspace's Settings.
+	var poller *pullsapp.Poller
+	if cfg.PRPollEnabled {
+		pages := github.New(github.Options{BaseURL: o.githubBaseURL, Token: githubToken, Retry: &retry.Options{}})
+		poller = pullsapp.NewPoller(pullsapp.PollerDeps{
+			Targets:   pullsStore,
+			Intervals: settingsIntervals{settings: settingsSvc},
+			Pages:     pullsgh.New(pages),
+			Store:     pullsStore,
+			Log:       log,
+			Now:       now,
+		}, pullsapp.PollerOptions{})
+	}
 	return &wired{
 		echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs),
 		reviews: reviewsSvc, executor: reviewsExec, evalRuns: evalRuns, evalExec: evalExec, intent: intentSvc, brief: briefSvc, onboarding: onbSvc,
+		poller: poller,
 	}, nil
 }
 
@@ -567,7 +593,9 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 // run is cancelled, up to 5 s to record itself, then every run bus completes so the SSE streams
 // end) in parallel with the eval executor (the same drain), the intent, brief and onboarding
 // generations (cancelled, up to 5 s to return) and the job runner (10 s); only then does Echo get its stop signal and drain
-// the remaining requests (20 s grace, FR43, FR4042). Echo runs on its own context for that
+// the remaining requests (20 s grace, FR43, FR4042). The background PR poll (when enabled) runs on
+// the stop context and returns within 5 s of it, next to the job runner; serve closes the database
+// only after listen has waited for it. Echo runs on its own context for that
 // reason: the signal context would stop it before the runs could finish. A server that cannot
 // drain within the grace period makes the process fail; runs and jobs that do not settle in time
 // keep their `running` rows (reaped at the next start) and only produce a warning.
@@ -624,6 +652,12 @@ func listen(ctx context.Context, cfg config.Config, o options, w *wired, runner 
 		stopping.Wait()
 		stopEcho()
 	})
+	if w.poller != nil {
+		log.Info("pull request poller started")
+		wg.Go(func() { w.poller.Run(stopCtx) })
+	} else {
+		log.Info("pull request poller disabled (PR_POLL_ENABLED=false)")
+	}
 	wg.Go(func() {
 		<-stopCtx.Done()
 		if err := runner.Shutdown(jobs.DefaultShutdownTimeout); err != nil {

@@ -1,19 +1,24 @@
-/* LeaderboardTable — the ranked PR table of the leaderboard (FR21). Pure view of `rows` (server
-   order = rank by health); sort and "show all" are local state. Headers of the sortable columns are
-   <button aria-sort> controls (desc → asc → server rank); the "#" column keeps the server rank while
-   sorting. Top 10 are shown until "Show all N". One row's reviews panel is open at a time. */
+/* LeaderboardTable — the ranked PR table of the leaderboard (FR21, D23). View of `rows` (server order =
+   rank by health, ties by PR number); sort and "show all" are local state. Headers of the sortable
+   columns are <button aria-sort> controls (desc → asc → server rank; Time starts ascending) and
+   "Reset to rank" drops the sort at once; the "#" column keeps the server rank while sorting and
+   missing values sort last. Top 10 are shown until "Show all N". A click on a row opens the PR; one
+   row's top findings are expanded at a time. */
 "use client";
 
 import React from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { LeaderboardRow } from "@devdigest/shared";
+import { prDetailPath } from "@/lib/pr-urls";
 import { SORT_KEYS, TOP_N, type SortKey, type SortState } from "./constants";
 import { ariaSort, nextSort, rankRows, sortRows } from "./helpers";
+import { HealthInfo } from "./_components/HealthInfo";
 import { LeaderboardTableRow } from "./_components/LeaderboardTableRow";
 import { s } from "./styles";
 
 export interface LeaderboardTableProps {
-  /** Rows in server rank order (health desc; ties: fewer CRITICAL, repo, number). */
+  /** Rows in server rank order (health desc; ties: PR number ascending, then repo). */
   rows: readonly LeaderboardRow[];
 }
 
@@ -24,6 +29,7 @@ const COLUMNS = ["rank", "pr", "status", "size", "risk", "health", "findings", "
 
 export function LeaderboardTable({ rows }: LeaderboardTableProps) {
   const t = useTranslations("leaderboardTable");
+  const router = useRouter();
   const headingId = React.useId();
   const [sort, setSort] = React.useState<SortState | null>(null);
   const [showAll, setShowAll] = React.useState(false);
@@ -35,9 +41,16 @@ export function LeaderboardTable({ rows }: LeaderboardTableProps) {
 
   return (
     <section style={s.card} aria-labelledby={headingId}>
-      <h2 id={headingId} style={s.header}>
-        {t("title", { count: rows.length })}
-      </h2>
+      <div style={s.header}>
+        <h2 id={headingId} style={s.heading}>
+          {t("title", { count: rows.length })}
+        </h2>
+        {sort && (
+          <button type="button" style={s.reset} onClick={() => setSort(null)}>
+            {t("resetSort")}
+          </button>
+        )}
+      </div>
       <div style={s.scroll}>
         <table style={s.table} aria-label={t("tableLabel")}>
           <thead>
@@ -51,6 +64,7 @@ export function LeaderboardTable({ rows }: LeaderboardTableProps) {
                         {sort?.key === key ? (sort.dir === "asc" ? "↑" : "↓") : ""}
                       </span>
                     </button>
+                    {key === "health" && <HealthInfo />}
                   </th>
                 ) : (
                   <th key={key} scope="col" style={s.th}>
@@ -71,6 +85,7 @@ export function LeaderboardTable({ rows }: LeaderboardTableProps) {
                 rank={rank}
                 open={openId === row.pr_id}
                 onToggle={() => setOpenId(openId === row.pr_id ? null : row.pr_id)}
+                onOpen={() => router.push(prDetailPath(encodeURIComponent(row.repo_id), row.number))}
               />
             ))}
           </tbody>
