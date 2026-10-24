@@ -1,0 +1,8 @@
+{
+  "latency_ms": 0,
+  "message": "OK — 2 models available",
+  "model": "deepseek/deepseek-v4-flash",
+  "model_reachable": true,
+  "ok": true,
+  "provider": "openrouter"
+}

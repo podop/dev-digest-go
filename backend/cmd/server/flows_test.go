@@ -415,8 +415,8 @@ func TestLogging_NoSecretsAndOneLinePerRequest(t *testing.T) { // AC98
 	}
 	resp := s.post("/settings/test-connection", map[string]string{"provider": "openai", "key": apiKey})
 	msg, _ := resp.Obj(t)["message"].(string)
-	if resp.Status != http.StatusOK || resp.Obj(t)["ok"] != false || !strings.Contains(msg, "[REDACTED]") {
-		t.Errorf("test-connection = %d %s, want ok:false with the key redacted", resp.Status, resp.Body)
+	if resp.Status != http.StatusOK || resp.Obj(t)["ok"] != false || !strings.Contains(msg, "401") {
+		t.Errorf("test-connection = %d %s, want ok:false with the provider's 401 and no key", resp.Status, resp.Body)
 	}
 	assertNoSecret(t, "test-connection response", string(resp.Body), apiKey)
 	s.post("/repos", map[string]string{"url": "https://github.com/o/gone"})
@@ -515,11 +515,12 @@ var (
 	latencyPattern = regexp.MustCompile(`("latency_ms":\s*)\d+`)
 )
 
-// goldens normalizes volatile values (ids, "now" timestamps, latency_ms, the clone directory) and compares
-// or rewrites testdata/contracts/<name>.json.
+// goldens normalizes volatile values (ids, "now" timestamps, latency_ms, the clone and data directories)
+// and compares or rewrites testdata/contracts/<name>.json.
 type goldens struct {
 	t        *testing.T
 	cloneDir string
+	dataDir  string // optional: the data directory, written as /data (the clone directory wins as /data/workspace)
 	ids      map[string]string
 }
 
@@ -529,6 +530,9 @@ func (g *goldens) check(name string, resp response, wantStatus int) {
 		g.t.Fatalf("%s: status = %d, want %d; body %s", name, resp.Status, wantStatus, resp.Body)
 	}
 	text := strings.ReplaceAll(string(resp.Body), g.cloneDir, "/data/workspace")
+	if g.dataDir != "" {
+		text = strings.ReplaceAll(text, g.dataDir, "/data")
+	}
 	text = uuidPattern.ReplaceAllStringFunc(text, func(id string) string {
 		id = strings.ToLower(id)
 		if _, ok := g.ids[id]; !ok {
