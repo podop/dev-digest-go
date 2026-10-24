@@ -1,6 +1,6 @@
 import type { CiFile } from "@devdigest/shared";
 import { ApiError } from "@/lib/api";
-import { FOCUSABLE_SELECTOR, RUNNER_BUNDLE_PATH, TRIGGERS, WORKFLOW_PATH_PATTERN, type Trigger, type TriggerState } from "./constants";
+import { RUNNER_BUNDLE_PATH, TRIGGERS, WORKFLOW_PATH_PATTERN, type Trigger, type TriggerState } from "./constants";
 
 const KIB = 1024;
 const MIB = KIB * KIB;
@@ -78,27 +78,4 @@ export function describeError(err: unknown, fallback: string): WizardError {
     return { code: err.code ?? null, message: err.message || fallback, rule };
   }
   return { code: null, message: fallback, rule: null };
-}
-
-/** The visible tab stops inside a dialog, in DOM order. */
-export function focusableIn(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
-  );
-}
-
-/** Where Tab should go to stay inside the dialog; null = let the browser move focus. */
-export function wrapTarget(
-  stops: readonly HTMLElement[],
-  active: Element | null,
-  shift: boolean,
-  inside: boolean,
-): HTMLElement | null {
-  const first = stops[0];
-  const last = stops[stops.length - 1];
-  if (!first || !last) return null;
-  if (!inside) return first;
-  if (shift && active === first) return last;
-  if (!shift && active === last) return first;
-  return null;
 }

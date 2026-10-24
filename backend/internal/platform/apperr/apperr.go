@@ -18,6 +18,7 @@ const (
 	KindConfig
 	KindExternalService
 	KindForbidden
+	KindPaymentRequired
 )
 
 // String returns the kind name, for logs and test failures.
@@ -41,6 +42,8 @@ func (k Kind) String() string {
 		return "external_service"
 	case KindForbidden:
 		return "forbidden"
+	case KindPaymentRequired:
+		return "payment_required"
 	default:
 		return "unknown"
 	}
@@ -103,6 +106,10 @@ func ExternalService(message string) *Error { return New(KindExternalService, me
 
 // Forbidden is a request the server refuses to serve, such as a foreign Origin or Host (403).
 func Forbidden(message string) *Error { return New(KindForbidden, message) }
+
+// PaymentRequired is a request refused because a spend limit is reached (402); callers set the
+// specific wire code with WithCode, e.g. spend_cap_reached.
+func PaymentRequired(message string) *Error { return New(KindPaymentRequired, message) }
 
 // WithCode replaces the wire code, e.g. github_unavailable.
 func (e *Error) WithCode(code string) *Error {

@@ -33,6 +33,16 @@ const (
 	errorMaxChars = 500
 )
 
+// OpExtract is the operation name the scan reports to the spend cap check (spec FR13).
+const OpExtract = "conventions_extract"
+
+// budget is the consumer-side spend cap port (spec FR13). Admit returns nil when the operation may
+// start, the 402 spend_cap_reached error when the monthly cap is reached, and any other error
+// when the spend cannot be read.
+type budget interface {
+	Admit(ctx context.Context, workspaceID, op string) error
+}
+
 // ExtractPayload is the payload of an extract job.
 type ExtractPayload struct {
 	ScanID      string `json:"scanId"`
@@ -60,6 +70,8 @@ type ServiceOptions struct {
 	Redact redactor
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
+	// Budget is checked once per Extract call; nil turns the check off.
+	Budget budget
 }
 
 // Service implements the conventions use cases. It is safe for concurrent use.
@@ -69,11 +81,12 @@ type Service struct {
 	jobs   enqueuer
 	redact redactor
 	now    func() time.Time
+	budget budget
 }
 
 // NewService builds a Service.
 func NewService(store scanStore, repos repoLookup, jobs enqueuer, opts ServiceOptions) *Service {
-	s := &Service{store: store, repos: repos, jobs: jobs, redact: opts.Redact, now: opts.Now}
+	s := &Service{store: store, repos: repos, jobs: jobs, redact: opts.Redact, now: opts.Now, budget: opts.Budget}
 	if s.redact == nil {
 		s.redact = noRedact{}
 	}
@@ -108,7 +121,9 @@ func (s *Service) State(ctx context.Context, workspaceID, repoID string) (State,
 
 // Extract starts a background scan of the repo and returns the running scan at once. A running
 // scan older than domain.ScanStaleAfter is failed first. Errors: not found (unknown repo),
-// validation not_cloned (no clone yet), conflict scan_running (one is already running).
+// validation not_cloned (no clone yet), the budget error unchanged (402 spend_cap_reached, or the
+// failed spend read), conflict scan_running (one is already running). The budget check runs after
+// the not-found and not-cloned checks and before any write.
 func (s *Service) Extract(ctx context.Context, workspaceID, repoID string) (domain.Scan, error) {
 	repo, err := s.repo(ctx, workspaceID, repoID)
 	if err != nil {
@@ -116,6 +131,11 @@ func (s *Service) Extract(ctx context.Context, workspaceID, repoID string) (doma
 	}
 	if repo.ClonePath == "" {
 		return domain.Scan{}, apperr.Validation(notClonedHint).WithCode("not_cloned")
+	}
+	if s.budget != nil {
+		if err := s.budget.Admit(ctx, workspaceID, OpExtract); err != nil {
+			return domain.Scan{}, err
+		}
 	}
 	now := s.now()
 	if err := s.store.FailStaleScans(ctx, repoID, now.Add(-domain.ScanStaleAfter), MsgInterrupted, now); err != nil {

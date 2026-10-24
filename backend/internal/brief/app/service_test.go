@@ -794,3 +794,121 @@ func TestShutdown_ReportsGenerationsThatDoNotStop(t *testing.T) {
 		t.Errorf("Shutdown() error = %v, want inflight.ErrNotDrained", err)
 	}
 }
+
+// fakeSpend is the budget port: it records every Admit call and answers err.
+type fakeSpend struct {
+	mu    sync.Mutex
+	err   error
+	calls []admitCall
+}
+
+type admitCall struct{ workspaceID, op string }
+
+func (b *fakeSpend) Admit(_ context.Context, workspaceID, op string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.calls = append(b.calls, admitCall{workspaceID, op})
+	return b.err
+}
+
+func (b *fakeSpend) setErr(err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.err = err
+}
+
+func withSpend(b *fakeSpend) func(*app.Deps) { return func(d *app.Deps) { d.Spend = b } }
+
+func capReached() error {
+	return apperr.PaymentRequired("Monthly spend cap of $50.00 reached").WithCode("spend_cap_reached")
+}
+
+func TestGenerate_SpendCap_ReachedIs402AndStartsNothing(t *testing.T) {
+	spend := &fakeSpend{err: capReached()}
+	f := newFixture(t, withSpend(spend))
+	_, err := f.svc.Generate(t.Context(), wsID, prID)
+	wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached", "Monthly spend cap of $50.00 reached")
+	if len(f.llm.Requests) != 0 || len(f.store.Saved) != 0 || len(f.issues.Calls) != 0 || len(f.blast.Calls) != 0 {
+		t.Errorf("model calls, saved briefs, issue reads, blast reads = %d, %d, %d, %d, want none",
+			len(f.llm.Requests), len(f.store.Saved), len(f.issues.Calls), len(f.blast.Calls))
+	}
+	if recs := f.logs.records(t); len(recs) != 0 {
+		t.Errorf("log lines = %v, want none (no generation started)", recs)
+	}
+	// No marker was left behind: once the cap is lifted the same pull request generates.
+	spend.setErr(nil)
+	if _, err := f.svc.Generate(t.Context(), wsID, prID); err != nil {
+		t.Errorf("Generate() after the refusal = %v, want a brief (the 402 left a marker)", err)
+	}
+}
+
+func TestGenerate_SpendCap_ReadErrorFailsClosedWith500(t *testing.T) {
+	boom := errors.New("ledger down")
+	f := newFixture(t, withSpend(&fakeSpend{err: boom}))
+	_, err := f.svc.Generate(t.Context(), wsID, prID)
+	if !errors.Is(err, boom) {
+		t.Fatalf("Generate() error = %v, want the Admit error unchanged", err)
+	}
+	if _, isApp := apperr.As(err); isApp {
+		t.Errorf("Generate() error = %v, want a plain error that httpx renders as 500", err)
+	}
+	if len(f.llm.Requests) != 0 || len(f.store.Saved) != 0 {
+		t.Errorf("model calls, saved briefs = %d, %d, want none", len(f.llm.Requests), len(f.store.Saved))
+	}
+}
+
+func TestGenerate_SpendCap_NilBudgetChangesNothing(t *testing.T) {
+	f := newFixture(t)
+	got, err := f.svc.Generate(t.Context(), wsID, prID)
+	if err != nil || got.Brief == nil {
+		t.Fatalf("Generate() = %+v, %v, want a brief", got, err)
+	}
+}
+
+func TestGenerate_SpendCap_CheckedOnceWithTheOperation(t *testing.T) {
+	spend := &fakeSpend{}
+	f := newFixture(t, withSpend(spend))
+	if _, err := f.svc.Generate(t.Context(), wsID, prID); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if diff := cmp.Diff([]admitCall{{wsID, "brief_generate"}}, spend.calls, cmp.AllowUnexported(admitCall{})); diff != "" {
+		t.Errorf("Admit calls mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestGenerate_SpendCap_UnknownPullRequestIs404NotChecked(t *testing.T) {
+	spend := &fakeSpend{err: capReached()}
+	f := newFixture(t, withSpend(spend))
+	f.store.PullMissing = true
+	_, err := f.svc.Generate(t.Context(), wsID, prID)
+	wantAppErr(t, err, apperr.KindNotFound, "not_found", "Pull request not found")
+	if len(spend.calls) != 0 {
+		t.Errorf("Admit calls = %v, want none: the 404 comes first", spend.calls)
+	}
+}
+
+func TestGenerate_SpendCap_WinsOverTheConflict(t *testing.T) {
+	spend := &fakeSpend{}
+	f := newFixture(t, withSpend(spend))
+	entered, release := holdLLM(f)
+	defer release()
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.svc.Generate(context.Background(), wsID, prID)
+		done <- err
+	}()
+	<-entered
+
+	spend.setErr(capReached())
+	_, err := f.svc.Generate(t.Context(), wsID, prID)
+	wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached", "Monthly spend cap of $50.00 reached")
+
+	spend.setErr(nil)
+	_, err = f.svc.Generate(t.Context(), wsID, prID)
+	wantAppErr(t, err, apperr.KindConflict, "generation_in_progress", "A brief is already being generated for this pull request")
+
+	release()
+	if err := <-done; err != nil {
+		t.Errorf("running Generate() error = %v, want it to finish: a reached cap does not stop admitted work", err)
+	}
+}

@@ -71,6 +71,20 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   `app/executor`, the providers peer) and `ci/runner` (domain, app) may import `reviewer/*` (the one
   engine `reviewer/app.Run` runs reviews, evals and the CI runner); `evals` and `ci` reach agents, skills, repos and GitHub only through
   consumer-side ports (`ci/adapters/peers` adapts the agents, skills and repos use cases).
+- Spend cap (`spend` context): `GET /settings/spend`; the cap is the Settings key
+  `monthly_spend_cap_usd` (USD number or null), read through `settingsCaps` in `cmd/server/spend.go`
+  (exact `big.Rat` conversion to `spend/domain.Micros`; a bad value is an error, so a check fails
+  closed). `spendapp.Service.Admit` is the one check; each entry context declares its own
+  consumer-side port and `cmd` passes the service to all six (reviews `Deps.Budget`, evals
+  `RunDeps.Budget`, conventions `ServiceOptions.Budget`, intent `Deps.Budget`, brief and onboarding
+  `Deps.Spend`). A nil port means the check is off; pass a true nil interface, never a typed-nil
+  pointer (prod always passes the service). The 402 `spend_cap_reached` comes after the 404/validation
+  checks and before any work.
+- `GET /about` (`about` context) reports `version` and `build_id` from the link-time vars
+  `main.version` / `main.buildID` (`cmd/server/main.go`, default `dev`), `runner.version` from
+  `ci/runner/domain.RunnerVersion`, plus the data dir and secrets file. The Dockerfile stamps them
+  from the build args `DEVDIGEST_VERSION` (default `dev`; only letters, digits and `. _ + -`, else
+  `dev`; a compose build arg) and the sanitised `DEVDIGEST_BUILD_ID`.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

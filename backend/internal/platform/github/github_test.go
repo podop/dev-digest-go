@@ -829,6 +829,105 @@ func TestClient_neverLeaksToken(t *testing.T) {
 	}
 }
 
+func TestCurrentUser_scopes(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		header func(http.Header)
+		want   github.User
+	}{
+		{"classic token lists scopes", func(h http.Header) { h.Set("X-OAuth-Scopes", "repo, read:org") },
+			github.User{Login: "ann", Scopes: []string{"repo", "read:org"}, ScopesReported: true}},
+		{"empty header is reported without scopes", func(h http.Header) { h.Set("X-OAuth-Scopes", "") },
+			github.User{Login: "ann", Scopes: []string{}, ScopesReported: true}},
+		{"absent header is not reported", func(http.Header) {},
+			github.User{Login: "ann", Scopes: []string{}, ScopesReported: false}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+				tc.header(w.Header())
+				writeJSON(w, 200, map[string]any{"login": "ann"})
+			})
+			got, err := newClient(s, github.Options{}).CurrentUser(t.Context())
+			if err != nil {
+				t.Fatalf("CurrentUser() error: %v", err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("CurrentUser() mismatch (-want +got):\n%s", diff)
+			}
+			req, _ := s.request(0)
+			if req.URL.Path != "/user" || s.count() != 1 {
+				t.Errorf("CurrentUser() sent %d requests, first to %q; want one to /user", s.count(), req.URL.Path)
+			}
+			if got := req.Header.Get("Authorization"); got != "Bearer "+testToken {
+				t.Errorf("Authorization = %q, want the bearer token", got)
+			}
+		})
+	}
+}
+
+func TestCurrentUser_noToken(t *testing.T) {
+	t.Parallel()
+	s := newStub(t, func(http.ResponseWriter, *http.Request) { t.Error("a request was sent without a token") })
+	_, err := newClient(s, github.Options{Token: func() string { return " " }}).CurrentUser(t.Context())
+	if !errors.Is(err, github.ErrNoToken) {
+		t.Errorf("CurrentUser() error = %v, want ErrNoToken", err)
+	}
+}
+
+func TestCurrentUser_doesNotFollowRedirect(t *testing.T) {
+	t.Parallel()
+	for _, status := range []int{http.StatusFound, http.StatusMovedPermanently, http.StatusTemporaryRedirect} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			t.Parallel()
+			other := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("X-OAuth-Scopes", "repo")
+				writeJSON(w, 200, map[string]any{"login": "evil"})
+			})
+			s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+				http.Redirect(w, r, other.URL+"/user", status)
+			})
+			got, err := newClient(s, github.Options{}).CurrentUser(t.Context())
+			var se *github.StatusError
+			if !errors.As(err, &se) || se.Status != status {
+				t.Fatalf("CurrentUser() = (%+v, %v), want StatusError{%d}", got, err, status)
+			}
+			if n := other.count(); n != 0 {
+				t.Errorf("redirect target received %d requests, want 0 (the token must not leak)", n)
+			}
+			if strings.Contains(err.Error(), testToken) {
+				t.Errorf("CurrentUser() error leaks the token: %v", err)
+			}
+		})
+	}
+}
+
+func TestCurrentUser_errorsNeverLeakToken(t *testing.T) {
+	t.Parallel()
+	echoing := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 401, map[string]any{"message": "Bad credentials for " + strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")})
+	})
+	_, err := newClient(echoing, github.Options{}).CurrentUser(t.Context())
+	var se *github.StatusError
+	if !errors.As(err, &se) || se.Status != 401 || strings.Contains(err.Error(), testToken) || strings.Contains(se.Message, testToken) {
+		t.Errorf("CurrentUser() error = %v, want a 401 StatusError without the token", err)
+	}
+
+	closed := newStub(t, func(http.ResponseWriter, *http.Request) {})
+	c := newClient(closed, github.Options{Retry: &retry.Options{}})
+	closed.Close()
+	if _, err := c.CurrentUser(t.Context()); err == nil || strings.Contains(err.Error(), testToken) {
+		t.Errorf("CurrentUser() on a closed server error = %v, want an error without the token", err)
+	}
+
+	bad := newStub(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("{not json")) })
+	if _, err := newClient(bad, github.Options{}).CurrentUser(t.Context()); err == nil || strings.Contains(err.Error(), testToken) {
+		t.Errorf("CurrentUser() on a bad body error = %v, want an error without the token", err)
+	}
+}
+
 func TestNew_panicsWithoutTokenFunc(t *testing.T) {
 	t.Parallel()
 	defer func() {

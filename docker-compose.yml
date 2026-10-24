@@ -33,6 +33,8 @@ services:
         # Source commit stamped into the embedded CI runner (12 hex, set by `make`, which passes it
         # only for a clean tree); anything else builds "dev".
         DEVDIGEST_BUILD_ID: ${DEVDIGEST_BUILD_ID:-dev}
+        # Release version GET /about reports (letters, digits and . _ + - only); anything else builds "dev".
+        DEVDIGEST_VERSION: ${DEVDIGEST_VERSION:-dev}
     restart: unless-stopped
     env_file:
       - path: .env          # optional: LLM keys, GITHUB_TOKEN (see .env.example)

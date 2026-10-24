@@ -12,12 +12,26 @@ import (
 	"dev-digest-go/backend/internal/reviews/domain"
 )
 
+// opReviewStart is the budget operation of Start. The string is the spend context's
+// (spend/app.OpReviewStart); it is duplicated here because contexts reach each other only through
+// consumer-side ports wired in cmd/ (backend/AGENTS.md), so reviews/app does not import spend/app.
+const opReviewStart = "review_start"
+
+// Budget is the monthly spend cap check (spend/app.API.Admit, bound in cmd/). Admit returns nil
+// when the operation may start, an *apperr.Error 402 when the cap is reached, and any other error
+// when the spend could not be read; Start returns it unchanged and creates nothing.
+type Budget interface {
+	Admit(ctx context.Context, workspaceID, op string) error
+}
+
 // Deps are the collaborators of Service.
 type Deps struct {
 	Store    Store
 	Tx       Tx
 	Executor Executor
 	Bus      Bus
+	// Budget gates Start on the monthly spend cap; nil = off.
+	Budget Budget
 	// Now is the clock of the triage timestamps and the synthetic stream event; nil = time.Now.
 	Now Clock
 	// Log receives the use cases' own log lines; nil discards them.
@@ -30,6 +44,7 @@ type Service struct {
 	tx       Tx
 	executor Executor
 	bus      Bus
+	budget   Budget
 	now      Clock
 	log      *slog.Logger
 }
@@ -45,7 +60,7 @@ func NewService(d Deps) *Service {
 	if d.Store == nil || d.Tx == nil || d.Executor == nil || d.Bus == nil {
 		panic("reviews/app: NewService needs a store, a transaction runner, an executor and a bus")
 	}
-	s := &Service{store: d.Store, tx: d.Tx, executor: d.Executor, bus: d.Bus, now: d.Now, log: d.Log}
+	s := &Service{store: d.Store, tx: d.Tx, executor: d.Executor, bus: d.Bus, budget: d.Budget, now: d.Now, log: d.Log}
 	if s.now == nil {
 		s.now = time.Now
 	}

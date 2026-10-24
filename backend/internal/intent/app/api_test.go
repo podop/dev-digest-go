@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"context"
 	"dev-digest-go/backend/internal/intent/app"
@@ -167,5 +168,112 @@ func TestRefresh(t *testing.T) {
 		w.pulls.pull.Body = "[d](https://github.com/acme/api/blob/main/docs/%E0%A4%A.md)"
 		_, err := w.svc.Refresh(t.Context(), wsID, prID)
 		wantAppErr(t, err, apperr.KindExternalService, "intent_unavailable", "Intent derivation failed: URI malformed")
+	})
+}
+
+// fakeBudget is the spend cap port: it records every call and answers with err.
+type fakeBudget struct {
+	err   error
+	calls [][2]string // workspace, op
+}
+
+func (b *fakeBudget) Admit(_ context.Context, workspaceID, op string) error {
+	b.calls = append(b.calls, [2]string{workspaceID, op})
+	return b.err
+}
+
+// budgetWorld is a world whose pull request has a stored record and whose service has the budget.
+func budgetWorld(t *testing.T, b *fakeBudget) *world {
+	t.Helper()
+	w := derivedWorld(t)
+	w.svc = app.NewService(app.Deps{
+		Pulls: w.pulls, Settings: w.settings, LLM: w.llm, Docs: w.docs, Tickets: w.tickets, Store: w.store,
+		Clock: func() time.Time { return fixedNow }, Budget: b,
+	}, app.Options{})
+	return w
+}
+
+func TestRefresh_Budget(t *testing.T) {
+	capReached := func() error {
+		return apperr.PaymentRequired("Monthly spend cap reached").WithCode("spend_cap_reached")
+	}
+	t.Run("admitted once with the op, then the derivation runs", func(t *testing.T) {
+		b := &fakeBudget{}
+		w := budgetWorld(t, b)
+		setup := len(w.llm.calls())
+
+		if _, err := w.svc.Refresh(t.Context(), wsID, prID); err != nil {
+			t.Fatalf("Refresh() error = %v", err)
+		}
+
+		if want := [][2]string{{wsID, "intent_refresh"}}; len(b.calls) != 1 || b.calls[0] != want[0] {
+			t.Errorf("Admit calls = %v, want %v", b.calls, want)
+		}
+		if n := len(w.llm.calls()) - setup; n != 1 {
+			t.Errorf("LLM calls = %d, want 1", n)
+		}
+	})
+	t.Run("cap reached is a 402 and nothing is derived or stored", func(t *testing.T) {
+		b := &fakeBudget{err: capReached()}
+		w := budgetWorld(t, b)
+		setupCalls, setupUpserts := len(w.llm.calls()), w.store.upsertCount()
+
+		_, err := w.svc.Refresh(t.Context(), wsID, prID)
+
+		wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached", "Monthly spend cap reached")
+		if n := len(w.llm.calls()); n != setupCalls {
+			t.Errorf("LLM calls = %d, want %d (none after the refusal)", n, setupCalls)
+		}
+		if n := w.store.upsertCount(); n != setupUpserts {
+			t.Errorf("upserts = %d, want %d", n, setupUpserts)
+		}
+	})
+	t.Run("a failed spend read is a plain error and nothing is derived", func(t *testing.T) {
+		boom := errors.New("ledger down")
+		b := &fakeBudget{err: boom}
+		w := budgetWorld(t, b)
+		setupCalls := len(w.llm.calls())
+
+		_, err := w.svc.Refresh(t.Context(), wsID, prID)
+
+		if !errors.Is(err, boom) {
+			t.Fatalf("Refresh() error = %v, want the budget error unchanged", err)
+		}
+		if _, isApp := apperr.As(err); isApp {
+			t.Errorf("Refresh() error = %v, want a plain error (500 at the edge)", err)
+		}
+		if n := len(w.llm.calls()); n != setupCalls {
+			t.Errorf("LLM calls = %d, want %d", n, setupCalls)
+		}
+	})
+	t.Run("404s win over 402 and skip the check", func(t *testing.T) {
+		b := &fakeBudget{err: capReached()}
+		w := budgetWorld(t, b)
+		_, errPull := w.svc.Refresh(t.Context(), wsID, "99999999-9999-4999-8999-999999999999")
+		w.pulls.repo = nil
+		_, errRepo := w.svc.Refresh(t.Context(), wsID, prID)
+
+		wantAppErr(t, errPull, apperr.KindNotFound, "not_found", "Pull request not found")
+		wantAppErr(t, errRepo, apperr.KindNotFound, "not_found", "Repo not found")
+		if len(b.calls) != 0 {
+			t.Errorf("Admit called %d times, want 0", len(b.calls))
+		}
+	})
+	t.Run("nil budget leaves Refresh unchanged", func(t *testing.T) {
+		w := derivedWorld(t)
+		if _, err := w.svc.Refresh(t.Context(), wsID, prID); err != nil {
+			t.Fatalf("Refresh() error = %v", err)
+		}
+	})
+	t.Run("the cap does not gate Resolve, the review pre-work and stale derivation", func(t *testing.T) {
+		b := &fakeBudget{err: capReached()}
+		w := budgetWorld(t, b)
+
+		if r := w.svc.Resolve(t.Context(), w.input(true), nil); !r.Used {
+			t.Errorf("Resolve() = %+v, want a derivation despite the cap", r)
+		}
+		if len(b.calls) != 0 {
+			t.Errorf("Admit called %d times by Resolve, want 0", len(b.calls))
+		}
 	})
 }

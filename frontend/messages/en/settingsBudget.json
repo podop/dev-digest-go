@@ -1,0 +1,41 @@
+{
+  "defaultModel": {
+    "label": "Default model",
+    "hint": "New agents and features without their own model use this one.",
+    "providerAria": "Default model provider",
+    "modelAria": "Default model",
+    "notSet": "Not set — features use their built-in defaults",
+    "pickModel": "Select a model",
+    "loading": "Loading…",
+    "freeTextHint": "No model list is available for {provider}. Type a model id.",
+    "noKey": "No {provider} key configured",
+    "save": "Save",
+    "saving": "Saving…",
+    "saveFailed": "Could not save the default model.",
+    "providers": {
+      "openai": "OpenAI",
+      "anthropic": "Anthropic",
+      "openrouter": "OpenRouter"
+    }
+  },
+  "spendCap": {
+    "label": "Monthly spend cap",
+    "inputAria": "Monthly spend cap in USD",
+    "placeholder": "No cap",
+    "hint": "New LLM work is blocked once the cap is reached. {spent} used this month.",
+    "hintNoCap": "No cap · {spent} used this month",
+    "hintLoading": "$… used this month",
+    "remaining": "{remaining} remaining of {cap}",
+    "reached": "Monthly spend cap of {cap} reached: {spent} used since {since} (UTC). New LLM work is blocked.",
+    "unavailable": "Spend unavailable",
+    "retry": "Retry",
+    "save": "Save",
+    "saving": "Saving…",
+    "saveFailed": "Could not save the spend cap.",
+    "errors": {
+      "notNumber": "Enter an amount in dollars, for example 50 or 50.25.",
+      "decimals": "Use at most {max} decimals.",
+      "range": "Enter an amount between {min} and {max}."
+    }
+  }
+}

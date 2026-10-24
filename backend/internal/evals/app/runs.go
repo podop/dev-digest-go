@@ -20,12 +20,30 @@ const (
 	msgRunNotFound = "Eval run not found"
 )
 
+// Budget operations of the start use cases. The strings are the spend context's
+// (spend/app.OpEval*); they are duplicated here because contexts reach each other only through
+// consumer-side ports wired in cmd/ (backend/AGENTS.md), so evals/app does not import spend/app.
+const (
+	opEvalAgentStart = "eval_agent_start"
+	opEvalSkillStart = "eval_skill_start"
+	opEvalRunAll     = "eval_run_all"
+)
+
+// Budget is the monthly spend cap check (spend/app.API.Admit, bound in cmd/). Admit returns nil
+// when the operation may start, an *apperr.Error 402 when the cap is reached, and any other error
+// when the spend could not be read; the start use cases return it unchanged and create nothing.
+type Budget interface {
+	Admit(ctx context.Context, workspaceID, op string) error
+}
+
 // RunDeps are the ports of the run service.
 type RunDeps struct {
 	Cases     CaseStore
 	Runs      RunStore
 	Snapshots Snapshots
 	Launcher  Launcher
+	// Budget gates the starts on the monthly spend cap; nil = off.
+	Budget Budget
 	// Now anchors the period windows; nil means time.Now.
 	Now Clock
 	// Log is nil to discard.
@@ -38,6 +56,7 @@ type RunService struct {
 	runs      RunStore
 	snapshots Snapshots
 	launcher  Launcher
+	budget    Budget
 	now       Clock
 	log       *slog.Logger
 }
@@ -46,7 +65,7 @@ var _ Runs = (*RunService)(nil)
 
 // NewRunService builds the run use cases.
 func NewRunService(d RunDeps) *RunService {
-	s := &RunService{cases: d.Cases, runs: d.Runs, snapshots: d.Snapshots, launcher: d.Launcher, now: d.Now, log: d.Log}
+	s := &RunService{cases: d.Cases, runs: d.Runs, snapshots: d.Snapshots, launcher: d.Launcher, budget: d.Budget, now: d.Now, log: d.Log}
 	if s.now == nil {
 		s.now = time.Now
 	}
@@ -85,24 +104,33 @@ func (s *RunService) begin(ctx context.Context, nr domain.NewRun) (run domain.Ru
 	return run, false, nil
 }
 
-// tryStartAgent is the agent start path of spec 7.5.1: no cases and an active run come back as a
-// skip, an unknown agent is the 404.
-func (s *RunService) tryStartAgent(ctx context.Context, workspaceID, agentID string) (startOutcome, error) {
+// admit asks the budget, when there is one, whether op may start. Its error is returned as it
+// is: an *apperr.Error 402 passes through, any other one becomes a 500 at the edge.
+func (s *RunService) admit(ctx context.Context, workspaceID, op string) error {
+	if s.budget == nil {
+		return nil
+	}
+	return s.budget.Admit(ctx, workspaceID, op)
+}
+
+// planAgentStart is the validation half of the agent start path of spec 7.5.1: an unknown agent is
+// the 404 and no cases come back as a skip. Nothing is written.
+func (s *RunService) planAgentStart(ctx context.Context, workspaceID, agentID string) (domain.NewRun, domain.SkipReason, error) {
 	agent, err := s.snapshots.Agent(ctx, workspaceID, agentID)
 	if errors.Is(err, domain.ErrNotFound) {
-		return startOutcome{}, apperr.NotFound(msgAgentNotFound)
+		return domain.NewRun{}, "", apperr.NotFound(msgAgentNotFound)
 	}
 	if err != nil {
-		return startOutcome{}, fmt.Errorf("read agent: %w", err)
+		return domain.NewRun{}, "", fmt.Errorf("read agent: %w", err)
 	}
 	caseIDs, err := s.cases.CaseIDs(ctx, workspaceID, domain.OwnerAgent, agentID)
 	if err != nil {
-		return startOutcome{}, fmt.Errorf("read case ids: %w", err)
+		return domain.NewRun{}, "", fmt.Errorf("read case ids: %w", err)
 	}
 	if len(caseIDs) == 0 {
-		return startOutcome{skip: domain.SkipNoCases}, nil
+		return domain.NewRun{}, domain.SkipNoCases, nil
 	}
-	run, active, err := s.begin(ctx, domain.NewRun{
+	return domain.NewRun{
 		WorkspaceID:  workspaceID,
 		OwnerKind:    domain.OwnerAgent,
 		AgentID:      agentID,
@@ -110,7 +138,12 @@ func (s *RunService) tryStartAgent(ctx context.Context, workspaceID, agentID str
 		AgentName:    agent.Name,
 		Config:       agent.Config,
 		CaseIDs:      caseIDs,
-	})
+	}, "", nil
+}
+
+// beginAgent persists and launches a planned agent run; an owner with a running run is a skip.
+func (s *RunService) beginAgent(ctx context.Context, nr domain.NewRun) (startOutcome, error) {
+	run, active, err := s.begin(ctx, nr)
 	if err != nil {
 		return startOutcome{}, err
 	}
@@ -120,16 +153,24 @@ func (s *RunService) tryStartAgent(ctx context.Context, workspaceID, agentID str
 	return startOutcome{run: run}, nil
 }
 
-// StartAgent implements Runs.
+// StartAgent implements Runs. The cap check comes after the 404 and the no-cases 422 and before
+// the run row is written.
 func (s *RunService) StartAgent(ctx context.Context, workspaceID, agentID string) (domain.Run, error) {
-	out, err := s.tryStartAgent(ctx, workspaceID, agentID)
+	nr, skip, err := s.planAgentStart(ctx, workspaceID, agentID)
 	if err != nil {
 		return domain.Run{}, err
 	}
-	switch out.skip {
-	case domain.SkipNoCases:
+	if skip == domain.SkipNoCases {
 		return domain.Run{}, apperr.Validation("This agent has no eval cases to run").WithCode(codeNoEvalCases)
-	case domain.SkipRunActive:
+	}
+	if err := s.admit(ctx, workspaceID, opEvalAgentStart); err != nil {
+		return domain.Run{}, err
+	}
+	out, err := s.beginAgent(ctx, nr)
+	if err != nil {
+		return domain.Run{}, err
+	}
+	if out.skip == domain.SkipRunActive {
 		return domain.Run{}, apperr.Conflict("An eval run is already in progress for this agent").WithCode(codeRunActive)
 	}
 	return out.run, nil
@@ -158,6 +199,9 @@ func (s *RunService) StartSkill(ctx context.Context, workspaceID, skillID, hostA
 	}
 	if len(caseIDs) == 0 {
 		return domain.Run{}, apperr.Validation("This skill has no eval cases to run").WithCode(codeNoEvalCases)
+	}
+	if err := s.admit(ctx, workspaceID, opEvalSkillStart); err != nil {
+		return domain.Run{}, err
 	}
 	cfg := host.Config
 	cfg.Skills = []domain.SkillSnapshot{skill}

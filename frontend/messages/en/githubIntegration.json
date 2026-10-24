@@ -1,0 +1,45 @@
+{
+  "title": "GitHub Integration",
+  "body": "Connect GitHub to import pull requests and post reviews.",
+  "token": {
+    "label": "Personal access token",
+    "hint": "Contents (read), Pull requests (read+write), Metadata (read), Actions (read)."
+  },
+  "scopes": {
+    "list": "Scopes: {scopes}",
+    "none": "No scopes granted",
+    "fineGrained": "Fine-grained token — scopes are not reported by GitHub",
+    "missingRepo": "This classic token has no repo scope, so importing private pull requests and posting reviews may fail."
+  },
+  "identity": {
+    "label": "Comment identity",
+    "owner": "Comments are posted as the token's owner.",
+    "login": "Comments are posted as @{login}."
+  },
+  "repos": {
+    "title": "Connected repositories ({count})",
+    "loading": "Loading repositories…",
+    "loadError": "Could not load the repositories",
+    "empty": "No repositories connected yet.",
+    "add": "Add repository",
+    "remove": "Remove",
+    "removeLabel": "Remove {repo}",
+    "notIndexed": "not indexed yet",
+    "indexUnknown": "index state unavailable",
+    "indexed": {
+      "justNow": "indexed just now",
+      "minutes": "indexed {count} min ago",
+      "hours": "indexed {count} h ago",
+      "days": "indexed {count} d ago"
+    },
+    "protectionNote": "Blocking merges is branch protection, not a DevDigest setting — mark the CI check required in the repo's rules."
+  },
+  "removeDialog": {
+    "title": "Remove {repo}?",
+    "body": "DevDigest stops tracking this repository. Nothing changes on GitHub.",
+    "confirm": "Remove",
+    "removing": "Removing…",
+    "cancel": "Cancel",
+    "error": "Could not remove the repository"
+  }
+}

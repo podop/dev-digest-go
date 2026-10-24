@@ -13,7 +13,16 @@ import (
 	"dev-digest-go/backend/internal/platform/inflight"
 )
 
-// Deps are the collaborators of the Service. Every field but Clock, Log and Budget is required.
+// opGenerate is the operation name the cap check logs with a 402 (the value of spend/app
+// OpBriefGenerate; contexts reach each other only through ports, so it is a local literal).
+const opGenerate = "brief_generate"
+
+// SpendBudget is the monthly spend cap check (the spend context's Admit, bound in cmd/server).
+type SpendBudget interface {
+	Admit(ctx context.Context, workspaceID, op string) error
+}
+
+// Deps are the collaborators of the Service. Every field but Clock, Log, Budget and Spend is required.
 type Deps struct {
 	Store     Store
 	Intents   Intents
@@ -29,6 +38,8 @@ type Deps struct {
 	Log *slog.Logger
 	// Budget bounds one generation (facts, model call, storage); zero = domain.GenerationBudget.
 	Budget time.Duration
+	// Spend is the monthly spend cap check; nil = no check.
+	Spend SpendBudget
 }
 
 // Service implements API and Lifecycle.
@@ -87,6 +98,11 @@ func (s *Service) Generate(ctx context.Context, workspaceID, prID string) (domai
 	if err != nil {
 		return domain.State{}, err
 	}
+	// The cap check follows the 404 and precedes the in-flight marker: a refused request leaves
+	// no marker and starts no work, and a reached cap wins over the 409 (spec FR13, EC9).
+	if err := s.admit(ctx, workspaceID); err != nil {
+		return domain.State{}, err
+	}
 	gctx, release, ok := s.markers.Begin(ctx, prID)
 	if !ok {
 		return domain.State{}, apperr.Conflict("A brief is already being generated for this pull request").
@@ -105,6 +121,15 @@ func (s *Service) Generate(ctx context.Context, workspaceID, prID string) (domai
 		return domain.State{}, err
 	}
 	return domain.State{Brief: &brief}, nil
+}
+
+// admit runs the spend-cap check once for a generation. Its error is returned unchanged: a 402
+// reaches the client as is, any other error is a 500 and nothing starts (fail closed).
+func (s *Service) admit(ctx context.Context, workspaceID string) error {
+	if s.d.Spend == nil {
+		return nil
+	}
+	return s.d.Spend.Admit(ctx, workspaceID, opGenerate)
 }
 
 // Shutdown cancels the running generations and waits for them.

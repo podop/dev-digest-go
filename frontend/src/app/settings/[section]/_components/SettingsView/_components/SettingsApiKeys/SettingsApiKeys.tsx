@@ -1,98 +1,59 @@
 "use client";
 
-import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Button, Icon, FormField, TextInput } from "@devdigest/ui";
-import { useTestConnection, useSecretsStatus } from "@/lib/hooks";
-import { ApiError } from "@/lib/api";
-import type { ConnTestProvider } from "@/lib/types";
+import { Icon } from "@devdigest/ui";
+import { KeyField, KEY_PAGE_URLS } from "@/components/key-field";
+import { useAbout, useSecretsStatus } from "@/lib/hooks";
+import { sectionHref } from "../../constants";
 import { SectionTitle } from "../SectionTitle";
+import { DefaultModelField } from "./_components/DefaultModelField";
+import { SpendCapField } from "./_components/SpendCapField";
 import { KEY_ROWS } from "./constants";
 import { s } from "./styles";
 
-/** "Configured / Not set" pill driven by GET /settings/secrets-status. */
-function StatusBadge({ configured }: { configured: boolean | undefined }) {
-  const t = useTranslations("settings");
-  if (configured === undefined) return null; // status still loading
+/** FR15: where the keys live (real path from GET /about) and where to put them for CI. */
+function SecretsInfoBox({ secretsFile }: { secretsFile: string }) {
+  const t = useTranslations("apiKeys");
   return (
-    <span style={s.badge(configured)}>
-      <span style={s.badgeDot(configured)} />
-      {configured ? t("apiKeys.configured") : t("apiKeys.notSet")}
-    </span>
+    <div style={s.infoBox}>
+      <Icon.Info size={14} style={s.infoIcon} />
+      <p>
+        {t.rich("infoBox", {
+          path: () => <span style={s.path}>{secretsFile}</span>,
+          github: (chunks) => (
+            <Link href={sectionHref("github")} style={s.link}>
+              {chunks}
+            </Link>
+          ),
+        })}
+      </p>
+    </div>
   );
 }
 
-function KeyRow({
-  label,
-  provider,
-  hint,
-  configured,
-}: {
-  label: string;
-  provider: ConnTestProvider;
-  hint: string;
-  configured: boolean | undefined;
-}) {
-  const t = useTranslations("settings");
-  const [val, setVal] = React.useState("");
-  const [reveal, setReveal] = React.useState(false);
-  const test = useTestConnection();
-  const [res, setRes] = React.useState<{ ok: boolean; message: string } | null>(null);
-
-  const run = async () => {
-    setRes(null);
-    try {
-      const r = await test.mutateAsync({ provider, key: val.trim() || undefined });
-      setRes({ ok: r.ok, message: r.message });
-    } catch (e) {
-      setRes({ ok: false, message: e instanceof ApiError ? e.message : t("apiKeys.testFailed") });
-    }
-  };
-
-  return (
-    <FormField label={label} hint={hint} right={<StatusBadge configured={configured} />}>
-      <div style={s.keyRow}>
-        <div style={s.keyInput}>
-          <TextInput
-            value={val}
-            onChange={setVal}
-            mono
-            type={reveal ? "text" : "password"}
-            placeholder={t("apiKeys.placeholder")}
-            suffix={
-              <Icon.EyeOff size={14} style={s.revealIcon} onClick={() => setReveal((r) => !r)} />
-            }
-          />
-        </div>
-        <Button kind="secondary" size="md" onClick={run} disabled={test.isPending}>
-          {test.isPending ? t("apiKeys.testing") : t("apiKeys.testConnection")}
-        </Button>
-      </div>
-      {res && (
-        <div style={s.result(res.ok)}>
-          {res.ok ? <Icon.CheckCircle size={13} /> : <Icon.XCircle size={13} />}
-          {res.message}
-        </div>
-      )}
-    </FormField>
-  );
-}
-
+/** Settings → API Keys: provider keys (FR2–FR4), default model (FR8), monthly spend cap (FR11), secrets info box (FR15). */
 export function SettingsApiKeys() {
-  const t = useTranslations("settings");
+  const t = useTranslations("apiKeys");
   const { data: status } = useSecretsStatus();
+  const { data: about } = useAbout();
   return (
     <div style={s.wrap}>
-      <SectionTitle title={t("apiKeys.title")} body={t("apiKeys.body")} />
+      <SectionTitle title={t("title")} body={t("body")} />
       {KEY_ROWS.map((row) => (
-        <KeyRow
+        <KeyField
           key={row.provider}
-          label={t(row.labelKey)}
           provider={row.provider}
+          label={t(row.labelKey)}
           hint={t(row.hintKey)}
+          docsHref={KEY_PAGE_URLS[row.provider]}
           configured={status?.[row.provider]}
+          optional={row.optional}
         />
       ))}
+      <DefaultModelField />
+      <SpendCapField />
+      {about && <SecretsInfoBox secretsFile={about.secrets_file} />}
     </div>
   );
 }

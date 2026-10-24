@@ -37,6 +37,8 @@ func statusOf(k apperr.Kind) (status int, ok bool) {
 		return http.StatusRequestEntityTooLarge, true
 	case apperr.KindForbidden:
 		return http.StatusForbidden, true
+	case apperr.KindPaymentRequired:
+		return http.StatusPaymentRequired, true
 	case apperr.KindValidation:
 		return http.StatusUnprocessableEntity, true
 	case apperr.KindInternal, apperr.KindConfig:

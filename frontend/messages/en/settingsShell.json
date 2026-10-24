@@ -1,0 +1,15 @@
+{
+  "breadcrumb": "Settings",
+  "title": "Settings",
+  "navLabel": "Settings sections",
+  "sections": {
+    "api-keys": "API Keys",
+    "github": "GitHub Integration",
+    "workspace": "Workspace",
+    "automatic-reviews": "Automatic Reviews",
+    "integrations": "Integrations",
+    "models": "Feature Models",
+    "about": "About"
+  },
+  "comingSoon": "This section is coming in a later release."
+}

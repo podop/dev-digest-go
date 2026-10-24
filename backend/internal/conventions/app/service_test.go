@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -284,4 +285,123 @@ func TestExtract_StartError(t *testing.T) {
 	if !errors.Is(err, errBoom) || strings.Contains(err.Error(), "scan_running") {
 		t.Errorf("Extract() error = %v, want it to wrap the store error", err)
 	}
+}
+
+// fakeBudget is the spend cap port: it records every call and answers with err.
+type fakeBudget struct {
+	err   error
+	calls []budgetCall
+}
+
+type budgetCall struct{ Workspace, Op string }
+
+func (b *fakeBudget) Admit(_ context.Context, workspaceID, op string) error {
+	b.calls = append(b.calls, budgetCall{workspaceID, op})
+	return b.err
+}
+
+func newBudgetSvc(t *testing.T, repos map[string]app.Repo, b *fakeBudget) *svcEnv {
+	t.Helper()
+	e := &svcEnv{store: &memStore{}, queue: &queue{}}
+	e.svc = app.NewService(e.store, memRepos{repos}, e.queue, app.ServiceOptions{
+		Now: func() time.Time { return t0 }, Budget: b,
+	})
+	return e
+}
+
+func capReached() error {
+	return apperr.PaymentRequired("Monthly spend cap reached").WithCode("spend_cap_reached")
+}
+
+func TestExtract_Budget(t *testing.T) {
+	t.Run("admitted once with the op, then the scan starts", func(t *testing.T) {
+		b := &fakeBudget{}
+		e := newBudgetSvc(t, cloned(), b)
+		if _, err := e.svc.Extract(t.Context(), ws, repoID); err != nil {
+			t.Fatalf("Extract() error = %v", err)
+		}
+		want := []budgetCall{{ws, "conventions_extract"}}
+		if diff := cmp.Diff(want, b.calls); diff != "" {
+			t.Errorf("Admit calls mismatch (-want +got):\n%s", diff)
+		}
+		if len(e.queue.jobs) != 1 {
+			t.Errorf("enqueued %d jobs, want 1", len(e.queue.jobs))
+		}
+	})
+	t.Run("cap reached is a 402 and nothing is written or enqueued", func(t *testing.T) {
+		b := &fakeBudget{err: capReached()}
+		e := newBudgetSvc(t, cloned(), b)
+		stale := &domain.Scan{ID: "old", RepoID: repoID, Status: domain.ScanRunning, StartedAt: t0.Add(-11 * time.Minute)}
+		e.store.scans = append(e.store.scans, stale)
+
+		_, err := e.svc.Extract(t.Context(), ws, repoID)
+
+		wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached", "Monthly spend cap reached")
+		if len(e.store.scans) != 1 || e.store.scan("old").Status != domain.ScanRunning {
+			t.Errorf("scans = %+v, want the stale scan untouched and no new row", e.store.scans)
+		}
+		if len(e.queue.jobs) != 0 {
+			t.Errorf("enqueued %d jobs, want none", len(e.queue.jobs))
+		}
+	})
+	t.Run("a failed spend read passes through as a plain error", func(t *testing.T) {
+		b := &fakeBudget{err: errBoom}
+		e := newBudgetSvc(t, cloned(), b)
+
+		_, err := e.svc.Extract(t.Context(), ws, repoID)
+
+		if !errors.Is(err, errBoom) {
+			t.Fatalf("Extract() error = %v, want errBoom unchanged", err)
+		}
+		if _, isApp := apperr.As(err); isApp {
+			t.Errorf("Extract() error = %v, want a plain error (500 at the edge)", err)
+		}
+		if len(e.store.scans) != 0 || len(e.queue.jobs) != 0 {
+			t.Errorf("scans = %d, jobs = %d, want none (fail closed)", len(e.store.scans), len(e.queue.jobs))
+		}
+	})
+	t.Run("not found and not cloned win over 402 and skip the check", func(t *testing.T) {
+		tests := []struct {
+			name  string
+			repos map[string]app.Repo
+			repo  string
+			kind  apperr.Kind
+		}{
+			{"unknown repo", cloned(), "other", apperr.KindNotFound},
+			{"not cloned", map[string]app.Repo{repoID: {ID: repoID, FullName: "o/r"}}, repoID, apperr.KindValidation},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				b := &fakeBudget{err: capReached()}
+				e := newBudgetSvc(t, tc.repos, b)
+
+				_, err := e.svc.Extract(t.Context(), ws, tc.repo)
+
+				if ae, ok := apperr.As(err); !ok || ae.Kind != tc.kind {
+					t.Errorf("Extract() error = %v, want kind %v", err, tc.kind)
+				}
+				if len(b.calls) != 0 {
+					t.Errorf("Admit called %d times, want 0", len(b.calls))
+				}
+			})
+		}
+	})
+	t.Run("a running scan (409) is checked after the cap, so 402 wins", func(t *testing.T) {
+		b := &fakeBudget{err: capReached()}
+		e := newBudgetSvc(t, cloned(), b)
+		e.store.scans = append(e.store.scans, &domain.Scan{ID: "old", RepoID: repoID, Status: domain.ScanRunning, StartedAt: t0.Add(-time.Minute)})
+
+		_, err := e.svc.Extract(t.Context(), ws, repoID)
+
+		wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached", "Monthly spend cap reached")
+	})
+	t.Run("a nil budget leaves Extract unchanged", func(t *testing.T) {
+		e := newSvc(t, cloned()) // newSvc sets no Budget
+		if _, err := e.svc.Extract(t.Context(), ws, repoID); err != nil {
+			t.Fatalf("Extract() error = %v", err)
+		}
+		if len(e.queue.jobs) != 1 {
+			t.Errorf("enqueued %d jobs, want 1", len(e.queue.jobs))
+		}
+	})
 }

@@ -52,6 +52,26 @@ func TestAppErrorStatus(t *testing.T) {
 	}
 }
 
+func TestPaymentRequiredIs402WithDetails(t *testing.T) {
+	rec := httptest.NewRecorder()
+	newTestEcho(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/apperr/payment_required", nil))
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Errorf("GET /apperr/payment_required status = %d, want 402", rec.Code)
+	}
+	var got httpx.ErrorBody
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode body %q: %v", rec.Body.String(), err)
+	}
+	want := httpx.ErrorBody{Error: httpx.ErrorDetail{
+		Code: "spend_cap_reached", Message: "cap reached",
+		Details: map[string]any{"cap_usd": 50.0, "spent_usd": 50.12, "month_start": "2026-10-01T00:00:00.000Z"},
+	}}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("body mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestAppErrorCauseNotExposed(t *testing.T) {
 	rec := httptest.NewRecorder()
 	newTestEcho(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/apperr/external_service", nil))

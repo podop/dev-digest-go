@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/big"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,6 +19,15 @@ const (
 	codeInvalidType = "invalid_type"
 	codeInvalidEnum = "invalid_enum_value"
 	codeTooSmall    = "too_small"
+	codeTooBig      = "too_big"
+	codeCustom      = "custom"
+)
+
+// Bounds and precision of monthly_spend_cap_usd (the UI contract's SPEND_CAP_* constants).
+const (
+	spendCapMin      = 0
+	spendCapMax      = 1_000_000
+	spendCapDecimals = 2
 )
 
 var (
@@ -27,7 +37,7 @@ var (
 	densities   = []string{"regular", "compact"}
 
 	// knownKeys are validated in this order; every other key is accepted as is.
-	knownKeys = []string{"polling_interval_min", "theme", "density", "sync_to_folder", "automatic_reviews", "feature_models"}
+	knownKeys = []string{"polling_interval_min", "theme", "density", "sync_to_folder", "automatic_reviews", "feature_models", "default_model", "monthly_spend_cap_usd"}
 )
 
 // parseSettingsUpdate validates a PUT /settings body (section 7.2) and returns the entries to
@@ -65,6 +75,10 @@ func parseSettingsUpdate(body []byte) (app.Bag, []httpx.Issue) {
 			value, is = boolean(raw, key)
 		case "feature_models":
 			value, is = featureModels(raw, key)
+		case "default_model":
+			value, is = defaultModel(raw, key)
+		case "monthly_spend_cap_usd":
+			value, is = spendCap(raw, key)
 		}
 		issues = append(issues, is...)
 		if is == nil {
@@ -216,6 +230,70 @@ func featureModels(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.I
 		return nil, []httpx.Issue{issue(codeInvalidType, "Invalid feature_models", path...)}
 	}
 	return out, nil
+}
+
+// defaultModel validates default_model: null (clears it) or a {provider, model} choice, checked
+// like a feature_models entry. Extra fields of the choice are dropped.
+func defaultModel(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue) {
+	if jsonType(raw) == "null" {
+		return json.RawMessage("null"), nil
+	}
+	choice, issues := featureModel(raw, path)
+	if issues != nil {
+		return nil, issues
+	}
+	out, err := json.Marshal(choice)
+	if err != nil {
+		return nil, []httpx.Issue{issue(codeInvalidType, "Invalid default_model", path...)}
+	}
+	return out, nil
+}
+
+// spendCap validates monthly_spend_cap_usd: null (no cap) or a JSON number from 0 to 1,000,000
+// with at most two decimals. The decimals are checked on the exact decimal value, so 0.07
+// passes and 1.234 does not; the issues are the ones Zod's min, max and refine produce.
+func spendCap(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue) {
+	t := jsonType(raw)
+	if t == "null" {
+		return json.RawMessage("null"), nil
+	}
+	if t != "number" {
+		return nil, []httpx.Issue{issue(codeInvalidType, "Expected number, received "+t, path...)}
+	}
+	text := string(bytes.TrimSpace(raw))
+	f, err := strconv.ParseFloat(text, 64)
+	if err != nil || math.IsInf(f, 0) || math.IsNaN(f) {
+		return nil, []httpx.Issue{issue(codeInvalidType, "Expected number, received nan", path...)}
+	}
+
+	var issues []httpx.Issue
+	if f < spendCapMin {
+		issues = append(issues, issue(codeTooSmall, fmt.Sprintf("Number must be greater than or equal to %d", spendCapMin), path...))
+	}
+	if f > spendCapMax {
+		issues = append(issues, issue(codeTooBig, fmt.Sprintf("Number must be less than or equal to %d", spendCapMax), path...))
+	}
+	if !atMostDecimals(text, spendCapDecimals) {
+		issues = append(issues, issue(codeCustom, fmt.Sprintf("At most %d decimals", spendCapDecimals), path...))
+	}
+	if issues != nil {
+		return nil, issues
+	}
+	if f == 0 {
+		return json.RawMessage("0"), nil // no negative zero
+	}
+	return json.RawMessage(strconv.FormatFloat(f, 'f', -1, 64)), nil
+}
+
+// atMostDecimals reports whether the decimal number text has no more than n decimals, exactly
+// (no float rounding): value × 10^n must be an integer.
+func atMostDecimals(text string, n int) bool {
+	r, ok := new(big.Rat).SetString(text)
+	if !ok {
+		return false
+	}
+	scale := new(big.Rat).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(n)), nil))
+	return r.Mul(r, scale).IsInt()
 }
 
 func featureModel(raw json.RawMessage, path []any) (featureModelChoice, []httpx.Issue) {

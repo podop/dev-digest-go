@@ -6,13 +6,15 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { providerKeys, repoKeys, prKeys, settingsKeys } from "./keys";
+import { aboutKeys, providerKeys, repoKeys, prKeys, settingsKeys } from "./keys";
 import type {
   Settings,
   SettingsUpdate,
   ConnTestProvider,
   ConnTestResult,
   SecretsStatus,
+  SpendStatus,
+  About,
   Repo,
   PrMeta,
   PrDetail,
@@ -30,7 +32,11 @@ export function useUpdateSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (patch: SettingsUpdate) => api.put<Settings>("/settings", patch),
-    onSuccess: (data) => qc.setQueryData(settingsKeys.current(), data),
+    // The saved cap is part of GET /settings/spend, so that read is refetched too.
+    onSuccess: (data) => {
+      qc.setQueryData(settingsKeys.current(), data);
+      qc.invalidateQueries({ queryKey: settingsKeys.spend() });
+    },
   });
 }
 
@@ -59,6 +65,23 @@ export function useSecretsStatus() {
     queryKey: settingsKeys.secretsStatus(),
     queryFn: () => api.get<SecretsStatus>("/settings/secrets-status"),
     staleTime: 30_000,
+  });
+}
+
+/** GET /settings/spend — month-to-date spend, the cap and whether it is reached. */
+export function useSpend() {
+  return useQuery({
+    queryKey: settingsKeys.spend(),
+    queryFn: () => api.get<SpendStatus>("/settings/spend"),
+  });
+}
+
+/** GET /about — version, build id, runner, config format, data dir and secrets file. */
+export function useAbout() {
+  return useQuery({
+    queryKey: aboutKeys.all,
+    queryFn: () => api.get<About>("/about"),
+    staleTime: Infinity,
   });
 }
 

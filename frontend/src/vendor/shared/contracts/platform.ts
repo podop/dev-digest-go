@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { Provider } from './knowledge.js';
 import { FEATURE_MODEL_IDS } from '../constants/feature-models.js';
+import {
+  ABOUT_RUNNER_KIND,
+  SPEND_CAP_MAX_DECIMALS,
+  SPEND_CAP_MAX_USD,
+  SPEND_CAP_MIN_USD,
+} from '../constants/settings.js';
 
 /**
  * Platform / scaffolding DTOs owned by F1:
@@ -25,6 +31,13 @@ export type FeatureModelChoice = z.infer<typeof FeatureModelChoice>;
 // Registry (FEATURE_MODELS, FeatureModelDef) lives in the zod-free
 // constants/feature-models.ts; re-exported here for compatibility.
 export { FEATURE_MODELS, type FeatureModelDef } from '../constants/feature-models.js';
+// Spend-cap bounds, error code and settings keys live in the zod-free constants/settings.ts.
+export {
+  SPEND_CAP_MIN_USD,
+  SPEND_CAP_MAX_USD,
+  SPEND_CAP_MAX_DECIMALS,
+  SPEND_CAP_ERROR_CODE,
+} from '../constants/settings.js';
 
 // ---- Settings ----
 /**
@@ -40,6 +53,18 @@ export const SettingsKnown = z.object({
   automatic_reviews: z.boolean().default(false),
   /** Per-feature model overrides (provider+model), keyed by FeatureModelId. */
   feature_models: z.record(FeatureModelId, FeatureModelChoice).default({}),
+  /** Workspace default model for features without their own choice; null = built-in defaults. */
+  default_model: FeatureModelChoice.nullable().default(null),
+  /** Monthly spend cap in USD (0..1,000,000, at most 2 decimals); null = no cap. */
+  monthly_spend_cap_usd: z
+    .number()
+    .min(SPEND_CAP_MIN_USD)
+    .max(SPEND_CAP_MAX_USD)
+    .refine((v) => Math.abs(v * 10 ** SPEND_CAP_MAX_DECIMALS - Math.round(v * 10 ** SPEND_CAP_MAX_DECIMALS)) < 1e-6, {
+      message: `At most ${SPEND_CAP_MAX_DECIMALS} decimals`,
+    })
+    .nullable()
+    .default(null),
 });
 export type SettingsKnown = z.infer<typeof SettingsKnown>;
 
@@ -66,8 +91,46 @@ export const ConnTestResult = z.object({
   ok: z.boolean(),
   message: z.string(),
   detail: z.unknown().optional(),
+  /** Round trip of the provider call; null when ok=false. */
+  latency_ms: z.number().int().nullish(),
+  /** LLM providers only: the model that was checked and whether the provider lists it (null when ok=false). */
+  model: z.string().nullish(),
+  model_reachable: z.boolean().nullish(),
+  /** GitHub only: the token's login and OAuth scopes (scopes null = not reported, e.g. fine-grained). */
+  login: z.string().nullish(),
+  scopes: z.array(z.string()).nullish(),
 });
 export type ConnTestResult = z.infer<typeof ConnTestResult>;
+
+// ---- Monthly spend (GET /settings/spend) ----
+/** Month-to-date spend against the optional cap; money rounded to 6 decimals. */
+export const SpendStatus = z.object({
+  month_start: z.string(),
+  spent_usd: z.number(),
+  cap_usd: z.number().nullable(),
+  remaining_usd: z.number().nullable(),
+  cap_reached: z.boolean(),
+});
+export type SpendStatus = z.infer<typeof SpendStatus>;
+
+/** `error.details` of the 402 `spend_cap_reached` answer. */
+export const SpendCapDetails = z.object({
+  cap_usd: z.number(),
+  spent_usd: z.number(),
+  month_start: z.string(),
+});
+export type SpendCapDetails = z.infer<typeof SpendCapDetails>;
+
+// ---- About (GET /about) ----
+export const About = z.object({
+  version: z.string(),
+  build_id: z.string(),
+  runner: z.object({ kind: z.literal(ABOUT_RUNNER_KIND), version: z.string() }),
+  config_format: z.string(),
+  data_dir: z.string(),
+  secrets_file: z.string(),
+});
+export type About = z.infer<typeof About>;
 
 // ---- Secrets status (which provider keys are configured; never the values) ----
 /** Boolean per provider: true ⇒ a key/PAT is stored. The value is never exposed. */

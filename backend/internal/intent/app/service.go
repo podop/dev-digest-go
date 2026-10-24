@@ -13,6 +13,16 @@ import (
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 )
 
+// OpRefresh is the operation name a refresh reports to the spend cap check (spec FR13).
+const OpRefresh = "intent_refresh"
+
+// budget is the consumer-side spend cap port (spec FR13). Admit returns nil when the operation may
+// start, the 402 spend_cap_reached error when the monthly cap is reached, and any other error
+// when the spend cannot be read.
+type budget interface {
+	Admit(ctx context.Context, workspaceID, op string) error
+}
+
 // Service implements the intent use cases: API for the routes, Resolver for the review pre-work
 // and Stopper for shutdown. Its only state is the registry of in-flight derivations.
 type Service struct {
@@ -87,7 +97,9 @@ func (s *Service) Get(ctx context.Context, workspaceID, prID string) (Response, 
 	return Response{Intent: &rec, Stale: s.stale(ctx, workspaceID, pull, repo, rec)}, nil
 }
 
-// Refresh answers POST /pulls/:id/intent/refresh.
+// Refresh answers POST /pulls/:id/intent/refresh. The spend cap is checked once, after the 404
+// checks and before the derivation; its error is returned unchanged. Only this user-triggered
+// route is gated: the derivations of Resolve (review pre-work) are not (spec FR13).
 func (s *Service) Refresh(ctx context.Context, workspaceID, prID string) (Response, error) {
 	pull, err := s.pull(ctx, workspaceID, prID)
 	if err != nil {
@@ -103,6 +115,11 @@ func (s *Service) Refresh(ctx context.Context, workspaceID, prID string) (Respon
 	files, err := s.d.Pulls.ChangedFiles(ctx, prID)
 	if err != nil {
 		return Response{}, fmt.Errorf("read changed files: %w", err)
+	}
+	if s.d.Budget != nil {
+		if err := s.d.Budget.Admit(ctx, workspaceID, OpRefresh); err != nil {
+			return Response{}, err
+		}
 	}
 	// Node passes no signal here: the derivation finishes and is stored even when the client has
 	// gone. WithoutCancel keeps the values; the flight still ends on its budget and on Shutdown.

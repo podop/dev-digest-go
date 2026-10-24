@@ -3,9 +3,13 @@ package github
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+
+	"dev-digest-go/backend/internal/platform/retry"
 )
 
 // PullSummary is a pull request as GitHub lists it. Diff stats are not part of
@@ -326,15 +330,55 @@ func (c *Client) GetIssue(ctx context.Context, owner, name string, number int) (
 	return Issue{Number: raw.Number, Title: raw.Title, Body: raw.Body, State: raw.State}, nil
 }
 
-// CurrentLogin returns the login of the token's owner (GET /user).
+// CurrentLogin returns the login of the token's owner (GET /user). It is CurrentUser reduced to
+// the login, so it does not follow redirects either.
 func (c *Client) CurrentLogin(ctx context.Context) (string, error) {
-	token, err := c.currentToken()
-	if err != nil {
-		return "", err
-	}
-	u, err := getJSON[apiUser](ctx, c, token, "/user", nil)
+	u, err := c.CurrentUser(ctx)
 	if err != nil {
 		return "", err
 	}
 	return u.Login, nil
+}
+
+// User is the token's owner as GET /user reports it.
+type User struct {
+	Login string
+	// Scopes is the X-OAuth-Scopes list of a classic token; empty when the header is present but
+	// empty. Only meaningful when ScopesReported.
+	Scopes []string
+	// ScopesReported is false when GitHub sent no X-OAuth-Scopes header (fine-grained tokens).
+	ScopesReported bool
+}
+
+// CurrentUser returns the token's owner and its OAuth scopes (GET /user). It never follows a
+// redirect, so the token cannot reach another host.
+func (c *Client) CurrentUser(ctx context.Context) (User, error) {
+	token, err := c.currentToken()
+	if err != nil {
+		return User{}, err
+	}
+	strict := c.noRedirect()
+	type result struct {
+		user   apiUser
+		header http.Header
+	}
+	res, err := retry.Value(ctx, strict.retry, func(ctx context.Context) (result, error) {
+		var r result
+		h, err := strict.doHeader(ctx, token, http.MethodGet, "/user", nil, nil, &r.user)
+		r.header = h
+		return r, err
+	})
+	if err != nil {
+		return User{}, err
+	}
+	u := User{Login: res.user.Login, Scopes: []string{}}
+	if vals, ok := res.header["X-Oauth-Scopes"]; ok {
+		u.ScopesReported = true
+		for _, part := range strings.Split(strings.Join(vals, ","), ",") {
+			if part = strings.TrimSpace(part); part != "" {
+				u.Scopes = append(u.Scopes, part)
+			}
+		}
+	}
+	return u, nil
 }

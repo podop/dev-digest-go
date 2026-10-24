@@ -22,8 +22,16 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -buildvcs=false \
       -ldflags "-s -w -buildid= -X main.buildID=$id" -o "$dir/devdigest-runner-linux-amd64" ./cmd/devdigest-runner; \
     printf '%s' "$id" > "$dir/build-id"
+# The server reports both in GET /about: main.buildID is the sanitised id written above,
+# main.version is DEVDIGEST_VERSION (letters, digits and . _ + - only; anything else becomes "dev").
+ARG DEVDIGEST_VERSION=dev
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=1 go build -trimpath -tags devdigest_runner -ldflags="-s -w" -o /out/server ./cmd/server
+    set -eu; \
+    ver="$DEVDIGEST_VERSION"; \
+    case "$ver" in *[!0-9A-Za-z._+-]*|"") ver=dev ;; esac; \
+    id=$(cat internal/ci/adapters/runnerbin/build-id); \
+    CGO_ENABLED=1 go build -trimpath -tags devdigest_runner \
+      -ldflags "-s -w -X main.version=$ver -X main.buildID=$id" -o /out/server ./cmd/server
 
 # Alpine, not distroless: the backend shells out to `git` (clone, fetch, diff, blame).
 FROM alpine:3.23

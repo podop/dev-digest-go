@@ -1,6 +1,23 @@
-/** Default settings section when none is provided in the route. */
-export const DEFAULT_SECTION = "api-keys";
+/** Settings sections in sub-nav order (FR1). App-owned: the vendored SETTINGS_SECTIONS lists only two. */
+export const SETTINGS_SECTION_KEYS = [
+  "api-keys",
+  "github",
+  "workspace",
+  "automatic-reviews",
+  "integrations",
+  "models",
+  "about",
+] as const;
 
-/** Section keys that have a bespoke implemented panel. */
-export const SECTION_API_KEYS = "api-keys";
-export const SECTION_MODELS = "models";
+export type SettingsSectionKey = (typeof SETTINGS_SECTION_KEYS)[number];
+
+/** Default settings section; an unknown route key redirects here. */
+export const DEFAULT_SECTION: SettingsSectionKey = "api-keys";
+
+/** Route of a section (also the target of the unknown-key redirect). */
+export const sectionHref = (key: SettingsSectionKey): string => `/settings/${key}`;
+
+/** Narrow a route segment to a known section key. */
+export function isSettingsSection(key: string): key is SettingsSectionKey {
+  return (SETTINGS_SECTION_KEYS as readonly string[]).includes(key);
+}

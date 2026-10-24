@@ -511,9 +511,11 @@ var (
 	uuidPattern = regexp.MustCompile(`[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 	timePattern = regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z`)
 	wireTime    = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$`)
+	// latencyPattern is the measured round trip of a connection test: it varies run to run.
+	latencyPattern = regexp.MustCompile(`("latency_ms":\s*)\d+`)
 )
 
-// goldens normalizes volatile values (ids, "now" timestamps, the clone directory) and compares
+// goldens normalizes volatile values (ids, "now" timestamps, latency_ms, the clone directory) and compares
 // or rewrites testdata/contracts/<name>.json.
 type goldens struct {
 	t        *testing.T
@@ -535,6 +537,7 @@ func (g *goldens) check(name string, resp response, wantStatus int) {
 		return g.ids[id]
 	})
 	text = timePattern.ReplaceAllString(text, "2026-01-01T00:00:00.000Z")
+	text = latencyPattern.ReplaceAllString(text, "${1}0")
 
 	dec := json.NewDecoder(strings.NewReader(text))
 	dec.UseNumber()

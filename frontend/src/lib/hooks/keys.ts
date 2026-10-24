@@ -11,6 +11,13 @@ export const settingsKeys = {
   all: ["settings"] as const,
   current: () => [...settingsKeys.all, "current"] as const,
   secretsStatus: () => [...settingsKeys.all, "secrets-status"] as const,
+  /** GET /settings/spend — month-to-date spend vs the cap. */
+  spend: () => [...settingsKeys.all, "spend"] as const,
+};
+
+/** GET /about — build/runtime facts; never changes while the server runs. */
+export const aboutKeys = {
+  all: ["about"] as const,
 };
 
 export const providerKeys = {

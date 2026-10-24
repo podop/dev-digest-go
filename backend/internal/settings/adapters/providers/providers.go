@@ -109,17 +109,24 @@ func (e *statusError) Error() string {
 
 func (e *statusError) StatusCode() int { return e.status }
 
-// CountModels lists the provider's models with key and returns how many count: for OpenAI the
-// ids starting with gpt or containing o1 or o3, for Anthropic the first page, for OpenRouter
-// all listed models.
+// CountModels is ListModels reduced to its Count.
 func (c *Client) CountModels(ctx context.Context, provider app.Provider, key string) (int, error) {
+	list, err := c.ListModels(ctx, provider, key)
+	return list.Count, err
+}
+
+// ListModels makes one model-list GET (retried on transient failures for OpenAI and Anthropic,
+// as before) and returns every listed id plus the count of usable ones: for OpenAI the ids
+// starting with gpt or containing o1 or o3, otherwise all of them. Anthropic asks for
+// limit=1000 (its maximum) so one page holds the whole list.
+func (c *Client) ListModels(ctx context.Context, provider app.Provider, key string) (app.ModelList, error) {
 	switch provider {
 	case app.OpenAI:
 		ids, err := c.withRetry(ctx, func(ctx context.Context) ([]string, error) {
 			return c.listIDs(ctx, "OpenAI", c.openAI+"/models", key, map[string]string{"Authorization": "Bearer " + key}, c.timeout)
 		})
 		if err != nil {
-			return 0, err
+			return app.ModelList{}, err
 		}
 		n := 0
 		for _, id := range ids {
@@ -127,18 +134,18 @@ func (c *Client) CountModels(ctx context.Context, provider app.Provider, key str
 				n++
 			}
 		}
-		return n, nil
+		return app.ModelList{IDs: ids, Count: n}, nil
 	case app.Anthropic:
 		ids, err := c.withRetry(ctx, func(ctx context.Context) ([]string, error) {
-			return c.listIDs(ctx, "Anthropic", c.anthropic+"/models", key,
+			return c.listIDs(ctx, "Anthropic", c.anthropic+"/models?limit=1000", key,
 				map[string]string{"x-api-key": key, "anthropic-version": anthropicVersion}, c.timeout)
 		})
-		return len(ids), err
+		return app.ModelList{IDs: ids, Count: len(ids)}, err
 	case app.OpenRouter:
 		ids, err := c.listIDs(ctx, "OpenRouter", c.openRouter+"/models", key, map[string]string{"Authorization": "Bearer " + key}, c.openRouterTimeout)
-		return len(ids), err
+		return app.ModelList{IDs: ids, Count: len(ids)}, err
 	default:
-		return 0, fmt.Errorf("provider %q has no model list", provider)
+		return app.ModelList{}, fmt.Errorf("provider %q has no model list", provider)
 	}
 }
 

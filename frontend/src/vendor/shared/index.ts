@@ -24,6 +24,8 @@
  *                         (re-exported by contracts/onboarding)
  *  - constants/evals      zod-free eval case limits, period presets + trend cap
  *                         (re-exported by contracts/eval-pipeline)
+ *  - constants/settings   zod-free spend-cap bounds + error code, settings keys, about runner kind
+ *                         (cap bounds/code re-exported by contracts/platform)
  *
  * Feature agents (A1–A6) and F2 import everything from here. The barrel is
  * stable — feature agents EXTEND with new files, they do not edit existing ones.

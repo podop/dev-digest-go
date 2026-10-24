@@ -16,11 +16,22 @@ func (s *RunService) RunAll(ctx context.Context, workspaceID string) (domain.Run
 	if err != nil {
 		return domain.RunAllResult{}, fmt.Errorf("list agents: %w", err)
 	}
+	// One cap check for the whole call, before any run is created (each agent is not admitted
+	// separately).
+	if err := s.admit(ctx, workspaceID, opEvalRunAll); err != nil {
+		return domain.RunAllResult{}, err
+	}
 	res := domain.RunAllResult{Started: []domain.Run{}, Skipped: []domain.Skip{}}
 	for _, id := range ids {
-		out, err := s.tryStartAgent(ctx, workspaceID, id)
+		nr, skip, err := s.planAgentStart(ctx, workspaceID, id)
 		if err != nil {
 			return domain.RunAllResult{}, err
+		}
+		out := startOutcome{skip: skip}
+		if skip == "" {
+			if out, err = s.beginAgent(ctx, nr); err != nil {
+				return domain.RunAllResult{}, err
+			}
 		}
 		if out.skip != "" {
 			res.Skipped = append(res.Skipped, domain.Skip{AgentID: id, Reason: out.skip})

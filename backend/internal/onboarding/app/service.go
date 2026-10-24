@@ -24,7 +24,16 @@ const (
 	codeInternal             = "internal_error"
 )
 
-// Deps are the collaborators of a Service. Every field except Now, Log and Budget is required.
+// opGenerate is the operation name the cap check logs with a 402 (the value of spend/app
+// OpOnboardingGenerate; contexts reach each other only through ports, so it is a local literal).
+const opGenerate = "onboarding_generate"
+
+// SpendBudget is the monthly spend cap check (the spend context's Admit, bound in cmd/server).
+type SpendBudget interface {
+	Admit(ctx context.Context, workspaceID, op string) error
+}
+
+// Deps are the collaborators of a Service. Every field except Now, Log, Budget and Spend is required.
 type Deps struct {
 	Store       Store
 	IndexStates IndexStates
@@ -38,6 +47,8 @@ type Deps struct {
 	Log *slog.Logger
 	// Budget bounds one generation; 0 is domain.GenerationBudget (tests shorten it).
 	Budget time.Duration
+	// Spend is the monthly spend cap check; nil = no check.
+	Spend SpendBudget
 }
 
 // Service implements API and Lifecycle.
@@ -112,6 +123,14 @@ func (s *Service) Generate(ctx context.Context, workspaceID, repoID string) (dom
 	repo, err := s.requireRepo(ctx, workspaceID, repoID)
 	if err != nil {
 		return domain.State{}, err
+	}
+	// The cap check follows the 404 and precedes the in-flight marker: a refused request leaves
+	// no marker and starts no work, and a reached cap wins over the 409 and over index_not_ready
+	// (spec FR13, EC9, assumption A7).
+	if s.d.Spend != nil {
+		if err := s.d.Spend.Admit(ctx, workspaceID, opGenerate); err != nil {
+			return domain.State{}, err
+		}
 	}
 	gctx, release, ok := s.markers.Begin(ctx, repoID)
 	if !ok {

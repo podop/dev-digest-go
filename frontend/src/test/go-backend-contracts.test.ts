@@ -380,7 +380,12 @@ const contracts: Record<string, z.ZodTypeAny> = {
   settings_get: Settings,
   settings_put: Settings,
   secrets_status: SecretsStatus.strict(),
-  test_connection: ConnTestResult.strict(),
+  // The golden is a GitHub success: latency_ms, login and scopes (null = not reported) are present.
+  test_connection: ConnTestResult.extend({
+    latency_ms: z.number().int().nonnegative(),
+    login: z.string().min(1),
+    scopes: z.array(z.string()).nullable(),
+  }).strict(),
   repos_create: Repo.strict(),
   repos_list: z.array(Repo.strict()),
   workspace: z

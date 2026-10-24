@@ -14,25 +14,40 @@ var defaultFeatureModels = map[string]struct {
 	"conventions":   {OpenAI, "gpt-5.4"},
 }
 
-// ResolveFeatureModel returns the provider and model a feature uses right now: the stored
-// setting feature_models.<feature> when it is a valid {provider, model} choice, else the
-// registry default. bag is the settings bag (settings.Bag); an unknown feature without a valid
-// stored choice yields ("", "").
+// ResolveFeatureModel returns the provider and model a feature uses right now, in this order:
+// the stored choice feature_models.<feature>, the workspace default_model, the registry default.
+// A stored value only counts when it is a valid {provider, model} choice (known provider,
+// non-empty model); an invalid one is skipped, not an error. bag is the settings bag
+// (settings.Bag); an unknown feature without any valid stored value yields ("", "").
 func ResolveFeatureModel(bag map[string]json.RawMessage, feature string) (Provider, string) {
 	if raw, ok := bag["feature_models"]; ok {
 		var models map[string]json.RawMessage
 		if json.Unmarshal(raw, &models) == nil {
-			var choice struct {
-				Provider string `json:"provider"`
-				Model    string `json:"model"`
-			}
-			if json.Unmarshal(models[feature], &choice) == nil {
-				if p, ok := ParseProvider(choice.Provider); ok && choice.Model != "" {
-					return p, choice.Model
-				}
+			if p, m, ok := parseChoice(models[feature]); ok {
+				return p, m
 			}
 		}
 	}
+	if p, m, ok := parseChoice(bag["default_model"]); ok {
+		return p, m
+	}
 	d := defaultFeatureModels[feature]
 	return d.provider, d.model
+}
+
+// parseChoice decodes a {provider, model} setting value; ok is false for absent, null,
+// malformed, unknown-provider or empty-model values.
+func parseChoice(raw json.RawMessage) (Provider, string, bool) {
+	var choice struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+	}
+	if json.Unmarshal(raw, &choice) != nil {
+		return "", "", false
+	}
+	p, ok := ParseProvider(choice.Provider)
+	if !ok || choice.Model == "" {
+		return "", "", false
+	}
+	return p, choice.Model, true
 }

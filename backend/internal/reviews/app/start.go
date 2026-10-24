@@ -31,6 +31,12 @@ func (s *Service) Start(ctx context.Context, workspaceID, prID string, req Start
 	if err != nil {
 		return StartResult{}, notFound(err, "Repo not found", "find repo "+pull.RepoID)
 	}
+	// The cap is checked once, after every 422/404 and before any write or executor start.
+	if s.budget != nil {
+		if err := s.budget.Admit(ctx, workspaceID, opReviewStart); err != nil {
+			return StartResult{}, err
+		}
+	}
 	res := StartResult{PRID: prID, Runs: []RunTarget{}}
 	if len(agents) == 0 {
 		return res, nil

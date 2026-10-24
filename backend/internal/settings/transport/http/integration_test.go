@@ -1,6 +1,7 @@
 package settingshttp_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -41,15 +42,23 @@ type upstream struct {
 	mu       sync.Mutex
 	githubOK bool
 	auths    []string
+	paths    []string
+
+	ghScopes   *string       // X-OAuth-Scopes of GET /gh/user; nil sends no header
+	orIDs      []string      // model ids of GET /or/models
+	orStatus   int           // non-zero answers GET /or/models with this status
+	orRedirect string        // non-empty answers GET /or/models with a 302 to this URL
+	orDelay    time.Duration // GET /or/models waits this long before answering
 }
 
 func newUpstream(t *testing.T) *upstream {
 	t.Helper()
-	u := &upstream{githubOK: true}
+	u := &upstream{githubOK: true, orIDs: []string{"a", "b", "c"}}
 	u.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u.mu.Lock()
 		u.auths = append(u.auths, r.Header.Get("Authorization"))
-		ok := u.githubOK
+		u.paths = append(u.paths, r.URL.Path)
+		ok, scopes, ids, status, redirect, delay := u.githubOK, u.ghScopes, u.orIDs, u.orStatus, u.orRedirect, u.orDelay
 		u.mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
@@ -59,9 +68,30 @@ func newUpstream(t *testing.T) *upstream {
 				_, _ = io.WriteString(w, `{"message":"Bad credentials"}`)
 				return
 			}
+			if scopes != nil {
+				w.Header().Set("X-OAuth-Scopes", *scopes)
+			}
 			_, _ = io.WriteString(w, `{"login":"octo"}`)
 		case "/or/models":
-			_, _ = io.WriteString(w, `{"data":[{"id":"a"},{"id":"b"},{"id":"c"}]}`)
+			select {
+			case <-time.After(delay):
+			case <-r.Context().Done():
+				return
+			}
+			if redirect != "" {
+				http.Redirect(w, r, redirect, http.StatusFound)
+				return
+			}
+			if status != 0 {
+				w.WriteHeader(status)
+				_, _ = io.WriteString(w, `{"error":"boom"}`)
+				return
+			}
+			data := make([]map[string]string, len(ids))
+			for i, id := range ids {
+				data[i] = map[string]string{"id": id}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 		default:
 			http.NotFound(w, r)
 		}
@@ -86,6 +116,7 @@ type stack struct {
 	clock      *fakeClock
 	res        seed.Result
 	db         *gorm.DB
+	logs       *bytes.Buffer // the settings service's log output
 }
 
 type fakeClock struct {
@@ -104,6 +135,8 @@ type stackOpts struct {
 	env       map[string]string
 	rateLimit bool
 	secretsIn string // initial secrets file content, "" for no file
+
+	openRouterTimeout time.Duration // 0 keeps the provider default
 }
 
 func newStack(t *testing.T, o stackOpts) *stack {
@@ -133,11 +166,15 @@ func newStack(t *testing.T, o stackOpts) *stack {
 		BaseURL: s.up.srv.URL + "/gh",
 		Retry:   &retry.Options{},
 	})
+	s.logs = &bytes.Buffer{}
 	svc := app.NewService(app.Deps{
-		Store:     settingspg.NewStore(d.DB),
-		Secrets:   sec,
-		GitHub:    gh,
-		Providers: providers.New(providers.Options{OpenRouterBaseURL: s.up.srv.URL + "/or", Retry: &retry.Options{}}),
+		Store:   settingspg.NewStore(d.DB),
+		Secrets: sec,
+		GitHub:  gh,
+		Providers: providers.New(providers.Options{
+			OpenRouterBaseURL: s.up.srv.URL + "/or", OpenRouterTimeout: o.openRouterTimeout, Retry: &retry.Options{},
+		}),
+		Logger: slog.New(slog.NewTextHandler(s.logs, nil)),
 	})
 	ids := tenancy.NewResolver(tenancypg.NewStore(d.DB))
 
@@ -283,9 +320,9 @@ func TestSecretsStatus_envFallback(t *testing.T) { // AC41
 func TestTestConnection_githubSavesKeyWith0600(t *testing.T) { // AC42, AC46 (token used next call)
 	s := newStack(t, stackOpts{seed: true})
 	rec := s.call(http.MethodPost, "/settings/test-connection", `{"provider":"github","key":"ghp_test"}`)
-	want := `{"provider":"github","ok":true,"message":"Connected as @octo"}`
-	if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != want {
-		t.Errorf("POST test-connection = %d %s, want 200 %s", rec.Code, got, want)
+	want := map[string]any{"provider": "github", "ok": true, "message": "Connected as @octo", "login": "octo", "scopes": nil}
+	if got := withoutLatency(t, rec); rec.Code != http.StatusOK || !cmp.Equal(want, got) {
+		t.Errorf("POST test-connection = %d %v, want 200 %v", rec.Code, got, want)
 	}
 	if got := s.up.lastAuth(); got != "Bearer ghp_test" {
 		t.Errorf("GitHub stub saw Authorization %q, want Bearer ghp_test", got)
@@ -330,19 +367,36 @@ func TestTestConnection_openRouter(t *testing.T) {
 	s := newStack(t, stackOpts{seed: true})
 	// AC44: no key anywhere.
 	rec := s.call(http.MethodPost, "/settings/test-connection", `{"provider":"openrouter"}`)
-	want := `{"provider":"openrouter","ok":false,"message":"OPENROUTER_API_KEY is not configured"}`
+	want := `{"provider":"openrouter","ok":false,"message":"OPENROUTER_API_KEY is not configured","latency_ms":null,"model":null,"model_reachable":null}`
 	if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != want {
 		t.Errorf("no key = %d %s, want 200 %s", rec.Code, got, want)
 	}
 	// AC45: three models.
 	rec = s.call(http.MethodPost, "/settings/test-connection", `{"provider":"openrouter","key":"or-key"}`)
-	want = `{"provider":"openrouter","ok":true,"message":"OK — 3 models available"}`
-	if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != want {
-		t.Errorf("with key = %d %s, want 200 %s", rec.Code, got, want)
+	wantOK := map[string]any{"provider": "openrouter", "ok": true, "message": "OK — 3 models available",
+		"model": "deepseek/deepseek-v4-flash", "model_reachable": false}
+	if got := withoutLatency(t, rec); rec.Code != http.StatusOK || !cmp.Equal(wantOK, got) {
+		t.Errorf("with key = %d %v, want 200 %v", rec.Code, got, wantOK)
 	}
 	if got := s.up.lastAuth(); got != "Bearer or-key" {
 		t.Errorf("stub saw Authorization %q, want Bearer or-key", got)
 	}
+}
+
+// withoutLatency decodes a test-connection answer, checks that latency_ms is a non-negative
+// integer or null and removes it, as its value changes from run to run.
+func withoutLatency(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	m := jsonMap(t, rec)
+	if l, ok := m["latency_ms"]; ok && l != nil {
+		if f, isNum := l.(float64); !isNum || f < 0 || f != float64(int(f)) {
+			t.Errorf("latency_ms = %v, want a non-negative integer", l)
+		}
+	} else if ok {
+		return m
+	}
+	delete(m, "latency_ms")
+	return m
 }
 
 func TestSecrets_malformedFileRecovers(t *testing.T) { // AC47
