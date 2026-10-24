@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/retry"
@@ -179,7 +181,7 @@ func (c *Client) listIDs(ctx context.Context, name, url, key string, headers map
 		return nil, fmt.Errorf("%s /models: read response: %w", name, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, &statusError{provider: name, status: resp.StatusCode, message: apiMessage(name, key, body)}
+		return nil, &statusError{provider: name, status: resp.StatusCode, message: apiMessage(name, key, resp.StatusCode, body)}
 	}
 	var payload struct {
 		Data []struct {
@@ -196,9 +198,28 @@ func (c *Client) listIDs(ctx context.Context, name, url, key string, headers map
 	return ids, nil
 }
 
-// apiMessage extracts the provider's error text ({"error":{"message":…}}) for OpenAI and
-// Anthropic. OpenRouter errors carry only the status (spec §7.2).
-func apiMessage(name, key string, body []byte) string {
+// authRejectedMessage replaces the provider's own text on a 401/403. Providers echo a masked copy
+// of the key there ("Incorrect API key provided: sk-proj-****abcd"), which spec NFR1 keeps out of
+// every response, so the text is never passed on.
+const authRejectedMessage = "API key rejected by the provider"
+
+// minKeyFragment is the shortest run of the key that is scrubbed from provider text.
+const minKeyFragment = 4
+
+var (
+	// keyLikeRun matches provider key shapes (sk-…, sk-or-…, sk-ant-…, sk-proj-…), masked or not.
+	keyLikeRun = regexp.MustCompile(`(?i)\bsk-[\w*•…-]*`)
+	// maskedRun matches any word run holding a mask (two or more of * • …).
+	maskedRun = regexp.MustCompile(`[\w-]*[*•…]{2,}[\w-]*`)
+)
+
+// apiMessage returns the text for a non-2xx provider response. A 401/403 gets a fixed message;
+// otherwise it is the provider's own error text ({"error":{"message":…}}) for OpenAI and
+// Anthropic, scrubbed of key fragments. OpenRouter errors carry only the status (spec §7.2).
+func apiMessage(name, key string, status int, body []byte) string {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return authRejectedMessage
+	}
 	if name == "OpenRouter" {
 		return ""
 	}
@@ -210,13 +231,50 @@ func apiMessage(name, key string, body []byte) string {
 	if json.Unmarshal(body, &payload) != nil {
 		return ""
 	}
-	msg := strings.TrimSpace(payload.Error.Message)
+	// Bound the text first so the scrub stays cheap, then scrub, then cut: a cut after the scrub
+	// cannot leave a key fragment of minKeyFragment or more behind.
+	msg := scrubKey(truncate(strings.TrimSpace(payload.Error.Message), 4*maxMessageBytes), key)
+	return truncate(msg, maxMessageBytes)
+}
+
+// scrubKey masks the whole key, key-like runs and every run of msg of at least minKeyFragment
+// bytes that is a substring of key.
+func scrubKey(msg, key string) string {
 	if key != "" {
-		// Scrub before truncating, so a cut can never leave a key prefix behind.
 		msg = strings.ReplaceAll(msg, key, logging.Redacted)
 	}
-	if len(msg) > maxMessageBytes {
-		msg = msg[:maxMessageBytes]
+	msg = keyLikeRun.ReplaceAllString(msg, logging.Redacted)
+	msg = maskedRun.ReplaceAllString(msg, logging.Redacted)
+	if len(key) < minKeyFragment {
+		return msg
 	}
-	return msg
+	var out strings.Builder
+	for i := 0; i < len(msg); {
+		n := 0
+		if i+minKeyFragment <= len(msg) && strings.Contains(key, msg[i:i+minKeyFragment]) {
+			n = minKeyFragment
+			for i+n < len(msg) && strings.Contains(key, msg[i:i+n+1]) {
+				n++
+			}
+		}
+		if n == 0 {
+			out.WriteByte(msg[i])
+			i++
+			continue
+		}
+		out.WriteString(logging.Redacted)
+		i += n
+	}
+	return out.String()
+}
+
+// truncate cuts s to at most n bytes without splitting a UTF-8 sequence.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

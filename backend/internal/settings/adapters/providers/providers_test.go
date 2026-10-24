@@ -97,7 +97,7 @@ func TestCountModels_openRouter(t *testing.T) {
 	})
 }
 
-func TestCountModels_authFailureCarriesScrubbedMessage(t *testing.T) {
+func TestCountModels_authFailureCarriesFixedMessage(t *testing.T) {
 	s := stub(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"error":{"message":"Incorrect API key provided: sk-abcdef"}}`))
@@ -107,7 +107,7 @@ func TestCountModels_authFailureCarriesScrubbedMessage(t *testing.T) {
 	if err == nil {
 		t.Fatal("CountModels() error = nil, want 401 error")
 	}
-	if got, want := err.Error(), "OpenAI /models returned 401: Incorrect API key provided: [REDACTED]"; got != want {
+	if got, want := err.Error(), "OpenAI /models returned 401: API key rejected by the provider"; got != want {
 		t.Errorf("error = %q, want %q", got, want)
 	}
 }
@@ -306,5 +306,101 @@ func TestListModels_failuresDoNotLeakKey(t *testing.T) {
 	}
 	if _, err := c.ListModels(t.Context(), app.GitHub, key); err == nil {
 		t.Error("ListModels(github) error = nil, want an error")
+	}
+}
+
+// TestListModels_errorTextNeverCarriesKeyFragments covers NFR1 ("no key value or part of one in any
+// response"): providers echo masked copies of the key (prefix and last 4) in their error text.
+func TestListModels_errorTextNeverCarriesKeyFragments(t *testing.T) {
+	const key = "sk-proj-AbCdEfGhIjKlMnOpQrSt9z8y7x6w"
+	tests := []struct {
+		name     string
+		provider app.Provider
+		status   int
+		body     string
+		want     string
+		banned   []string
+	}{
+		{
+			name: "openai 401 masked echo with prefix and last 4", provider: app.OpenAI, status: http.StatusUnauthorized,
+			body:   `{"error":{"message":"Incorrect API key provided: sk-proj-********************7x6w. You can find your API key at https://platform.openai.com/account/api-keys."}}`,
+			want:   "OpenAI /models returned 401: API key rejected by the provider",
+			banned: []string{"sk-", "7x6w", "proj", "*"},
+		},
+		{
+			name: "openai 401 unicode mask", provider: app.OpenAI, status: http.StatusUnauthorized,
+			body:   `{"error":{"message":"Incorrect API key provided: sk-proj-****…7x6w"}}`,
+			want:   "OpenAI /models returned 401: API key rejected by the provider",
+			banned: []string{"sk-", "7x6w", "…"},
+		},
+		{
+			name: "openai 401 full key echo", provider: app.OpenAI, status: http.StatusUnauthorized,
+			body:   `{"error":{"message":"Incorrect API key provided: ` + key + `"}}`,
+			want:   "OpenAI /models returned 401: API key rejected by the provider",
+			banned: []string{key, "sk-", "AbCd"},
+		},
+		{
+			name: "anthropic 403 full key echo", provider: app.Anthropic, status: http.StatusForbidden,
+			body:   `{"error":{"type":"permission_error","message":"bad key ` + key + `"}}`,
+			want:   "Anthropic /models returned 403: API key rejected by the provider",
+			banned: []string{key, "sk-"},
+		},
+		{
+			name: "openai 500 keeps its text minus the full key", provider: app.OpenAI, status: http.StatusInternalServerError,
+			body:   `{"error":{"message":"upstream failed for ` + key + ` twice"}}`,
+			want:   "OpenAI /models returned 500: upstream failed for [REDACTED] twice",
+			banned: []string{key, "sk-"},
+		},
+		{
+			name: "anthropic 500 masks a masked echo and a last-4 fragment", provider: app.Anthropic, status: http.StatusInternalServerError,
+			body:   `{"error":{"message":"overloaded; key sk-ant-****…7x6w seen, tail 7x6w9 retry later"}}`,
+			want:   "Anthropic /models returned 500: overloaded; key [REDACTED] seen, tail [REDACTED]9 retry later",
+			banned: []string{"sk-", "7x6w", "…"},
+		},
+		{
+			name: "openai 500 keeps plain text", provider: app.OpenAI, status: http.StatusInternalServerError,
+			body: `{"error":{"message":"The server had an error while processing your request"}}`,
+			want: "OpenAI /models returned 500: The server had an error while processing your request",
+		},
+		{
+			name: "openai 500 words are not mistaken for key prefixes", provider: app.OpenAI, status: http.StatusInternalServerError,
+			body: `{"error":{"message":"task-queue is full"}}`,
+			want: "OpenAI /models returned 500: task-queue is full",
+		},
+		{
+			name: "openrouter 401 carries only the fixed message", provider: app.OpenRouter, status: http.StatusUnauthorized,
+			body:   `{"error":{"message":"No auth credentials found sk-or-v1-****abcd"}}`,
+			want:   "OpenRouter /models returned 401: API key rejected by the provider",
+			banned: []string{"sk-", "abcd"},
+		},
+		{
+			name: "openrouter 500 carries only the status", provider: app.OpenRouter, status: http.StatusInternalServerError,
+			body: `{"error":{"message":"` + key + `"}}`,
+			want: "OpenRouter /models returned 500",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s := stub(t, func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			})
+			c := providers.New(providers.Options{
+				OpenAIBaseURL: s.URL, AnthropicBaseURL: s.URL, OpenRouterBaseURL: s.URL, Retry: &fastRetry,
+			})
+			_, err := c.ListModels(t.Context(), tc.provider, key)
+			if err == nil {
+				t.Fatalf("ListModels(%v) error = nil, want a %d error", tc.provider, tc.status)
+			}
+			got := err.Error()
+			if got != tc.want {
+				t.Errorf("ListModels(%v) error = %q, want %q", tc.provider, got, tc.want)
+			}
+			for _, b := range tc.banned {
+				if strings.Contains(got, b) {
+					t.Errorf("ListModels(%v) error = %q, must not contain %q", tc.provider, got, b)
+				}
+			}
+		})
 	}
 }
