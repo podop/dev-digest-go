@@ -1,7 +1,6 @@
 package domain_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -9,22 +8,8 @@ import (
 	"dev-digest-go/backend/internal/leaderboard/domain"
 )
 
-func aggItems(file string, n int, severity string) []domain.FindingItem {
-	var out []domain.FindingItem
-	for range n {
-		out = append(out, domain.FindingItem{File: file, Severity: severity})
-	}
-	return out
-}
-
-func aggFileRow(repo string, number int, items ...[]domain.FindingItem) domain.Row {
-	r := domain.Row{PRID: fmt.Sprintf("%s-%d", repo, number), RepoID: "id-" + repo, Repo: repo, Number: number}
-	var all []domain.FindingItem
-	for _, it := range items {
-		all = append(all, it...)
-	}
-	r.Reviews = []domain.RowReview{{ReviewID: "rv", Items: all}}
-	return r
+func aggHot(path, repo string, findings, critical int, prs ...int) domain.HotFile {
+	return domain.HotFile{Path: path, RepoID: "id-" + repo, Repo: repo, Findings: findings, Critical: critical, PRs: prs}
 }
 
 func TestHotFiles_Empty(t *testing.T) {
@@ -34,75 +19,83 @@ func TestHotFiles_Empty(t *testing.T) {
 	}
 }
 
-func TestHotFilesGroupsByRepoAndPath(t *testing.T) {
-	rows := []domain.Row{
-		aggFileRow("api", 12, aggItems("a.go", 2, domain.SeverityCritical), aggItems("a.go", 1, domain.SeverityWarning)),
-		aggFileRow("api", 3, aggItems("a.go", 1, domain.SeveritySuggestion)),
-		aggFileRow("api", 12, aggItems("a.go", 1, domain.SeverityWarning)), // same PR again: number listed once
-		aggFileRow("web", 5, aggItems("a.go", 1, domain.SeverityCritical)), // same path, other repo
+// The store counts the findings per (repository, path) in SQL (dismissed excluded, accepted
+// kept, files without a path ignored, PR numbers distinct: pinned by the store tests); the
+// domain keeps the order and the cap.
+func TestHotFilesOrdersByFindingsCriticalPathRepo(t *testing.T) {
+	in := []domain.HotFile{
+		aggHot("b.go", "web", 3, 1, 5),
+		aggHot("a.go", "web", 5, 1, 5),
+		aggHot("a.go", "api", 5, 2, 3, 12),
+		aggHot("c.go", "api", 5, 2, 1),
+		aggHot("a.go", "api", 3, 0, 9),
 	}
-	got := domain.HotFiles(rows)
+	got := domain.HotFiles(in)
 	want := []domain.HotFile{
-		{Path: "a.go", RepoID: "id-api", Repo: "api", Findings: 5, Critical: 2, PRs: []int{3, 12}},
-		{Path: "a.go", RepoID: "id-web", Repo: "web", Findings: 1, Critical: 1, PRs: []int{5}},
+		aggHot("a.go", "api", 5, 2, 3, 12), // findings 5, critical 2; path a.go before c.go
+		aggHot("c.go", "api", 5, 2, 1),
+		aggHot("a.go", "web", 5, 1, 5), // fewer criticals
+		aggHot("b.go", "web", 3, 1, 5), // 3 findings: critical 1 before 0
+		aggHot("a.go", "api", 3, 0, 9),
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("HotFiles(rows) mismatch (-want +got):\n%s", diff)
+		t.Errorf("HotFiles(files) mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestHotFilesExcludeDismissedKeepAccepted(t *testing.T) {
-	when := aggAt(1)
-	items := []domain.FindingItem{
-		{File: "a.go", Severity: domain.SeverityCritical},
-		{File: "a.go", Severity: domain.SeverityCritical, AcceptedAt: &when},
-		{File: "a.go", Severity: domain.SeverityCritical, DismissedAt: &when},
-		{File: "a.go", Severity: domain.SeverityCritical, AcceptedAt: &when, DismissedAt: &when}, // dismissed wins (EC7)
-		{File: "only-dismissed.go", Severity: domain.SeverityWarning, DismissedAt: &when},
-		{File: "", Severity: domain.SeverityWarning}, // no path
+func TestHotFilesTieBreaksRepoPRsRepoID(t *testing.T) {
+	in := []domain.HotFile{
+		{Path: "a.go", RepoID: "id-2", Repo: "web", Findings: 1, PRs: []int{1}},
+		{Path: "a.go", RepoID: "id-9", Repo: "api", Findings: 1, PRs: []int{2}},
+		{Path: "a.go", RepoID: "id-5", Repo: "api", Findings: 1, PRs: []int{1, 3}},
+		{Path: "a.go", RepoID: "id-4", Repo: "api", Findings: 1, PRs: []int{1}},
+		{Path: "a.go", RepoID: "id-3", Repo: "api", Findings: 1, PRs: []int{1}},
 	}
-	got := domain.HotFiles([]domain.Row{aggFileRow("api", 1, items)})
-	want := []domain.HotFile{{Path: "a.go", RepoID: "id-api", Repo: "api", Findings: 2, Critical: 2, PRs: []int{1}}}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("HotFiles(rows) mismatch (-want +got):\n%s", diff)
+	var ids []string
+	for _, f := range domain.HotFiles(in) {
+		ids = append(ids, f.RepoID)
+	}
+	// repo api before web; among api the PR lists [1] [1] [1 3] [2] ascending (a prefix is
+	// smaller); equal lists by repository id
+	want := []string{"id-3", "id-4", "id-5", "id-9", "id-2"}
+	if diff := cmp.Diff(want, ids); diff != "" {
+		t.Errorf("HotFiles() repository order mismatch (-want +got):\n%s", diff)
 	}
 }
 
 func TestHotFilesTopSixOrderedByFindingsCriticalPath(t *testing.T) {
-	row := aggFileRow("api", 1,
-		aggItems("f1.go", 9, domain.SeverityWarning),
-		aggItems("f2.go", 5, domain.SeverityWarning),
-		aggItems("f3.go", 3, domain.SeverityWarning), aggItems("f3.go", 2, domain.SeverityCritical), // 5, 2 critical: ahead of f2
-		aggItems("b.go", 4, domain.SeverityWarning), // 4, 0
-		aggItems("a.go", 4, domain.SeverityWarning), // 4, 0: ties with b.go, path ascending
-		aggItems("c.go", 3, domain.SeverityWarning),
-		aggItems("d.go", 2, domain.SeverityWarning),
-		aggItems("e.go", 1, domain.SeverityWarning),
-	)
-	got := domain.HotFiles([]domain.Row{row})
+	in := []domain.HotFile{
+		aggHot("e.go", "api", 1, 0, 1),
+		aggHot("d.go", "api", 2, 0, 1),
+		aggHot("c.go", "api", 3, 0, 1),
+		aggHot("a.go", "api", 4, 0, 1), // 4, 0: ties with b.go, path ascending
+		aggHot("b.go", "api", 4, 0, 1),
+		aggHot("f3.go", "api", 5, 2, 1), // 5, 2 critical: ahead of f2
+		aggHot("f2.go", "api", 5, 0, 1),
+		aggHot("f1.go", "api", 9, 0, 1),
+	}
+	got := domain.HotFiles(in)
 	var paths []string
 	for _, f := range got {
 		paths = append(paths, f.Path)
 	}
 	want := []string{"f1.go", "f3.go", "f2.go", "a.go", "b.go", "c.go"}
 	if diff := cmp.Diff(want, paths); diff != "" {
-		t.Errorf("HotFiles(9 files) paths mismatch (-want +got):\n%s", diff)
+		t.Errorf("HotFiles(8 files) paths mismatch (-want +got):\n%s", diff)
 	}
 	if len(got) != domain.HotFilesLimit {
-		t.Errorf("HotFiles(9 files) returned %d, want %d", len(got), domain.HotFilesLimit)
+		t.Errorf("HotFiles(8 files) returned %d, want %d", len(got), domain.HotFilesLimit)
 	}
 }
 
-func TestHotFilesCountAllSnapshotReviews(t *testing.T) {
-	r := aggFileRow("api", 1)
-	r.Reviews = []domain.RowReview{
-		{ReviewID: "r1", Items: aggItems("a.go", 1, domain.SeverityCritical)},
-		{ReviewID: "r2", Items: aggItems("a.go", 2, domain.SeverityWarning)},
+func TestHotFilesSortsPRsAndLeavesInputAlone(t *testing.T) {
+	in := []domain.HotFile{aggHot("a.go", "api", 1, 0, 12, 3)}
+	got := domain.HotFiles(in)
+	if diff := cmp.Diff([]int{3, 12}, got[0].PRs); diff != "" {
+		t.Errorf("HotFiles() PRs mismatch (-want +got):\n%s", diff)
 	}
-	got := domain.HotFiles([]domain.Row{r})
-	want := []domain.HotFile{{Path: "a.go", RepoID: "id-api", Repo: "api", Findings: 3, Critical: 1, PRs: []int{1}}}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("HotFiles(two reviews) mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]int{12, 3}, in[0].PRs); diff != "" {
+		t.Errorf("HotFiles() changed its input (-want +got):\n%s", diff)
 	}
 }
 

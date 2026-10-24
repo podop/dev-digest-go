@@ -6,47 +6,19 @@ import (
 	"slices"
 )
 
-// HotFiles returns the files with the most snapshot findings over the rows (spec FR14), dismissed
-// findings excluded (accepted ones still count). A file is a (repository, path) pair; findings
-// without a path are ignored. Ordered by findings desc, critical desc, path asc (then
-// repository), at most HotFilesLimit entries. PRs are the row numbers with a finding in the file,
-// ascending and distinct.
-func HotFiles(rows []Row) []HotFile {
-	type key struct{ repoID, repo, path string }
-	type acc struct {
-		file HotFile
-		prs  map[int]struct{}
-	}
-	byFile := make(map[key]*acc)
-	for _, r := range rows {
-		for _, rv := range r.Reviews {
-			for _, it := range rv.Items {
-				if it.DismissedAt != nil || it.File == "" {
-					continue
-				}
-				k := key{r.RepoID, r.Repo, it.File}
-				a, ok := byFile[k]
-				if !ok {
-					a = &acc{file: HotFile{Path: it.File, RepoID: r.RepoID, Repo: r.Repo}, prs: make(map[int]struct{})}
-					byFile[k] = a
-				}
-				a.file.Findings++
-				if it.Severity == SeverityCritical {
-					a.file.Critical++
-				}
-				a.prs[r.Number] = struct{}{}
-			}
-		}
-	}
-
-	out := make([]HotFile, 0, len(byFile))
-	for _, a := range byFile {
-		a.file.PRs = make([]int, 0, len(a.prs))
-		for n := range a.prs {
-			a.file.PRs = append(a.file.PRs, n)
-		}
-		slices.Sort(a.file.PRs)
-		out = append(out, a.file)
+// HotFiles orders the hot-file facts of the store (spec FR14) and caps them at HotFilesLimit. The
+// store has already counted the snapshot findings of the current window's rows per file (a file
+// is a (repository, path) pair; dismissed findings excluded, accepted ones still count; findings
+// without a path ignored) and returns at most HotFilesLimit files; it must use the order below
+// (SQL ORDER BY of the hot-files query in adapters/postgres, same constant), so that the files it
+// cuts off are the ones this function would cut. Order: findings desc, critical desc, path asc
+// (then repository, then the PR numbers, then the repository id). PRs are the row numbers with
+// a finding in the file, ascending and distinct. The result is a copy and never nil.
+func HotFiles(files []HotFile) []HotFile {
+	out := make([]HotFile, len(files))
+	for i, f := range files {
+		f.PRs = slices.Sorted(slices.Values(f.PRs))
+		out[i] = f
 	}
 	slices.SortFunc(out, func(a, b HotFile) int {
 		return cmp.Or(
@@ -55,6 +27,7 @@ func HotFiles(rows []Row) []HotFile {
 			cmp.Compare(a.Path, b.Path),
 			cmp.Compare(a.Repo, b.Repo),
 			slices.Compare(a.PRs, b.PRs),
+			cmp.Compare(a.RepoID, b.RepoID),
 		)
 	})
 	return out[:min(len(out), HotFilesLimit)]

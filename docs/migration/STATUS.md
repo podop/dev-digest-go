@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-23 (night: PR Leaderboard section below) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-24 (PR Leaderboard AC12 closed; Settings A in progress in worktree) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -30,37 +30,31 @@ Review gate (reports in `.sdd/review/2026-10-23-pr-leaderboard/`, git-ignored):
 | Plan verification | 105 PASS / 0 FAIL, rest pending | 106 PASS / 0 FAIL; 39 container rows settled by `make check` on `2b7c5d1`; delta for S21/S22 + fix r1 still to run |
 | Manual S22 (`s22-manual.md`) | — | AC20 PASS (Playwright, 0 errors); AC12 no-writes PASS; **AC12 latency FAIL**: 30d/all p95 5.7 s (limit 500 ms) at NFR1 volume, because `qWindowFindings` scans ~104k findings into Go |
 
-**In flight when the session stopped: fix round r1 for AC12.** The user chose SQL aggregation with no wire or
-spec change. Brief: `.sdd/review/2026-10-23-pr-leaderboard/fix-r1-ac12-brief.md`. Throwaway-stack assets (override,
-NFR1 seed, measure scripts, EXPLAINs, Playwright script): `.sdd/review/2026-10-23-pr-leaderboard/s22-assets/`.
-The brief points at the old session scratchpad, so use these copies.
-- Move the per-PR counts, the top-3 findings (P13 order) and the hot-files aggregation into SQL, so the rows sent
-  to Go are O(rows), not O(findings).
-- The S19 goldens must pass unchanged.
-- Re-measure on the throwaway project `devdigest-go-s22` (API 3211, DB 5436).
-- **Stopped by the user at 23:35** (agent killed mid-run). The partial work is uncommitted in the working tree: 13 files in
-  `backend/internal/leaderboard/**`, +930/−413, plus the new `domain/findings_helper_test.go`. It has not been reviewed and its
-  tests were not confirmed green.
-  - Backup: `.sdd/review/2026-10-23-pr-leaderboard/fix-r1-partial.patch` and `fix-r1-partial-findings_helper_test.go`.
-  - **It contains temporary `TMPTIMING` debug output in `leaderboard/transport/http/routes.go`, which must be removed.**
-  - The agent's last step was "check equality at NFR1 and timing with a fresh host binary": the result had not yet been
-    compared with the old output, and no after-fix numbers exist.
-  - The `s22-assets/r1-base-mix.txt` it wrote at 22:57 shows 30d/all ≈ 2.2 s and week/all ≈ 1.0 s per request. It is
-    probably the round's re-measured baseline; check before relying on it.
-- The throwaway stack is **stopped, not removed**, so the NFR1 data is kept (volumes `devdigest_go_s22_*`). To restart it:
-  `docker compose -p devdigest-go-s22 -f docker-compose.yml -f .sdd/review/2026-10-23-pr-leaderboard/s22-assets/override.yml up -d --build db backend`.
-
-To resume:
-1. `git status`: check whether the fix round left a report (no commit) or partial code.
-2. If partial, either finish it with an implementer, using the same goal plus the S22 assets, or
-   `git restore backend/internal/leaderboard` and record AC12 as a follow-up (user's choice).
-3. `docker compose ls`: if `devdigest-go-s22` is still up, `docker compose -p devdigest-go-s22 down -v
-   --rmi local`. Only that project; check `config | sed -n '/^volumes:/,$p'` first.
-4. Then run the gate: `make check`, arch delta (`architecture-reviewer`), security delta (read-only `general-purpose`
-   agent with skill `engineering-paved-path:security` — user decision 2026-10-23, no longer the Datarim
-   `security` agent), plan-verifier delta (S21, S22, fix r1), then INSIGHTS wrap-up and this section.
+**Fix round r1 for AC12 (2026-10-24): done, gate closed.** User decision: SQL aggregation with no wire change.
+Brief `fix-r1-ac12-brief.md`, report `fix-r1-report.md`, assets `s22-assets/`, all in `.sdd/review/2026-10-23-pr-leaderboard/`.
+- Per-PR counts, the top-3 findings (P13, LATERAL top-N) and hot files are computed in SQL (`qFindingStats`, 4 repo
+  shards read in parallel; sequential inside a transaction). The domain still owns the rules. Output byte-identical
+  to HEAD on NFR1 data. Goldens untouched.
+- p95 at NFR1 volume (200-request mix, load 3–4): 30d/all **532 ms** (was 5,692), week/all 197, last_week/all 270,
+  one-repo variants 36–56 ms. **AC12 accepted with a deviation by the user (spec D27).**
+- Plan P2: ≤ 9 statements per request instead of ≤ 8 (accepted deviation, recorded under P2).
+- Gate r3: architecture **PASS** (2 LOW); security **PASS** (INFO N4–N6); plan verification: 32 PASS, 4 FAIL rows,
+  all of them the two accepted deviations, and 41 CANNOT_VERIFY rows (DB tests), settled by `make check`:
+  130 backend packages ok incl. `cmd/server`; the 2 known load-sensitive packages (`onboarding/domain`, `repointel/domain`)
+  were green on re-run; frontend 954/954.
+- The throwaway project `devdigest-go-s22` is removed (volumes included).
 
 Leaderboard follow-ups (not fixed):
+- AC12 latency (D27):
+  - merge `windowReviews` into the shard statement (4 shards within ≤ 8 statements);
+  - parallel JSON encoding (~15 ms);
+  - fewer allocations in `BuildRows` (~10 ms);
+  - re-measure the 4-shard build on a quiet host.
+- Security r3:
+  - N4: one request holds up to 8 of 20 pool connections, so cap the fan-out with a shared semaphore.
+  - N5: the store goroutines have no `recover`.
+  - N6: the hot-files `repos` join lacks `workspace_id` (as r1 INFO 4, `agents` join).
+- Arch r3 LOW: no test of `WindowFacts` inside a transaction.
 - Backfill slot use:
   - security N1 / lane x: a PR with real 0/0/0 stats, or one whose stats fetch keeps failing, takes one of the 20
     backfill slots every cycle. Fix: remember `(pr.ID, updated_at)` after a zero result or an error.
@@ -76,11 +70,20 @@ Leaderboard follow-ups (not fixed):
 - Load-sensitive tests: `repointel` `TestExtractSymbols_Hostile` and `TestBuild_SubstitutionFanoutIsBounded`
   failed once at load average ≈ 45; they pass on a quiet host.
 
-**Settings** (next feature, not started). Design `docs/design/2026-10-23-settings-first-run.md` (accepted) and
-specs A–D (`specs/2026-10-23-settings-*.md`, ready-for-planning), commit `74c6ebf`.
-- Order: A, then B ∥ C (C uses the leaderboard poller), then D.
-- Start only after the leaderboard gate closes (user: one feature at a time). First step:
-  `sdd-engineering:implementation-planner` on slice A (`specs/2026-10-23-settings-first-run-setup.md`).
+**Settings** (in progress). Design `docs/design/2026-10-23-settings-first-run.md` (accepted) and specs A–D
+(`specs/2026-10-23-settings-*.md`), commit `74c6ebf`. Order: A, then B ∥ C (C uses the leaderboard poller), then D.
+- Slice A: plan `docs/plans/2026-10-23-settings-first-run-setup.md` (+ `.context.md`), S1–S30 in W0–W5, approved
+  2026-10-24 (A0–A14; spec D23). Commit `bd926b0`.
+- It is being implemented multi-agent in the worktree `../dev-digest-go-settings-a` on branch `feat/settings-a`
+  (from `bd926b0`).
+- W0 and W1 are done and uncommitted. Per the plan, W0–W3 are committed as one change set. Merge into this branch only
+  after slice A's review gate, and only with the user's OK.
+- User decisions in W1:
+  - with the cap reached, 402 wins over 409 and over the 422s checked inside a generation;
+  - with the cap reached, starts with no agents also answer 402;
+  - the toast link text is "Review the spend cap in Settings";
+  - KeyField gets an `onResult` prop.
+- S26 additionally owns the `spend/app.Caps` adapter (a plan gap found in W1).
 - Before slice B, confirm Q4: does "reset run history" also delete learnings?
 
 ## Phase 6 review gate (reports in `.sdd/review/2026-10-23-go-backend-phase-6/`, git-ignored)

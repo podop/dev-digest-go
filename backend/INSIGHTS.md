@@ -8,6 +8,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Works
 <!-- approaches and solutions that worked here -->
+- 2026-10-24 — leaderboard/adapters/postgres qFindingStats (AC12, NFR1 ~104k findings): one statement over all repos took 520 ms because it spills at the default 4 MB work_mem; splitting the repos into 4 parallel shards gives 150-190 ms each, 6 shards gain nothing on 8 cores, and what's left is ~4 µs of Postgres CPU per finding (30d/all p95 532 ms, down from 5.7 s) → shard by repo before trying indexes (covering and partial indexes measured no end-to-end gain); going below ~500 ms needs a data-model change
 - 2026-10-23 — cmd/server component tests of the PR poller (leaderboard_wiring_test.go TestPoll_StartsWhenEnabled): pre-insert a repo 'o/r' into pgtest.Migrated, start with noSeed and PRPollEnabled set in spec.config — the shared GitHub stub serves any owner except acme/ and the poller's first round runs at start, so no tick or sleep is needed; a GET /leaderboard test that must be empty sets spec.now years after the seed instead of skipping the seed, because without the seeded workspace + user rows the tenancy resolver returns 500 → copy this setup for poller/leaderboard component tests
 
 ## What Doesn't Work

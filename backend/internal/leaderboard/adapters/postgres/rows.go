@@ -1,66 +1,152 @@
 package postgres
 
-import "time"
+// Row scanning. The heavy statements (a few thousand pull requests, ten thousand reviews, tens
+// of thousands of statistics rows at NFR1) are read with database/sql's Rows and plain
+// pointers, straight into domain facts, instead of GORM's struct Scan: GORM's reflection path
+// costs ~1.1 µs per column value against ~0.4 µs, which at 560k values per request was ~0.6 s of
+// CPU (profile of the first AC12 fix round).
+//
+// Instants are selected as microseconds since the Unix epoch (bigint): scanning a timestamptz
+// column through database/sql and pgx costs ~10 µs per value, a bigint ~0.4 µs.
 
-// The row types of the queries. They are declared per adapter and read only the columns the
-// context needs of tables that other contexts own.
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"time"
 
-type repoRow struct {
-	ID           string     `gorm:"column:id"`
-	Owner        string     `gorm:"column:owner"`
-	Name         string     `gorm:"column:name"`
-	FullName     string     `gorm:"column:full_name"`
-	LastPolledAt *time.Time `gorm:"column:last_polled_at"`
+	"dev-digest-go/backend/internal/leaderboard/domain"
+)
+
+// eachRow calls scan for every row of rows (the result of a Rows() call) and closes it.
+func eachRow(rows *sql.Rows, err error, scan func(*sql.Rows) error) error {
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		if err := scan(rows); err != nil {
+			return err
+		}
+	}
+	return rows.Err()
 }
 
-type pullRow struct {
-	ID              string     `gorm:"column:id"`
-	RepoID          string     `gorm:"column:repo_id"`
-	Repo            string     `gorm:"column:repo"`
-	Number          int        `gorm:"column:number"`
-	Title           string     `gorm:"column:title"`
-	Author          string     `gorm:"column:author"`
-	HeadSHA         string     `gorm:"column:head_sha"`
-	LastReviewedSHA *string    `gorm:"column:last_reviewed_sha"`
-	Additions       int        `gorm:"column:additions"`
-	Deletions       int        `gorm:"column:deletions"`
-	FilesCount      int        `gorm:"column:files_count"`
-	Status          string     `gorm:"column:status"`
-	Draft           bool       `gorm:"column:draft"`
-	OpenedAt        *time.Time `gorm:"column:opened_at"`
-	UpdatedAt       *time.Time `gorm:"column:updated_at"`
-	MergedAt        *time.Time `gorm:"column:merged_at"`
-	ClosedAt        *time.Time `gorm:"column:closed_at"`
-	FirstReviewAt   *time.Time `gorm:"column:first_review_at"`
+// instant converts a nullable epoch-microseconds column to a UTC time.
+func instant(micros *int64) *time.Time {
+	if micros == nil {
+		return nil
+	}
+	t := time.UnixMicro(*micros).UTC()
+	return &t
 }
 
-type reviewRow struct {
-	ID        string    `gorm:"column:id"`
-	PRID      string    `gorm:"column:pr_id"`
-	AgentID   *string   `gorm:"column:agent_id"`
-	AgentName *string   `gorm:"column:agent_name"`
-	Score     *int      `gorm:"column:score"`
-	CreatedAt time.Time `gorm:"column:created_at"`
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
-type findingRow struct {
-	ID          string     `gorm:"column:id"`
-	ReviewID    string     `gorm:"column:review_id"`
-	File        string     `gorm:"column:file"`
-	StartLine   int        `gorm:"column:start_line"`
-	Severity    string     `gorm:"column:severity"`
-	Title       string     `gorm:"column:title"`
-	AcceptedAt  *time.Time `gorm:"column:accepted_at"`
-	DismissedAt *time.Time `gorm:"column:dismissed_at"`
+// scanRepo reads one row of repoColumns.
+func scanRepo(rows *sql.Rows) (domain.RepoRef, error) {
+	var r domain.RepoRef
+	var polled *int64
+	if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.FullName, &polled); err != nil {
+		return domain.RepoRef{}, err
+	}
+	r.LastPolledAt = instant(polled)
+	return r, nil
 }
 
-type runRow struct {
-	PRID    string    `gorm:"column:pr_id"`
-	RanAt   time.Time `gorm:"column:ran_at"`
-	CostUSD *float64  `gorm:"column:cost_usd"`
+// scanPull reads one row of qWindowPulls (the column order of pullColumns, then first_review_at).
+func scanPull(rows *sql.Rows) (domain.PullFact, error) {
+	var p domain.PullFact
+	var opened, updated, merged, closed, firstReview *int64
+	if err := rows.Scan(&p.PRID, &p.RepoID, &p.Repo, &p.Number, &p.Title, &p.Author, &p.HeadSHA, &p.LastReviewedSHA,
+		&p.Additions, &p.Deletions, &p.FilesCount, &p.Status, &p.Draft,
+		&opened, &updated, &merged, &closed, &firstReview); err != nil {
+		return domain.PullFact{}, err
+	}
+	p.OpenedAt, p.UpdatedAt, p.MergedAt, p.ClosedAt, p.FirstReviewAt =
+		instant(opened), instant(updated), instant(merged), instant(closed), instant(firstReview)
+	return p, nil
 }
 
-type openCriticalRow struct {
-	PRID string `gorm:"column:pr_id"`
-	N    int    `gorm:"column:n"`
+// scanReview reads one row of windowReviews. The agent name is NULL for a deleted agent.
+func scanReview(rows *sql.Rows) (domain.ReviewFact, error) {
+	var r domain.ReviewFact
+	var agentID, agentName *string
+	var created int64
+	if err := rows.Scan(&r.ReviewID, &r.PRID, &agentID, &agentName, &r.Score, &created); err != nil {
+		return domain.ReviewFact{}, err
+	}
+	r.AgentID, r.AgentName, r.CreatedAt = deref(agentID), deref(agentName), time.UnixMicro(created).UTC()
+	return r, nil
+}
+
+// scanRun reads one row of windowRuns: the runs of a PR in one half, summed.
+func scanRun(rows *sql.Rows) (domain.RunFact, error) {
+	var r domain.RunFact
+	var cur bool
+	var ranAt int64
+	if err := rows.Scan(&r.PRID, &cur, &ranAt, &r.CostUSD); err != nil {
+		return domain.RunFact{}, err
+	}
+	r.RanAt = time.UnixMicro(ranAt).UTC()
+	return r, nil
+}
+
+// scanOpenCritical reads one row of qOpenCritical.
+func scanOpenCritical(rows *sql.Rows) (prID string, n int, err error) {
+	err = rows.Scan(&prID, &n)
+	return prID, n, err
+}
+
+// statRows collects the rows of qFindingStats into the facts they stand for.
+type statRows struct {
+	counts []domain.ReviewCounts
+	tops   []domain.FindingFact
+	hot    []domain.HotFile
+}
+
+// scan reads one row of qFindingStats and files it by kind.
+func (s *statRows) scan(rows *sql.Rows) error {
+	var (
+		kind                                                 string
+		reviewID, findingID, file, severity, title           *string
+		repoID, repo, prs                                    *string
+		startLine, findings, critical                        int
+		accepted, dismissed                                  *int64
+		allC, allW, allS, liveC, liveW, liveS, openCriticalN int
+	)
+	if err := rows.Scan(&kind, &reviewID, &findingID, &file, &startLine, &severity, &title, &accepted, &dismissed,
+		&repoID, &repo, &prs, &allC, &allW, &allS, &liveC, &liveW, &liveS, &openCriticalN, &findings, &critical); err != nil {
+		return err
+	}
+	switch kind {
+	case kindCount:
+		s.counts = append(s.counts, domain.ReviewCounts{
+			ReviewID:     deref(reviewID),
+			All:          domain.FindingCounts{Critical: allC, Warning: allW, Suggestion: allS},
+			Live:         domain.FindingCounts{Critical: liveC, Warning: liveW, Suggestion: liveS},
+			OpenCritical: openCriticalN,
+		})
+	case kindTop:
+		s.tops = append(s.tops, domain.FindingFact{
+			FindingID: deref(findingID), ReviewID: deref(reviewID), File: deref(file), StartLine: startLine,
+			Severity: deref(severity), Title: deref(title), AcceptedAt: instant(accepted), DismissedAt: instant(dismissed),
+		})
+	case kindHot:
+		var numbers []int
+		if err := json.Unmarshal([]byte(deref(prs)), &numbers); err != nil {
+			return fmt.Errorf("decode the PR numbers of hot file %q: %w", deref(file), err)
+		}
+		s.hot = append(s.hot, domain.HotFile{
+			Path: deref(file), RepoID: deref(repoID), Repo: deref(repo), Findings: findings, Critical: critical, PRs: numbers,
+		})
+	default:
+		return fmt.Errorf("unknown finding statistics row kind %q", kind)
+	}
+	return nil
 }

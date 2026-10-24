@@ -76,7 +76,7 @@ func TestBuildRows_Fixture(t *testing.T) {
 	}
 	accepted := rowsPtr(rowsAt(21, 11, 0))
 	dismissed := rowsPtr(rowsAt(21, 12, 0))
-	f.Findings = []domain.FindingFact{
+	setFindings(&f, []domain.FindingFact{
 		{FindingID: "f0", ReviewID: "r0", File: "old.go", StartLine: 3, Title: "Old", Severity: domain.SeverityWarning},
 		// r1 is not a snapshot review: ignored
 		rowsFinding("r1", domain.SeverityCritical), rowsFinding("r1", domain.SeverityCritical),
@@ -90,7 +90,7 @@ func TestBuildRows_Fixture(t *testing.T) {
 		{FindingID: "f6", ReviewID: "r2", File: "d.go", StartLine: 60, Title: "Warning", Severity: domain.SeverityWarning},
 		// r4: two suggestions
 		rowsFinding("r4", domain.SeveritySuggestion), rowsFinding("r4", domain.SeveritySuggestion),
-	}
+	})
 	cost := func(v float64) *float64 { return &v }
 	f.Runs = []domain.RunFact{
 		{PRID: "p1", RanAt: rowsAt(15, 9, 0), CostUSD: cost(1)},     // previous window
@@ -133,30 +133,16 @@ func TestBuildRows_Fixture(t *testing.T) {
 				ReviewID: "r3", AgentID: rowsPtr("a-alpha"), AgentName: "Alpha", Score: rowsPtr(60),
 				Findings:  domain.FindingCounts{Critical: 2, Warning: 1, Suggestion: 1},
 				CreatedAt: rowsAt(21, 9, 0),
-				Items: []domain.FindingItem{
-					{File: "a.go", Severity: domain.SeverityCritical},
-					{File: "b.go", Severity: domain.SeverityCritical, AcceptedAt: accepted},
-					{File: "a.go", Severity: domain.SeverityWarning, DismissedAt: dismissed},
-					{File: "c.go", Severity: domain.SeveritySuggestion},
-				},
 			},
 			{
 				ReviewID: "r2", AgentID: rowsPtr("a-beta"), AgentName: "Beta", Score: rowsPtr(71),
 				Findings:  domain.FindingCounts{Critical: 1, Warning: 1},
 				CreatedAt: rowsAt(20, 10, 0),
-				Items: []domain.FindingItem{
-					{File: "d.go", Severity: domain.SeverityCritical, AcceptedAt: accepted, DismissedAt: dismissed},
-					{File: "d.go", Severity: domain.SeverityWarning},
-				},
 			},
 			{
 				ReviewID: "r4", AgentName: domain.DeletedAgentName,
 				Findings:  domain.FindingCounts{Suggestion: 2},
 				CreatedAt: rowsAt(21, 10, 0),
-				Items: []domain.FindingItem{
-					{File: "f.go", Severity: domain.SeveritySuggestion},
-					{File: "f.go", Severity: domain.SeveritySuggestion},
-				},
 			},
 		},
 	}
@@ -180,7 +166,6 @@ func TestBuildRows_Fixture(t *testing.T) {
 		ReviewID: "r0", AgentID: rowsPtr("a-alpha"), AgentName: "Alpha", Score: rowsPtr(10),
 		Findings:  domain.FindingCounts{Warning: 1},
 		CreatedAt: rowsAt(14, 9, 0),
-		Items:     []domain.FindingItem{{File: "old.go", Severity: domain.SeverityWarning}},
 	}}
 	if diff := cmp.Diff([]domain.Row{wantPrev}, prev); diff != "" {
 		t.Errorf("BuildRows() previous rows mismatch (-want +got):\n%s", diff)
@@ -279,6 +264,7 @@ func TestBuildRows_Health(t *testing.T) {
 				})
 			}
 			newest := fmt.Sprintf("r%d", tc.rounds-1)
+			var findings []domain.FindingFact
 			for _, x := range tc.in {
 				ff := domain.FindingFact{ReviewID: newest, File: "f.go", Severity: x.sev}
 				if x.oldRound {
@@ -290,8 +276,9 @@ func TestBuildRows_Health(t *testing.T) {
 				if x.accepted {
 					ff.AcceptedAt = rowsPtr(rowsAt(21, 9, 0))
 				}
-				f.Findings = append(f.Findings, ff)
+				findings = append(findings, ff)
 			}
+			setFindings(&f, findings)
 			cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
 			if len(cur) != 1 || cur[0].Health == nil {
 				t.Fatalf("BuildRows() = %+v, want one row with a health", cur)
@@ -313,11 +300,11 @@ func TestBuildRows_HealthSumsAgents(t *testing.T) {
 		{ReviewID: "a2", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 10, 0)},
 		{ReviewID: "b1", PRID: "p", AgentID: "b", AgentName: "B", CreatedAt: rowsAt(20, 9, 0)},
 	}
-	f.Findings = []domain.FindingFact{
+	setFindings(&f, []domain.FindingFact{
 		{ReviewID: "a2", Severity: domain.SeverityCritical},
 		{ReviewID: "b1", Severity: domain.SeverityWarning},
 		{ReviewID: "b1", Severity: domain.SeveritySuggestion},
-	}
+	})
 	cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
 	// 100 - (10 + 3 + 1) - 3*(2-1) = 83
 	if got := cur[0].Health; got == nil || *got != 83 {
@@ -397,7 +384,7 @@ func TestBuildRows_TopFindings(t *testing.T) {
 				{ReviewID: "r0", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 9, 0)},
 				{ReviewID: "r", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 10, 0)},
 			}
-			f.Findings = tc.in
+			setFindings(&f, tc.in)
 			cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
 			got := []string{}
 			for _, tf := range cur[0].TopFindings {
@@ -423,10 +410,10 @@ func TestBuildRows_TopFindingAgentAndState(t *testing.T) {
 		{ReviewID: "r1", PRID: "p", AgentID: "a", AgentName: "Alpha", CreatedAt: rowsAt(20, 9, 0)},
 		{ReviewID: "r2", PRID: "p", CreatedAt: rowsAt(20, 9, 0)},
 	}
-	f.Findings = []domain.FindingFact{
+	setFindings(&f, []domain.FindingFact{
 		{FindingID: "f1", ReviewID: "r1", Severity: domain.SeverityCritical, File: "a.go", StartLine: 7, Title: "X", AcceptedAt: at, DismissedAt: at},
 		{FindingID: "f2", ReviewID: "r2", Severity: domain.SeverityWarning, File: "b.go", StartLine: 8, Title: "Y", AcceptedAt: at},
-	}
+	})
 	cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
 	want := []domain.TopFinding{ // severity first: the dismissed critical, then the accepted warning
 		{FindingID: "f1", Severity: domain.SeverityCritical, Title: "X", File: "a.go", StartLine: 7, AgentName: "Alpha", State: domain.FindingDismissed},
@@ -510,13 +497,15 @@ func TestBuildRows_Risk(t *testing.T) {
 			f := rowsFacts()
 			f.Pulls = []domain.PullFact{{PRID: "p", Repo: "api", Number: 1, Status: "open"}}
 			f.Reviews = []domain.ReviewFact{{ReviewID: "r", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 9, 0)}}
+			var findings []domain.FindingFact
 			for _, x := range tc.in {
 				ff := domain.FindingFact{ReviewID: "r", File: "f.go", Severity: x.sev}
 				if x.dismissed {
 					ff.DismissedAt = rowsPtr(rowsAt(21, 9, 0))
 				}
-				f.Findings = append(f.Findings, ff)
+				findings = append(findings, ff)
 			}
+			setFindings(&f, findings)
 			cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
 			if got := cur[0].Risk; got != tc.want {
 				t.Errorf("BuildRows() risk for %s = %q, want %q", tc.name, got, tc.want)
@@ -531,14 +520,14 @@ func TestBuildRows_OpenCritical(t *testing.T) {
 	f := rowsFacts()
 	f.Pulls = []domain.PullFact{{PRID: "p", Repo: "api", Number: 1, Status: "open"}}
 	f.Reviews = []domain.ReviewFact{{ReviewID: "r", PRID: "p", AgentID: "a", AgentName: "A", CreatedAt: rowsAt(20, 9, 0)}}
-	f.Findings = []domain.FindingFact{
+	setFindings(&f, []domain.FindingFact{
 		{ReviewID: "r", Severity: domain.SeverityCritical},                                  // open
 		{ReviewID: "r", Severity: domain.SeverityCritical},                                  // open
 		{ReviewID: "r", Severity: domain.SeverityCritical, AcceptedAt: at},                  // accepted
 		{ReviewID: "r", Severity: domain.SeverityCritical, DismissedAt: at},                 // dismissed
 		{ReviewID: "r", Severity: domain.SeverityCritical, AcceptedAt: at, DismissedAt: at}, // EC7: dismissed
 		{ReviewID: "r", Severity: domain.SeverityWarning},                                   // not critical
-	}
+	})
 	cur, _ := domain.BuildRows(rowsWindow(), f, rowsNow())
 	if got, want := cur[0].OpenCritical, 2; got != want {
 		t.Errorf("BuildRows() open critical = %d, want %d", got, want)

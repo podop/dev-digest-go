@@ -18,7 +18,7 @@ type Clock func() time.Time
 
 // Reader is the read-only persistence of the context (SELECT only; the adapter reads the tables
 // of other contexts with its own row types, plan P1/P2). Every method is workspace-scoped, and
-// at most eight set-based queries serve one request in total. A failure is returned as is; the
+// at most nine set-based queries serve one request in total. A failure is returned as is; the
 // use case maps it to 500.
 type Reader interface {
 	// RepoScope returns the repositories of the filter, ordered by full name. repo is

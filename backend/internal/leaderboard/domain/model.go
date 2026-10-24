@@ -88,14 +88,17 @@ const (
 const (
 	// AttentionLimit caps the needs-attention items; the total still counts all.
 	AttentionLimit = 20
-	// HotFilesLimit is the number of hot files returned.
+	// HotFilesLimit is the number of hot files returned. The store applies the same cap in SQL
+	// (the hot-files query takes this constant as a parameter), see HotFiles.
 	HotFilesLimit = 6
 	// OpenLongDays: an open PR opened at least this many days ago is "open long" (FR13 e); so is
 	// a stale one (derived status stale).
 	OpenLongDays = 5
 	// StaleAfter is the PR list's stale threshold.
 	StaleAfter = 7 * 24 * time.Hour
-	// TopFindingsLimit is the number of top findings per row (FR21, D23).
+	// TopFindingsLimit is the number of top findings per row (FR21, D23). The store applies the
+	// same cap in SQL (LIMIT this constant per PR and snapshot half, the finding-statistics query
+	// takes it as a parameter) in the order of topFindings; keep both orders in step.
 	TopFindingsLimit = 3
 	// MoneyDecimals is the number of decimals money is rounded to.
 	MoneyDecimals = 6
@@ -269,24 +272,46 @@ type RepoRef struct {
 // deltas without a second read. Every slice is in no particular order. Rows of the two windows are told apart
 // by the review / merge / run instants against the Window, never by the store.
 //
+// The store does not return findings one by one (a busy workspace has 100k of them in a window,
+// and moving them dominated the request time, AC12): it counts them per snapshot review and
+// returns only the findings a row can show. The rules that decide what a count or a top finding
+// means (health, risk, state, order) stay in this package; the store only has to apply the
+// triage predicates documented on ReviewCounts, TopFindings and HotFiles.
+//
 // Membership (the store guarantees at least this, it may return more; the folds ignore what
 // does not apply):
 //   - Pulls: every PR of the filter that has a review (kind review) created in the range, OR a
 //     merge time in the range, OR an opened time in the range.
 //   - Reviews: every review of kind "review" created in the range, for the PRs above.
-//   - Findings: all findings of every review that is the newest of its (PR, agent) inside the
-//     current window OR inside the previous window (the two snapshots). Findings of other
-//     reviews are not needed and ignored by the folds. "Agent" here is Review.AgentID, and
-//     reviews of deleted agents ("") are one agent.
+//   - Counts: one entry per review that is the newest of its (PR, agent) inside the current
+//     window OR inside the previous window (the two snapshots) and has at least one finding
+//     (a review without findings has no entry = all zero). Counts of other reviews are not
+//     needed and ignored by the folds. "Agent" here is Review.AgentID, and reviews of deleted
+//     agents ("") are one agent.
+//   - TopFindings: for each PR and each of the two snapshots, the TopFindingsLimit findings of
+//     that snapshot's reviews that come first in the order of topFindings (severity, state,
+//     file, start line, id), or fewer when it has fewer. The folds re-apply that order and cap
+//     to the findings of a row's snapshot reviews, so extra candidates are harmless.
+//   - HotFiles: the HotFilesLimit hottest files of the CURRENT window's snapshot (the order of
+//     HotFiles), or fewer.
 //   - Every PullFact carries OpenCritical, the CRITICAL findings without accepted or dismissed
 //     time in the PR's current reviews (the newest review per agent, ever), for the PRs above.
-//   - Runs: every agent run with a PR whose RanAt lies in the range (any status; CI-ingested
-//     runs have no PR and are absent).
+//   - Runs: the agent runs with a PR whose RanAt lies in the range (any status; CI-ingested
+//     runs have no PR and are absent), possibly pre-summed: the store may merge the runs of one
+//     PR that lie in the same window (the current one or the previous one) into one RunFact
+//     whose RanAt is the first of them and whose CostUSD is the sum of their known costs. The
+//     folds only test which window a RanAt lies in and add costs up, so both forms give the
+//     same rows and KPIs.
 type Facts struct {
 	From, To time.Time
 	Pulls    []PullFact
 	Reviews  []ReviewFact
-	Findings []FindingFact
+	// Counts are the finding counts of the snapshot reviews (see the membership above).
+	Counts []ReviewCounts
+	// TopFindings are the candidate top findings (see the membership above).
+	TopFindings []FindingFact
+	// HotFiles are the hottest files of the current window (see the membership above).
+	HotFiles []HotFile
 	Runs     []RunFact
 }
 
@@ -339,7 +364,21 @@ type ReviewFact struct {
 	CreatedAt time.Time
 }
 
-// FindingFact is one finding of a snapshot review.
+// ReviewCounts are the finding counts of one snapshot review, by triage state. Accepting and
+// dismissing clear each other; if both times are set the finding is dismissed (EC7), so
+// "dismissed" means dismissed_at is set and "accepted" accepted_at is set without dismissed_at.
+type ReviewCounts struct {
+	ReviewID string
+	// All counts the findings of every state.
+	All FindingCounts
+	// Live counts the findings that are not dismissed (accepted ones included): they weigh on
+	// the health and the risk.
+	Live FindingCounts
+	// OpenCritical counts the CRITICAL findings with neither accepted nor dismissed time.
+	OpenCritical int
+}
+
+// FindingFact is one finding a row can show as a top finding.
 type FindingFact struct {
 	FindingID string
 	ReviewID  string
@@ -355,7 +394,7 @@ type FindingFact struct {
 	DismissedAt *time.Time
 }
 
-// RunFact is one agent run attached to a PR.
+// RunFact is one agent run attached to a PR, or the sum of several of them (see Facts.Runs).
 type RunFact struct {
 	PRID  string
 	RanAt time.Time
@@ -433,16 +472,6 @@ type RowReview struct {
 	// CreatedAt is the review's time (domain only; the activity chart buckets CRITICAL findings
 	// by the day of their review).
 	CreatedAt time.Time
-	// Items are the review's findings (domain only; hot files group them by file).
-	Items []FindingItem
-}
-
-// FindingItem is a finding as the aggregate folds see it.
-type FindingItem struct {
-	File        string
-	Severity    string
-	AcceptedAt  *time.Time
-	DismissedAt *time.Time
 }
 
 // Finding states of a top finding.

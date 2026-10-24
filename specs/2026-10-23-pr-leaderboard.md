@@ -358,6 +358,7 @@ with the backend (repository rule). GET `/repos` keeps its shape and already ret
 - D24 — The background poll backfills diff stats (≤ 20 per repo per cycle), so sizes, Health by size and Monster PR do not depend on someone opening the PR list (user, 2026-10-23).
 - D25 — "compared with" follows `previous_summary`, not the existence of a previous window (user, 2026-10-23).
 - D26 — Hot files PR numbers are links (user, 2026-10-23).
+- D27 — AC12 accepted with a deviation after fix round r1 (SQL aggregation, output byte-identical): at NFR1 volume 30d/all p95 is 532 ms at host load 3–4 (4-shard build without a clean full-mix run), against the 500 ms limit. The other five variants pass (p95 36–270 ms). The remaining cost is ~4 µs of Postgres CPU per finding. Follow-ups: merge windowReviews into the shard statement, parallel JSON encoding (user, 2026-10-24).
 
 ## 17. Open questions
 None — Q1–Q10 were resolved on 2026-10-23 by accepting their defaults (D7–D16).

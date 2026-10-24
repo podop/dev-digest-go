@@ -12,6 +12,7 @@ Spec §3; PR-list DTOs; new indexes (AC1).
 ## Decisions
 - P1 New context `L/` like performance [F1][K2]; own rows, SELECT only [K3]; status/risk re-implemented in `L/domain` + cross-check test vs `P/domain` [K5]
 - P2 ≤ 8 set-based queries, snapshot = ROW_NUMBER CTE [K4][K12]; handles via `postgres.Conn` [K8]
+  - Deviation (accepted, fix r1 AC12, user 2026-10-24): ≤ 9 statements per request (RepoScope 1 + 4 reads + up to 4 finding-stats shards); `TestStore_SetBasedReadOnlyAndBoundedQueries` pins 7 (2 repos) and 9 (6 repos)
 - P3 `tz`: regex, ≤ 64 chars, not `Local`, then `LoadLocation` [F9]. Previous = same calendar days before `from`. `period.*` = local time + offset, ms (AC6; exception to [K9]); other times UTC `…Z`
 - P4 Only keys period/tz/repo, one value each, else 422 `httpx.NewValidationError`; unknown repo → `apperr.NotFound("Repo not found")`
 - P5 Poller = loop in `P/app`, not a job kind (no job rows); `listen` runs it on the stop ctx and waits [K10]; next cycle at max(start+interval, reset)

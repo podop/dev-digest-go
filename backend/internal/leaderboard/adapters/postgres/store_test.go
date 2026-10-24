@@ -364,75 +364,83 @@ func TestWindowFacts_Membership(t *testing.T) {
 			}
 		}
 	})
-	t.Run("findings: every kind and every triage state of the snapshot reviews, nothing else", func(t *testing.T) {
+	t.Run("finding counts: every kind and every triage state of the snapshot reviews, nothing else", func(t *testing.T) {
 		byID := map[string]string{}
 		for name, id := range w.reviews {
 			byID[id] = name
 		}
-		have := map[string]int{}
-		for _, f := range got.Findings {
-			have[byID[f.ReviewID]]++
+		have := map[string]domain.ReviewCounts{}
+		for _, c := range got.Counts {
+			c.ReviewID = byID[c.ReviewID]
+			have[c.ReviewID] = c
 		}
 		// With no previous window the range is one window: only the newest review per agent counts
 		// (alpha1 and doomed1 are superseded). alphaOld and mergedBefore are before the range,
-		// summary has another kind, atTo is out of the range.
-		want := map[string]int{"alpha2": 5, "beta": 1, "doomed2": 1, "closed": 1}
+		// summary has another kind, atTo is out of the range. alpha2 holds, in this order, an open
+		// critical, an accepted one, a dismissed one, one accepted and dismissed (dismissed wins,
+		// EC7) and an open warning.
+		want := map[string]domain.ReviewCounts{
+			"alpha2": {
+				ReviewID: "alpha2", All: domain.FindingCounts{Critical: 4, Warning: 1},
+				Live: domain.FindingCounts{Critical: 2, Warning: 1}, OpenCritical: 1,
+			},
+			"beta": {
+				ReviewID: "beta", All: domain.FindingCounts{Critical: 1}, Live: domain.FindingCounts{Critical: 1}, OpenCritical: 1,
+			},
+			"doomed2": {
+				ReviewID: "doomed2", All: domain.FindingCounts{Critical: 1}, Live: domain.FindingCounts{Critical: 1}, OpenCritical: 1,
+			},
+			"closed": {
+				ReviewID: "closed", All: domain.FindingCounts{Critical: 1}, Live: domain.FindingCounts{Critical: 1}, OpenCritical: 1,
+			},
+		}
 		if diff := cmp.Diff(want, have); diff != "" {
-			t.Errorf("WindowFacts() findings per review mismatch (-want +got):\n%s", diff)
-		}
-		var triaged []domain.FindingFact
-		for _, f := range got.Findings {
-			if byID[f.ReviewID] == "alpha2" && f.File == "b.go" {
-				triaged = append(triaged, f)
-			}
-		}
-		states := map[string]int{}
-		for _, f := range triaged {
-			key := ""
-			if f.AcceptedAt != nil {
-				key += "A"
-			}
-			if f.DismissedAt != nil {
-				key += "D"
-			}
-			states[f.Severity+":"+key]++
-		}
-		wantStates := map[string]int{"CRITICAL:A": 1, "CRITICAL:D": 1, "CRITICAL:AD": 1, "WARNING:": 1}
-		if diff := cmp.Diff(wantStates, states); diff != "" {
-			t.Errorf("WindowFacts() triage states mismatch (-want +got):\n%s", diff)
+			t.Errorf("WindowFacts() counts per review mismatch (-want +got):\n%s", diff)
 		}
 	})
-	t.Run("finding columns", func(t *testing.T) {
-		for _, f := range got.Findings {
-			if f.ReviewID != w.reviews["beta"] {
-				continue
-			}
-			if f.FindingID == "" || f.Title != "t s.go" || f.File != "s.go" || f.StartLine != 1 || f.Severity != "CRITICAL" {
-				t.Errorf("WindowFacts() beta finding = %+v, want an id, title %q, s.go:1, CRITICAL", f, "t s.go")
-			}
+	t.Run("top findings: the first three of each PR, columns and triage times", func(t *testing.T) {
+		byID := map[string]string{}
+		for name, id := range w.reviews {
+			byID[id] = name
 		}
-		for _, f := range got.Findings {
-			if f.ReviewID == w.reviews["alpha2"] && f.File == "b.go" && f.Severity == "WARNING" && f.StartLine != 5 {
-				t.Errorf("WindowFacts() alpha2 warning start line = %d, want 5 (fifth finding)", f.StartLine)
-			}
-		}
-	})
-	t.Run("runs: any status, PR runs in [from, to) only", func(t *testing.T) {
 		type brief struct {
-			At   time.Time
-			Cost *float64
+			Review, File string
+			Line         int
+			Severity     string
+			Accepted     bool
+			Dismissed    bool
 		}
 		var have []brief
-		for _, r := range got.Runs {
-			if r.PRID != w.pr[1] {
-				t.Errorf("run of PR %s, want only PR 1 of repoA", r.PRID)
+		for _, f := range got.TopFindings {
+			if f.FindingID == "" || f.Title != "t "+f.File {
+				t.Errorf("WindowFacts() top finding = %+v, want an id and the title %q", f, "t "+f.File)
 			}
-			have = append(have, brief{r.RanAt, r.CostUSD})
+			have = append(have, brief{byID[f.ReviewID], f.File, f.StartLine, f.Severity, f.AcceptedAt != nil, f.DismissedAt != nil})
 		}
-		sort.Slice(have, func(i, j int) bool { return have[i].At.Before(have[j].At) })
-		want := []brief{{from, ptr(0.25)}, {from.Add(day), nil}, {from.Add(2 * day), ptr(1.0)}}
-		if diff := cmp.Diff(want, have, cmpopts.EquateApproxTime(0)); diff != "" {
-			t.Errorf("WindowFacts() runs mismatch (-want +got):\n%s", diff)
+		sort.Slice(have, func(i, j int) bool { return have[i].File < have[j].File })
+		// PR 1: seven snapshot findings, all CRITICAL but alpha2's accepted, dismissed and
+		// warning ones; the open ones rank first by file: a.go (alpha2), d.go (doomed2), s.go
+		// (beta). PR 8: its only finding.
+		want := []brief{
+			{"alpha2", "a.go", 1, "CRITICAL", false, false},
+			{"closed", "c.go", 1, "CRITICAL", false, false},
+			{"doomed2", "d.go", 1, "CRITICAL", false, false},
+			{"beta", "s.go", 1, "CRITICAL", false, false},
+		}
+		if diff := cmp.Diff(want, have); diff != "" {
+			t.Errorf("WindowFacts() top findings mismatch (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("runs: any status, PR runs in [from, to) only, summed per PR", func(t *testing.T) {
+		if len(got.Runs) != 1 {
+			t.Fatalf("WindowFacts() runs = %+v, want one group (PR 1; no previous window)", got.Runs)
+		}
+		r := got.Runs[0]
+		// The three runs of PR 1 in the range (done 0.25, failed without cost, running 1) are one
+		// group: first run = from, cost 1.25. The runs outside the range, of the PR without a
+		// match and of other repositories are absent.
+		if r.PRID != w.pr[1] || !r.RanAt.Equal(from) || r.CostUSD == nil || *r.CostUSD != 1.25 {
+			t.Errorf("WindowFacts() run = %+v, want PR 1 at %v with cost 1.25", r, from)
 		}
 	})
 	t.Run("range echo", func(t *testing.T) {
@@ -451,13 +459,13 @@ func TestWindowFacts_Bounds(t *testing.T) {
 		from, to time.Time
 		pulls    []string
 		reviews  int
-		runs     int
+		runCost  float64 // the runs of PR 1 are one group; its cost is the sum of the runs in the range
 	}{
-		{"[from, to)", from, to, []string{"api#1", "api#3", "api#5", "api#8"}, 6, 3},
-		{"from+1ms drops the review, run and opening at from", from.Add(time.Millisecond), to, []string{"api#1", "api#3", "api#8"}, 5, 2},
-		{"to+1ms adds the review and the run at to, and the PR opened at to", from, to.Add(time.Millisecond), []string{"api#1", "api#2", "api#3", "api#4", "api#5", "api#8"}, 7, 4},
-		{"to-1ms still holds all but the end", from, to.Add(-time.Millisecond), []string{"api#1", "api#3", "api#5", "api#8"}, 6, 3},
-		{"before from: merged PR 4 only, its run too", from.Add(-day), from, []string{"api#4"}, 0, 1},
+		{"[from, to)", from, to, []string{"api#1", "api#3", "api#5", "api#8"}, 6, 1.25},
+		{"from+1ms drops the review, run and opening at from", from.Add(time.Millisecond), to, []string{"api#1", "api#3", "api#8"}, 5, 1},
+		{"to+1ms adds the review and the run at to, and the PR opened at to", from, to.Add(time.Millisecond), []string{"api#1", "api#2", "api#3", "api#4", "api#5", "api#8"}, 7, 10.25},
+		{"to-1ms still holds all but the end", from, to.Add(-time.Millisecond), []string{"api#1", "api#3", "api#5", "api#8"}, 6, 1.25},
+		{"before from: merged PR 4 only, its run too", from.Add(-day), from, []string{"api#4"}, 0, 9},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -471,16 +479,23 @@ func TestWindowFacts_Bounds(t *testing.T) {
 			if len(got.Reviews) != tc.reviews {
 				t.Errorf("WindowFacts() reviews = %d, want %d", len(got.Reviews), tc.reviews)
 			}
-			if len(got.Runs) != tc.runs {
-				t.Errorf("WindowFacts() runs = %d, want %d", len(got.Runs), tc.runs)
+			var cost float64
+			for _, r := range got.Runs {
+				if r.CostUSD != nil {
+					cost += *r.CostUSD
+				}
+			}
+			if cost != tc.runCost {
+				t.Errorf("WindowFacts() cost of the runs in the range = %v, want %v", cost, tc.runCost)
 			}
 		})
 	}
 }
 
-// TestWindowFacts_FindingsOfBothSnapshots: with a previous window the store returns the findings
+// TestWindowFacts_FindingsOfBothSnapshots: with a previous window the store counts the findings
 // of the newest review per (PR, agent) in each half of the range, split at Window.From, and of no
-// other review. Reviews of deleted agents are one agent.
+// other review; it ranks the top findings per PR and half. Reviews of deleted agents are one
+// agent. Runs are summed per PR and half.
 func TestWindowFacts_FindingsOfBothSnapshots(t *testing.T) {
 	w := newWorld(t)
 	split := from.Add(2 * day) // doomed1 sits exactly on the split: current half
@@ -496,19 +511,46 @@ func TestWindowFacts_FindingsOfBothSnapshots(t *testing.T) {
 	for name, id := range w.reviews {
 		byID[id] = name
 	}
-	have := map[string]int{}
-	for _, f := range got.Findings {
-		have[byID[f.ReviewID]]++
+	counted := map[string]int{}
+	for _, c := range got.Counts {
+		counted[byID[c.ReviewID]] = c.All.Critical + c.All.Warning + c.All.Suggestion
 	}
 	// previous half [from, from+2d): alpha1 (alpha), beta; current half: the deleted agent's
 	// doomed2 (doomed1 is superseded), alpha2 (5 findings), closed (PR 8).
 	want := map[string]int{"alpha1": 1, "beta": 1, "doomed2": 1, "alpha2": 5, "closed": 1}
-	if diff := cmp.Diff(want, have); diff != "" {
-		t.Errorf("WindowFacts() findings per review mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff(want, counted); diff != "" {
+		t.Errorf("WindowFacts() findings counted per review mismatch (-want +got):\n%s", diff)
+	}
+	// Top findings per PR and half: PR 1 previous half has two findings (both kept); its current
+	// half has doomed2's d.go and alpha2's five: a.go (open critical) and d.go (open critical)
+	// come first, then alpha2's accepted b.go critical (class accepted); the dismissed ones and the
+	// warning stay out. PR 8: its one.
+	tops := map[string]int{}
+	for _, f := range got.TopFindings {
+		tops[byID[f.ReviewID]]++
+	}
+	wantTops := map[string]int{"alpha1": 1, "beta": 1, "doomed2": 1, "alpha2": 2, "closed": 1}
+	if diff := cmp.Diff(wantTops, tops); diff != "" {
+		t.Errorf("WindowFacts() top findings per review mismatch (-want +got):\n%s", diff)
 	}
 	// ReadFrom is the previous window's start, so the reviews of both halves are returned.
 	if len(got.Reviews) != 6 {
 		t.Errorf("WindowFacts() reviews = %d, want the 6 of the range", len(got.Reviews))
+	}
+	// Runs of PR 1 in the range: previous half = the done run at from and the failed one without
+	// cost at from+1d (summed: 0.25, first at from); current half = the running run at from+2d (1).
+	type group struct {
+		At   time.Time
+		Cost *float64
+	}
+	var runs []group
+	for _, r := range got.Runs {
+		runs = append(runs, group{r.RanAt, r.CostUSD})
+	}
+	sort.Slice(runs, func(i, j int) bool { return runs[i].At.Before(runs[j].At) })
+	wantRuns := []group{{from, ptr(0.25)}, {from.Add(2 * day), ptr(1.0)}}
+	if diff := cmp.Diff(wantRuns, runs, cmpopts.EquateApproxTime(0)); diff != "" {
+		t.Errorf("WindowFacts() runs per half mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -521,7 +563,7 @@ func TestWindowFacts_Isolation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(got.Pulls)+len(got.Reviews)+len(got.Findings)+len(got.Runs) != 0 {
+		if len(got.Pulls)+len(got.Reviews)+len(got.Counts)+len(got.TopFindings)+len(got.HotFiles)+len(got.Runs) != 0 {
 			t.Errorf("WindowFacts(ws, repo of other) = %+v, want nothing", got)
 		}
 	})
@@ -533,7 +575,7 @@ func TestWindowFacts_Isolation(t *testing.T) {
 		if diff := cmp.Diff([]string{"x#1"}, numbers(got.Pulls)); diff != "" {
 			t.Errorf("WindowFacts(other) pulls mismatch (-want +got):\n%s", diff)
 		}
-		if len(got.Reviews) != 1 || len(got.Findings) != 1 || len(got.Runs) != 1 || got.Runs[0].CostUSD == nil || *got.Runs[0].CostUSD != 7 {
+		if len(got.Reviews) != 1 || len(got.Counts) != 1 || len(got.TopFindings) != 1 || len(got.Runs) != 1 || got.Runs[0].CostUSD == nil || *got.Runs[0].CostUSD != 7 {
 			t.Errorf("WindowFacts(other) = %+v, want one review, one finding and the run of cost 7", got)
 		}
 	})
@@ -567,9 +609,9 @@ func TestWindowFacts_DeletedRepoLeavesNoPulls(t *testing.T) {
 	if diff := cmp.Diff([]string{"web#1"}, numbers(got.Pulls)); diff != "" {
 		t.Errorf("WindowFacts() pulls after removing repoA mismatch (-want +got):\n%s", diff)
 	}
-	if len(got.Reviews) != 1 || len(got.Findings) != 1 || len(got.Runs) != 1 {
-		t.Errorf("WindowFacts() = %d reviews, %d findings, %d runs, want only repoB's 1, 1, 1",
-			len(got.Reviews), len(got.Findings), len(got.Runs))
+	if len(got.Reviews) != 1 || len(got.Counts) != 1 || len(got.TopFindings) != 1 || len(got.Runs) != 1 {
+		t.Errorf("WindowFacts() = %d reviews, %d counts, %d top findings, %d runs, want only repoB's 1, 1, 1, 1",
+			len(got.Reviews), len(got.Counts), len(got.TopFindings), len(got.Runs))
 	}
 }
 
@@ -619,6 +661,200 @@ func TestWindowFacts_OpenCritical(t *testing.T) {
 	})
 }
 
+// TestWindowFacts_TopFindingsOrderAndCap pins plan P13 as the SQL applies it (and
+// domain.topFindings repeats it): per PR and snapshot half the first three findings of the
+// snapshot reviews by severity, then open before accepted before dismissed (dismissed wins over
+// accepted), then file in byte order, start line, id.
+func TestWindowFacts_TopFindingsOrderAndCap(t *testing.T) {
+	w := newWorld(t)
+	pr := w.pull(t, w.repoA, 20, "open", pullSpec{opened: ptr(from.Add(day))})
+	// alphaOld is superseded by alphaNew (same PR, same agent): its critical stays out.
+	w.review(t, "alphaOld", pr, &w.alpha, "review", from.Add(day), ptr(10), fnd("CRITICAL", "finding", "pending", "old.go"))
+	// Lines are the insertion order, 1..6.
+	w.review(t, "alphaNew", pr, &w.alpha, "review", from.Add(2*day), ptr(20),
+		fnd("WARNING", "finding", "pending", "z.go"),     // 1: WARNING
+		fnd("SUGGESTION", "finding", "pending", "a.go"),  // 2: SUGGESTION
+		fnd("CRITICAL", "finding", "dismissed", "b.go"),  // 3: CRITICAL, dismissed
+		fnd("CRITICAL", "finding", "accepted", "b.go"),   // 4: CRITICAL, accepted
+		fnd("CRITICAL", "finding", "pending", "c.go"),    // 5: CRITICAL, open
+		fnd("CRITICAL", "finding", "both", "A_upper.go"), // 6: CRITICAL, dismissed (wins over accepted); upper case sorts before lower in byte order
+	)
+	w.review(t, "betaNew", pr, &w.beta, "review", from.Add(3*day), ptr(30),
+		fnd("CRITICAL", "finding", "pending", "c.go"), // 1: CRITICAL, open, same file as alphaNew:5 but line 1
+	)
+
+	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA}, win(from, to))
+	if err != nil {
+		t.Fatalf("WindowFacts() error = %v", err)
+	}
+	byID := map[string]string{}
+	for name, id := range w.reviews {
+		byID[id] = name
+	}
+	type brief struct {
+		Review, File string
+		Line         int
+	}
+	var have []brief
+	for _, f := range got.TopFindings {
+		if f.ReviewID == w.reviews["alphaNew"] || f.ReviewID == w.reviews["betaNew"] || f.ReviewID == w.reviews["alphaOld"] {
+			have = append(have, brief{byID[f.ReviewID], f.File, f.StartLine})
+		}
+	}
+	sort.Slice(have, func(i, j int) bool {
+		if have[i].File != have[j].File {
+			return have[i].File < have[j].File
+		}
+		return have[i].Line < have[j].Line
+	})
+	// Open criticals first: c.go:1 (betaNew) before c.go:5 (alphaNew); then the accepted critical
+	// b.go:4. The dismissed criticals (b.go:3, A_upper.go:6), the warning and the suggestion are
+	// beyond the cap of three, and alphaOld's critical is not in the snapshot.
+	want := []brief{{"alphaNew", "b.go", 4}, {"betaNew", "c.go", 1}, {"alphaNew", "c.go", 5}}
+	if diff := cmp.Diff(want, have); diff != "" {
+		t.Errorf("WindowFacts() top findings of PR 20 mismatch (-want +got):\n%s", diff)
+	}
+	// The same order through the domain, which re-applies it: the same three.
+	cur, _ := domain.BuildRows(domain.Window{Key: domain.PeriodWeek, Location: time.UTC, From: from, To: to, Days: 14}, got, to)
+	for _, row := range cur {
+		if row.PRID != pr {
+			continue
+		}
+		var ids []string
+		for _, tf := range row.TopFindings {
+			ids = append(ids, tf.File+":"+itoa(tf.StartLine)+":"+tf.State)
+		}
+		if diff := cmp.Diff([]string{"c.go:1:open", "c.go:5:open", "b.go:4:accepted"}, ids); diff != "" {
+			t.Errorf("BuildRows() top findings of PR 20 mismatch (-want +got):\n%s", diff)
+		}
+	}
+}
+
+// TestWindowFacts_HotFiles pins FR14 as the SQL applies it: findings of the current snapshot
+// without a dismissed time (accepted ones count) and with a path, per (repository, path), the
+// critical count, the distinct PR numbers; the cut keeps at least the first six files and
+// every file tied with the sixth on findings, critical, path and repository name.
+func TestWindowFacts_HotFiles(t *testing.T) {
+	w := newWorld(t)
+	ctx := t.Context()
+
+	t.Run("counts, exclusions and PR numbers", func(t *testing.T) {
+		got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoA}, win(from, to))
+		if err != nil {
+			t.Fatalf("WindowFacts() error = %v", err)
+		}
+		// Snapshot findings of repoA without a dismissed time: a.go (alpha2, open critical),
+		// b.go (alpha2: the accepted critical and the open warning; the dismissed and the
+		// accepted-and-dismissed criticals are out), s.go (beta), d.go (doomed2) of PR 1 and c.go
+		// (closed) of PR 8.
+		want := []domain.HotFile{
+			{Path: "b.go", RepoID: w.repoA, Repo: "api", Findings: 2, Critical: 1, PRs: []int{1}},
+			{Path: "a.go", RepoID: w.repoA, Repo: "api", Findings: 1, Critical: 1, PRs: []int{1}},
+			{Path: "c.go", RepoID: w.repoA, Repo: "api", Findings: 1, Critical: 1, PRs: []int{8}},
+			{Path: "d.go", RepoID: w.repoA, Repo: "api", Findings: 1, Critical: 1, PRs: []int{1}},
+			{Path: "s.go", RepoID: w.repoA, Repo: "api", Findings: 1, Critical: 1, PRs: []int{1}},
+		}
+		if diff := cmp.Diff(want, domain.HotFiles(got.HotFiles)); diff != "" {
+			t.Errorf("WindowFacts() hot files mismatch (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("only the current half counts", func(t *testing.T) {
+		split := from.Add(2 * day)
+		window := domain.Window{From: split, To: to, HasPrev: true, PrevFrom: from, PrevTo: split}
+		got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoA}, window)
+		if err != nil {
+			t.Fatalf("WindowFacts() error = %v", err)
+		}
+		// The previous half (alpha1's a.go, beta's s.go) is not in the hot files.
+		var paths []string
+		for _, f := range domain.HotFiles(got.HotFiles) {
+			paths = append(paths, f.Path)
+		}
+		if diff := cmp.Diff([]string{"b.go", "a.go", "c.go", "d.go"}, paths); diff != "" {
+			t.Errorf("WindowFacts() hot file paths with a previous half mismatch (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("cap with ties, empty paths and superseded reviews", func(t *testing.T) {
+		repoD := w.insert(t, `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES (?, 'zed', 'api', 'zed/api') RETURNING id`, w.ws)
+		many := func(n int, severity, file string) []finding {
+			out := make([]finding, n)
+			for i := range out {
+				out[i] = fnd(severity, "finding", "pending", file)
+			}
+			return out
+		}
+		join := func(parts ...[]finding) []finding {
+			var out []finding
+			for _, p := range parts {
+				out = append(out, p...)
+			}
+			return out
+		}
+		pr30 := w.pull(t, w.repoA, 30, "open", pullSpec{})
+		pr32 := w.pull(t, w.repoA, 32, "open", pullSpec{})
+		pr31 := w.pull(t, repoD, 31, "open", pullSpec{})
+		// F1..F6 get 9, 8, 7, 6, 5, 4 findings in repoA PR 30, F1 two more criticals in PR 32;
+		// the file "" and dismissed findings are not files; an older review of the same agent is
+		// not in the snapshot.
+		w.review(t, "hotOld", pr30, &w.alpha, "review", from.Add(day), nil, many(20, "WARNING", "F1")...)
+		w.review(t, "hot30", pr30, &w.alpha, "review", from.Add(2*day), nil, join(
+			many(9, "WARNING", "F1"), many(8, "WARNING", "F2"), many(7, "WARNING", "F3"), many(6, "WARNING", "F4"),
+			many(5, "WARNING", "F5"), many(4, "WARNING", "F6"),
+			[]finding{fnd("WARNING", "finding", "dismissed", "F1"), fnd("WARNING", "finding", "dismissed", "F1")},
+			[]finding{fnd("WARNING", "finding", "pending", "")},
+		)...)
+		w.review(t, "hot32", pr32, &w.beta, "review", from.Add(2*day), nil, many(2, "CRITICAL", "F1")...)
+		// repoD has the same short name "api" as repoA: its F6 (4 findings, no critical) ties
+		// with repoA's F6 on findings, critical, path and repository name.
+		w.review(t, "hot31", pr31, &w.alpha, "review", from.Add(2*day), nil, many(4, "WARNING", "F6")...)
+
+		got, err := w.store.WindowFacts(ctx, w.ws, []string{w.repoA, repoD}, win(from, to))
+		if err != nil {
+			t.Fatalf("WindowFacts() error = %v", err)
+		}
+		if len(got.HotFiles) != domain.HotFilesLimit+1 {
+			t.Errorf("WindowFacts() returned %d hot files, want %d (the first %d and the one tied with the last)",
+				len(got.HotFiles), domain.HotFilesLimit+1, domain.HotFilesLimit)
+		}
+		want := []domain.HotFile{
+			{Path: "F1", RepoID: w.repoA, Repo: "api", Findings: 11, Critical: 2, PRs: []int{30, 32}},
+			{Path: "F2", RepoID: w.repoA, Repo: "api", Findings: 8, PRs: []int{30}},
+			{Path: "F3", RepoID: w.repoA, Repo: "api", Findings: 7, PRs: []int{30}},
+			{Path: "F4", RepoID: w.repoA, Repo: "api", Findings: 6, PRs: []int{30}},
+			{Path: "F5", RepoID: w.repoA, Repo: "api", Findings: 5, PRs: []int{30}},
+			{Path: "F6", RepoID: w.repoA, Repo: "api", Findings: 4, PRs: []int{30}}, // the tie: PR list [30] < [31]
+		}
+		if diff := cmp.Diff(want, domain.HotFiles(got.HotFiles)); diff != "" {
+			t.Errorf("WindowFacts() hot files after the domain's order and cap mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+// TestWindowFacts_RunsPerHalf: the runs of a PR in one half are one group; a group without a
+// known cost has none (the domain counts it as 0); runs of two PRs are two groups.
+func TestWindowFacts_RunsPerHalf(t *testing.T) {
+	w := newWorld(t)
+	pr := w.pull(t, w.repoA, 40, "open", pullSpec{})
+	w.run(t, w.ws, pr, from.Add(day), "failed", "ci", nil)
+	w.run(t, w.ws, pr, from.Add(2*day), "done", "local", nil)
+	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA}, win(from, to))
+	if err != nil {
+		t.Fatalf("WindowFacts() error = %v", err)
+	}
+	var found []domain.RunFact
+	for _, r := range got.Runs {
+		if r.PRID == pr {
+			found = append(found, r)
+		}
+	}
+	if len(found) != 1 || !found[0].RanAt.Equal(from.Add(day)) || found[0].CostUSD != nil {
+		t.Errorf("WindowFacts() runs of PR 40 = %+v, want one group at %v without a cost", found, from.Add(day))
+	}
+	if len(got.Runs) != 2 {
+		t.Errorf("WindowFacts() runs = %d groups, want 2 (PR 1 and PR 40)", len(got.Runs))
+	}
+}
+
 // statements records the SQL a store sends (GORM logger).
 type statements struct {
 	logger.Interface
@@ -666,11 +902,10 @@ func TestStore_SetBasedReadOnlyAndBoundedQueries(t *testing.T) {
 	}
 
 	before := request()
-	if len(before) != 6 { // RepoScope 1, WindowFacts 5
-		t.Errorf("one request sent %d statements, want 6", len(before))
-	}
-	if len(before) > 8 {
-		t.Errorf("one request sent %d statements, want <= 8", len(before))
+	// RepoScope 1; WindowFacts: pulls, reviews, runs, open criticals, and one finding statistics
+	// statement per shard of repositories (2 repositories: 2 shards).
+	if len(before) != 7 {
+		t.Errorf("one request sent %d statements, want 7", len(before))
 	}
 	for _, q := range before {
 		head := strings.ToUpper(strings.TrimSpace(q))
@@ -679,7 +914,8 @@ func TestStore_SetBasedReadOnlyAndBoundedQueries(t *testing.T) {
 		}
 	}
 
-	// More pull requests, reviews and findings do not add statements (no per-PR loop).
+	// More pull requests, reviews and findings do not add statements (no per-PR loop, no per-finding
+	// read). The reads of WindowFacts are sent concurrently; they are one statement each.
 	for n := 100; n < 130; n++ {
 		pr := w.pull(t, w.repoA, n, "open", pullSpec{opened: ptr(from.Add(day))})
 		w.review(t, "bulk"+itoa(n%10)+itoa(n/10%10), pr, &w.alpha, "review", from.Add(day), ptr(50), fnd("CRITICAL", "finding", "pending", "z.go"))
@@ -687,6 +923,15 @@ func TestStore_SetBasedReadOnlyAndBoundedQueries(t *testing.T) {
 	}
 	if after := request(); len(after) != len(before) {
 		t.Errorf("statements with 30 more PRs = %d, want %d (independent of the PR count)", len(after), len(before))
+	}
+
+	// More repositories add finding-statistics shards up to a fixed number: 1 + 4 + 4 = 9 at most.
+	for i := range 4 {
+		w.insert(t, `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES (?, 'acme', ?, ?) RETURNING id`,
+			w.ws, "extra"+itoa(i), "acme/extra"+itoa(i))
+	}
+	if more := request(); len(more) != 9 {
+		t.Errorf("statements with 6 repositories = %d, want 9 (the shards are capped)", len(more))
 	}
 }
 

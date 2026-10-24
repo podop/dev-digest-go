@@ -27,24 +27,29 @@ func BuildRows(win Window, f Facts, now time.Time) (cur, prev []Row) {
 
 // rowInput holds Facts indexed by the keys the folds join on.
 type rowInput struct {
-	pulls    []PullFact
-	reviews  map[string][]ReviewFact  // by PR id
-	findings map[string][]FindingFact // by review id
-	runs     map[string][]RunFact     // by PR id
+	pulls   []PullFact
+	reviews map[string][]ReviewFact  // by PR id
+	counts  map[string]ReviewCounts  // by review id
+	top     map[string][]FindingFact // by review id
+	runs    map[string][]RunFact     // by PR id
 }
 
 func newRowInput(f Facts) rowInput {
 	in := rowInput{
-		pulls:    f.Pulls,
-		reviews:  make(map[string][]ReviewFact),
-		findings: make(map[string][]FindingFact),
-		runs:     make(map[string][]RunFact),
+		pulls:   f.Pulls,
+		reviews: make(map[string][]ReviewFact),
+		counts:  make(map[string]ReviewCounts, len(f.Counts)),
+		top:     make(map[string][]FindingFact, len(f.TopFindings)),
+		runs:    make(map[string][]RunFact),
 	}
 	for _, r := range f.Reviews {
 		in.reviews[r.PRID] = append(in.reviews[r.PRID], r)
 	}
-	for _, fi := range f.Findings {
-		in.findings[fi.ReviewID] = append(in.findings[fi.ReviewID], fi)
+	for _, c := range f.Counts {
+		in.counts[c.ReviewID] = c
+	}
+	for _, fi := range f.TopFindings {
+		in.top[fi.ReviewID] = append(in.top[fi.ReviewID], fi)
 	}
 	for _, r := range f.Runs {
 		in.runs[r.PRID] = append(in.runs[r.PRID], r)
@@ -110,7 +115,7 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 		Reviews:               make([]RowReview, 0, len(snapshot)),
 	}
 
-	var healthPoints, riskPoints int
+	var healthLost, riskSum int
 	var top []TopFinding
 	for _, r := range snapshot {
 		rr := RowReview{
@@ -125,13 +130,12 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 			id := r.AgentID
 			rr.AgentID = &id
 		}
-		for _, fi := range in.findings[r.ReviewID] {
-			rr.Items = append(rr.Items, FindingItem{
-				File:        fi.File,
-				Severity:    fi.Severity,
-				AcceptedAt:  fi.AcceptedAt,
-				DismissedAt: fi.DismissedAt,
-			})
+		c := in.counts[r.ReviewID]
+		rr.Findings = c.All
+		healthLost += healthPoints(c.Live)
+		riskSum += riskPoints(c.Live)
+		row.OpenCritical += c.OpenCritical
+		for _, fi := range in.top[r.ReviewID] {
 			top = append(top, TopFinding{
 				FindingID: fi.FindingID,
 				Severity:  fi.Severity,
@@ -141,14 +145,6 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 				AgentName: rr.AgentName,
 				State:     findingState(fi),
 			})
-			addSeverity(&rr.Findings, fi.Severity)
-			if fi.DismissedAt == nil {
-				healthPoints += healthWeight(fi.Severity)
-				riskPoints += severityWeight(fi.Severity)
-				if fi.Severity == SeverityCritical && fi.AcceptedAt == nil {
-					row.OpenCritical++
-				}
-			}
 		}
 		row.Findings.Critical += rr.Findings.Critical
 		row.Findings.Warning += rr.Findings.Warning
@@ -160,11 +156,11 @@ func (in rowInput) row(p PullFact, reviews []ReviewFact, span Span, now time.Tim
 	})
 
 	if rounds > 0 {
-		h := max(0, HealthBase-healthPoints-HealthPerExtraRound*(rounds-1))
+		h := max(0, HealthBase-healthLost-HealthPerExtraRound*(rounds-1))
 		row.Health = &h
 	}
 	row.TopFindings = topFindings(top)
-	row.Risk = riskOfPoints(riskPoints)
+	row.Risk = riskOfPoints(riskSum)
 	row.TimeToFirstReviewS = rowSecondsBetween(p.OpenedAt, p.FirstReviewAt)
 	if row.Status == StatusMerged {
 		row.TimeToMergeS = rowSecondsBetween(p.OpenedAt, p.MergedAt)
@@ -189,6 +185,8 @@ func findingState(f FindingFact) string {
 
 // topFindings keeps the TopFindingsLimit most notable findings: severity (CRITICAL first), then
 // state (open, accepted, dismissed), then file, start line and finding id. It never returns nil.
+// The store selects its candidates with the same order in SQL (ORDER BY of the top-findings
+// query in adapters/postgres, string columns in byte order = Go's cmp.Compare on strings).
 func topFindings(all []TopFinding) []TopFinding {
 	slices.SortFunc(all, func(a, b TopFinding) int {
 		return cmp.Or(
@@ -293,40 +291,14 @@ func riskOfPoints(points int) Risk {
 	}
 }
 
-// healthWeight is what a non-dismissed finding takes off the health (spec FR10).
-func healthWeight(severity string) int {
-	switch severity {
-	case SeverityCritical:
-		return HealthCritical
-	case SeverityWarning:
-		return HealthWarning
-	case SeveritySuggestion:
-		return HealthSuggestion
-	}
-	return 0
+// healthPoints is what the counted (non-dismissed) findings take off the health (spec FR10).
+func healthPoints(c FindingCounts) int {
+	return c.Critical*HealthCritical + c.Warning*HealthWarning + c.Suggestion*HealthSuggestion
 }
 
-func severityWeight(severity string) int {
-	switch severity {
-	case SeverityCritical:
-		return WeightCritical
-	case SeverityWarning:
-		return WeightWarning
-	case SeveritySuggestion:
-		return WeightSuggestion
-	}
-	return 0
-}
-
-func addSeverity(c *FindingCounts, severity string) {
-	switch severity {
-	case SeverityCritical:
-		c.Critical++
-	case SeverityWarning:
-		c.Warning++
-	case SeveritySuggestion:
-		c.Suggestion++
-	}
+// riskPoints is the weighted sum of the counted (non-dismissed) findings (spec FR10).
+func riskPoints(c FindingCounts) int {
+	return c.Critical*WeightCritical + c.Warning*WeightWarning + c.Suggestion*WeightSuggestion
 }
 
 // runCostIn sums the cost of the runs started in span; an unknown cost is 0 (plan Q3).

@@ -106,9 +106,13 @@ func busyReader() *fakeReader {
 				{ReviewID: "rv-top", PRID: "p-top", AgentID: "a1", AgentName: "Alpha", Score: ptr(90), CreatedAt: at(time.October, 20, 10)},
 				{ReviewID: "rv-old", PRID: "p-old", AgentID: "a1", AgentName: "Alpha", Score: ptr(50), CreatedAt: at(time.October, 14, 10)},
 			},
-			Findings: []domain.FindingFact{
-				{ReviewID: "rv-top", File: "a.go", Severity: domain.SeverityCritical},
-				{ReviewID: "rv-old", File: "b.go", Severity: domain.SeverityWarning},
+			Counts: []domain.ReviewCounts{
+				{ReviewID: "rv-top", All: domain.FindingCounts{Critical: 1}, Live: domain.FindingCounts{Critical: 1}, OpenCritical: 1},
+				{ReviewID: "rv-old", All: domain.FindingCounts{Warning: 1}, Live: domain.FindingCounts{Warning: 1}},
+			},
+			HotFiles: []domain.HotFile{
+				{Path: "b.go", RepoID: "r-api", Repo: "api", Findings: 1, PRs: []int{5}},
+				{Path: "a.go", RepoID: "r-api", Repo: "api", Findings: 2, Critical: 1, PRs: []int{7}},
 			},
 			Runs: []domain.RunFact{
 				{PRID: "p-top", RanAt: at(time.October, 20, 9), CostUSD: ptr(0.25)},
@@ -164,6 +168,14 @@ func TestLeaderboard_ReadsOnceInOrderAndFoldsBothWindows(t *testing.T) {
 	}
 	if got.Awards.FastestMerge == nil || got.Awards.FastestMerge.PRID != "p-top" {
 		t.Errorf("Awards.FastestMerge = %+v, want p-top (p-old merged in the previous window)", got.Awards.FastestMerge)
+	}
+	// The hot files of the store are ordered by the domain.
+	wantHot := []domain.HotFile{
+		{Path: "a.go", RepoID: "r-api", Repo: "api", Findings: 2, Critical: 1, PRs: []int{7}},
+		{Path: "b.go", RepoID: "r-api", Repo: "api", Findings: 1, PRs: []int{5}},
+	}
+	if diff := cmp.Diff(wantHot, got.HotFiles); diff != "" {
+		t.Errorf("HotFiles mismatch (-want +got):\n%s", diff)
 	}
 	if got.NeedsAttention.Total != 2 {
 		t.Errorf("NeedsAttention.Total = %d, want 2 (merged p-top with an open critical, p-new never reviewed)", got.NeedsAttention.Total)
