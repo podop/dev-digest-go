@@ -457,7 +457,7 @@ consumers keep working, because every addition is optional or a new route.
   Traces: FR1 · Verify: component
 - AC2 [ui] — Given secrets-status `{openrouter:true, openai:false, anthropic:false}`, then API Keys shows rows
   OpenRouter, OpenAI ("Optional"), Anthropic, with badges Connected, Not connected, Not connected and no GitHub row.
-  Typing `sk-or-v1-abcdefgh1234` shows 16 dots plus `1234`, and the toggle reveals it. A configured row shows the
+  Typing `sk-or-v1-abcdefgh1234` shows 17 dots plus `1234`, and the toggle reveals it. A configured row shows the
   "Key saved" placeholder.
   Traces: FR2, FR3, FR4, NFR7 · Verify: component
 - AC3 [ui] — Given a mocked test result `ok:true, model:"anthropic/claude-sonnet-4", model_reachable:true,
@@ -628,6 +628,8 @@ consumers keep working, because every addition is optional or a new route.
 - D21 — Q5 "Skip setup" link → no; only `/` is gated (user approved default, 2026-10-23).
 - D22 — Q6 A successful step 1 test sets `default_model` → no; setup stores nothing new (user approved default,
   2026-10-23).
+- D23 — AC2 example corrected from 16 to 17 dots: the 21-character key gives 17 under FR3 (planner SCR1, user
+  approved 2026-10-24).
 
 ## 17. Open questions
 None — Q1–Q6 were resolved on 2026-10-23 by accepting their defaults (D17–D22).
