@@ -242,7 +242,8 @@ condition selected"; `paused_spend_cap` (warn) "Paused — spend cap reached" + 
 - EC19 [ui] — More than 20 agents clicked → the 21st is refused with "Up to 20 agents" (FR15).
 
 ## 11. Non-functional requirements
-- NFR1 [auto] — One evaluation over 1,000 stored open PRs and 10,000 records takes ≤ 500 ms of database time.
+- NFR1 [auto] — One evaluation over 1,000 stored open PRs and 10,000 records takes ≤ 500 ms of database time
+  (relaxed to p95 ≤ 750 ms for a steady evaluation, see D16).
 - NFR2 [auto] — The evaluation itself makes no GitHub and no LLM call; only the started review runs do, as manual runs.
 - NFR3 [auto] — One INFO log line per decision with workspace_id, pr_id, repo, number, head SHA (first 12), event,
   outcome, run count; no token, key or prompt text is logged.
@@ -391,6 +392,13 @@ condition selected"; `paused_spend_cap` (warn) "Paused — spend cap reached" + 
   until a poll stores the value; a deleted fork (`head.repo` null in GitHub's payload) counts as a fork (user, 2026-10-25,
   accepting the fix-round reading: a recorded skip is permanent).
 - D14 — AC15 wording: `text/plain` on PUT /settings answers 422 `validation_error`, as on the sibling routes (W4 finding).
+- D15 — AC22 (manual end-to-end walk with a real GitHub repo, PR and push) is waived; the flow is covered by the
+  cmd/server automatic-review flow tests against a GitHub stub (user, 2026-10-25).
+- D16 — NFR1/AC16 bound, relaxed: a steady evaluation (about 120 undecided candidates among the 1,000 PRs) takes
+  p95 ≤ 750 ms of database time, measured on pgtest (fsync off; a durable Postgres is slower, unmeasured). Measured
+  p95 360–372 ms (implementer), 528–589 ms under host load ~8 (verifier r2), 423–550 ms (orchestrator re-run). A burst (700 undecided PRs in one
+  evaluation) is measured but not bound (p95 1.4–2.8 s, linear in per-record INSERT commits); only its candidates read
+  is bound by the 750 ms limit (p95 144–208 ms). Batching record-only decisions into one INSERT is a follow-up (user, 2026-10-25).
 
 ## 17. Open questions
 None — Q1–Q9 were resolved on 2026-10-23 by accepting their defaults (D4–D12).

@@ -70,7 +70,8 @@ type Candidate struct {
 	// GitHub named no head repository (a deleted fork).
 	IsFork bool
 	// HeadRepoUnknown is true when the poll has not stored the head repository of the PR yet (a row
-	// from before migration 0007). IsFork is meaningless then; Decide defers the PR.
+	// from before migration 0007). The store reports IsFork true then too (defence in depth); Decide
+	// checks this flag first and defers the PR with no record.
 	HeadRepoUnknown bool
 	// Running is true when the PR has a review run in progress, whatever its source.
 	Running bool

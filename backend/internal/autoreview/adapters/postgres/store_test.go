@@ -173,7 +173,8 @@ func TestCandidates_FR4Rules(t *testing.T) {
 }
 
 // TestCandidates_HeadRepository (D13): fork, same-repository and unknown (NULL) head repositories
-// are all candidates, each with the flags the trigger decides on; the unknown one is not a fork.
+// are all candidates, each with the flags the trigger decides on; the unknown one reads as a fork
+// too (defence in depth), and HeadRepoUnknown is what tells it apart.
 func TestCandidates_HeadRepository(t *testing.T) {
 	f := newFixture(t)
 	same := f.pr(t, prSpec{updatedAt: ptr(before)})
@@ -185,7 +186,7 @@ func TestCandidates_HeadRepository(t *testing.T) {
 		t.Fatalf("Candidates() ids mismatch (-want +got):\n%s", diff)
 	}
 	type flags struct{ IsFork, HeadRepoUnknown bool }
-	want := []flags{{false, false}, {true, false}, {false, true}}
+	want := []flags{{false, false}, {true, false}, {true, true}}
 	for i, c := range got {
 		if g := (flags{c.IsFork, c.HeadRepoUnknown}); g != want[i] {
 			t.Errorf("Candidates()[%d] (IsFork, HeadRepoUnknown) = %+v, want %+v", i, g, want[i])

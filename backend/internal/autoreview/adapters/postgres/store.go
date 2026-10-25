@@ -39,12 +39,14 @@ var closedStatuses = []string{"merged", "closed"}
 // agent_runs_running_idx), ordered as domain.SortCandidates does: updated_at NULLS LAST, then id.
 // Rows without an opened time or head never match (domain.Eligible). Fork and unknown-head-repository
 // rows are returned too: the trigger records the forks (skipped_fork, D13) and defers the unknown.
+// An unknown head repository also reads as a fork (is_fork defaults to true): Decide defers on
+// HeadRepoUnknown first, and should that check ever be lost the PR still counts as a fork.
 func (s *Store) Candidates(ctx context.Context, workspaceID string, enabledAt time.Time) ([]domain.Candidate, error) {
 	var rows []candidateRow
 	err := s.conn(ctx).Table("pull_requests AS p").
 		Select(`p.id AS pr_id, r.full_name AS repo, p.number, p.head_sha,
 			COALESCE(p.last_reviewed_sha, '') AS last_reviewed_sha,
-			COALESCE(p.head_is_fork, false) AS is_fork, p.head_is_fork IS NULL AS head_repo_unknown,
+			COALESCE(p.head_is_fork, true) AS is_fork, p.head_is_fork IS NULL AS head_repo_unknown,
 			EXISTS (SELECT 1 FROM auto_review_records a WHERE a.pr_id = p.id) AS has_any_record,
 			EXISTS (SELECT 1 FROM agent_runs ar WHERE ar.pr_id = p.id AND ar.status = 'running') AS running,
 			p.updated_at`).
