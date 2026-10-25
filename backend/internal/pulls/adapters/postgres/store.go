@@ -47,6 +47,8 @@ type pullRow struct {
 	MergedAt        *time.Time `gorm:"column:merged_at"`
 	ClosedAt        *time.Time `gorm:"column:closed_at"`
 	Draft           bool       `gorm:"column:draft"`
+	// HeadIsFork is NULL until the GitHub poll has written it (migration 0007).
+	HeadIsFork *bool `gorm:"column:head_is_fork"`
 }
 
 func (pullRow) TableName() string { return "pull_requests" }
@@ -192,7 +194,8 @@ func (s *Store) ListPulls(ctx context.Context, workspaceID, repoID string) ([]do
 }
 
 // UpsertListed inserts the listed PRs and, for PRs that exist (by repo and number), updates only
-// title, head_sha, status, updated_at, merged_at, closed_at and draft. Rows are never deleted.
+// title, head_sha, status, updated_at, merged_at, closed_at, draft and head_is_fork. Rows are
+// never deleted.
 func (s *Store) UpsertListed(ctx context.Context, workspaceID, repoID string, listed []domain.Listed) error {
 	if len(listed) == 0 {
 		return nil
@@ -211,13 +214,13 @@ func (s *Store) UpsertListed(ctx context.Context, workspaceID, repoID string, li
 			WorkspaceID: workspaceID, RepoID: repoID, Number: l.Number, Title: l.Title,
 			Author: l.Author, Branch: l.Branch, Base: l.Base, HeadSHA: l.HeadSHA,
 			Status: l.Status, OpenedAt: l.OpenedAt, UpdatedAt: l.UpdatedAt,
-			MergedAt: l.MergedAt, ClosedAt: l.ClosedAt, Draft: l.Draft,
+			MergedAt: l.MergedAt, ClosedAt: l.ClosedAt, Draft: l.Draft, HeadIsFork: &l.HeadIsFork,
 		})
 	}
 	err := s.db.WithContext(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "repo_id"}, {Name: "number"}},
-			DoUpdates: clause.AssignmentColumns([]string{"title", "head_sha", "status", "updated_at", "merged_at", "closed_at", "draft"}),
+			DoUpdates: clause.AssignmentColumns([]string{"title", "head_sha", "status", "updated_at", "merged_at", "closed_at", "draft", "head_is_fork"}),
 		}).
 		CreateInBatches(&rows, insertBatch).Error
 	if err != nil {

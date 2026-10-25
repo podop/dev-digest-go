@@ -36,6 +36,8 @@ type candidateRow struct {
 	Number          int        `gorm:"column:number"`
 	HeadSHA         string     `gorm:"column:head_sha"`
 	LastReviewedSHA string     `gorm:"column:last_reviewed_sha"`
+	IsFork          bool       `gorm:"column:is_fork"`
+	HeadRepoUnknown bool       `gorm:"column:head_repo_unknown"`
 	HasAnyRecord    bool       `gorm:"column:has_any_record"`
 	Running         bool       `gorm:"column:running"`
 	UpdatedAt       *time.Time `gorm:"column:updated_at"`
@@ -45,7 +47,7 @@ func (r candidateRow) toDomain() domain.Candidate {
 	return domain.Candidate{
 		PRID: r.PRID, Repo: r.Repo, Number: r.Number, HeadSHA: r.HeadSHA,
 		LastReviewedSHA: r.LastReviewedSHA, HasAnyRecord: r.HasAnyRecord, Running: r.Running,
-		UpdatedAt: r.UpdatedAt,
+		IsFork: r.IsFork, HeadRepoUnknown: r.HeadRepoUnknown, UpdatedAt: r.UpdatedAt,
 	}
 }
 

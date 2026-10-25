@@ -117,7 +117,7 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   holds `SHARE ROW EXCLUSIVE` on `agent_runs` and `eval_suite_runs` for its duration (≤ ~30 s), which
   pauses run starts and CI ingest in all workspaces — acceptable for the local tool. A prune batch waits
   up to 60 s for the history lock (a reset waits 10 s), so a prune that meets a reset waits it out.
-- Automatic reviews (`autoreview` context, Settings C, migration 0006): the Settings key
+- Automatic reviews (`autoreview` context, Settings C, migrations 0006, 0007): the Settings key
   `automatic_reviews` is the object `{enabled, agent_ids, on_new_pr, on_new_commits, enabled_at}`
   (`settings/app.AutomaticReviewsFromStored`; `enabled_at` is stamped by the server when the value becomes
   armed, so PRs opened earlier are never reviewed). The hook: `autoreview/app.Service` is the poller's
@@ -130,7 +130,11 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   start and settles it after, so two evaluations or processes never review one head twice; the table has no
   FK to `agent_runs` (B's reset deletes runs but keeps the records). Rate limits: ≤ 5 starts per evaluation
   and ≤ 20 per rolling hour per workspace (over the limit a PR is deferred, not recorded). The spend cap is
-  asked once per evaluation; a reached cap records `skipped_spend_cap`, a failed check defers. Shutdown: the
+  asked once per evaluation; a reached cap records `skipped_spend_cap`, a failed check defers. Fork guard (D13):
+  only PRs whose head branch is in the PR's own repository start; the poll stores `pull_requests.head_is_fork`
+  (`head.repo.full_name` vs `base.repo.full_name`; a null or missing repository counts as a fork), a fork head is
+  recorded `skipped_fork` before any budget or rate check, and a NULL value (a row from before 0007, not yet
+  refreshed by the poll) defers without a record. The flag is not part of any API response. Shutdown: the
   poller runs on the stop ctx and returns ≤ 5 s; a claim/start/settle runs on a ctx detached from it
   (bounded to 3 s) so a started review is never left half-recorded. `GET /settings/automatic-reviews-status`
   (`autoreview/transport/http`) derives the state on read; the service is built even with

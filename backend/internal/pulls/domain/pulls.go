@@ -73,6 +73,9 @@ type Listed struct {
 	MergedAt  *time.Time // nil unless merged
 	ClosedAt  *time.Time // nil while open; set for closed and merged PRs
 	Draft     bool
+	// HeadIsFork is true when the head branch is in another repository (or none is named). Stored,
+	// not served: the automatic-review trigger reads it.
+	HeadIsFork bool
 }
 
 // DiffStats are the size fields the detail endpoint fills.

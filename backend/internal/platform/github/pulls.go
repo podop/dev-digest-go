@@ -27,6 +27,10 @@ type PullSummary struct {
 	MergedAt  *time.Time // nil unless merged
 	ClosedAt  *time.Time // nil while open; set for closed and merged PRs
 	Draft     bool
+	// HeadIsFork is true when the head branch lives in another repository than the PR's base
+	// repository, and also when GitHub names no head repository (a deleted fork) or no base one:
+	// anything that cannot be shown to be the same repository counts as a fork.
+	HeadIsFork bool
 }
 
 // File is one changed file of a pull request. Patch is nil when GitHub gives
@@ -70,16 +74,22 @@ type apiUser struct {
 	Login string `json:"login"`
 }
 
+type apiRepo struct {
+	FullName string `json:"full_name"`
+}
+
 type apiPull struct {
 	Number int      `json:"number"`
 	Title  string   `json:"title"`
 	User   *apiUser `json:"user"`
 	Head   struct {
-		Ref string `json:"ref"`
-		SHA string `json:"sha"`
+		Ref  string   `json:"ref"`
+		SHA  string   `json:"sha"`
+		Repo *apiRepo `json:"repo"` // null when the head repository was deleted
 	} `json:"head"`
 	Base struct {
-		Ref string `json:"ref"`
+		Ref  string   `json:"ref"`
+		Repo *apiRepo `json:"repo"`
 	} `json:"base"`
 	State        string     `json:"state"`
 	MergedAt     *time.Time `json:"merged_at"`
@@ -137,6 +147,16 @@ func mapStatus(state string, mergedAt *time.Time) string {
 	}
 }
 
+// headIsFork reports whether the head branch is in another repository than the base. Both names
+// must be present and equal (GitHub names are case-insensitive); anything else is a fork.
+func (p apiPull) headIsFork() bool {
+	h, b := p.Head.Repo, p.Base.Repo
+	if h == nil || b == nil || h.FullName == "" || b.FullName == "" {
+		return true
+	}
+	return !strings.EqualFold(h.FullName, b.FullName)
+}
+
 func (p apiPull) summary() PullSummary {
 	return PullSummary{
 		Number:    p.Number,
@@ -151,6 +171,8 @@ func (p apiPull) summary() PullSummary {
 		MergedAt:  p.MergedAt,
 		ClosedAt:  p.ClosedAt,
 		Draft:     p.Draft,
+
+		HeadIsFork: p.headIsFork(),
 	}
 }
 

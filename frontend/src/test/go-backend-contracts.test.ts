@@ -18,6 +18,7 @@ import {
   AgentVersion,
   AgentVersionConfig,
   ApiErrorBody,
+  AutomaticReviewsStatus,
   BlastCaller,
   BlastRadius,
   BriefMissingInput,
@@ -447,6 +448,9 @@ const workspaceExport = PluginBundle.extend({
   settings: z.record(z.unknown()),
 }).strict();
 
+// ---- Settings slice C (specs/2026-10-23-settings-c-automatic-reviews.md): the status line. ----
+const automaticReviewsStatus = AutomaticReviewsStatus.strict();
+
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
   health: z.object({ status: z.literal("ok") }).strict(),
@@ -631,6 +635,9 @@ const contracts: Record<string, z.ZodTypeAny> = {
   workspace_export: workspaceExport,
   workspace_reset: workspaceResetResult,
   workspace_reset_run_active: resetRunActive,
+
+  // ---- Settings slice C ----
+  automatic_reviews_status: automaticReviewsStatus,
 };
 
 const read = (name: string): unknown =>
@@ -730,6 +737,14 @@ describe("Go backend golden responses", () => {
     expect(reset.deleted.agent_runs).toBe(2);
     expect(reset.prs_unmarked).toBe(2);
     expect(resetRunActive.parse(read("workspace_reset_run_active")).error.message).toMatch(/in progress/);
+  });
+
+  it("the settings-slice-C status golden is an active line with a poll time and the tracked PRs", () => {
+    const status = automaticReviewsStatus.parse(read("automatic_reviews_status"));
+    expect(status.state).toBe("active");
+    expect(status.last_poll_at).not.toBeNull();
+    expect(status.prs_tracked).toBeGreaterThan(0);
+    expect(status.poll_interval_min).toBe(5);
   });
 
   it("the index-state goldens cover a full, a degraded and a synthesised state", () => {

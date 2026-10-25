@@ -161,6 +161,11 @@ func TestAfterCycle_SkipRules(t *testing.T) {
 		{name: "cap reached, wrapped", cand: func(*domain.Candidate) {}, budgetErr: fmt.Errorf("admit: %w", app.ErrCapReached),
 			wantRecord: true, want: domain.OutcomeSkippedSpendCap},
 		{name: "budget check failed: fail closed, no record", cand: func(*domain.Candidate) {}, budgetErr: errBoom},
+		{name: "fork PR: recorded, no start (D13)", cand: func(c *domain.Candidate) { c.IsFork = true },
+			wantRecord: true, want: domain.OutcomeSkippedFork},
+		{name: "fork PR with the cap reached: still skipped_fork", cand: func(c *domain.Candidate) { c.IsFork = true },
+			budgetErr: app.ErrCapReached, wantRecord: true, want: domain.OutcomeSkippedFork},
+		{name: "unknown head repository: no record, no start (D13)", cand: func(c *domain.Candidate) { c.HeadRepoUnknown = true }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

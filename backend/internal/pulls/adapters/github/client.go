@@ -126,7 +126,7 @@ func listed(p ghclient.PullSummary) domain.Listed {
 	return domain.Listed{
 		Number: p.Number, Title: p.Title, Author: p.Author, Branch: p.Branch, Base: p.Base,
 		HeadSHA: p.HeadSHA, Status: p.Status, OpenedAt: timePtr(p.OpenedAt), UpdatedAt: timePtr(p.UpdatedAt),
-		MergedAt: p.MergedAt, ClosedAt: p.ClosedAt, Draft: p.Draft,
+		MergedAt: p.MergedAt, ClosedAt: p.ClosedAt, Draft: p.Draft, HeadIsFork: p.HeadIsFork,
 	}
 }
 

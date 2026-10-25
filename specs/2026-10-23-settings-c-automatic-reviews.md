@@ -315,7 +315,7 @@ condition selected"; `paused_spend_cap` (warn) "Paused — spend cap reached" + 
 - AC14 [auto] — Given captured logs of AC5–AC8, then each decision has one INFO line with the NFR3 fields and no line
   contains the GitHub token or a provider key.
   Traces: NFR3 · Verify: integration
-- AC15 [api] — Given PUT `/settings` with a foreign Origin → 403; with `text/plain` → 415 as other routes; the status
+- AC15 [api] — Given PUT `/settings` with a foreign Origin → 403; with `text/plain` → 422 `validation_error` as on the sibling routes (D14); the status
   route with a foreign Host is refused; Go goldens match the UI contract.
   Traces: NFR7 · Verify: component
 - AC16 [auto] — Given 1,000 open PRs and 10,000 records in a throwaway database, when 50 evaluations run, then p95
@@ -385,6 +385,12 @@ condition selected"; `paused_spend_cap` (warn) "Paused — spend cap reached" + 
 - D10 — Q7 `auto` runs count in Agent Performance `runs_local`; no new field (user approved default, 2026-10-23).
 - D11 — Q8 Settings section key `automatic-reviews` (user approved default, 2026-10-23).
 - D12 — Q9 `prs_tracked` counts every stored open PR, drafts included (user approved default, 2026-10-23).
+- D13 — Automatic reviews start only for PRs whose head branch is in the same repository (no forks). A fork PR is recorded
+  `skipped_fork` and can still be reviewed manually. Poll stores the PR's head repository; migration 0007 (security r1 M1;
+  user, 2026-10-25). A PR whose head repository is not known yet (NULL, e.g. stored before 0007) gets no record and no start
+  until a poll stores the value; a deleted fork (`head.repo` null in GitHub's payload) counts as a fork (user, 2026-10-25,
+  accepting the fix-round reading: a recorded skip is permanent).
+- D14 — AC15 wording: `text/plain` on PUT /settings answers 422 `validation_error`, as on the sibling routes (W4 finding).
 
 ## 17. Open questions
 None — Q1–Q9 were resolved on 2026-10-23 by accepting their defaults (D4–D12).

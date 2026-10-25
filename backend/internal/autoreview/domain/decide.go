@@ -25,6 +25,7 @@ const (
 	OutcomeSkippedAlreadyReviewed Outcome = "skipped_already_reviewed"
 	OutcomeSkippedNoAgents        Outcome = "skipped_no_agents"
 	OutcomeSkippedSpendCap        Outcome = "skipped_spend_cap"
+	OutcomeSkippedFork            Outcome = "skipped_fork"
 	OutcomeFailed                 Outcome = "failed"
 )
 
@@ -32,7 +33,7 @@ const (
 func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeStarted, OutcomeSkippedTriggerOff, OutcomeSkippedAlreadyReviewed,
-		OutcomeSkippedNoAgents, OutcomeSkippedSpendCap, OutcomeFailed:
+		OutcomeSkippedNoAgents, OutcomeSkippedSpendCap, OutcomeSkippedFork, OutcomeFailed:
 		return true
 	default:
 		return false
@@ -65,6 +66,12 @@ type Candidate struct {
 	LastReviewedSHA string
 	// HasAnyRecord is true when the PR has an auto-review record for some head SHA.
 	HasAnyRecord bool
+	// IsFork is true when the PR's head branch is in another repository than its base (D13), or
+	// GitHub named no head repository (a deleted fork).
+	IsFork bool
+	// HeadRepoUnknown is true when the poll has not stored the head repository of the PR yet (a row
+	// from before migration 0007). IsFork is meaningless then; Decide defers the PR.
+	HeadRepoUnknown bool
 	// Running is true when the PR has a review run in progress, whatever its source.
 	Running bool
 	// UpdatedAt is GitHub's update time of the PR; nil when unknown (it sorts last).
@@ -169,8 +176,11 @@ type Decision struct {
 	Outcome Outcome // ActionRecord only
 }
 
-// Decide applies the rules of FR5 and FR6 to one candidate, in order: the trigger condition of its
-// event is not ticked -> record skipped_trigger_off; (a) a review is running -> defer; (b) the last
+// Decide applies the rules of FR5, FR6 and D13 to one candidate, in order: the head repository is
+// not stored yet (a row from before migration 0007) -> defer, so nothing is started or recorded on a
+// guess and the next poll decides; the head is in another repository -> record skipped_fork,
+// whatever the setting says (D13: a fork PR, which anyone can open, never spends the budget); the
+// trigger condition of its event is not ticked -> record skipped_trigger_off; (a) a review is running -> defer; (b) the last
 // reviewed SHA equals the head -> record skipped_already_reviewed; (c) agents (the effective agents)
 // is empty -> record skipped_no_agents; (d) the budget: unknown -> ask, denied -> record
 // skipped_spend_cap, error -> defer; (e) rateLeft is used up -> defer; (f) start. A setting that is
@@ -182,6 +192,10 @@ func Decide(c Candidate, s Setting, agents []string, budget Budget, rateLeft int
 	ev := EventFor(c)
 	record := func(o Outcome) Decision { return Decision{Action: ActionRecord, Event: ev, Outcome: o} }
 	switch {
+	case c.HeadRepoUnknown:
+		return Decision{Action: ActionDefer, Event: ev}
+	case c.IsFork:
+		return record(OutcomeSkippedFork)
 	case !s.Ticked(ev):
 		return record(OutcomeSkippedTriggerOff)
 	case c.Running:

@@ -134,6 +134,44 @@ func TestUpsertListed_insertThenUpdateOnlyListFields(t *testing.T) {
 	}
 }
 
+// TestUpsertListed_storesHeadRepositoryAndRefreshesIt (D13): the poll writes head_is_fork on insert
+// and on every refresh; a row from before migration 0007 stays NULL until the poll touches it.
+func TestUpsertListed_storesHeadRepositoryAndRefreshesIt(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	read := func(number int) *bool {
+		t.Helper()
+		var row struct{ HeadIsFork *bool }
+		scan(t, f.db, &row, `SELECT head_is_fork FROM pull_requests WHERE repo_id = ? AND number = ?`, f.repoID, number)
+		return row.HeadIsFork
+	}
+	listed := func(number int, fork bool) domain.Listed {
+		return domain.Listed{Number: number, Title: "t", Author: "a", Branch: "feat", Base: "main", HeadSHA: "h",
+			Status: "open", OpenedAt: day(1, 9), UpdatedAt: day(2, 9), HeadIsFork: fork}
+	}
+	if err := f.store.UpsertListed(ctx, f.wsID, f.repoID, []domain.Listed{listed(71, false), listed(72, true)}); err != nil {
+		t.Fatalf("UpsertListed() error = %v", err)
+	}
+	if got := read(71); got == nil || *got {
+		t.Errorf("head_is_fork of the same-repo PR = %v, want false", got)
+	}
+	if got := read(72); got == nil || !*got {
+		t.Errorf("head_is_fork of the fork PR = %v, want true", got)
+	}
+
+	// A row from before the column (NULL) and a changed head repository are refreshed by the poll.
+	exec(t, f.db, `UPDATE pull_requests SET head_is_fork = NULL WHERE repo_id = ? AND number = 71`, f.repoID)
+	if err := f.store.UpsertListed(ctx, f.wsID, f.repoID, []domain.Listed{listed(71, false), listed(72, false)}); err != nil {
+		t.Fatalf("UpsertListed() second error = %v", err)
+	}
+	if got := read(71); got == nil || *got {
+		t.Errorf("head_is_fork of the refreshed legacy PR = %v, want false", got)
+	}
+	if got := read(72); got == nil || *got {
+		t.Errorf("head_is_fork after the refresh = %v, want false", got)
+	}
+}
+
 type mergeState struct {
 	MergedAt *time.Time
 	ClosedAt *time.Time

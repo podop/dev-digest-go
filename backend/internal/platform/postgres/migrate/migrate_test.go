@@ -940,6 +940,109 @@ func TestMigration0006_AutoReviewRecords(t *testing.T) {
 	}
 }
 
+// TestMigration0007_PRHeadRepo: Up adds the nullable head_is_fork column (old rows stay NULL) and
+// widens the outcome rule to 'skipped_fork' (D13); Down drops the column, turns stored
+// 'skipped_fork' records into 'skipped_trigger_off' (lossy, documented) and restores the old rule;
+// Up again restores version 7.
+func TestMigration0007_PRHeadRepo(t *testing.T) {
+	upTo6Names := []string{"0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes", "0005_cost_ledger", "0006_auto_review_records"}
+	upTo7Names := append(append([]string{}, upTo6Names...), "0007_pr_head_repo")
+
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+	if _, err := newMigrator(t, db, embeddedFS(t, upTo6Names...)).Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-6 error = %v", err)
+	}
+	if _, err := db.ExecContext(t.Context(), autoReviewFixture); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	exec := func(q string) error {
+		_, err := db.ExecContext(t.Context(), q)
+		return err
+	}
+	const ws = "00000000-0000-0000-0000-0000000000a1"
+	const pr1, pr2 = "00000000-0000-0000-0000-0000000000c1", "00000000-0000-0000-0000-0000000000c2"
+	record := func(pr, sha, outcome string) string {
+		return `INSERT INTO auto_review_records (workspace_id, pr_id, head_sha, event, outcome, runs_started, decided_at)
+		  VALUES ('` + ws + `', '` + pr + `', '` + sha + `', 'new_pr', '` + outcome + `', 0, '2026-10-25 12:00:00+00')`
+	}
+	if err := exec(record(pr1, "x0", "skipped_fork")); err == nil {
+		t.Errorf("version 6 accepts outcome 'skipped_fork', want its rule to reject it")
+	}
+	before := catalog(t, db)
+
+	upTo7 := embeddedFS(t, upTo7Names...)
+	all, err := migrate.Load(upTo7)
+	if err != nil {
+		t.Fatalf("Load(versions 1-7) error = %v", err)
+	}
+	if len(all) != 7 || all[6].Version != 7 || all[6].Name != "pr_head_repo" {
+		t.Fatalf("Load(versions 1-7) = %d migrations, last %+v, want 7 ending in version 7 pr_head_repo", len(all), all[len(all)-1])
+	}
+	m := newMigrator(t, db, upTo7)
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 7 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+
+	const oldRule = "constraint auto_review_records auto_review_records_outcome_chk c CHECK ((outcome = ANY (ARRAY['started'::text, 'skipped_trigger_off'::text, 'skipped_already_reviewed'::text, 'skipped_no_agents'::text, 'skipped_spend_cap'::text, 'failed'::text])))"
+	const newRule = "constraint auto_review_records auto_review_records_outcome_chk c CHECK ((outcome = ANY (ARRAY['started'::text, 'skipped_trigger_off'::text, 'skipped_already_reviewed'::text, 'skipped_no_agents'::text, 'skipped_spend_cap'::text, 'skipped_fork'::text, 'failed'::text])))"
+	if diff := cmp.Diff([]string{oldRule}, onlyIn(before, afterUp)); diff != "" {
+		t.Errorf("objects removed by 0007 mismatch (-want +got):\n%s", diff)
+	}
+	added := onlyIn(afterUp, before)
+	if len(added) != 2 || added[1] != newRule ||
+		!strings.HasPrefix(added[0], "column pull_requests.head_is_fork #") ||
+		!strings.HasSuffix(added[0], " boolean default=<none> generated= identity=") {
+		t.Errorf("objects added by 0007 = %q, want the nullable boolean column head_is_fork without default, and the widened outcome rule", added)
+	}
+	if got := queryStrings(t, db, `SELECT count(*)::text FROM pull_requests WHERE head_is_fork IS NULL`); !cmp.Equal(got, []string{"2"}) {
+		t.Errorf("pull requests with an unknown head repository after Up = %v, want both fixture rows", got)
+	}
+	if err := exec(`UPDATE pull_requests SET head_is_fork = true WHERE id = '` + pr1 + `'`); err != nil {
+		t.Fatalf("set head_is_fork: %v", err)
+	}
+	if err := exec(record(pr1, "sha1", "skipped_fork")); err != nil {
+		t.Fatalf("record with outcome 'skipped_fork': %v", err)
+	}
+	if err := exec(record(pr2, "sha1", "skipped_spend_cap")); err != nil {
+		t.Fatalf("record with outcome 'skipped_spend_cap': %v", err)
+	}
+	if err := exec(record(pr2, "sha2", "bogus")); err == nil {
+		t.Errorf("unknown outcome accepted after Up, want the outcome rule to reject it")
+	}
+
+	// Down: the fork record becomes skipped_trigger_off, other records are untouched, the column goes.
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 7 {
+		t.Fatalf("Down() = %d, %v, %v, want 7, true, nil", v, ok, err)
+	}
+	wantRecords := []string{pr1 + " sha1 skipped_trigger_off", pr2 + " sha1 skipped_spend_cap"}
+	if diff := cmp.Diff(wantRecords, queryStrings(t, db, `SELECT pr_id || ' ' || head_sha || ' ' || outcome FROM auto_review_records ORDER BY pr_id`)); diff != "" {
+		t.Errorf("records after Down mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0007 differs from version 6 (-v6 +got):\n%s", diff)
+	}
+	if err := exec(record(pr1, "x1", "skipped_fork")); err == nil {
+		t.Errorf("outcome 'skipped_fork' accepted after Down, want the old rule")
+	}
+
+	// Up again: the same schema, the converted record stays converted, every PR is unknown again.
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, `SELECT count(*)::text FROM pull_requests WHERE head_is_fork IS NULL`); !cmp.Equal(got, []string{"2"}) {
+		t.Errorf("pull requests with an unknown head repository after Down->Up = %v, want 2", got)
+	}
+	if diff := cmp.Diff(wantRecords, queryStrings(t, db, `SELECT pr_id || ' ' || head_sha || ' ' || outcome FROM auto_review_records ORDER BY pr_id`)); diff != "" {
+		t.Errorf("records after Down->Up mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // onlyIn returns the entries of a that are not in b (both sorted).
 func onlyIn(a, b []string) []string {
 	have := make(map[string]bool, len(b))

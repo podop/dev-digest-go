@@ -41,7 +41,7 @@ type store interface {
 	// ListPulls returns the repo's PRs by updated_at descending (nulls last), then number descending.
 	ListPulls(ctx context.Context, workspaceID, repoID string) ([]domain.Pull, error)
 	// UpsertListed inserts new PRs and refreshes title, head_sha, status, updated_at, merged_at,
-	// closed_at and draft of existing ones; it never deletes.
+	// closed_at, draft and head_is_fork of existing ones; it never deletes.
 	UpsertListed(ctx context.Context, workspaceID, repoID string, listed []domain.Listed) error
 	SetDiffStats(ctx context.Context, prID string, stats domain.DiffStats) error
 	// ReplaceDetail writes body, stats, files and commits in one transaction.

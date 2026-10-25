@@ -133,6 +133,35 @@ func TestDecide(t *testing.T) {
 		want domain.Decision
 	}{
 		{"new PR starts", func(*in) {}, domain.Decision{Action: domain.ActionStart, Event: domain.EventNewPR}},
+		{"fork PR is recorded (D13)", func(i *in) { i.c.IsFork = true },
+			rec(domain.EventNewPR, domain.OutcomeSkippedFork)},
+		{"fork PR with new commits is recorded", func(i *in) {
+			i.c.IsFork = true
+			i.c.HasAnyRecord = true
+		}, rec(domain.EventNewCommits, domain.OutcomeSkippedFork)},
+		{"fork wins over every other rule", func(i *in) {
+			i.c.IsFork = true
+			i.c.Running = true
+			i.c.LastReviewedSHA = i.c.HeadSHA
+			i.s.OnNewPR = false
+			i.agents = nil
+			i.budget = domain.BudgetDenied
+			i.rate = 0
+		}, rec(domain.EventNewPR, domain.OutcomeSkippedFork)},
+		{"fork is recorded before the budget is asked", func(i *in) {
+			i.c.IsFork = true
+			i.budget = domain.BudgetUnknown
+		}, rec(domain.EventNewPR, domain.OutcomeSkippedFork)},
+		{"unknown head repository defers without a record", func(i *in) { i.c.HeadRepoUnknown = true },
+			deferred(domain.EventNewPR)},
+		{"unknown head repository wins over fork", func(i *in) {
+			i.c.HeadRepoUnknown = true
+			i.c.IsFork = true
+		}, deferred(domain.EventNewPR)},
+		{"fork PR with the setting not armed still defers", func(i *in) {
+			i.c.IsFork = true
+			i.s.Enabled = false
+		}, domain.Decision{Action: domain.ActionDefer}},
 		{"new commits start", func(i *in) { i.c.HasAnyRecord = true },
 			domain.Decision{Action: domain.ActionStart, Event: domain.EventNewCommits}},
 		{"new PR with on_new_pr off is recorded", func(i *in) { i.s.OnNewPR = false },
@@ -192,7 +221,7 @@ func TestDecide(t *testing.T) {
 
 func TestOutcomeAndEventValid(t *testing.T) {
 	for _, o := range []domain.Outcome{domain.OutcomeStarted, domain.OutcomeSkippedTriggerOff,
-		domain.OutcomeSkippedAlreadyReviewed, domain.OutcomeSkippedNoAgents, domain.OutcomeSkippedSpendCap, domain.OutcomeFailed} {
+		domain.OutcomeSkippedAlreadyReviewed, domain.OutcomeSkippedNoAgents, domain.OutcomeSkippedSpendCap, domain.OutcomeSkippedFork, domain.OutcomeFailed} {
 		if !o.Valid() {
 			t.Errorf("Outcome(%q).Valid() = false, want true", o)
 		}

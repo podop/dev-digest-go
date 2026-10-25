@@ -81,6 +81,7 @@ type prSpec struct {
 	lastReviewed string
 	openedAt     *time.Time // default: after; use noTime for NULL
 	updatedAt    *time.Time
+	headRepo     string // default: the PR's own repository; "fork" or "unknown" (NULL)
 }
 
 var noTime = new(time.Time) // marks a NULL time in prSpec.openedAt
@@ -106,11 +107,18 @@ func (f *fixture) pr(t *testing.T, s prSpec) string {
 	if s.lastReviewed != "" {
 		last = &s.lastReviewed
 	}
+	var isFork *bool
+	switch s.headRepo {
+	case "":
+		isFork = ptr(false)
+	case "fork":
+		isFork = ptr(true)
+	}
 	f.next++
 	return f.insert(t, `INSERT INTO pull_requests
-		(id, workspace_id, repo_id, number, title, author, branch, base, head_sha, last_reviewed_sha, status, draft, opened_at, updated_at)
-		VALUES (COALESCE(NULLIF(?, '')::uuid, gen_random_uuid()), ?, ?, ?, 't', 'dev', 'feat', 'main', ?, ?, ?, ?, ?, ?) RETURNING id`,
-		s.id, s.ws, s.repo, f.next, s.head, last, s.status, s.draft, s.openedAt, s.updatedAt)
+		(id, workspace_id, repo_id, number, title, author, branch, base, head_sha, last_reviewed_sha, status, draft, opened_at, updated_at, head_is_fork)
+		VALUES (COALESCE(NULLIF(?, '')::uuid, gen_random_uuid()), ?, ?, ?, 't', 'dev', 'feat', 'main', ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		s.id, s.ws, s.repo, f.next, s.head, last, s.status, s.draft, s.openedAt, s.updatedAt, isFork)
 }
 
 func (f *fixture) record(t *testing.T, ws, pr, head string, ev domain.Event, o domain.Outcome, runs int, at time.Time) {
@@ -161,6 +169,27 @@ func TestCandidates_FR4Rules(t *testing.T) {
 	c := got[0]
 	if c.Repo != "acme/api" || c.HeadSHA != "h1" || c.Number == 0 || c.HasAnyRecord || c.Running || c.LastReviewedSHA != "" {
 		t.Errorf("Candidates()[0] = %+v, want acme/api at h1, no record, not running, never reviewed", c)
+	}
+}
+
+// TestCandidates_HeadRepository (D13): fork, same-repository and unknown (NULL) head repositories
+// are all candidates, each with the flags the trigger decides on; the unknown one is not a fork.
+func TestCandidates_HeadRepository(t *testing.T) {
+	f := newFixture(t)
+	same := f.pr(t, prSpec{updatedAt: ptr(before)})
+	fork := f.pr(t, prSpec{updatedAt: ptr(before.Add(time.Minute)), headRepo: "fork"})
+	unknown := f.pr(t, prSpec{updatedAt: ptr(before.Add(2 * time.Minute)), headRepo: "unknown"})
+
+	got := f.candidates(t)
+	if diff := cmp.Diff([]string{same, fork, unknown}, ids(got)); diff != "" {
+		t.Fatalf("Candidates() ids mismatch (-want +got):\n%s", diff)
+	}
+	type flags struct{ IsFork, HeadRepoUnknown bool }
+	want := []flags{{false, false}, {true, false}, {false, true}}
+	for i, c := range got {
+		if g := (flags{c.IsFork, c.HeadRepoUnknown}); g != want[i] {
+			t.Errorf("Candidates()[%d] (IsFork, HeadRepoUnknown) = %+v, want %+v", i, g, want[i])
+		}
 	}
 }
 
@@ -387,6 +416,22 @@ func TestClaim_ConcurrentClaimsHaveOneWinner(t *testing.T) {
 	}
 	if winners != 1 {
 		t.Errorf("claims won = %d of %d, want exactly 1", winners, n)
+	}
+}
+
+// TestClaim_ForkRecord: a skipped_fork record is stored, takes its head out of the candidates, and
+// does not count against the start rate.
+func TestClaim_ForkRecord(t *testing.T) {
+	f := newFixture(t)
+	pr := f.pr(t, prSpec{headRepo: "fork"})
+	if ok, err := f.store.Claim(t.Context(), rec(f, pr, "h1", domain.OutcomeSkippedFork, 0, decided)); err != nil || !ok {
+		t.Fatalf("Claim(skipped_fork) = %v, %v, want true, nil", ok, err)
+	}
+	if got := f.candidates(t); len(got) != 0 {
+		t.Errorf("Candidates() after the fork record = %v, want none", ids(got))
+	}
+	if n, err := f.store.StartedSince(t.Context(), f.ws, before); err != nil || n != 0 {
+		t.Errorf("StartedSince() = %d, %v, want 0, nil", n, err)
 	}
 }
 

@@ -83,9 +83,50 @@ func prJSON(n int, state string, mergedAt any, user any) map[string]any {
 	return map[string]any{
 		"number": n, "title": fmt.Sprintf("PR %d", n), "user": user, "state": state, "merged_at": mergedAt,
 		"closed_at": nil, "draft": false,
-		"head": map[string]any{"ref": "feat", "sha": "abc123"}, "base": map[string]any{"ref": "main"},
+		"head":       map[string]any{"ref": "feat", "sha": "abc123", "repo": map[string]any{"full_name": "acme/api"}},
+		"base":       map[string]any{"ref": "main", "repo": map[string]any{"full_name": "acme/api"}},
 		"created_at": "2026-10-01T10:00:00Z", "updated_at": "2026-10-02T11:30:00Z",
 		"body": "closes #99", "additions": 7, "deletions": 3, "changed_files": 2,
+	}
+}
+
+// TestListPullRequests_HeadIsFork (D13): only a head repository that is shown to be the base
+// repository is not a fork; another repository, a deleted fork (null head repository) and a payload
+// without repositories all count as forks.
+func TestListPullRequests_HeadIsFork(t *testing.T) {
+	t.Parallel()
+	repo := func(name string) map[string]any { return map[string]any{"full_name": name} }
+	tests := []struct {
+		name       string
+		head, base any
+		want       bool
+	}{
+		{"same repository", repo("acme/api"), repo("acme/api"), false},
+		{"same repository, other case", repo("Acme/API"), repo("acme/api"), false},
+		{"fork of another owner", repo("mallory/api"), repo("acme/api"), true},
+		{"fork with the same owner and another name", repo("acme/api-fork"), repo("acme/api"), true},
+		{"deleted fork", nil, repo("acme/api"), true},
+		{"no base repository", repo("acme/api"), nil, true},
+		{"no repositories", nil, nil, true},
+		{"empty names", repo(""), repo(""), true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			s := newStub(t, func(w http.ResponseWriter, r *http.Request) {
+				p := prJSON(1, "open", nil, map[string]any{"login": "octo"})
+				p["head"] = map[string]any{"ref": "feat", "sha": "abc123", "repo": tc.head}
+				p["base"] = map[string]any{"ref": "main", "repo": tc.base}
+				writeJSON(w, 200, []any{p})
+			})
+			got, err := newClient(s, github.Options{}).ListPullRequests(t.Context(), "acme", "api")
+			if err != nil || len(got) != 1 {
+				t.Fatalf("ListPullRequests() = %v, %v, want one PR", got, err)
+			}
+			if got[0].HeadIsFork != tc.want {
+				t.Errorf("ListPullRequests() HeadIsFork = %v, want %v", got[0].HeadIsFork, tc.want)
+			}
+		})
 	}
 }
 

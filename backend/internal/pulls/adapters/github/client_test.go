@@ -37,6 +37,29 @@ func reply(status int, v any) http.HandlerFunc {
 	}
 }
 
+// TestListPullRequests_mapsHeadIsFork (D13): the adapter carries the platform client's fork flag
+// into the listed PR, for the list and for the detail fetch.
+func TestListPullRequests_mapsHeadIsFork(t *testing.T) {
+	repo := func(name string) map[string]any { return map[string]any{"full_name": name} }
+	pull := func(number int, head any) map[string]any {
+		return map[string]any{
+			"number": number, "title": "T", "user": nil,
+			"head": map[string]any{"ref": "f", "sha": "s", "repo": head}, "base": map[string]any{"ref": "main", "repo": repo("acme/api")},
+			"state": "open", "merged_at": nil, "draft": false, "created_at": "2026-10-01T00:00:00Z", "updated_at": "2026-10-03T00:00:00Z",
+		}
+	}
+	a := newAdapter(t, "tok", reply(200, []map[string]any{pull(1, repo("acme/api")), pull(2, repo("mallory/api")), pull(3, nil)}))
+	got, err := a.ListPullRequests(t.Context(), "acme", "api")
+	if err != nil || len(got) != 3 {
+		t.Fatalf("ListPullRequests() = %d items, %v, want 3, nil", len(got), err)
+	}
+	for i, want := range []bool{false, true, true} {
+		if got[i].HeadIsFork != want {
+			t.Errorf("ListPullRequests()[%d] (#%d) HeadIsFork = %v, want %v", i, got[i].Number, got[i].HeadIsFork, want)
+		}
+	}
+}
+
 func TestListPullRequests_mapsFields(t *testing.T) {
 	a := newAdapter(t, "tok", reply(200, []map[string]any{{
 		"number": 3, "title": "T", "user": nil, "head": map[string]string{"ref": "f", "sha": "s"}, "base": map[string]string{"ref": "main"},
