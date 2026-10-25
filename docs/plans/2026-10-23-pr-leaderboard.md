@@ -1,5 +1,5 @@
 # Development Plan: PR Leaderboard
-Plan: PR Leaderboard · Status: approved · Spec: specs/2026-10-23-pr-leaderboard.md · Base: feat/go-backend-phase-1@eacb860
+Plan: PR Leaderboard · Status: done (2026-10-24) · Spec: specs/2026-10-23-pr-leaderboard.md · Base: feat/go-backend-phase-1@eacb860
 Packages: backend, frontend · Context pack: docs/plans/2026-10-23-pr-leaderboard.context.md
 Execution: multi-agent, parallel lanes per wave (user)
 

@@ -1,5 +1,5 @@
 # Development Plan: Settings B — Workspace
-Plan: Settings B · Status: approved (user pre-approval 2026-10-25: no critical remarks; A0–A12 accepted; spec D22–D27) · Spec: specs/2026-10-23-settings-b-workspace.md · Base: feat/go-backend-phase-1@efaa348
+Plan: Settings B · Status: done (2026-10-25) · Spec: specs/2026-10-23-settings-b-workspace.md · Base: feat/go-backend-phase-1@efaa348
 Packages: backend, frontend · Context pack: docs/plans/2026-10-25-settings-b-workspace.context.md
 Execution: multi-agent, parallel lanes (default, A0)
 

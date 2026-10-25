@@ -1,5 +1,5 @@
 # PR Leaderboard
-Spec: PR Leaderboard (global page, read API, merge timestamps, background PR poll) · Status: ready-for-planning · Date: 2026-10-23
+Spec: PR Leaderboard (global page, read API, merge timestamps, background PR poll) · Status: implemented (2026-10-24, 4ce720b; AC12 accepted with deviation D27) · Date: 2026-10-23
 Areas: api, ui, sync, db
 Design sources: two screenshots of a Claude Design mock-up supplied by the user on 2026-10-23 (page top: KPIs, awards,
 leaderboard, needs attention; page bottom: rows 6–11, hot files, health by PR size, daily activity). The original design

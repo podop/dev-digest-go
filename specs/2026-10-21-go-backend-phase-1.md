@@ -1,5 +1,5 @@
 # Go backend migration — Phase 1: platform and core data
-Spec: Go backend Phase 1 (platform + settings, repos, pulls, polling, workspace) · Status: ready-for-planning · Date: 2026-10-21
+Spec: Go backend Phase 1 (platform + settings, repos, pulls, polling, workspace) · Status: implemented (2026-10-22, gate r2 PASS; open: AC97 user walkthrough with a GitHub token) · Date: 2026-10-21
 Areas: http, db, seed, settings, repos, jobs, pulls, ops
 Design sources: task brief (user decisions, 2026-10-21); `CLAUDE.md`; `docs/migration/README.md`; `docs/migration/research/01-http-api.md`, `02-data-layer.md`, `03-engine-integrations.md`; contracts `frontend/src/vendor/shared/contracts/platform.ts`; UI `frontend/src/lib/api.ts`, `frontend/src/lib/hooks/core.ts` and the Settings, PR list and PR detail screens; Node reference `<dev-digest>` = `/home/ypodop/IdeaProjects/dev-digest` (commit d1c9093), read through six research reports made for this spec (R-settings, R-repos, R-pulls, R-http, R-seed, R-ui). No design frames.
 Related: none (first spec of the migration; `docs/migration/README.md` phases 2–6 get their own specs)

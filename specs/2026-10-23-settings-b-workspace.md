@@ -1,5 +1,5 @@
 # Settings B — Workspace
-Spec: Settings B — Workspace (name, data directory, retention prune, counts, export, reset run history) · Status: ready-for-planning · Date: 2026-10-23
+Spec: Settings B — Workspace (name, data directory, retention prune, counts, export, reset run history) · Status: implemented (2026-10-25, 43bb6d3..4b287c4; AC23 PASS with thin reset margin D28) · Date: 2026-10-23
 Areas: api, prune, ui
 Design sources: accepted design `docs/design/2026-10-23-settings-first-run.md` (§4 Slice B, §5, §7, §8 binding; Q4: reset
 also deletes learnings); prototype extraction `proto-screens.md` §3.3 (Workspace) of the user's Claude Design bundle

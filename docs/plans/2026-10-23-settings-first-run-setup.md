@@ -1,5 +1,5 @@
 # Development Plan: Settings A — shell, API Keys, GitHub, About, first-run setup
-Plan: Settings A · Status: approved (user, 2026-10-24: A0–A14 accepted, SCR1 → spec D23, SCR2 measure first) · Spec: specs/2026-10-23-settings-first-run-setup.md · Base: feat/go-backend-phase-1@f7fd4a0
+Plan: Settings A · Status: done (2026-10-25, merged ac69763) · Spec: specs/2026-10-23-settings-first-run-setup.md · Base: feat/go-backend-phase-1@f7fd4a0
 Packages: backend, frontend · Context pack: docs/plans/2026-10-23-settings-first-run-setup.context.md ([A] aliases, [C1]–[C3] lane contracts, [D] assumptions)
 Execution: multi-agent, parallel lanes (default, A0)
 

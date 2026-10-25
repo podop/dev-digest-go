@@ -1,5 +1,5 @@
 # Settings shell, API Keys, GitHub Integration, About and First-run setup
-Spec: Settings slice A (settings shell, API Keys with default model and spend cap, GitHub Integration, About, first-run setup) · Status: ready-for-planning · Date: 2026-10-23
+Spec: Settings slice A (settings shell, API Keys with default model and spend cap, GitHub Integration, About, first-run setup) · Status: implemented (2026-10-25, merged ac69763; AC23 accepted D26; AC25 PASS incl. real keys) · Date: 2026-10-23
 Areas: api, ui
 Design sources: `docs/design/2026-10-23-settings-first-run.md` (accepted by the user on 2026-10-23, slice A, decisions
 P1–P8, answers Q1–Q4); the user's Claude Design prototype "DevDigest — App prototype". The screenshots read were
