@@ -43,7 +43,8 @@ func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 // A duplicate dedupe_key inserts nothing (also when a concurrent append of the same key has not
 // committed yet: the insert waits for it), the CTE returns no row and the upsert does nothing, so
 // the statement affects 0 rows. A stored entry affects 1 row. A NULL cost adds 0 to spent_micros
-// and 1 to unpriced_count.
+// and 1 to unpriced_count. The slot total saturates at the bigint maximum instead of failing the
+// append with an overflow (D19): the sum is taken in numeric and clamped.
 const appendSQL = `
 WITH ins AS (
 	INSERT INTO cost_ledger
@@ -62,7 +63,7 @@ SELECT workspace_id,
        1
 FROM ins
 ON CONFLICT (workspace_id, month, slot) DO UPDATE SET
-	spent_micros   = spend_month_totals.spent_micros + EXCLUDED.spent_micros,
+	spent_micros   = LEAST(spend_month_totals.spent_micros::numeric + EXCLUDED.spent_micros, 9223372036854775807::numeric)::bigint,
 	unpriced_count = spend_month_totals.unpriced_count + EXCLUDED.unpriced_count,
 	entry_count    = spend_month_totals.entry_count + EXCLUDED.entry_count`
 
@@ -104,21 +105,20 @@ func slotOf(key string) int {
 	return int(h.Sum32() % slots)
 }
 
-// monthTotalSQL sums the (at most 8) slot rows of one workspace and month. SUM of bigint is
-// numeric, so it is cast back; no row sums to 0.
-const monthTotalSQL = `
-SELECT COALESCE(SUM(spent_micros), 0)::bigint AS spent, COALESCE(SUM(unpriced_count), 0)::bigint AS unpriced
-FROM spend_month_totals
-WHERE workspace_id = @ws AND month = @month`
+// maxBigint is the largest spent_micros; the month total saturates here (D19).
+const maxBigint = "9223372036854775807"
 
 // MonthTotal implements app.Totals: the stored total of the workspace and the UTC month that
 // contains month.
 func (s *Store) MonthTotal(ctx context.Context, workspaceID string, month time.Time) (domain.MonthTotal, error) {
+	// SUM of bigint is numeric, so it is cast back after clamping the sum of the (at most 8) slot
+	// rows at the bigint maximum; no row sums to 0.
 	var row struct{ Spent, Unpriced int64 }
-	err := platformpg.Conn(ctx, s.db).Raw(monthTotalSQL, map[string]any{
-		"ws":    workspaceID,
-		"month": domain.MonthStart(month).Format(time.DateOnly),
-	}).Scan(&row).Error
+	err := platformpg.Conn(ctx, s.db).Table("spend_month_totals").
+		Select("CAST(LEAST(COALESCE(SUM(spent_micros), 0), "+maxBigint+") AS bigint) AS spent, "+
+			"CAST(COALESCE(SUM(unpriced_count), 0) AS bigint) AS unpriced").
+		Where("workspace_id = ? AND month = ?", workspaceID, domain.MonthStart(month).Format(time.DateOnly)).
+		Scan(&row).Error
 	if err != nil {
 		return domain.MonthTotal{}, fmt.Errorf("read month total: %w", err)
 	}

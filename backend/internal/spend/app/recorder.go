@@ -18,6 +18,11 @@ import (
 // call, so a slow database must not hold the call longer (A10, D3).
 const appendTimeout = 3 * time.Second
 
+// maxCIRunCost is the largest cost a CI run may report and still count (D19). CI artifacts are
+// written by a workflow in the user's repository, so the reported cost is not trusted: a larger
+// one is recorded as unknown, so a forged artifact cannot pin the month at its cap.
+const maxCIRunCost domain.Micros = 10_000 * 1_000_000
+
 // Recorder turns the usage of an answered LLM attempt, and a newly ingested CI run, into ledger
 // entries. It implements llm.Recorder. internal/llm is shared infrastructure, imported by the
 // feature contexts' app packages alike.
@@ -109,8 +114,18 @@ type CIRun struct {
 // RecordUsage it runs on the caller's context as is, so the append joins the transaction that
 // stores the run, and it returns the error: a failed append must roll the run back. Recording a
 // run that already has its entry (same run id and attempt) is a no-op, not an error: after a
-// history reset a re-ingested run is new for CI and only this key stops double counting.
+// history reset a re-ingested run is new for CI and only this key stops double counting. A
+// reported cost above maxCIRunCost is stored as unknown, with one WARN line (D19).
 func (r *Recorder) RecordCIRun(ctx context.Context, run CIRun) error {
+	cost := domain.CostFromUSD(run.CostUSD)
+	if cost != nil && *cost > maxCIRunCost {
+		r.log.WarnContext(context.WithoutCancel(ctx), "cost ledger: ci run reports an implausible cost; recorded as unknown",
+			"workspace_id", run.WorkspaceID,
+			"github_run_id", run.GithubRunID,
+			"attempt", run.Attempt,
+		)
+		cost = nil
+	}
 	e := domain.Entry{
 		WorkspaceID: run.WorkspaceID,
 		OccurredAt:  run.OccurredAt.UTC(),
@@ -118,7 +133,7 @@ func (r *Recorder) RecordCIRun(ctx context.Context, run CIRun) error {
 		Origin:      domain.OriginCIIngest,
 		Provider:    deref(run.Provider),
 		Model:       deref(run.Model),
-		Cost:        domain.CostFromUSD(run.CostUSD),
+		Cost:        cost,
 		RefID:       refID(run.AgentRunID),
 		DedupeKey:   domain.CIDedupeKey(run.GithubRunID, run.Attempt),
 	}

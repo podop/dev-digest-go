@@ -449,6 +449,63 @@ func TestRecorder_RecordCIRun(t *testing.T) {
 	}
 }
 
+// D19: a reported cost above $10,000 is unknown (and counted as unpriced), with one WARN line that
+// names the workspace and the GitHub run and nothing else; $10,000 exactly is kept.
+func TestRecorder_RecordCIRun_ImplausibleCostIsUnknown(t *testing.T) {
+	tests := []struct {
+		name     string
+		cost     float64
+		wantCost *domain.Micros
+		wantWarn bool
+	}{
+		{"exactly the ceiling is kept", 10000, micros(10_000_000_000), false},
+		{"just under the ceiling is kept", 9999.99, micros(9_999_990_000), false},
+		{"one cent over the ceiling is unknown", 10000.01, nil, true},
+		{"a forged huge cost is unknown", 9.9e11, nil, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := &fakeEntries{}
+			rec, logs := newRecorder(entries)
+			run := ciRun()
+			run.CostUSD = f64(tc.cost)
+
+			if err := rec.RecordCIRun(t.Context(), run); err != nil {
+				t.Fatalf("RecordCIRun(cost %v) = %v, want nil", tc.cost, err)
+			}
+
+			got := entries.entries()
+			if len(got) != 1 {
+				t.Fatalf("RecordCIRun(cost %v) appended %d entries, want 1", tc.cost, len(got))
+			}
+			if diff := cmp.Diff(tc.wantCost, got[0].Cost); diff != "" {
+				t.Errorf("RecordCIRun(cost %v) cost mismatch (-want +got):\n%s", tc.cost, diff)
+			}
+			lines := logLines(t, logs)
+			if !tc.wantWarn {
+				if len(lines) != 0 {
+					t.Errorf("RecordCIRun(cost %v) logged %q, want nothing", tc.cost, logs.String())
+				}
+				return
+			}
+			if len(lines) != 1 || lines[0]["level"] != "WARN" {
+				t.Fatalf("RecordCIRun(cost %v) logged %q, want exactly one WARN line", tc.cost, logs.String())
+			}
+			want := map[string]any{"workspace_id": wsID, "github_run_id": float64(9001), "attempt": float64(2)}
+			for k, v := range want {
+				if lines[0][k] != v {
+					t.Errorf("WARN line %s = %v, want %v", k, lines[0][k], v)
+				}
+			}
+			for _, k := range []string{"cost_usd", "provider", "model", "ref_id"} {
+				if _, ok := lines[0][k]; ok {
+					t.Errorf("WARN line carries %q, want the workspace and the run only", k)
+				}
+			}
+		})
+	}
+}
+
 func TestRecorder_RecordCIRun_IsIdempotent(t *testing.T) {
 	entries := &fakeEntries{}
 	rec, _ := newRecorder(entries)

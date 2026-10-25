@@ -48,6 +48,9 @@ func dollars(m Micros) string {
 	if m < 0 {
 		sign, m = "-", -m
 	}
-	cents := (int64(m) + microsPerUSD/200) / (microsPerUSD / 100)
-	return fmt.Sprintf("%s$%d.%02d", sign, cents/100, cents%100)
+	// Whole dollars are split off first, so a saturated total (the bigint maximum) does not
+	// overflow when the half cent is added.
+	whole, rest := int64(m)/microsPerUSD, int64(m)%microsPerUSD
+	cents := (rest + microsPerUSD/200) / (microsPerUSD / 100) // 0..100
+	return fmt.Sprintf("%s$%d.%02d", sign, whole+cents/100, cents%100)
 }

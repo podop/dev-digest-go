@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -114,6 +115,11 @@ func TestStatus_Shape(t *testing.T) {
 			"six decimals on the wire",
 			domain.Status{MonthStart: month, Spent: 1, Cap: micros(1_000_001)},
 			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":0.000001,"cap_usd":1.000001,"remaining_usd":1,"cap_reached":false,"unpriced_count":0}`,
+		},
+		{
+			"a saturated total (bigint maximum) is a plain 200",
+			domain.Status{MonthStart: month, Spent: math.MaxInt64, Cap: micros(50_000_000)},
+			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":9223372036854.775,"cap_usd":50,"remaining_usd":0,"cap_reached":true,"unpriced_count":0}`,
 		},
 		{
 			"unpriced calls are counted, not summed",

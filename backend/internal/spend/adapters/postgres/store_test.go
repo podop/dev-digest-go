@@ -544,6 +544,41 @@ func TestMonthTotal_sumsAllSlots(t *testing.T) {
 	}
 }
 
+// TestAppend_saturatesTheMonthTotal: a slot near the bigint maximum does not fail the append with
+// an overflow; it saturates, and so does the sum of several saturated slots (D19, security L2).
+func TestAppend_saturatesTheMonthTotal(t *testing.T) {
+	const maxBigint = int64(1<<63 - 1)
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	// Every slot holds the maximum minus 5, so any entry of 10 or more pushes its slot past it.
+	for slot := range pgstore.Slots {
+		l.exec(`INSERT INTO spend_month_totals (workspace_id, month, slot, spent_micros, unpriced_count, entry_count)
+			VALUES (?, '2026-10-01', ?, ?, 0, 1)`, tn.ws, slot, maxBigint-5)
+	}
+
+	for i, cost := range []int64{10, 1_000_000_000_000, maxBigint} {
+		key := fmt.Sprintf("sat-%d", i)
+		if !l.append(entryAt(tn.ws, key, micros(cost), mid)) {
+			t.Fatalf("Append(%s, %d micros) stored = false, want true", key, cost)
+		}
+	}
+	if !l.append(entryAt(tn.ws, "sat-unpriced", nil, mid)) {
+		t.Fatalf("Append(unpriced) on a saturated month stored = false, want true")
+	}
+
+	if got, want := l.count(`SELECT count(*) FROM spend_month_totals WHERE workspace_id = ? AND spent_micros > ?`, tn.ws, maxBigint), 0; got != want {
+		t.Errorf("slots above the bigint maximum = %d, want %d", got, want)
+	}
+	// Eight saturated slots sum past the bigint range; the read clamps instead of failing.
+	got := l.total(tn.ws, mid)
+	if want := (domain.MonthTotal{Spent: domain.Micros(maxBigint), Unpriced: 1}); got != want {
+		t.Errorf("MonthTotal(saturated month) = %+v, want %+v", got, want)
+	}
+	if n := l.count(`SELECT count(*) FROM cost_ledger WHERE workspace_id = ?`, tn.ws); n != 4 {
+		t.Errorf("cost_ledger rows = %d, want 4 (the entries are kept whole)", n)
+	}
+}
+
 func TestClaimBackfillSummary_ClaimsTheRowOnce(t *testing.T) { // FR15
 	l := newLedger(t)
 	err := l.db.Exec(`UPDATE cost_ledger_backfill

@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -43,6 +44,10 @@ func TestStatus(t *testing.T) {
 			"Monthly spend cap of $0.00 reached: $0.00 used since 2026-10-01 (UTC)."},
 		{"half a cent shows one cent", domain.Status{MonthStart: start, Spent: 5_000, Cap: micros(0)}, true, 0, true,
 			"Monthly spend cap of $0.00 reached: $0.01 used since 2026-10-01 (UTC)."},
+		{"saturated total (bigint maximum) does not overflow", domain.Status{MonthStart: start, Spent: math.MaxInt64, Cap: micros(1_000_000_000)}, true, 0, true,
+			"Monthly spend cap of $1000.00 reached: $9223372036854.78 used since 2026-10-01 (UTC)."},
+		{"rounding up carries into the dollars", domain.Status{MonthStart: start, Spent: 49_999_999, Cap: micros(0)}, true, 0, true,
+			"Monthly spend cap of $0.00 reached: $50.00 used since 2026-10-01 (UTC)."},
 		{"month start in another zone prints the UTC date", domain.Status{
 			MonthStart: time.Date(2026, 10, 1, 2, 0, 0, 0, time.FixedZone("x", 2*3600)), Spent: 1_000_000, Cap: micros(1_000_000)}, true, 0, true,
 			"Monthly spend cap of $1.00 reached: $1.00 used since 2026-10-01 (UTC)."},

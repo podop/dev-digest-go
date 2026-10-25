@@ -6,36 +6,40 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+
 	platformpg "dev-digest-go/backend/internal/platform/postgres"
 	"dev-digest-go/backend/internal/spend/app"
 	"dev-digest-go/backend/internal/spend/domain"
 )
 
-// claimBackfillSQL takes the summary row the ledger migration left and stamps it in the same
-// statement, so of several starts exactly one gets the row (once-only report, FR15). It is Raw
-// because GORM's builder has no UPDATE ... RETURNING.
-const claimBackfillSQL = `
-UPDATE public.cost_ledger_backfill
-   SET logged_at = now()
- WHERE id = 1 AND logged_at IS NULL
- RETURNING created, skipped, duration_ms`
+// backfillRow is the single summary row (id = 1) the ledger migration leaves.
+type backfillRow struct {
+	Created    []byte `gorm:"column:created"`
+	Skipped    int64  `gorm:"column:skipped"`
+	DurationMs int64  `gorm:"column:duration_ms"`
+}
+
+func (backfillRow) TableName() string { return "public.cost_ledger_backfill" }
 
 // ClaimBackfillSummary returns the summary of the ledger backfill if no earlier start has claimed
 // it: the row is stamped logged_at = now() as it is read, so a second call (or a concurrent one)
 // gets claimed = false. A kind this build does not know is left out of the counts.
 func (s *Store) ClaimBackfillSummary(ctx context.Context) (summary app.BackfillSummary, claimed bool, err error) {
-	var rows []struct {
-		Created    []byte
-		Skipped    int64
-		DurationMs int64
+	// One UPDATE ... RETURNING takes the row and stamps it, so of several starts exactly one gets
+	// it (once-only report, FR15); the others update no row.
+	var row backfillRow
+	res := platformpg.Conn(ctx, s.db).Model(&row).
+		Clauses(clause.Returning{Columns: []clause.Column{{Name: "created"}, {Name: "skipped"}, {Name: "duration_ms"}}}).
+		Where("id = 1 AND logged_at IS NULL").
+		Updates(map[string]any{"logged_at": gorm.Expr("now()")})
+	if res.Error != nil {
+		return app.BackfillSummary{}, false, fmt.Errorf("claim ledger backfill summary: %w", res.Error)
 	}
-	if err := platformpg.Conn(ctx, s.db).Raw(claimBackfillSQL).Scan(&rows).Error; err != nil {
-		return app.BackfillSummary{}, false, fmt.Errorf("claim ledger backfill summary: %w", err)
-	}
-	if len(rows) == 0 {
+	if res.RowsAffected == 0 {
 		return app.BackfillSummary{}, false, nil
 	}
-	row := rows[0]
 	var perKind map[string]int
 	if err := json.Unmarshal(row.Created, &perKind); err != nil {
 		return app.BackfillSummary{}, false, fmt.Errorf("decode ledger backfill counts: %w", err)

@@ -328,7 +328,7 @@ No other route, status code or field changes.
   and 2,000,000 in the 12 earlier months for the workspace, plus the Settings A NFR4 volumes in the per-feature tables.
 - NFR2 [api] — `GET /settings/spend` p95 ≤ 50 ms at the NFR1 volume. The read time does not grow with the number of
   entries.
-- NFR3 [api] — Appending an entry adds ≤ 10 ms p95 to an LLM call, with 50 concurrent appends to one workspace.
+- NFR3 [api] — Appending an entry adds ≤ 50 ms p95 (D21; was 10 ms) to an LLM call, with 50 concurrent appends to one workspace.
 - NFR4 [api] — Privacy: entries and the FR15 log lines contain no prompt, model output, diff, file path, PR title, key
   or header value. Tests check this with a canary string in the PR title and diff.
 - NFR5 [api] — Exactness: amounts are whole micro-USD. The stored total equals the sum of the entries exactly, with no
@@ -372,7 +372,7 @@ No other route, status code or field changes.
   Traces: FR1, FR2, FR3, FR7 · Verify: integration
 - AC2 [api] — Given a month with a known total, when an intent is refreshed twice, a brief generated twice and a tour
   generated twice, then `GET /settings/spend` `spent_usd` has risen by 6 × $0.00042, and with a cap 1 micro-USD above
-  the old total the next POST `/pulls/:id/brief` answers 402 `spend_cap_reached`.
+  the old total (seed an old total just under a cent, as the cap takes at most 2 decimals) the next POST `/pulls/:id/brief` answers 402 `spend_cap_reached`.
   Traces: FR1, FR4, FR8, EC1, EC2 · Verify: integration
 - AC3 [api] — Given a fake provider whose model has no price, when a review with 2 answers runs, then 2 unknown-cost
   entries exist, `spent_usd` is unchanged and `unpriced_count` is 2. With a cap set above the spend, the next review
@@ -381,8 +381,8 @@ No other route, status code or field changes.
 - AC4 [api] — Given a fake provider, then each of these keeps one entry per answer and the month spend includes them:
   - a review cancelled after 2 of 3 chunks answered → 2 entries;
   - a first invalid answer then a valid re-prompt → 2 entries;
-  - a brief, a tour and a conventions scan whose answer fails output validation → 1 entry each, while the generation
-    fails as today;
+  - a brief, a tour and a conventions scan whose answer fails output validation → one entry per answered attempt
+    (2 each with today's single re-prompt), while the generation fails as today;
   - an eval case aborted by shutdown after its answer → 1 entry.
 
   Traces: FR5, EC4, EC6, EC7 · Verify: integration
@@ -521,6 +521,13 @@ No other route, status code or field changes.
   mock provider (planner SCR2, SCR5; 2026-10-25).
 - D18 — The startup seed's demo costs get no ledger entries; a fresh database shows $0 for the seed month (planner A5;
   2026-10-25).
+- D19 — A CI-ingested run whose reported cost exceeds $10,000 is recorded with an unknown cost (counted in
+  `unpriced_count`) and one WARN line, and the month totals use overflow-safe arithmetic. This stops a forged artifact
+  from pinning the month at the cap or overflowing a total (security r1 L1/L2; orchestrator under the user's
+  pre-approval, 2026-10-25).
+- D20 — AC2 and AC4 wording aligned with D3 and with the 2-decimal cap input (W4 findings, 2026-10-25).
+- D21 — NFR3 threshold relaxed by the user: an append adds ≤ 50 ms p95 at 50 concurrent calls (was 10 ms), pool wait
+  included. A local noisy run measured 24–40 ms (user, 2026-10-25).
 
 ## 17. Open questions
 None — Q1–Q8 were resolved on 2026-10-25 by accepting their defaults (D6–D13).
