@@ -126,6 +126,8 @@ export const SpendStatus = z.object({
   cap_usd: z.number().nullable(),
   remaining_usd: z.number().nullable(),
   cap_reached: z.boolean(),
+  /** Answered calls of the month whose cost is unknown (not in `spent_usd`); absent = none. */
+  unpriced_count: z.number().int().nonnegative().optional(),
 });
 export type SpendStatus = z.infer<typeof SpendStatus>;
 

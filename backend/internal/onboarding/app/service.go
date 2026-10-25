@@ -249,6 +249,7 @@ func (s *Service) callModel(ctx context.Context, repo domain.Repo, provider llm.
 		Reprompts:     domain.Reprompts,
 		Feature:       domain.Feature,
 		CorrelationID: "onboarding:" + repo.ID,
+		Charge:        &llm.Charge{WorkspaceID: repo.WorkspaceID, Kind: llm.KindOnboarding, RefID: repo.ID},
 	})
 	if err != nil {
 		class := classifyModelError(ctx, err)

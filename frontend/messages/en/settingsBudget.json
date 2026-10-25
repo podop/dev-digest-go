@@ -24,6 +24,7 @@
     "placeholder": "No cap",
     "hint": "New LLM work is blocked once the cap is reached. {spent} used this month.",
     "hintNoCap": "No cap · {spent} used this month",
+    "unpriced": "{count, plural, one {# call with unknown cost is not included.} other {# calls with unknown cost are not included.}}",
     "hintLoading": "$… used this month",
     "remaining": "{remaining} remaining of {cap}",
     "reached": "Monthly spend cap of {cap} reached: {spent} used since {since} (UTC). New LLM work is blocked.",

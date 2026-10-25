@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"dev-digest-go/backend/internal/evals/adapters/peers"
 	"dev-digest-go/backend/internal/evals/app/executor"
 	"dev-digest-go/backend/internal/llm"
@@ -35,7 +37,7 @@ type testClient interface {
 func newProviders(c testClient) *peers.Providers {
 	return peers.NewProviders(c, func(cc peers.CallerConfig) reviewerapp.LLM {
 		return llmcall.New(llmcall.Config{
-			Client: c, Provider: cc.Provider, Model: cc.Model, RunID: cc.RunID, OnUsage: cc.OnUsage,
+			Client: c, Provider: cc.Provider, Model: cc.Model, RunID: cc.RunID, Charge: cc.Charge, OnUsage: cc.OnUsage,
 		})
 	})
 }
@@ -129,7 +131,9 @@ func (f *fakeLLMClient) Structured(_ context.Context, r llm.Request) (llm.Result
 func TestProviders_BindsTheCaseIntoTheRequest(t *testing.T) {
 	f := &fakeLLMClient{}
 	p := newProviders(f)
-	port, err := p.Resolve(t.Context(), executor.LLMBinding{Provider: "anthropic", Model: "claude-x", RunID: "run-7"})
+	port, err := p.Resolve(t.Context(), executor.LLMBinding{
+		Provider: "anthropic", Model: "claude-x", RunID: "run-7", WorkspaceID: "ws-1", CaseID: "case-9",
+	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
 	}
@@ -139,6 +143,10 @@ func TestProviders_BindsTheCaseIntoTheRequest(t *testing.T) {
 	r := f.req
 	if r.Provider != llm.Anthropic || r.Model != "claude-x" || r.CorrelationID != "run-7" || r.SessionID != "" || r.Chunk.Index != 1 || r.Chunk.Total != 4 {
 		t.Errorf("request = %+v", r)
+	}
+	want := &llm.Charge{WorkspaceID: "ws-1", Kind: llm.KindEvalCase, RefID: "case-9"}
+	if diff := cmp.Diff(want, r.Charge); diff != "" {
+		t.Errorf("request charge mismatch (-want +got):\n%s", diff)
 	}
 	if got := p.Redact("x"); got != "R(x)" {
 		t.Errorf("Redact() = %q, want it to go through the client", got)

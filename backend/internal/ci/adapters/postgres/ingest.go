@@ -43,14 +43,17 @@ func (s *Store) StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[do
 
 // RecordRun implements app.Store. The unique (github_run_id, run_attempt) is the idempotency key:
 // a second writer of the same attempt waits for the first one's transaction and then inserts
-// nothing, so exactly one of two concurrent refreshes stores the run and the other gets false.
-func (s *Store) RecordRun(ctx context.Context, run domain.NewRun) (bool, error) {
+// nothing, so exactly one of two concurrent refreshes stores the run and the other gets Stored
+// false. A stored run reports the id of its agent_runs row. When ctx carries a caller's
+// transaction (platform postgres InTx), the writes join it: nothing is committed here, so the
+// caller can write the ledger entry of the run in the same transaction.
+func (s *Store) RecordRun(ctx context.Context, run domain.NewRun) (app.Recorded, error) {
 	if err := checkRun(run); err != nil {
-		return false, err
+		return app.Recorded{}, err
 	}
-	stored := false
+	var rec app.Recorded
 	err := s.conn(ctx).Transaction(func(tx *gorm.DB) error {
-		stored = false
+		rec = app.Recorded{}
 		ci := ciRunInsertRow{
 			InstallationID:  run.InstallationID,
 			PRNumber:        run.PRNumber,
@@ -101,13 +104,13 @@ func (s *Store) RecordRun(ctx context.Context, run domain.NewRun) (bool, error) 
 		if link.Error != nil {
 			return fmt.Errorf("link ci run to agent run: %w", link.Error)
 		}
-		stored = true
+		rec = app.Recorded{AgentRunID: agentRun.ID, Stored: true}
 		return nil
 	})
 	if err != nil {
-		return false, err
+		return app.Recorded{}, err
 	}
-	return stored, nil
+	return rec, nil
 }
 
 // Column limits. A verified artifact is hostile input: a value its column cannot hold would fail

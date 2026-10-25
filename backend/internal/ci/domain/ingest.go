@@ -79,6 +79,7 @@ func NewestArtifact(artifacts []RunArtifact, name string) (RunArtifact, bool) {
 // the run's created_at does not parse.
 func NewRunFromArtifact(workspaceID string, inst Installation, run WorkflowRun, a CiResultArtifact, now time.Time) NewRun {
 	n := baseRun(workspaceID, inst, run, now)
+	n.FromArtifact = true
 	n.PRNumber = a.PRNumber
 	if n.PRNumber == nil {
 		n.PRNumber = firstPR(run)

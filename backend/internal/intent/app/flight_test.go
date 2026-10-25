@@ -138,8 +138,14 @@ func TestFlight_ARefreshAndAReviewShareOneCall(t *testing.T) { // EC5007
 		if resp.Intent == nil || resp.Intent.InputHash != baseHash || resp.Stale {
 			t.Errorf("Refresh() = %+v, want the record of the shared derivation, not stale", resp)
 		}
-		if n := len(w.llm.calls()); n != 1 {
-			t.Errorf("LLM calls = %d, want 1", n)
+		calls := w.llm.calls()
+		if len(calls) != 1 {
+			t.Fatalf("LLM calls = %d, want 1", len(calls))
+		}
+		// The review started the flight, so its kind is charged (spec A7).
+		want := &llm.Charge{WorkspaceID: wsID, Kind: llm.KindReviewIntent, RefID: prID}
+		if diff := cmp.Diff(want, calls[0].Charge); diff != "" {
+			t.Errorf("shared derivation Charge mismatch (-want +got):\n%s", diff)
 		}
 	})
 }

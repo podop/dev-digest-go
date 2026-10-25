@@ -46,6 +46,10 @@ type LLMBinding struct {
 	Model    string
 	// RunID is the correlation id of the prompt log line (the suite run's id).
 	RunID string
+	// WorkspaceID and CaseID say who pays for the case's calls and which case they belong to; the
+	// provider adapter turns them into the spend-ledger charge (kind eval_case, ref = the case id).
+	WorkspaceID string
+	CaseID      string
 	// OnUsage receives the usage of every response, schema-invalid attempts included, as it
 	// arrives; the executor sums it so an errored case keeps what it spent. It may be called
 	// from several goroutines.

@@ -76,6 +76,7 @@ func TestResolve_ClassificationRequest(t *testing.T) {
 		},
 		SchemaName: "IntentClassification", MaxTokens: 5000, Reprompts: 1, Feature: "intent",
 		CorrelationID: "intent:" + prID + ":" + baseHash[:12],
+		Charge:        &llm.Charge{WorkspaceID: wsID, Kind: llm.KindReviewIntent, RefID: prID},
 	}
 	opts := []cmp.Option{
 		cmp.FilterPath(func(p cmp.Path) bool { s := p.String(); return s == "Schema" || s == "Temperature" || s == "Sections" }, cmp.Ignore()),
@@ -183,6 +184,32 @@ func TestResolve_ForceSkipsOnlyTheCacheCheck(t *testing.T) {
 	}
 	if n := len(w.llm.calls()); n != 1 {
 		t.Errorf("LLM calls = %d, want 1", n)
+	}
+}
+
+func TestResolve_ChargeKindFollowsWhoStartedTheDerivation(t *testing.T) { // FR1
+	for _, tc := range []struct {
+		name  string
+		force bool
+		want  llm.UsageKind
+	}{
+		{name: "review run", force: false, want: llm.KindReviewIntent},
+		{name: "refresh", force: true, want: llm.KindIntentRefresh},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w := newWorld(t, app.Options{})
+
+			w.svc.Resolve(t.Context(), w.input(tc.force), nil)
+
+			calls := w.llm.calls()
+			if len(calls) != 1 {
+				t.Fatalf("LLM calls = %d, want 1", len(calls))
+			}
+			want := &llm.Charge{WorkspaceID: wsID, Kind: tc.want, RefID: prID}
+			if diff := cmp.Diff(want, calls[0].Charge); diff != "" {
+				t.Errorf("Structured request Charge mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

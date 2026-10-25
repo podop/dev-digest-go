@@ -2,16 +2,22 @@ package postgres_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"gorm.io/gorm"
 
+	platformpg "dev-digest-go/backend/internal/platform/postgres"
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
 	pgstore "dev-digest-go/backend/internal/spend/adapters/postgres"
+	"dev-digest-go/backend/internal/spend/app"
 	"dev-digest-go/backend/internal/spend/domain"
 )
 
@@ -29,6 +35,11 @@ type ledger struct {
 	db    *gorm.DB
 	store *pgstore.Store
 }
+
+var (
+	_ app.Totals  = (*pgstore.Store)(nil)
+	_ app.Entries = (*pgstore.Store)(nil)
+)
 
 func newLedger(t *testing.T) *ledger {
 	t.Helper()
@@ -128,15 +139,6 @@ func (tn *tenant) mirrors(at time.Time) {
 	tn.l.exec(`INSERT INTO ci_runs (ran_at, cost_usd, source) VALUES (?, 2000, 'ci')`, at)
 }
 
-func (l *ledger) spend(ws string, from, to time.Time) domain.Micros {
-	l.t.Helper()
-	got, err := l.store.MonthSpend(context.Background(), ws, from, to)
-	if err != nil {
-		l.t.Fatalf("MonthSpend(%s, %v, %v) error: %v", ws, from, to, err)
-	}
-	return got
-}
-
 // seedAll adds one record of each of the six sources at time at; the costs are distinct powers
 // of two (in cents) so a wrong subset shows in the total.
 func (tn *tenant) seedAll(at time.Time) {
@@ -150,184 +152,425 @@ func (tn *tenant) seedAll(at time.Time) {
 
 const allSixMicros = domain.Micros(630_000)
 
-func TestMonthSpend_countsAllSixSources(t *testing.T) {
-	l := newLedger(t)
-	tn := l.newTenant("a")
-	tn.seedAll(mid)
+// ---- the ledger store (current schema) ----
 
-	if got := l.spend(tn.ws, from, to); got != allSixMicros {
-		t.Errorf("MonthSpend = %d, want %d (sum of the six sources)", got, allSixMicros)
+func micros(n int64) *domain.Micros { m := domain.Micros(n); return &m }
+
+func int64p(n int64) *int64 { return &n }
+
+// entryAt is a live review-run entry of ws with a unique key unless the test reuses one.
+func entryAt(ws, key string, cost *domain.Micros, at time.Time) domain.Entry {
+	return domain.Entry{
+		WorkspaceID: ws, OccurredAt: at, Kind: domain.KindReviewRun, Origin: domain.OriginLive,
+		Provider: "openai", Model: "gpt-4o", Cost: cost, DedupeKey: key,
 	}
 }
 
-func TestMonthSpend_eachSourceAlone(t *testing.T) {
-	tests := []struct {
-		name string
-		seed func(tn *tenant)
-		want domain.Micros
-	}{
-		{"agent_runs", func(tn *tenant) { tn.agentRun(0.01, mid) }, 10_000},
-		{"eval_runs", func(tn *tenant) { tn.evalRun(0.02, mid) }, 20_000},
-		{"convention_scans", func(tn *tenant) { tn.conventionScan(0.04, mid) }, 40_000},
-		{"pr_intent", func(tn *tenant) { tn.intent(0.08, mid) }, 80_000},
-		{"pr_brief", func(tn *tenant) { tn.briefAt(0.16, mid) }, 160_000},
-		{"onboarding", func(tn *tenant) { tn.onboardingAt(0.32, mid) }, 320_000},
+func (l *ledger) append(e domain.Entry) bool {
+	l.t.Helper()
+	stored, err := l.store.Append(context.Background(), e)
+	if err != nil {
+		l.t.Fatalf("Append(%s) error: %v", e.DedupeKey, err)
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			l := newLedger(t)
-			tn := l.newTenant("a")
-			tc.seed(tn)
-			if got := l.spend(tn.ws, from, to); got != tc.want {
-				t.Errorf("MonthSpend = %d, want %d", got, tc.want)
+	return stored
+}
+
+func (l *ledger) total(ws string, month time.Time) domain.MonthTotal {
+	l.t.Helper()
+	got, err := l.store.MonthTotal(context.Background(), ws, month)
+	if err != nil {
+		l.t.Fatalf("MonthTotal(%s, %v) error: %v", ws, month, err)
+	}
+	return got
+}
+
+func (l *ledger) count(query string, args ...any) int {
+	l.t.Helper()
+	var n int
+	if err := l.db.Raw(query, args...).Scan(&n).Error; err != nil {
+		l.t.Fatalf("count %.50s: %v", query, err)
+	}
+	return n
+}
+
+// assertTotalsMatchEntries checks the FR9 invariant for the workspace: for every month, the
+// stored total (spent, unpriced, entry count) equals the aggregate over the entries.
+func (l *ledger) assertTotalsMatchEntries(ws string) {
+	l.t.Helper()
+	type agg struct {
+		Month                    string
+		Spent, Unpriced, Entries int64
+	}
+	var want, got []agg
+	err := l.db.Raw(`SELECT to_char(date_trunc('month', occurred_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS month,
+			COALESCE(SUM(cost_micros), 0)::bigint AS spent,
+			count(*) FILTER (WHERE cost_micros IS NULL) AS unpriced, count(*) AS entries
+		FROM cost_ledger WHERE workspace_id = ? GROUP BY 1 ORDER BY 1`, ws).Scan(&want).Error
+	if err != nil {
+		l.t.Fatalf("aggregate entries: %v", err)
+	}
+	err = l.db.Raw(`SELECT to_char(month, 'YYYY-MM-DD') AS month, SUM(spent_micros)::bigint AS spent,
+			SUM(unpriced_count)::bigint AS unpriced, SUM(entry_count)::bigint AS entries
+		FROM spend_month_totals WHERE workspace_id = ? GROUP BY 1 ORDER BY 1`, ws).Scan(&got).Error
+	if err != nil {
+		l.t.Fatalf("aggregate totals: %v", err)
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		l.t.Errorf("stored totals of %s differ from the entries (-entries +totals):\n%s", ws, diff)
+	}
+}
+
+func TestAppend_storesEntryAndTotal(t *testing.T) {
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	ref := tn.pr
+
+	full := domain.Entry{
+		WorkspaceID: tn.ws, OccurredAt: mid, Kind: domain.KindBrief, Origin: domain.OriginLive,
+		Provider: "anthropic", Model: "claude", TokensIn: int64p(1200), TokensOut: int64p(34),
+		Cost: micros(123_456), RefID: ref, DedupeKey: "live:full",
+	}
+	if !l.append(full) {
+		t.Fatal("Append(full) stored = false, want true")
+	}
+	// Provider and model '' and an empty ref stay as they are: '' and NULL.
+	bare := domain.Entry{
+		WorkspaceID: tn.ws, OccurredAt: mid, Kind: domain.KindCIRun, Origin: domain.OriginCIIngest,
+		Cost: micros(1), DedupeKey: domain.CIDedupeKey(99, 1),
+	}
+	if !l.append(bare) {
+		t.Fatal("Append(bare) stored = false, want true")
+	}
+
+	type row struct {
+		Kind, Origin, Provider, Model string
+		TokensIn, TokensOut, Cost     *int64
+		Ref                           *string
+	}
+	read := func(key string) row {
+		var r row
+		err := l.db.Raw(`SELECT kind, origin, provider, model, tokens_in, tokens_out, cost_micros AS cost, ref_id::text AS ref
+			FROM cost_ledger WHERE dedupe_key = ?`, key).Scan(&r).Error
+		if err != nil {
+			t.Fatalf("read entry %s: %v", key, err)
+		}
+		return r
+	}
+	wantFull := row{Kind: "brief", Origin: "live", Provider: "anthropic", Model: "claude",
+		TokensIn: int64p(1200), TokensOut: int64p(34), Cost: int64p(123_456), Ref: &ref}
+	if diff := cmp.Diff(wantFull, read("live:full")); diff != "" {
+		t.Errorf("stored full entry mismatch (-want +got):\n%s", diff)
+	}
+	wantBare := row{Kind: "ci_run", Origin: "ci_ingest", Provider: "", Model: "", Cost: int64p(1)}
+	if diff := cmp.Diff(wantBare, read(domain.CIDedupeKey(99, 1))); diff != "" {
+		t.Errorf("stored bare entry mismatch (-want +got):\n%s", diff)
+	}
+
+	if got, want := l.total(tn.ws, from), (domain.MonthTotal{Spent: 123_457}); got != want {
+		t.Errorf("MonthTotal = %+v, want %+v", got, want)
+	}
+	l.assertTotalsMatchEntries(tn.ws)
+}
+
+func TestAppend_nilCostIsUnpriced(t *testing.T) {
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	l.append(entryAt(tn.ws, "k1", nil, mid))
+	l.append(entryAt(tn.ws, "k2", nil, mid))
+	l.append(entryAt(tn.ws, "k3", micros(0), mid)) // a zero cost is known, not unpriced
+	l.append(entryAt(tn.ws, "k4", micros(250_000), mid))
+
+	if got, want := l.total(tn.ws, from), (domain.MonthTotal{Spent: 250_000, Unpriced: 2}); got != want {
+		t.Errorf("MonthTotal = %+v, want %+v", got, want)
+	}
+	if n := l.count(`SELECT sum(entry_count) FROM spend_month_totals WHERE workspace_id = ?`, tn.ws); n != 4 {
+		t.Errorf("entry_count = %d, want 4", n)
+	}
+	l.assertTotalsMatchEntries(tn.ws)
+}
+
+func TestAppend_duplicateKeyIsNoop(t *testing.T) {
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	if !l.append(entryAt(tn.ws, "dup", micros(500), mid)) {
+		t.Fatal("first Append stored = false, want true")
+	}
+	// Same key again, even with another cost, month or workspace: nothing changes, no error.
+	other := l.newTenant("b")
+	for _, e := range []domain.Entry{
+		entryAt(tn.ws, "dup", micros(500), mid),
+		entryAt(tn.ws, "dup", micros(9_999), to),
+		entryAt(tn.ws, "dup", nil, mid),
+		entryAt(other.ws, "dup", micros(7), mid),
+	} {
+		if l.append(e) {
+			t.Errorf("Append(duplicate %+v) stored = true, want false", e)
+		}
+	}
+	if got, want := l.total(tn.ws, from), (domain.MonthTotal{Spent: 500}); got != want {
+		t.Errorf("MonthTotal after duplicates = %+v, want %+v", got, want)
+	}
+	if got := l.total(tn.ws, to); got != (domain.MonthTotal{}) {
+		t.Errorf("MonthTotal(next month) after duplicates = %+v, want zero", got)
+	}
+	if got := l.total(other.ws, from); got != (domain.MonthTotal{}) {
+		t.Errorf("MonthTotal(other workspace) after duplicates = %+v, want zero", got)
+	}
+	if n := l.count(`SELECT count(*) FROM cost_ledger`); n != 1 {
+		t.Errorf("entries = %d, want 1", n)
+	}
+}
+
+// TestAppend_failedTotalRollsBackEntry: when the total cannot be updated, the entry is not
+// stored either (FR9: one all-or-nothing step).
+func TestAppend_failedTotalRollsBackEntry(t *testing.T) {
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	l.exec(`ALTER TABLE spend_month_totals ADD CONSTRAINT test_no_totals CHECK (false)`)
+
+	stored, err := l.store.Append(context.Background(), entryAt(tn.ws, "k", micros(5), mid))
+	if err == nil || stored {
+		t.Fatalf("Append with an unwritable total = %v, %v, want false and an error", stored, err)
+	}
+	if n := l.count(`SELECT count(*) FROM cost_ledger`); n != 0 {
+		t.Errorf("entries after a failed append = %d, want 0 (rolled back with the total)", n)
+	}
+
+	l.exec(`ALTER TABLE spend_month_totals DROP CONSTRAINT test_no_totals`)
+	if !l.append(entryAt(tn.ws, "k", micros(5), mid)) {
+		t.Error("Append after the total is writable again stored = false, want true (the key was not used up)")
+	}
+}
+
+func TestAppend_invalidEntryIsRejected(t *testing.T) {
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	bad := map[string]domain.Entry{
+		"kind":      {WorkspaceID: tn.ws, OccurredAt: mid, Kind: "nope", Origin: domain.OriginLive, DedupeKey: "a"},
+		"origin":    {WorkspaceID: tn.ws, OccurredAt: mid, Kind: domain.KindBrief, Origin: "nope", DedupeKey: "b"},
+		"cost":      {WorkspaceID: tn.ws, OccurredAt: mid, Kind: domain.KindBrief, Origin: domain.OriginLive, Cost: micros(-1), DedupeKey: "c"},
+		"workspace": {WorkspaceID: "00000000-0000-0000-0000-000000000000", OccurredAt: mid, Kind: domain.KindBrief, Origin: domain.OriginLive, DedupeKey: "d"},
+	}
+	for name, e := range bad {
+		t.Run(name, func(t *testing.T) {
+			if stored, err := l.store.Append(context.Background(), e); err == nil || stored {
+				t.Errorf("Append(%s) = %v, %v, want false and an error", name, stored, err)
 			}
 		})
 	}
+	if n := l.count(`SELECT count(*) FROM cost_ledger`) + l.count(`SELECT count(*) FROM spend_month_totals`); n != 0 {
+		t.Errorf("rows after rejected appends = %d, want 0", n)
+	}
 }
 
-func TestMonthSpend_mirrorsExcluded(t *testing.T) {
+// TestAppend_monthSplitsAtUTCBoundary (EC11): the month of an entry is its UTC month.
+func TestAppend_monthSplitsAtUTCBoundary(t *testing.T) {
 	l := newLedger(t)
 	tn := l.newTenant("a")
-	tn.mirrors(mid)
-	if got := l.spend(tn.ws, from, to); got != 0 {
-		t.Fatalf("MonthSpend with only mirror records = %d, want 0", got)
+	plus2 := time.FixedZone("UTC+2", 2*3600)
+	for i, tc := range []struct {
+		name string
+		at   time.Time
+		cost int64
+	}{
+		{"last millisecond of October", to.Add(-time.Millisecond), 1},
+		{"first instant of November", to, 10},
+		{"first instant of October", from, 100},
+		{"November 1st 01:00 at UTC+2 is still October", time.Date(2026, time.November, 1, 1, 0, 0, 0, plus2), 1000},
+		{"October 31st 23:30 at UTC-2 is already November", time.Date(2026, time.October, 31, 23, 30, 0, 0, time.FixedZone("UTC-2", -2*3600)), 10_000},
+	} {
+		l.append(entryAt(tn.ws, fmt.Sprint("k", i), micros(tc.cost), tc.at))
+	}
+	if got, want := l.total(tn.ws, from), (domain.MonthTotal{Spent: 1 + 100 + 1000}); got != want {
+		t.Errorf("MonthTotal(October) = %+v, want %+v", got, want)
+	}
+	if got, want := l.total(tn.ws, to), (domain.MonthTotal{Spent: 10 + 10_000}); got != want {
+		t.Errorf("MonthTotal(November) = %+v, want %+v", got, want)
+	}
+	l.assertTotalsMatchEntries(tn.ws)
+}
+
+func TestAppend_joinsCallerTransaction(t *testing.T) {
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	tx := platformpg.NewTx(l.db)
+	errRollback := errors.New("roll back")
+
+	err := tx.InTx(context.Background(), func(ctx context.Context) error {
+		if stored, err := l.store.Append(ctx, entryAt(tn.ws, "in-tx", micros(40), mid)); err != nil || !stored {
+			t.Errorf("Append in tx = %v, %v, want true, nil", stored, err)
+		}
+		// The caller sees its own uncommitted entry through the same handle.
+		if got, err := l.store.MonthTotal(ctx, tn.ws, mid); err != nil || got.Spent != 40 {
+			t.Errorf("MonthTotal in tx = %+v, %v, want 40 spent", got, err)
+		}
+		return errRollback
+	})
+	if !errors.Is(err, errRollback) {
+		t.Fatalf("InTx error = %v, want the rollback error", err)
+	}
+	if n := l.count(`SELECT count(*) FROM cost_ledger`) + l.count(`SELECT count(*) FROM spend_month_totals`); n != 0 {
+		t.Errorf("rows after the caller rolled back = %d, want 0 (the append joined the transaction)", n)
 	}
 
-	tn.seedAll(mid)
-	if got := l.spend(tn.ws, from, to); got != allSixMicros {
-		t.Errorf("MonthSpend with mirrors next to the six sources = %d, want %d", got, allSixMicros)
+	err = tx.InTx(context.Background(), func(ctx context.Context) error {
+		_, err := l.store.Append(ctx, entryAt(tn.ws, "in-tx", micros(40), mid))
+		return err
+	})
+	if err != nil {
+		t.Fatalf("InTx(commit) error: %v", err)
+	}
+	if got, want := l.total(tn.ws, mid), (domain.MonthTotal{Spent: 40}); got != want {
+		t.Errorf("MonthTotal after commit = %+v, want %+v", got, want)
 	}
 }
 
-func TestMonthSpend_workspacesIsolated(t *testing.T) {
+// TestAppend_concurrent (AC10, EC12, NFR5): 50 appends to workspace 1 and 10 to workspace 2 with
+// known and unknown costs, plus 10 duplicates of workspace 1's keys, all at once.
+func TestAppend_concurrent(t *testing.T) {
 	l := newLedger(t)
 	a, b := l.newTenant("a"), l.newTenant("b")
-	a.seedAll(mid)
-	b.agentRun(5, mid)
-	b.briefAt(7, mid)
-	b.onboardingAt(11, mid)
 
-	if got := l.spend(a.ws, from, to); got != allSixMicros {
-		t.Errorf("MonthSpend(a) = %d, want %d", got, allSixMicros)
+	type job struct {
+		e    domain.Entry
+		dupe bool
 	}
-	if got, want := l.spend(b.ws, from, to), domain.Micros(23_000_000); got != want {
-		t.Errorf("MonthSpend(b) = %d, want %d", got, want)
-	}
-	if got := l.spend("00000000-0000-0000-0000-000000000000", from, to); got != 0 {
-		t.Errorf("MonthSpend(unknown workspace) = %d, want 0", got)
-	}
-}
-
-func TestMonthSpend_monthBoundaries(t *testing.T) {
-	l := newLedger(t)
-	tn := l.newTenant("a")
-	us := time.Microsecond
-
-	tn.seedAll(from.Add(-us)) // just before the month: out
-	tn.seedAll(to)            // first instant of the next month: out
-	if got := l.spend(tn.ws, from, to); got != 0 {
-		t.Fatalf("MonthSpend with records outside [from, to) = %d, want 0", got)
-	}
-
-	tn.seedAll(from)        // first instant: in
-	tn.seedAll(to.Add(-us)) // last microsecond: in
-	if got, want := l.spend(tn.ws, from, to), 2*allSixMicros; got != want {
-		t.Errorf("MonthSpend with records on the boundaries = %d, want %d (from inclusive, to exclusive)", got, want)
-	}
-}
-
-func TestMonthSpend_nextMonthIsDisjoint(t *testing.T) {
-	l := newLedger(t)
-	tn := l.newTenant("a")
-	tn.seedAll(to.Add(-time.Microsecond))
-	tn.seedAll(to)
-
-	if got := l.spend(tn.ws, from, to); got != allSixMicros {
-		t.Errorf("MonthSpend(October) = %d, want %d", got, allSixMicros)
-	}
-	if got := l.spend(tn.ws, to, to.AddDate(0, 1, 0)); got != allSixMicros {
-		t.Errorf("MonthSpend(November) = %d, want %d", got, allSixMicros)
-	}
-}
-
-func TestMonthSpend_nullCostCountsAsZero(t *testing.T) {
-	l := newLedger(t)
-	tn := l.newTenant("a")
-	tn.agentRun(nil, mid)
-	tn.evalRun(nil, mid)
-	tn.conventionScan(nil, mid)
-	tn.intent(nil, mid)
-	tn.brief(fmt.Sprintf(`{"generated_at": %q, "cost_usd": null}`, mid.Format(time.RFC3339)))
-	tn.onboarding(`{"cost_usd": null}`, mid)
-	if got := l.spend(tn.ws, from, to); got != 0 {
-		t.Errorf("MonthSpend with NULL costs = %d, want 0", got)
-	}
-
-	tn.agentRun(0.5, mid)
-	if got, want := l.spend(tn.ws, from, to), domain.Micros(500_000); got != want {
-		t.Errorf("MonthSpend with a NULL and a real cost = %d, want %d", got, want)
-	}
-}
-
-func TestMonthSpend_malformedJSONDocsSkipped(t *testing.T) {
-	l := newLedger(t)
-	tn := l.newTenant("a")
-	okTime := mid.Format(time.RFC3339)
-
-	tn.briefAt(0.16, mid) // the only good brief
-	tn.brief(`{"generated_at": "not a date", "cost_usd": 100}`)
-	tn.brief(`{"generated_at": "2026-02-31T00:00:00Z", "cost_usd": 100}`)
-	tn.brief(`{"generated_at": 20261015, "cost_usd": 100}`)
-	tn.brief(`{"cost_usd": 100}`)
-	tn.brief(fmt.Sprintf(`{"generated_at": %q, "cost_usd": "abc"}`, okTime))
-	tn.brief(fmt.Sprintf(`{"generated_at": %q, "cost_usd": {"a": 1}}`, okTime))
-	tn.brief(fmt.Sprintf(`{"generated_at": %q}`, okTime))
-	tn.brief(`[]`)
-	tn.brief(`"text"`)
-	tn.brief(`null`)
-
-	tn.onboardingAt(0.32, mid) // the only good tour
-	tn.onboarding(`{"cost_usd": "abc"}`, mid)
-	tn.onboarding(`{"cost_usd": [1]}`, mid)
-	tn.onboarding(`{}`, mid)
-	tn.onboarding(`[]`, mid)
-	tn.onboarding(`"text"`, mid)
-
-	if got, want := l.spend(tn.ws, from, to), domain.Micros(480_000); got != want {
-		t.Errorf("MonthSpend with malformed documents = %d, want %d (they are skipped, not an error)", got, want)
-	}
-}
-
-func TestMonthSpend_roundsToMicros(t *testing.T) {
-	l := newLedger(t)
-	tn := l.newTenant("a")
-	// convention_scans.cost_usd is double precision: 0.1 + 0.2 must still total 0.300000.
-	tn.conventionScan(0.1, mid)
-	tn.conventionScan(0.2, mid)
-	tn.agentRun(0.000001, mid)
-	if got, want := l.spend(tn.ws, from, to), domain.Micros(300_001); got != want {
-		t.Errorf("MonthSpend = %d, want %d", got, want)
-	}
-}
-
-// TestMonthSpend_explain records the plan of the query for the NFR4 latency check: it must run
-// under EXPLAIN ANALYZE and touch each of the six sources.
-func TestMonthSpend_explain(t *testing.T) {
-	l := newLedger(t)
-	tn := l.newTenant("a")
-	tn.seedAll(mid)
-
-	var plan []string
-	err := l.db.Raw("EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, SUMMARY OFF) "+pgstore.MonthSpendSQL,
-		map[string]any{"ws": tn.ws, "from": from, "to": to}).Scan(&plan).Error
-	if err != nil {
-		t.Fatalf("EXPLAIN ANALYZE: %v", err)
-	}
-	text := strings.Join(plan, "\n")
-	for _, table := range []string{"agent_runs", "eval_runs", "convention_scans", "pr_intent", "pr_brief", "onboarding"} {
-		if !strings.Contains(text, table) {
-			t.Errorf("plan does not mention %s:\n%s", table, text)
+	var jobs []job
+	var wantA, wantB domain.MonthTotal
+	for i := range 50 {
+		var cost *domain.Micros
+		if i%5 != 0 {
+			cost = micros(int64(1_000_003 + i*37))
+			wantA.Spent += *cost
+		} else {
+			wantA.Unpriced++
+		}
+		e := entryAt(a.ws, fmt.Sprint("a", i), cost, mid)
+		jobs = append(jobs, job{e: e})
+		if i < 10 {
+			jobs = append(jobs, job{e: e, dupe: true})
 		}
 	}
-	t.Logf("plan:\n%s", text)
+	for i := range 10 {
+		var cost *domain.Micros
+		if i%3 != 0 {
+			cost = micros(int64(7_000_001 + i))
+			wantB.Spent += *cost
+		} else {
+			wantB.Unpriced++
+		}
+		jobs = append(jobs, job{e: entryAt(b.ws, fmt.Sprint("b", i), cost, mid)})
+	}
+
+	var wg sync.WaitGroup
+	var stored atomic.Int64
+	start := make(chan struct{})
+	for _, j := range jobs {
+		wg.Go(func() {
+			<-start
+			ok, err := l.store.Append(context.Background(), j.e)
+			if err != nil {
+				t.Errorf("Append(%s) error: %v", j.e.DedupeKey, err)
+				return
+			}
+			if ok {
+				stored.Add(1)
+			}
+		})
+	}
+	close(start)
+	wg.Wait()
+
+	if got, want := stored.Load(), int64(60); got != want {
+		t.Errorf("appends stored = %d, want %d (each key once, duplicates are no-ops)", got, want)
+	}
+	if got := l.total(a.ws, from); got != wantA {
+		t.Errorf("MonthTotal(workspace 1) = %+v, want %+v", got, wantA)
+	}
+	if got := l.total(b.ws, from); got != wantB {
+		t.Errorf("MonthTotal(workspace 2) = %+v, want %+v", got, wantB)
+	}
+	l.assertTotalsMatchEntries(a.ws)
+	l.assertTotalsMatchEntries(b.ws)
+	if n := l.count(`SELECT count(*) FROM cost_ledger WHERE workspace_id = ?`, a.ws); n != 50 {
+		t.Errorf("entries of workspace 1 = %d, want 50", n)
+	}
+	// The appends spread over the slot rows (A8), within the 8 the schema allows.
+	slotRows := l.count(`SELECT count(*) FROM spend_month_totals WHERE workspace_id = ?`, a.ws)
+	if slotRows < 2 || slotRows > pgstore.Slots {
+		t.Errorf("slot rows of workspace 1 = %d, want 2..%d", slotRows, pgstore.Slots)
+	}
+}
+
+func TestMonthTotal_emptyAndIsolated(t *testing.T) {
+	l := newLedger(t)
+	a, b := l.newTenant("a"), l.newTenant("b")
+	if got := l.total(a.ws, from); got != (domain.MonthTotal{}) {
+		t.Errorf("MonthTotal(no entries) = %+v, want zero (EC19)", got)
+	}
+	l.append(entryAt(a.ws, "x", micros(33), mid))
+	if got := l.total(b.ws, from); got != (domain.MonthTotal{}) {
+		t.Errorf("MonthTotal(other workspace) = %+v, want zero", got)
+	}
+	if got := l.total("00000000-0000-0000-0000-000000000000", from); got != (domain.MonthTotal{}) {
+		t.Errorf("MonthTotal(unknown workspace) = %+v, want zero", got)
+	}
+	// Any instant of the month names the month.
+	for _, at := range []time.Time{from, mid, to.Add(-time.Nanosecond)} {
+		if got := l.total(a.ws, at); got.Spent != 33 {
+			t.Errorf("MonthTotal(at %v) = %+v, want 33 spent", at, got)
+		}
+	}
+	if got := l.total(a.ws, to); got.Spent != 0 {
+		t.Errorf("MonthTotal(November) = %+v, want zero", got)
+	}
+}
+
+// TestMonthTotal_sumsAllSlots: the total is the sum of the slot rows of the month, whatever
+// slots hold it.
+func TestMonthTotal_sumsAllSlots(t *testing.T) {
+	l := newLedger(t)
+	tn := l.newTenant("a")
+	var want domain.MonthTotal
+	for slot := range pgstore.Slots {
+		l.exec(`INSERT INTO spend_month_totals (workspace_id, month, slot, spent_micros, unpriced_count, entry_count)
+			VALUES (?, '2026-10-01', ?, ?, ?, 1)`, tn.ws, slot, 1000*(slot+1), slot)
+		want.Spent += domain.Micros(1000 * (slot + 1))
+		want.Unpriced += slot
+	}
+	l.exec(`INSERT INTO spend_month_totals (workspace_id, month, slot, spent_micros) VALUES (?, '2026-11-01', 0, 5)`, tn.ws)
+	if got := l.total(tn.ws, mid); got != want {
+		t.Errorf("MonthTotal = %+v, want %+v", got, want)
+	}
+}
+
+func TestClaimBackfillSummary_ClaimsTheRowOnce(t *testing.T) { // FR15
+	l := newLedger(t)
+	err := l.db.Exec(`UPDATE cost_ledger_backfill
+		SET created = CAST(? AS jsonb), skipped = 4, duration_ms = 1500, logged_at = NULL WHERE id = 1`,
+		`{"review_run": 3, "ci_run": 2, "future_kind": 9}`).Error
+	if err != nil {
+		t.Fatalf("set backfill row: %v", err)
+	}
+
+	got, claimed, err := l.store.ClaimBackfillSummary(t.Context())
+	if err != nil || !claimed {
+		t.Fatalf("ClaimBackfillSummary() first call = _, %v, %v, want _, true, nil", claimed, err)
+	}
+	want := app.BackfillSummary{
+		Created:  map[domain.Kind]int{domain.KindReviewRun: 3, domain.KindCIRun: 2},
+		Skipped:  4,
+		Duration: 1500 * time.Millisecond,
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("ClaimBackfillSummary() first call mismatch (-want +got):\n%s", diff)
+	}
+	var stamped bool
+	if err := l.db.Raw(`SELECT logged_at IS NOT NULL FROM cost_ledger_backfill WHERE id = 1`).Scan(&stamped).Error; err != nil || !stamped {
+		t.Errorf("logged_at stamped after the claim = %v, %v, want true, nil", stamped, err)
+	}
+
+	if _, claimed, err := l.store.ClaimBackfillSummary(t.Context()); err != nil || claimed {
+		t.Errorf("ClaimBackfillSummary() second call = _, %v, %v, want _, false, nil", claimed, err)
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -332,4 +333,123 @@ func recordedShapes(runs []domain.NewRun) []any {
 		})
 	}
 	return out
+}
+
+// ledgerRig is an artifactRig whose service has the cost ledger on.
+func ledgerRig(t testing.TB, zips ...[]byte) (*ingestRig, *fakeLedger, *fakeTx) {
+	t.Helper()
+	rig := artifactRig(t, zips...)
+	ledger := &fakeLedger{}
+	tx := &fakeTx{store: rig.store, ledger: ledger}
+	rig.svc = app.NewIngestService(app.IngestDeps{
+		Agents: fakeAgents{agents: map[string]domain.ExportAgent{"agent-1": {ID: "agent-1"}}}, Store: rig.store, GitHub: rig.gh,
+		Zip: zipentry.New(), Ledger: ledger, Tx: tx, Clock: rig.clock.Now, Log: rig.logs.logger(),
+	})
+	return rig, ledger, tx
+}
+
+func TestIngestLedger(t *testing.T) {
+	model := "deepseek/deepseek-v4-flash"
+	ranAt := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
+
+	t.Run("run with an artifact appends one entry", func(t *testing.T) {
+		rig, ledger, tx := ledgerRig(t, resultZip(t, marshal(t, baseResult())))
+		cost := 0.0123
+		got := refresh(t, rig)
+		want := []app.CIRun{{
+			WorkspaceID: "ws-1", AgentRunID: "agent-run-1001:1", GithubRunID: 1001, Attempt: 1, OccurredAt: ranAt,
+			Provider: domain.ProviderOpenRouter, Model: &model, CostUSD: &cost,
+		}}
+		if diff := cmp.Diff(want, ledger.runs); diff != "" {
+			t.Errorf("ledger runs mismatch (-want +got):\n%s", diff)
+		}
+		if got.Ingested != 1 || tx.ran != 1 {
+			t.Errorf("ingested = %d, transactions = %d, want 1 and 1", got.Ingested, tx.ran)
+		}
+	})
+
+	t.Run("null cost appends an entry with unknown cost", func(t *testing.T) {
+		rig, ledger, _ := ledgerRig(t, resultZip(t, marshal(t, with(baseResult(), obj{"cost_usd": nil}))))
+		refresh(t, rig)
+		if len(ledger.runs) != 1 || ledger.runs[0].CostUSD != nil {
+			t.Errorf("ledger runs = %+v, want one entry with a nil cost", ledger.runs)
+		}
+	})
+
+	t.Run("run without an artifact appends nothing", func(t *testing.T) {
+		rig, ledger, tx := ledgerRig(t, nil)
+		rig.gh.listArtifact = func(app.RepoRef, int64) ([]domain.RunArtifact, error) { return nil, nil }
+		got := refresh(t, rig)
+		if len(rig.store.recorded) != 1 || rig.store.recorded[0].Status != domain.RunFailed || got.Ingested != 1 {
+			t.Fatalf("recorded = %+v ingested = %d, want one failed run", rig.store.recorded, got.Ingested)
+		}
+		if len(ledger.runs) != 0 || tx.ran != 0 {
+			t.Errorf("ledger runs = %+v, transactions = %d, want none", ledger.runs, tx.ran)
+		}
+	})
+
+	t.Run("a run another refresh stored appends nothing", func(t *testing.T) {
+		rig, ledger, _ := ledgerRig(t, resultZip(t, marshal(t, baseResult())))
+		rig.store.recordFalse = map[domain.RunKey]bool{{GithubRunID: 1001, Attempt: 1}: true}
+		got := refresh(t, rig)
+		if len(ledger.runs) != 0 || got.Ingested != 0 {
+			t.Errorf("ledger runs = %+v ingested = %d, want none", ledger.runs, got.Ingested)
+		}
+	})
+
+	t.Run("a second refresh of the same run appends nothing", func(t *testing.T) {
+		rig, ledger, _ := ledgerRig(t, resultZip(t, marshal(t, baseResult())))
+		refresh(t, rig)
+		got := refresh(t, rig)
+		if len(ledger.runs) != 1 || got.Ingested != 0 {
+			t.Errorf("ledger runs = %d ingested = %d, want 1 entry and 0 on the second refresh", len(ledger.runs), got.Ingested)
+		}
+	})
+
+	t.Run("a ledger error stores no CI run", func(t *testing.T) {
+		rig, ledger, _ := ledgerRig(t, resultZip(t, marshal(t, baseResult())))
+		boom := errors.New("ledger down")
+		ledger.err = boom
+		_, err := rig.svc.Refresh(t.Context(), "ws-1", "")
+		if !errors.Is(err, boom) {
+			t.Fatalf("Refresh() error = %v, want it to wrap %v", err, boom)
+		}
+		if len(rig.store.recorded) != 0 || len(rig.store.stored) != 0 {
+			t.Errorf("recorded = %+v stored = %v, want the CI run rolled back", rig.store.recorded, rig.store.stored)
+		}
+		ledger.err = nil // the next refresh retries the run and stores it with its entry
+		got := refresh(t, rig)
+		if got.Ingested != 1 || len(ledger.runs) != 1 {
+			t.Errorf("after recovery ingested = %d ledger runs = %d, want 1 and 1", got.Ingested, len(ledger.runs))
+		}
+	})
+
+	t.Run("an unstorable value is still a skip", func(t *testing.T) {
+		rig, ledger, _ := ledgerRig(t, resultZip(t, marshal(t, baseResult())))
+		rig.store.recordErr = fmt.Errorf("record run: %w", app.ErrNotStorable)
+		got := refresh(t, rig)
+		if got.Installations[0].Skipped[0].Reason != domain.SkipInvalid || len(ledger.runs) != 0 {
+			t.Errorf("skipped = %+v ledger runs = %+v, want artifact_invalid and none", got.Installations[0].Skipped, ledger.runs)
+		}
+	})
+
+	t.Run("a nil ledger is off", func(t *testing.T) {
+		rig := artifactRig(t, resultZip(t, marshal(t, baseResult())))
+		got := refresh(t, rig)
+		if got.Ingested != 1 || len(rig.store.recorded) != 1 {
+			t.Errorf("ingested = %d recorded = %d, want 1 and 1", got.Ingested, len(rig.store.recorded))
+		}
+	})
+}
+
+func TestNewIngestServiceLedgerNeedsTx(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("NewIngestService() with a Ledger and no Tx did not panic")
+		}
+	}()
+	rig := newIngestRig(t)
+	app.NewIngestService(app.IngestDeps{
+		Agents: fakeAgents{}, Store: rig.store, GitHub: rig.gh, Zip: nopReader{}, Ledger: &fakeLedger{},
+	})
 }

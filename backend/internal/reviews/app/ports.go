@@ -75,7 +75,9 @@ type Bus interface {
 type LLMBinding struct {
 	Provider string
 	Model    string
-	// RunID is the correlation id of the prompt log line.
+	// WorkspaceID is the workspace that pays for the run's LLM calls (the spend ledger charge).
+	WorkspaceID string
+	// RunID is the correlation id of the prompt log line and the ledger reference of the run.
 	RunID string
 	// SessionID is the OpenRouter session id "<owner>/<name>#<number>:<agent name>".
 	SessionID string

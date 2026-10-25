@@ -17,28 +17,28 @@ import (
 	"dev-digest-go/backend/internal/spend/domain"
 )
 
-type ledgerCall struct {
+type totalsCall struct {
 	WorkspaceID string
-	From, To    time.Time
+	Month       time.Time
 }
 
-type fakeLedger struct {
-	spent domain.Micros
+type fakeTotals struct {
+	total domain.MonthTotal
 	err   error
-	calls []ledgerCall
+	calls []totalsCall
 }
 
-func (f *fakeLedger) MonthSpend(_ context.Context, ws string, from, to time.Time) (domain.Micros, error) {
-	f.calls = append(f.calls, ledgerCall{ws, from, to})
-	return f.spent, f.err
+func (f *fakeTotals) MonthTotal(_ context.Context, ws string, month time.Time) (domain.MonthTotal, error) {
+	f.calls = append(f.calls, totalsCall{ws, month})
+	return f.total, f.err
 }
 
-// forbiddenLedger fails the test when the month spend is read: Admit must not read it without a cap (D24).
-type forbiddenLedger struct{ t *testing.T }
+// forbiddenTotals fails the test when the month total is read: Admit must not read it without a cap (D24).
+type forbiddenTotals struct{ t *testing.T }
 
-func (f forbiddenLedger) MonthSpend(context.Context, string, time.Time, time.Time) (domain.Micros, error) {
-	f.t.Error("MonthSpend was called, want no spend read when no cap is set")
-	return 0, errors.New("unexpected MonthSpend call")
+func (f forbiddenTotals) MonthTotal(context.Context, string, time.Time) (domain.MonthTotal, error) {
+	f.t.Error("MonthTotal was called, want no total read when no cap is set")
+	return domain.MonthTotal{}, errors.New("unexpected MonthTotal call")
 }
 
 type fakeCaps struct {
@@ -53,14 +53,13 @@ func micros(v domain.Micros) *domain.Micros { return &v }
 var (
 	october   = time.Date(2026, 10, 24, 13, 5, 0, 0, time.UTC)
 	monthFrom = time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	monthTo   = time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
 )
 
 // newService builds a Service whose log lines go to the returned buffer, as JSON.
-func newService(ledger *fakeLedger, caps fakeCaps) (*app.Service, *bytes.Buffer) {
+func newService(totals *fakeTotals, caps fakeCaps) (*app.Service, *bytes.Buffer) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&buf, nil))
-	return app.NewService(ledger, caps, func() time.Time { return october }, log), &buf
+	return app.NewService(totals, caps, func() time.Time { return october }, log), &buf
 }
 
 func TestService_Status(t *testing.T) {
@@ -78,8 +77,8 @@ func TestService_Status(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			ledger := &fakeLedger{spent: tc.spent}
-			svc, _ := newService(ledger, fakeCaps{limit: tc.limit})
+			totals := &fakeTotals{total: domain.MonthTotal{Spent: tc.spent}}
+			svc, _ := newService(totals, fakeCaps{limit: tc.limit})
 
 			got, err := svc.Status(t.Context(), "ws-1")
 			if err != nil {
@@ -88,30 +87,29 @@ func TestService_Status(t *testing.T) {
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("Status() mismatch (-want +got):\n%s", diff)
 			}
-			wantCalls := []ledgerCall{{"ws-1", monthFrom, monthTo}}
-			if diff := cmp.Diff(wantCalls, ledger.calls); diff != "" {
-				t.Errorf("MonthSpend calls mismatch (-want +got):\n%s", diff)
+			wantCalls := []totalsCall{{"ws-1", monthFrom}}
+			if diff := cmp.Diff(wantCalls, totals.calls); diff != "" {
+				t.Errorf("MonthTotal calls mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}
 }
 
 func TestService_Status_MonthBoundsUseInjectedClock(t *testing.T) {
-	ledger := &fakeLedger{}
+	totals := &fakeTotals{}
 	now := time.Date(2026, 12, 31, 23, 59, 59, 999_000_000, time.UTC)
-	svc := app.NewService(ledger, fakeCaps{}, func() time.Time { return now }, slog.New(slog.DiscardHandler))
+	svc := app.NewService(totals, fakeCaps{}, func() time.Time { return now }, slog.New(slog.DiscardHandler))
 
 	got, err := svc.Status(t.Context(), "ws-1")
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
 	}
 	wantFrom := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
-	wantTo := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	if !got.MonthStart.Equal(wantFrom) {
 		t.Errorf("Status().MonthStart = %v, want %v", got.MonthStart, wantFrom)
 	}
-	if diff := cmp.Diff([]ledgerCall{{"ws-1", wantFrom, wantTo}}, ledger.calls); diff != "" {
-		t.Errorf("MonthSpend calls mismatch (-want +got):\n%s", diff)
+	if diff := cmp.Diff([]totalsCall{{"ws-1", wantFrom}}, totals.calls); diff != "" {
+		t.Errorf("MonthTotal calls mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -119,15 +117,15 @@ func TestService_Status_ReadErrorsAreWrapped(t *testing.T) {
 	boom := errors.New("db down")
 	tests := []struct {
 		name   string
-		ledger *fakeLedger
+		totals *fakeTotals
 		caps   fakeCaps
 	}{
-		{"ledger fails", &fakeLedger{err: boom}, fakeCaps{limit: micros(1)}},
-		{"cap fails", &fakeLedger{}, fakeCaps{err: boom}},
+		{"totals fail", &fakeTotals{err: boom}, fakeCaps{limit: micros(1)}},
+		{"cap fails", &fakeTotals{}, fakeCaps{err: boom}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, _ := newService(tc.ledger, tc.caps)
+			svc, _ := newService(tc.totals, tc.caps)
 			_, err := svc.Status(t.Context(), "ws-1")
 			if !errors.Is(err, boom) {
 				t.Fatalf("Status() error = %v, want it to wrap %v", err, boom)
@@ -151,7 +149,7 @@ func TestService_Admit_Allowed(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, logs := newService(&fakeLedger{spent: tc.spent}, fakeCaps{limit: tc.limit})
+			svc, logs := newService(&fakeTotals{total: domain.MonthTotal{Spent: tc.spent}}, fakeCaps{limit: tc.limit})
 			if err := svc.Admit(t.Context(), "ws-1", app.OpBriefGenerate); err != nil {
 				t.Errorf("Admit() = %v, want nil", err)
 			}
@@ -164,7 +162,7 @@ func TestService_Admit_Allowed(t *testing.T) {
 
 func TestService_Admit_NoCapSkipsTheSpendRead(t *testing.T) {
 	var buf bytes.Buffer
-	svc := app.NewService(forbiddenLedger{t}, fakeCaps{}, func() time.Time { return october }, slog.New(slog.NewJSONHandler(&buf, nil)))
+	svc := app.NewService(forbiddenTotals{t}, fakeCaps{}, func() time.Time { return october }, slog.New(slog.NewJSONHandler(&buf, nil)))
 
 	if err := svc.Admit(t.Context(), "ws-1", app.OpReviewStart); err != nil {
 		t.Errorf("Admit() without a cap = %v, want nil", err)
@@ -175,15 +173,15 @@ func TestService_Admit_NoCapSkipsTheSpendRead(t *testing.T) {
 }
 
 func TestService_Status_NoCapStillReadsTheSpend(t *testing.T) {
-	ledger := &fakeLedger{spent: 12_340_000}
-	svc, _ := newService(ledger, fakeCaps{})
+	totals := &fakeTotals{total: domain.MonthTotal{Spent: 12_340_000}}
+	svc, _ := newService(totals, fakeCaps{})
 
 	got, err := svc.Status(t.Context(), "ws-1")
 	if err != nil {
 		t.Fatalf("Status() error = %v", err)
 	}
-	if got.Spent != 12_340_000 || len(ledger.calls) != 1 {
-		t.Errorf("Status() spent = %d after %d ledger calls, want 12340000 after 1 (the Settings screen shows it)", got.Spent, len(ledger.calls))
+	if got.Spent != 12_340_000 || len(totals.calls) != 1 {
+		t.Errorf("Status() spent = %d after %d total reads, want 12340000 after 1 (the Settings screen shows it)", got.Spent, len(totals.calls))
 	}
 }
 
@@ -199,7 +197,7 @@ func TestService_Admit_Refused(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, logs := newService(&fakeLedger{spent: tc.spent}, fakeCaps{limit: &tc.limit})
+			svc, logs := newService(&fakeTotals{total: domain.MonthTotal{Spent: tc.spent}}, fakeCaps{limit: &tc.limit})
 
 			err := svc.Admit(t.Context(), "ws-1", app.OpReviewStart)
 
@@ -240,15 +238,15 @@ func TestService_Admit_FailsClosedOnReadError(t *testing.T) {
 	boom := errors.New("db down")
 	tests := []struct {
 		name   string
-		ledger *fakeLedger
+		totals *fakeTotals
 		caps   fakeCaps
 	}{
-		{"ledger fails", &fakeLedger{err: boom}, fakeCaps{limit: micros(50_000_000)}},
-		{"cap fails", &fakeLedger{}, fakeCaps{err: boom}},
+		{"totals fail", &fakeTotals{err: boom}, fakeCaps{limit: micros(50_000_000)}},
+		{"cap fails", &fakeTotals{}, fakeCaps{err: boom}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			svc, logs := newService(tc.ledger, tc.caps)
+			svc, logs := newService(tc.totals, tc.caps)
 
 			err := svc.Admit(t.Context(), "ws-1", app.OpBriefGenerate)
 
@@ -263,5 +261,59 @@ func TestService_Admit_FailsClosedOnReadError(t *testing.T) {
 				t.Errorf("Admit() logged %q on a read error, want no 402 log line", logs.String())
 			}
 		})
+	}
+}
+
+func TestService_Status_ReportsTheUnpricedCount(t *testing.T) {
+	tests := []struct {
+		name  string
+		total domain.MonthTotal
+		want  domain.Status
+	}{
+		{"spend and unpriced", domain.MonthTotal{Spent: 12_340_000, Unpriced: 3},
+			domain.Status{MonthStart: monthFrom, Spent: 12_340_000, Unpriced: 3, Cap: micros(50_000_000)}},
+		{"only unpriced entries", domain.MonthTotal{Unpriced: 2},
+			domain.Status{MonthStart: monthFrom, Unpriced: 2, Cap: micros(50_000_000)}},
+		{"no entry this month (EC19)", domain.MonthTotal{},
+			domain.Status{MonthStart: monthFrom, Cap: micros(50_000_000)}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _ := newService(&fakeTotals{total: tc.total}, fakeCaps{limit: micros(50_000_000)})
+
+			got, err := svc.Status(t.Context(), "ws-1")
+			if err != nil {
+				t.Fatalf("Status() error = %v", err)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("Status() mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+// Unknown-cost entries never block (FR8): with a huge unpriced count and a spend under the cap,
+// Admit lets the work through.
+func TestService_Admit_UnpricedEntriesNeverBlock(t *testing.T) {
+	svc, logs := newService(&fakeTotals{total: domain.MonthTotal{Spent: 1_000_000, Unpriced: 100_000}}, fakeCaps{limit: micros(50_000_000)})
+
+	if err := svc.Admit(t.Context(), "ws-1", app.OpReviewStart); err != nil {
+		t.Errorf("Admit() = %v, want nil", err)
+	}
+	if logs.Len() != 0 {
+		t.Errorf("Admit() logged %q, want no log line when admitted", logs.String())
+	}
+}
+
+// Admit reads the stored total once, for the workspace asked about and the month of the clock.
+func TestService_Admit_ReadsTheStoredTotalOnce(t *testing.T) {
+	totals := &fakeTotals{total: domain.MonthTotal{Spent: 1}}
+	svc, _ := newService(totals, fakeCaps{limit: micros(50_000_000)})
+
+	if err := svc.Admit(t.Context(), "ws-9", app.OpReviewStart); err != nil {
+		t.Fatalf("Admit() = %v, want nil", err)
+	}
+	if diff := cmp.Diff([]totalsCall{{"ws-9", monthFrom}}, totals.calls); diff != "" {
+		t.Errorf("MonthTotal calls mismatch (-want +got):\n%s", diff)
 	}
 }

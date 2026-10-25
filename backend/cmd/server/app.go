@@ -279,6 +279,11 @@ func startupDB(ctx context.Context, cfg config.Config, db *gorm.DB, sqlDB *sql.D
 			log.ErrorContext(ctx, "startup failed", "step", "migrate", "error", err)
 			return err
 		}
+		// The summary of the cost ledger backfill is logged once (FR15); a failure to log it does
+		// not stop startup.
+		if err := reportLedgerBackfill(ctx, db, log); err != nil {
+			log.ErrorContext(ctx, "cost ledger backfill summary not logged", "error", err)
+		}
 	}
 	if cfg.AutoSeed {
 		if _, err := seed.New(seedpg.NewStore(db), log).Run(ctx); err != nil {
@@ -390,6 +395,11 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, log)
 	}
 	llmOpts.Logger = log
+	// The cost ledger records every answered LLM attempt (FR1) and every new CI run (FR6). The
+	// recorder is built before llm.New and is never a typed-nil: it is always on.
+	spendStore := spendpg.NewStore(db)
+	ledgerRecorder := spendapp.NewRecorder(spendStore, spendapp.Clock(now), log)
+	llmOpts.Recorder = ledgerRecorder
 	llmClient := llm.New(llmOpts)
 
 	settingsSvc := settingsapp.NewService(settingsapp.Deps{
@@ -402,7 +412,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	})
 	// The spend context reads the cap through the settings bag. Its service is a non-nil value, so
 	// every Budget/Spend port below holds a real interface; no field is ever a typed-nil pointer.
-	spendSvc := spendapp.NewService(spendpg.NewStore(db), settingsCaps{settings: settingsSvc}, spendapp.Clock(now), log)
+	spendSvc := spendapp.NewService(spendStore, settingsCaps{settings: settingsSvc}, spendapp.Clock(now), log)
 	intelStore := intelpg.NewStore(db)
 	intelFiles := intelclone.New()
 	intelAnalyzer := inteltreesitter.New()
@@ -562,6 +572,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	})
 	ciIngest := ciapp.NewIngestService(ciapp.IngestDeps{
 		Agents: ciAgents, Store: ciStore, GitHub: ciGitHub, Zip: zipentry.New(), Clock: now, Log: log,
+		Ledger: ciLedger{recorder: ledgerRecorder}, Tx: tx,
 	})
 
 	limits := skillshttp.BodyLimits()
@@ -773,7 +784,7 @@ func listen(ctx context.Context, cfg config.Config, o options, w *wired, runner 
 func newLLMCaller(client llmcall.Structured) peers.CallerFactory {
 	return func(c peers.CallerConfig) reviewerapp.LLM {
 		return llmcall.New(llmcall.Config{
-			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, SessionID: c.SessionID, OnUsage: c.OnUsage,
+			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, SessionID: c.SessionID, OnUsage: c.OnUsage, Charge: c.Charge,
 		})
 	}
 }
@@ -783,7 +794,7 @@ func newLLMCaller(client llmcall.Structured) peers.CallerFactory {
 func newEvalLLMCaller(client llmcall.Structured) evalspeers.CallerFactory {
 	return func(c evalspeers.CallerConfig) reviewerapp.LLM {
 		return llmcall.New(llmcall.Config{
-			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, OnUsage: c.OnUsage,
+			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, OnUsage: c.OnUsage, Charge: c.Charge,
 		})
 	}
 }

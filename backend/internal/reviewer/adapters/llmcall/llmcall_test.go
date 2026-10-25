@@ -174,6 +174,49 @@ func TestCaller_NoOnUsageLeavesTheHookNil(t *testing.T) {
 	}
 }
 
+func TestCaller_ChargeReachesTheRequest(t *testing.T) {
+	fc := &fakeClient{fn: func(llm.Request) (llm.Result, error) {
+		return llm.Result{Data: json.RawMessage(`{"verdict":"approve","summary":"","score":100,"findings":[]}`)}, nil
+	}}
+	charge := llm.Charge{WorkspaceID: "ws-1", Kind: llm.KindReviewRun, RefID: "run-1"}
+	c := llmcall.New(llmcall.Config{Client: fc, Provider: llm.OpenAI, Model: "m", Charge: &charge})
+
+	var seen []*llm.Charge
+	for range 2 {
+		if _, err := c.Review(t.Context(), twoSectionCall(domain.ChunkRef{Total: 1})); err != nil {
+			t.Fatalf("Review() error = %v", err)
+		}
+		seen = append(seen, fc.req.Charge)
+	}
+	for i, got := range seen {
+		if diff := cmp.Diff(&llm.Charge{WorkspaceID: "ws-1", Kind: llm.KindReviewRun, RefID: "run-1"}, got); diff != "" {
+			t.Errorf("Review() call %d request charge mismatch (-want +got):\n%s", i, diff)
+		}
+	}
+
+	// Each request owns its copy: neither the caller's value nor an earlier request is shared.
+	if seen[0] == &charge || seen[0] == seen[1] {
+		t.Error("Review() requests share the Charge pointer, want a copy per request")
+	}
+	charge.RefID = "changed"
+	if seen[0].RefID != "run-1" {
+		t.Errorf("request charge RefID = %q after the caller changed its value, want run-1", seen[0].RefID)
+	}
+}
+
+func TestCaller_NilChargeStaysNil(t *testing.T) {
+	fc := &fakeClient{fn: func(llm.Request) (llm.Result, error) {
+		return llm.Result{Data: json.RawMessage(`{"verdict":"approve","summary":"","score":100,"findings":[]}`)}, nil
+	}}
+	c := llmcall.New(llmcall.Config{Client: fc, Provider: llm.OpenAI, Model: "m"})
+	if _, err := c.Review(t.Context(), twoSectionCall(domain.ChunkRef{Total: 1})); err != nil {
+		t.Fatalf("Review() error = %v", err)
+	}
+	if fc.req.Charge != nil {
+		t.Errorf("Review() request charge = %+v, want nil", fc.req.Charge)
+	}
+}
+
 func TestCaller_ClientErrorPassesThroughUnchanged(t *testing.T) {
 	boom := errors.New("OpenAI structured output failed schema validation for Review after 3 attempt(s)")
 	fc := &fakeClient{fn: func(llm.Request) (llm.Result, error) { return llm.Result{}, boom }}

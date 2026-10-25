@@ -453,6 +453,310 @@ func TestMigration0004_ResetHistoryIndexes(t *testing.T) {
 	}
 }
 
+// ledgerFixture is the pre-ledger data of TestMigration0005_CostLedger (database at version 4):
+// every cost source, the mirror, NULL and malformed costs, boundary times, two months and two
+// workspaces. Ids are fixed so that expectations can name them.
+const ledgerFixture = `
+INSERT INTO workspaces (id, name) VALUES
+  ('00000000-0000-0000-0000-0000000000a1', 'w1'), ('00000000-0000-0000-0000-0000000000a2', 'w2');
+INSERT INTO repos (id, workspace_id, owner, name, full_name) VALUES
+  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000a1', 'o', 'r1', 'o/r1'),
+  ('00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000a1', 'o', 'r2', 'o/r2');
+INSERT INTO pull_requests (id, workspace_id, repo_id, number, title, author, branch, base, head_sha) VALUES
+  ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 1, 't', 'a', 'b', 'main', 's'),
+  ('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 2, 't', 'a', 'b', 'main', 's'),
+  ('00000000-0000-0000-0000-0000000000c3', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 3, 't', 'a', 'b', 'main', 's'),
+  ('00000000-0000-0000-0000-0000000000c4', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 4, 't', 'a', 'b', 'main', 's'),
+  ('00000000-0000-0000-0000-0000000000c5', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 5, 't', 'a', 'b', 'main', 's'),
+  ('00000000-0000-0000-0000-0000000000c6', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 6, 't', 'a', 'b', 'main', 's');
+-- agent_runs: d1 local (2026-09-30 23:30 UTC, written with an offset), d2 NULL cost, d3 negative,
+-- d4 CI with a ci_runs row, d5 CI without one, d6 other workspace.
+INSERT INTO agent_runs (id, workspace_id, ran_at, provider, model, tokens_in, tokens_out, source, cost_usd) VALUES
+  ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000a1', '2026-10-01 01:30:00+02', 'openai', 'gpt', 100, 50, 'local', 0.123456),
+  ('00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-0000000000a1', '2026-10-02 10:00:00+00', 'openai', 'gpt', 1, 1, 'local', NULL),
+  ('00000000-0000-0000-0000-0000000000d3', '00000000-0000-0000-0000-0000000000a1', '2026-10-02 10:00:00+00', 'openai', 'gpt', 1, 1, 'local', -1),
+  ('00000000-0000-0000-0000-0000000000d4', '00000000-0000-0000-0000-0000000000a1', '2026-10-05 08:00:00+00', 'openrouter', NULL, NULL, NULL, 'ci', 0.5),
+  ('00000000-0000-0000-0000-0000000000d5', '00000000-0000-0000-0000-0000000000a1', '2026-10-06 08:00:00+00', 'openrouter', NULL, NULL, NULL, 'ci', 0.25),
+  ('00000000-0000-0000-0000-0000000000d6', '00000000-0000-0000-0000-0000000000a2', '2026-10-01 00:00:00+00', 'openai', 'gpt', 3, 4, 'local', 1);
+-- The mirror of d4 (not counted) and a second ci_runs row without a link.
+INSERT INTO ci_runs (id, agent_run_id, github_run_id, run_attempt, ran_at, cost_usd, source) VALUES
+  ('00000000-0000-0000-0000-0000000000e1', '00000000-0000-0000-0000-0000000000d4', 111, 2, '2026-10-05 08:00:00+00', 0.5, 'ci'),
+  ('00000000-0000-0000-0000-0000000000e2', NULL, 222, 1, '2026-10-07 08:00:00+00', 9, 'ci');
+INSERT INTO eval_cases (id, workspace_id, owner_kind, owner_id, name) VALUES
+  ('00000000-0000-0000-0000-0000000000f1', '00000000-0000-0000-0000-0000000000a1', 'agent', '00000000-0000-0000-0000-0000000000f9', 'c');
+INSERT INTO eval_runs (id, case_id, ran_at, cost_usd) VALUES
+  ('00000000-0000-0000-0000-000000000101', '00000000-0000-0000-0000-0000000000f1', '2026-10-08 00:00:00+00', 0.000001),
+  ('00000000-0000-0000-0000-000000000102', '00000000-0000-0000-0000-0000000000f1', '2026-10-08 00:00:00+00', NULL);
+-- convention_scans (double precision): 0.0000005 rounds half away from zero to 1 micro-USD;
+-- NaN, Infinity and 1e12 are malformed.
+INSERT INTO convention_scans (id, workspace_id, repo_id, status, model, tokens_in, tokens_out, started_at, cost_usd) VALUES
+  ('00000000-0000-0000-0000-000000000111', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 'done', 'm', 7, 8, '2026-10-09 00:00:00+00', 0.0000005),
+  ('00000000-0000-0000-0000-000000000112', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 'done', 'm', 1, 1, '2026-10-09 00:00:00+00', 'NaN'),
+  ('00000000-0000-0000-0000-000000000113', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 'done', 'm', 1, 1, '2026-10-09 00:00:00+00', 'Infinity'),
+  ('00000000-0000-0000-0000-000000000114', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 'done', 'm', 1, 1, '2026-10-09 00:00:00+00', 1e12);
+-- pr_intent: c1 counted, c2 without a time (malformed).
+INSERT INTO pr_intent (pr_id, intent, provider, model, tokens_in, tokens_out, cost_usd, derived_at) VALUES
+  ('00000000-0000-0000-0000-0000000000c1', 'i', 'openai', 'gpt', 5, 6, 2.5, '2026-10-10 00:00:00+00'),
+  ('00000000-0000-0000-0000-0000000000c2', 'i', 'openai', 'gpt', 5, 6, 3, NULL);
+-- pr_brief: c3 counted, c4 cost is a string, c5 time is garbage, c6 an array (no cost).
+INSERT INTO pr_brief (pr_id, json) VALUES
+  ('00000000-0000-0000-0000-0000000000c3', '{"cost_usd": 0.75, "generated_at": "2026-10-11T12:00:00Z"}'),
+  ('00000000-0000-0000-0000-0000000000c4', '{"cost_usd": "x", "generated_at": "2026-10-11T12:00:00Z"}'),
+  ('00000000-0000-0000-0000-0000000000c5', '{"cost_usd": 0.1, "generated_at": "garbage"}'),
+  ('00000000-0000-0000-0000-0000000000c6', '[1, 2]');
+-- onboarding: b1 counted, b2 cost is a string.
+INSERT INTO onboarding (repo_id, json, generated_at) VALUES
+  ('00000000-0000-0000-0000-0000000000b1', '{"cost_usd": 0.3}', '2026-10-12 00:00:00+00'),
+  ('00000000-0000-0000-0000-0000000000b2', '{"cost_usd": "bad"}', '2026-10-12 00:00:00+00');
+`
+
+// ledgerRows returns the entries of the ledger without their random ids, sorted by dedupe key.
+func ledgerRows(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	return queryStrings(t, db, `SELECT format('%s kind=%s origin=%s ws=%s at=%s prov=%s model=%s in=%s out=%s cost=%s ref=%s',
+	    dedupe_key, kind, origin, w.name, to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US'),
+	    provider, model, coalesce(tokens_in::text, '-'), coalesce(tokens_out::text, '-'),
+	    coalesce(cost_micros::text, '-'), coalesce(ref_id::text, '-'))
+	  FROM cost_ledger l JOIN workspaces w ON w.id = l.workspace_id ORDER BY dedupe_key`)
+}
+
+func totalsRows(t *testing.T, db *sql.DB) []string {
+	t.Helper()
+	return queryStrings(t, db, `SELECT format('%s %s slot=%s spent=%s unpriced=%s entries=%s',
+	    w.name, to_char(month, 'YYYY-MM-DD'), slot, spent_micros, unpriced_count, entry_count)
+	  FROM spend_month_totals t JOIN workspaces w ON w.id = t.workspace_id ORDER BY 1`)
+}
+
+func queryStrings(t *testing.T, db *sql.DB, q string) []string {
+	t.Helper()
+	rows, err := db.Query(q)
+	if err != nil {
+		t.Fatalf("query failed: %v\n%s", err, q)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// TestMigration0005_CostLedger: Up creates exactly the three ledger tables and backfills them
+// from the cost records of the other contexts (FR10), Down drops exactly those tables and leaves
+// the cost records alone, and Up again recreates the same entries without duplicates (EC18).
+func TestMigration0005_CostLedger(t *testing.T) {
+	upTo4Names := []string{"0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes"}
+	upTo5Names := append(append([]string{}, upTo4Names...), "0005_cost_ledger")
+
+	t.Run("backfill, down, up", func(t *testing.T) {
+		d := pgtest.Empty(t)
+		db := sqlDBOf(t, d)
+
+		if _, err := newMigrator(t, db, embeddedFS(t, upTo4Names...)).Up(t.Context()); err != nil {
+			t.Fatalf("Up() versions 1-4 error = %v", err)
+		}
+		before := catalog(t, db)
+		if _, err := db.ExecContext(t.Context(), ledgerFixture); err != nil {
+			t.Fatalf("load fixture: %v", err)
+		}
+		var costRecords int
+		if err := db.QueryRow(`SELECT (SELECT count(*) FROM agent_runs) + (SELECT count(*) FROM ci_runs) + (SELECT count(*) FROM pr_brief)`).Scan(&costRecords); err != nil {
+			t.Fatal(err)
+		}
+
+		upTo5 := embeddedFS(t, upTo5Names...)
+		all, err := migrate.Load(upTo5)
+		if err != nil {
+			t.Fatalf("Load(versions 1-5) error = %v", err)
+		}
+		if len(all) != 5 || all[4].Version != 5 || all[4].Name != "cost_ledger" {
+			t.Fatalf("Load(versions 1-5) = %d migrations, last %+v, want 5 ending in version 5 cost_ledger", len(all), all[len(all)-1])
+		}
+		m := newMigrator(t, db, upTo5)
+		if n, err := m.Up(t.Context()); err != nil || n != 1 {
+			t.Fatalf("Up() = %d, %v, want 1, nil (version 5 only)", n, err)
+		}
+		afterUp := catalog(t, db)
+		if removed := onlyIn(before, afterUp); len(removed) != 0 {
+			t.Errorf("objects removed by 0005 = %v, want none", removed)
+		}
+		var tables, indexes []string
+		for _, line := range onlyIn(afterUp, before) {
+			switch {
+			case strings.HasPrefix(line, "table "):
+				tables = append(tables, line)
+			case strings.HasPrefix(line, "index "):
+				indexes = append(indexes, line)
+			}
+			if !strings.Contains(line, " cost_ledger") && !strings.Contains(line, " spend_month_totals") &&
+				!strings.Contains(line, "column cost_ledger") && !strings.Contains(line, "column spend_month_totals") {
+				t.Errorf("0005 added %q, which names none of its tables", line)
+			}
+		}
+		if diff := cmp.Diff([]string{"table cost_ledger", "table cost_ledger_backfill", "table spend_month_totals"}, tables); diff != "" {
+			t.Errorf("tables added by 0005 mismatch (-want +got):\n%s", diff)
+		}
+		wantIndexes := []string{
+			"index cost_ledger cost_ledger_dedupe_key_key CREATE UNIQUE INDEX cost_ledger_dedupe_key_key ON public.cost_ledger USING btree (dedupe_key)",
+			"index cost_ledger cost_ledger_pkey CREATE UNIQUE INDEX cost_ledger_pkey ON public.cost_ledger USING btree (id)",
+			"index cost_ledger cost_ledger_ws_occurred_idx CREATE INDEX cost_ledger_ws_occurred_idx ON public.cost_ledger USING btree (workspace_id, occurred_at)",
+			"index cost_ledger_backfill cost_ledger_backfill_pkey CREATE UNIQUE INDEX cost_ledger_backfill_pkey ON public.cost_ledger_backfill USING btree (id)",
+			"index spend_month_totals spend_month_totals_pkey CREATE UNIQUE INDEX spend_month_totals_pkey ON public.spend_month_totals USING btree (workspace_id, month, slot)",
+		}
+		if diff := cmp.Diff(wantIndexes, indexes); diff != "" {
+			t.Errorf("indexes added by 0005 mismatch (-want +got):\n%s", diff)
+		}
+
+		// The backfill: one entry per counted record with a usable cost. d2/eval 102 have no cost
+		// (EC17), d3, the NaN/Infinity/1e12 scans, c2 (no time), c4, c5 and b2 are malformed, the
+		// mirror ci_runs rows and the array brief c6 carry nothing.
+		wantEntries := []string{
+			"backfill:convention_scan:00000000-0000-0000-0000-000000000111 kind=conventions_scan origin=backfill ws=w1 at=2026-10-09T00:00:00.000000 prov= model=m in=7 out=8 cost=1 ref=00000000-0000-0000-0000-000000000111",
+			"backfill:eval_run:00000000-0000-0000-0000-000000000101 kind=eval_case origin=backfill ws=w1 at=2026-10-08T00:00:00.000000 prov= model= in=- out=- cost=1 ref=00000000-0000-0000-0000-0000000000f1",
+			"backfill:agent_run:00000000-0000-0000-0000-0000000000d1 kind=review_run origin=backfill ws=w1 at=2026-09-30T23:30:00.000000 prov=openai model=gpt in=100 out=50 cost=123456 ref=00000000-0000-0000-0000-0000000000d1",
+			"backfill:agent_run:00000000-0000-0000-0000-0000000000d5 kind=ci_run origin=backfill ws=w1 at=2026-10-06T08:00:00.000000 prov=openrouter model= in=- out=- cost=250000 ref=00000000-0000-0000-0000-0000000000d5",
+			"backfill:agent_run:00000000-0000-0000-0000-0000000000d6 kind=review_run origin=backfill ws=w2 at=2026-10-01T00:00:00.000000 prov=openai model=gpt in=3 out=4 cost=1000000 ref=00000000-0000-0000-0000-0000000000d6",
+			"backfill:onboarding:00000000-0000-0000-0000-0000000000b1 kind=onboarding origin=backfill ws=w1 at=2026-10-12T00:00:00.000000 prov= model= in=- out=- cost=300000 ref=00000000-0000-0000-0000-0000000000b1",
+			"backfill:pr_brief:00000000-0000-0000-0000-0000000000c3 kind=brief origin=backfill ws=w1 at=2026-10-11T12:00:00.000000 prov= model= in=- out=- cost=750000 ref=00000000-0000-0000-0000-0000000000c3",
+			"backfill:pr_intent:00000000-0000-0000-0000-0000000000c1 kind=review_intent origin=backfill ws=w1 at=2026-10-10T00:00:00.000000 prov=openai model=gpt in=5 out=6 cost=2500000 ref=00000000-0000-0000-0000-0000000000c1",
+			"ci:111:2 kind=ci_run origin=backfill ws=w1 at=2026-10-05T08:00:00.000000 prov=openrouter model= in=- out=- cost=500000 ref=00000000-0000-0000-0000-0000000000d4",
+		}
+		sort.Strings(wantEntries)
+		entries := ledgerRows(t, db)
+		if diff := cmp.Diff(wantEntries, entries); diff != "" {
+			t.Errorf("backfilled entries mismatch (-want +got):\n%s", diff)
+		}
+		wantTotals := []string{
+			"w1 2026-09-01 slot=0 spent=123456 unpriced=0 entries=1",
+			"w1 2026-10-01 slot=0 spent=4300002 unpriced=0 entries=7",
+			"w2 2026-10-01 slot=0 spent=1000000 unpriced=0 entries=1",
+		}
+		totals := totalsRows(t, db)
+		if diff := cmp.Diff(wantTotals, totals); diff != "" {
+			t.Errorf("stored totals mismatch (-want +got):\n%s", diff)
+		}
+		wantSummary := `{"brief": 1, "ci_run": 2, "eval_case": 1, "onboarding": 1, "review_run": 2, "review_intent": 1, "intent_refresh": 0, "conventions_scan": 1} skipped=8 logged=false`
+		summary := queryStrings(t, db, `SELECT created::text || ' skipped=' || skipped || ' logged=' || (logged_at IS NOT NULL) FROM cost_ledger_backfill`)
+		if len(summary) != 1 {
+			t.Fatalf("cost_ledger_backfill has %d rows, want 1", len(summary))
+		}
+		var got, want map[string]any
+		gotJSON, _, _ := strings.Cut(summary[0], " skipped=")
+		wantJSON, _, _ := strings.Cut(wantSummary, " skipped=")
+		if err := json.Unmarshal([]byte(gotJSON), &got); err != nil {
+			t.Fatalf("summary created %q: %v", gotJSON, err)
+		}
+		if err := json.Unmarshal([]byte(wantJSON), &want); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("backfill summary created mismatch (-want +got):\n%s", diff)
+		}
+		if _, tail, _ := strings.Cut(summary[0], " skipped="); tail != "8 logged=false" {
+			t.Errorf("backfill summary tail = %q, want %q", tail, "8 logged=false")
+		}
+
+		// The table accepts what the app writes and refuses what it must not.
+		const ws = "00000000-0000-0000-0000-0000000000a1"
+		ok := `INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, dedupe_key) VALUES ($1, now(), $2, 'live', $3)`
+		if _, err := db.Exec(ok, ws, "ci_run", "live:1"); err != nil {
+			t.Errorf("insert with empty provider/model, no tokens, cost or ref error = %v, want nil", err)
+		}
+		for name, q := range map[string]string{
+			"duplicate dedupe key": `INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, dedupe_key) VALUES ('` + ws + `', now(), 'brief', 'live', 'ci:111:2')`,
+			"unknown kind":         `INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, dedupe_key) VALUES ('` + ws + `', now(), 'x', 'live', 'live:2')`,
+			"unknown origin":       `INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, dedupe_key) VALUES ('` + ws + `', now(), 'brief', 'x', 'live:3')`,
+			"negative cost":        `INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, dedupe_key, cost_micros) VALUES ('` + ws + `', now(), 'brief', 'live', 'live:4', -1)`,
+			"negative tokens":      `INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, dedupe_key, tokens_in) VALUES ('` + ws + `', now(), 'brief', 'live', 'live:5', -1)`,
+			"unknown workspace":    `INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, dedupe_key) VALUES ('00000000-0000-0000-0000-0000000000ff', now(), 'brief', 'live', 'live:6')`,
+			"slot out of range":    `INSERT INTO spend_month_totals (workspace_id, month, slot) VALUES ('` + ws + `', '2026-10-01', 8)`,
+			"month not the first":  `INSERT INTO spend_month_totals (workspace_id, month, slot) VALUES ('` + ws + `', '2026-10-02', 0)`,
+			"second summary row":   `INSERT INTO cost_ledger_backfill (id, created, skipped, duration_ms) VALUES (2, '{}', 0, 0)`,
+		} {
+			if _, err := db.Exec(q); err == nil {
+				t.Errorf("%s: insert error = nil, want a constraint violation", name)
+			}
+		}
+		if _, err := db.Exec(`DELETE FROM cost_ledger WHERE dedupe_key = 'live:1'`); err != nil {
+			t.Fatal(err)
+		}
+
+		v, okDown, err := m.Down(t.Context())
+		if err != nil || !okDown || v != 5 {
+			t.Fatalf("Down() = %d, %v, %v, want 5, true, nil", v, okDown, err)
+		}
+		if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+			t.Errorf("schema after Down of 0005 differs from version 4 (-v4 +got):\n%s", diff)
+		}
+		var after int
+		if err := db.QueryRow(`SELECT (SELECT count(*) FROM agent_runs) + (SELECT count(*) FROM ci_runs) + (SELECT count(*) FROM pr_brief)`).Scan(&after); err != nil {
+			t.Fatal(err)
+		}
+		if after != costRecords {
+			t.Errorf("cost records after Down = %d, want %d (unchanged)", after, costRecords)
+		}
+
+		if n, err := m.Up(t.Context()); err != nil || n != 1 {
+			t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+		}
+		if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+			t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(entries, ledgerRows(t, db)); diff != "" {
+			t.Errorf("entries after Down->Up differ from the first Up (-first +got):\n%s", diff)
+		}
+		if diff := cmp.Diff(totals, totalsRows(t, db)); diff != "" {
+			t.Errorf("totals after Down->Up differ from the first Up (-first +got):\n%s", diff)
+		}
+		var distinct, rows int
+		if err := db.QueryRow(`SELECT count(DISTINCT dedupe_key), count(*) FROM cost_ledger`).Scan(&distinct, &rows); err != nil {
+			t.Fatal(err)
+		}
+		if distinct != rows || rows != len(wantEntries) {
+			t.Errorf("entries after Down->Up = %d rows, %d distinct keys, want %d, %d", rows, distinct, len(wantEntries), len(wantEntries))
+		}
+	})
+
+	// The seed runs after the migrations (D18): on a new database the backfill finds nothing.
+	t.Run("fresh database backfills nothing", func(t *testing.T) {
+		d := pgtest.Empty(t)
+		db := sqlDBOf(t, d)
+		if _, err := newMigrator(t, db, embeddedFS(t, upTo5Names...)).Up(t.Context()); err != nil {
+			t.Fatalf("Up() versions 1-5 error = %v", err)
+		}
+		if got := ledgerRows(t, db); len(got) != 0 {
+			t.Errorf("entries on a fresh database = %v, want none", got)
+		}
+		if got := totalsRows(t, db); len(got) != 0 {
+			t.Errorf("totals on a fresh database = %v, want none", got)
+		}
+		got := queryStrings(t, db, `SELECT jsonb_object_agg(k, v)::text || ' skipped=' || min(skipped) FROM cost_ledger_backfill, jsonb_each_text(created) AS e(k, v)`)
+		want := []string{`{"brief": "0", "ci_run": "0", "eval_case": "0", "onboarding": "0", "review_run": "0", "review_intent": "0", "intent_refresh": "0", "conventions_scan": "0"} skipped=0`}
+		if len(got) != 1 {
+			t.Fatalf("summary = %v, want one row", got)
+		}
+		var g, w map[string]any
+		gj, gt, _ := strings.Cut(got[0], " skipped=")
+		wj, wt, _ := strings.Cut(want[0], " skipped=")
+		if err := json.Unmarshal([]byte(gj), &g); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal([]byte(wj), &w); err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(w, g); diff != "" || gt != wt {
+			t.Errorf("summary on a fresh database mismatch (-want +got):\n%s skipped %s, want %s", diff, gt, wt)
+		}
+	})
+}
+
 // onlyIn returns the entries of a that are not in b (both sorted).
 func onlyIn(a, b []string) []string {
 	have := make(map[string]bool, len(b))

@@ -118,6 +118,7 @@ func TestNewRunFromArtifact(t *testing.T) {
 		want.PRNumber, want.ManifestVersion = ptr(17), ptr(5)
 		want.Status, want.Model, want.CostUSD, want.DurationMS = domain.RunSucceeded, ptr("m"), ptr(0.5), ptr(900)
 		want.FindingsCount, want.Blockers = 3, 2
+		want.FromArtifact = true
 		got := domain.NewRunFromArtifact("ws", testInstallation(), testRun(), a, testNow)
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("NewRunFromArtifact() mismatch (-want +got):\n%s", diff)
@@ -127,6 +128,7 @@ func TestNewRunFromArtifact(t *testing.T) {
 		want := base
 		want.PRNumber, want.ManifestVersion = ptr(7), ptr(2)
 		want.Status = domain.RunNoFindings
+		want.FromArtifact = true
 		got := domain.NewRunFromArtifact("ws", testInstallation(), testRun(), domain.CiResultArtifact{}, testNow)
 		if diff := cmp.Diff(want, got); diff != "" {
 			t.Errorf("NewRunFromArtifact() mismatch (-want +got):\n%s", diff)

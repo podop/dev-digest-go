@@ -20,6 +20,10 @@ type IngestDeps struct {
 	Store  Store
 	GitHub GitHub
 	Zip    ArtifactReader
+	// Ledger appends the cost ledger entry of a run stored from an artifact, in the transaction
+	// that stores the run; nil = ledger off. Tx is required whenever Ledger is set.
+	Ledger Ledger
+	Tx     Tx
 	// Clock measures the refresh budget and stands in for an unparsable run time; nil = time.Now.
 	Clock Clock
 	// Log receives the per-installation failure and per-run skip lines; nil discards them.
@@ -39,6 +43,9 @@ var _ Ingest = (*IngestService)(nil)
 func NewIngestService(d IngestDeps) *IngestService {
 	if d.Agents == nil || d.Store == nil || d.GitHub == nil || d.Zip == nil {
 		panic("ci/app: NewIngestService needs every dependency")
+	}
+	if d.Ledger != nil && d.Tx == nil {
+		panic("ci/app: NewIngestService needs a Tx with a Ledger")
 	}
 	s := &IngestService{d: d, now: d.Clock, log: d.Log}
 	if s.now == nil {
@@ -210,7 +217,7 @@ func (r *refresh) installation(ctx context.Context, inst domain.Installation, sl
 			r.skipped(ctx, inst, res, run, out.skip)
 			continue
 		}
-		inserted, err := r.s.d.Store.RecordRun(ctx, out.run)
+		inserted, err := r.record(ctx, out.run)
 		if errors.Is(err, ErrNotStorable) {
 			r.skipped(ctx, inst, res, run, domain.SkipInvalid)
 			continue
@@ -223,6 +230,50 @@ func (r *refresh) installation(ctx context.Context, inst domain.Installation, sl
 		}
 	}
 	return nil
+}
+
+// record stores the run. A run built from an artifact with the ledger on is stored together with
+// its ledger entry in one transaction, so a ledger failure leaves no CI run behind and the next
+// refresh retries it; a run without an artifact appends no entry (spec D9). It reports whether
+// this call stored the run.
+func (r *refresh) record(ctx context.Context, run domain.NewRun) (bool, error) {
+	if r.s.d.Ledger == nil || !run.FromArtifact {
+		rec, err := r.s.d.Store.RecordRun(ctx, run)
+		return rec.Stored, err
+	}
+	stored := false
+	err := r.s.d.Tx.InTx(ctx, func(ctx context.Context) error {
+		stored = false
+		rec, err := r.s.d.Store.RecordRun(ctx, run)
+		if err != nil {
+			return err
+		}
+		if !rec.Stored {
+			return nil
+		}
+		if err := r.s.d.Ledger.RecordCIRun(ctx, ciRunOf(run, rec)); err != nil {
+			return fmt.Errorf("record ci run in ledger: %w", err)
+		}
+		stored = true
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return stored, nil
+}
+
+func ciRunOf(run domain.NewRun, rec Recorded) CIRun {
+	return CIRun{
+		WorkspaceID: run.WorkspaceID,
+		AgentRunID:  rec.AgentRunID,
+		GithubRunID: run.GithubRunID,
+		Attempt:     run.RunAttempt,
+		OccurredAt:  run.RanAt,
+		Provider:    domain.ProviderOpenRouter,
+		Model:       run.Model,
+		CostUSD:     run.CostUSD,
+	}
 }
 
 func (r *refresh) skipped(ctx context.Context, inst domain.Installation, res *domain.InstallationResult, run domain.WorkflowRun, reason domain.SkipReason) {

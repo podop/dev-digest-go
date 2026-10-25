@@ -401,11 +401,12 @@ func TestSettings_SpendStatusShape(t *testing.T) { // AC14 (FR12), FR13
 		t.Fatalf("PUT cap = %d %s, want 200", put.Status, put.Body)
 	}
 	want := map[string]any{
-		"month_start":   "2031-03-01T00:00:00.000Z",
-		"spent_usd":     float64(0),
-		"cap_usd":       12.5,
-		"remaining_usd": 12.5,
-		"cap_reached":   false,
+		"month_start":    "2031-03-01T00:00:00.000Z",
+		"spent_usd":      float64(0),
+		"cap_usd":        12.5,
+		"remaining_usd":  12.5,
+		"cap_reached":    false,
+		"unpriced_count": float64(0), // always sent, 0 included (ledger FR13)
 	}
 	if diff := cmp.Diff(want, s.get("/settings/spend").Obj(t)); diff != "" {
 		t.Errorf("GET /settings/spend mismatch (-want +got):\n%s", diff)

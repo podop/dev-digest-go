@@ -8,7 +8,8 @@ import (
 
 // Wiring of the spend context (plan S26): GET /settings/spend and GET /about are served, the cap
 // is read from the settings bag, and an entry point that passes through the budget port answers
-// 402 once the cap is reached.
+// 402 once the cap is reached. Since the cost ledger the month spend comes from the stored month
+// totals, which TestSpend_StatusAndAdmissionReadTheLedger drives through seedLedgerSpend.
 
 func TestSpend_RoutesAndCapAreWired(t *testing.T) {
 	s := startStack(t, spec{now: func() time.Time { return time.Date(2031, 1, 15, 12, 0, 0, 0, time.UTC) }})
@@ -45,6 +46,34 @@ func TestSpend_ReachedCapRefusesAnEntryPoint(t *testing.T) {
 	resp := startReview(t, s, pr, map[string]any{"all": true})
 	if resp.Status != http.StatusPaymentRequired || resp.errorCode(t) != "spend_cap_reached" {
 		t.Errorf("POST /pulls/%s/review with the cap reached = %d %s, want 402 spend_cap_reached", pr, resp.Status, resp.Body)
+	}
+}
+
+// A ledger entry moves GET /settings/spend and the admission of an entry point, and nothing else does
+// (ledger FR8, FR11): the cap is reached by the entries of the month, not by the entries of another
+// month or workspace.
+func TestSpend_StatusAndAdmissionReadTheLedger(t *testing.T) {
+	s := startStack(t, spec{now: capClock})
+	ws := workspaceID(t, s)
+	requireNoSpend(t, s)
+	setCap(t, s, 1)
+
+	other := scalar[string](t, s.db.DB, `INSERT INTO workspaces (name) VALUES ('other') RETURNING id::text`)
+	seedLedgerSpend(t, s, other, capNow, 5)
+	seedLedgerSpend(t, s, ws, time.Date(2030, 12, 31, 23, 59, 59, 0, time.UTC), 5)
+	seedLedgerSpend(t, s, ws, capNow, 0.4)
+	seedLedgerUnpriced(t, s, ws, capNow)
+	if got := s.get("/settings/spend").Obj(t); got["spent_usd"] != 0.4 || got["cap_reached"] != false {
+		t.Fatalf("GET /settings/spend below the cap = %v, want spent_usd 0.4 and cap_reached false", got)
+	}
+
+	seedLedgerSpend(t, s, ws, capNow, 0.6)
+	if got := s.get("/settings/spend").Obj(t); got["spent_usd"] != float64(1) || got["cap_reached"] != true {
+		t.Fatalf("GET /settings/spend at the cap = %v, want spent_usd 1 and cap_reached true", got)
+	}
+	pr := s.get("/repos/" + repoByName(t, s, "acme/payments-api") + "/pulls").JSON(t).([]any)[0].(map[string]any)["id"].(string)
+	if r := startReview(t, s, pr, map[string]any{"all": true}); r.Status != http.StatusPaymentRequired || r.errorCode(t) != "spend_cap_reached" {
+		t.Errorf("POST /pulls/%s/review with the ledger at the cap = %d %s, want 402 spend_cap_reached", pr, r.Status, r.Body)
 	}
 }
 

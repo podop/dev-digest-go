@@ -267,6 +267,7 @@ func (j *Jobs) propose(ctx context.Context, p ExtractPayload, repo Repo, sample 
 		Reprompts:     domain.LLMReprompts,
 		Feature:       featureName,
 		CorrelationID: p.ScanID,
+		Charge:        &llm.Charge{WorkspaceID: p.WorkspaceID, Kind: llm.KindConventionsScan, RefID: p.ScanID},
 		Sections: []llm.PromptSection{
 			{Name: "system", Source: "engine", Trust: llm.Trusted, Chars: llm.UTF16Len(domain.ExtractionSystemPrompt)},
 			{Name: "task", Source: "engine", Trust: llm.Trusted, Chars: llm.UTF16Len(domain.TaskText(repo.FullName))},

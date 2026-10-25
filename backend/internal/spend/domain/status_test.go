@@ -75,3 +75,30 @@ func TestStatus_MessageSpecExample(t *testing.T) {
 		t.Errorf("Message() = %q, want %q", got, want)
 	}
 }
+
+// TestStatus_Unpriced: the count of unknown-cost entries rides on the status; it neither changes
+// whether the cap is reached nor the message (FR7, FR13).
+func TestStatus_Unpriced(t *testing.T) {
+	start := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	base := domain.Status{MonthStart: start, Spent: 18_400_000, Cap: micros(50_000_000)}
+	withUnpriced := base
+	withUnpriced.Unpriced = 3
+
+	if withUnpriced.Unpriced != 3 {
+		t.Errorf("Unpriced = %d, want 3", withUnpriced.Unpriced)
+	}
+	if base.Unpriced != 0 {
+		t.Errorf("zero value Unpriced = %d, want 0", base.Unpriced)
+	}
+	if got, want := withUnpriced.Reached(), base.Reached(); got != want {
+		t.Errorf("Reached() with Unpriced = %v, want %v", got, want)
+	}
+	if got, want := withUnpriced.Message(), base.Message(); got != want {
+		t.Errorf("Message() with Unpriced = %q, want %q", got, want)
+	}
+	gotRem, gotOK := withUnpriced.Remaining()
+	wantRem, wantOK := base.Remaining()
+	if gotRem != wantRem || gotOK != wantOK {
+		t.Errorf("Remaining() with Unpriced = (%d, %v), want (%d, %v)", gotRem, gotOK, wantRem, wantOK)
+	}
+}

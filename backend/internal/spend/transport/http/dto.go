@@ -17,13 +17,17 @@ type statusResponse struct {
 	CapUSD       *float64 `json:"cap_usd"`
 	RemainingUSD *float64 `json:"remaining_usd"`
 	CapReached   bool     `json:"cap_reached"`
+	// UnpricedCount is the number of this month's answered calls whose cost is unknown. They are
+	// not in SpentUSD. It is always sent, 0 included (FR13).
+	UnpricedCount int `json:"unpriced_count"`
 }
 
 func toStatusResponse(s domain.Status) statusResponse {
 	out := statusResponse{
-		MonthStart: s.MonthStart.UTC().Format(monthStartLayout),
-		SpentUSD:   s.Spent.USD(),
-		CapReached: s.Reached(),
+		MonthStart:    s.MonthStart.UTC().Format(monthStartLayout),
+		SpentUSD:      s.Spent.USD(),
+		CapReached:    s.Reached(),
+		UnpricedCount: s.Unpriced,
 	}
 	if s.Cap != nil {
 		v := s.Cap.USD()

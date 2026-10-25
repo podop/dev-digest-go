@@ -94,6 +94,31 @@ describe("SpendCapField", () => {
     expect(screen.getByText("$0.00 remaining of $50.00")).toBeInTheDocument();
   });
 
+  it("adds the unknown-cost sentence with plural forms, with or without a cap, nothing for 0 or absent (AC16)", async () => {
+    const sentence = /calls? with unknown cost (is|are) not included\./;
+    const view = (body: unknown) => {
+      mockCap(50, body);
+      return renderWithProviders(<SpendCapField />);
+    };
+
+    let r = view(spend({ unpriced_count: 1 }));
+    expect(await screen.findByText("1 call with unknown cost is not included.")).toBeInTheDocument();
+    expect(screen.getByText(/\$18\.40 used this month/)).toBeInTheDocument();
+    r.unmount();
+
+    r = view(spend({ unpriced_count: 3, cap_usd: null, remaining_usd: null }));
+    expect(await screen.findByText("3 calls with unknown cost are not included.")).toBeInTheDocument();
+    expect(screen.getByText(/No cap · \$18\.40 used this month/)).toBeInTheDocument();
+    r.unmount();
+
+    for (const over of [{ unpriced_count: 0 }, {}]) {
+      r = view(spend(over));
+      expect(await screen.findByText(/\$18\.40 used this month/)).toBeInTheDocument();
+      expect(screen.queryByText(sentence)).not.toBeInTheDocument();
+      r.unmount();
+    }
+  });
+
   it("says spend is unavailable and retries the read", async () => {
     let fail = true;
     const api = mockFetch({
@@ -116,6 +141,14 @@ describe("SpendCapField", () => {
     const { container } = renderWithProviders(<SpendCapField />, { messages: pseudoMessages() });
 
     await screen.findByText(/settingsBudget\.spendCap\.reached/);
+    expect(strayText(container)).toEqual([]);
+  });
+
+  it("renders the unknown-cost sentence without hard-coded copy under pseudo messages (AC16)", async () => {
+    mockCap(50, spend({ unpriced_count: 3 }));
+    const { container } = renderWithProviders(<SpendCapField />, { messages: pseudoMessages() });
+
+    await screen.findByText(/settingsBudget\.spendCap\.unpriced/);
     expect(strayText(container)).toEqual([]);
   });
 });

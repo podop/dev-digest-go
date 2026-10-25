@@ -26,6 +26,9 @@ type CallerConfig struct {
 	Model    string
 	// RunID is the correlation id of the prompt log line (the suite run's id).
 	RunID string
+	// Charge labels the case's calls for the spend ledger: the workspace, kind eval_case and the
+	// eval case id. The factory sets it as llmcall's Config.Charge.
+	Charge *llm.Charge
 	// OnUsage receives the usage of every response; nil = none.
 	OnUsage func(reviewer.Usage)
 }
@@ -58,7 +61,10 @@ func (p *Providers) Resolve(_ context.Context, b executor.LLMBinding) (reviewera
 	if err := p.c.Ready(provider); err != nil {
 		return nil, err
 	}
-	cfg := CallerConfig{Provider: provider, Model: b.Model, RunID: b.RunID}
+	cfg := CallerConfig{
+		Provider: provider, Model: b.Model, RunID: b.RunID,
+		Charge: &llm.Charge{WorkspaceID: b.WorkspaceID, Kind: llm.KindEvalCase, RefID: b.CaseID},
+	}
 	if b.OnUsage != nil {
 		on := b.OnUsage
 		cfg.OnUsage = func(u reviewer.Usage) { on(u) }

@@ -144,6 +144,10 @@ func TestExtract_SuccessStoresResultAndAsksTheModelAsSpecified(t *testing.T) {
 		r.Feature != "conventions" || r.CorrelationID != scanID {
 		t.Errorf("request = %+v, want openai gpt-5.4, ConventionExtraction, 6000 tokens, 100 s, 1 reprompt", r)
 	}
+	wantCharge := &llm.Charge{WorkspaceID: ws, Kind: llm.KindConventionsScan, RefID: scanID} // FR1
+	if diff := cmp.Diff(wantCharge, r.Charge); diff != "" {
+		t.Errorf("request Charge mismatch (-want +got):\n%s", diff)
+	}
 	if r.Temperature == nil || *r.Temperature != 0.1 {
 		t.Errorf("temperature = %v, want 0.1", r.Temperature)
 	}

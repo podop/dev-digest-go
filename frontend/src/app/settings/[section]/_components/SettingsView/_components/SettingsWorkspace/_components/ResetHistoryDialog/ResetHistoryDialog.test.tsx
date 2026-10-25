@@ -46,7 +46,7 @@ describe("ResetHistoryDialog", () => {
     expect(within(dialog).getByText("24 learnings")).toBeInTheDocument();
     expect(within(dialog).getByText(/Agents, skills, eval cases/)).toBeInTheDocument();
     expect(within(dialog).getByText(/Export does not include run history/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/spend total will no longer include the deleted runs/)).toBeInTheDocument();
+    expect(within(dialog).getByText("This month's spend total is kept.")).toBeInTheDocument();
 
     const input = within(dialog).getByRole("textbox", { name: "Type acme to confirm" });
     expect(input).toHaveFocus();

@@ -134,6 +134,65 @@ type Request struct {
 	// attempt's usage, so a caller can account spend when the call ends in an error. It is
 	// observational: it runs on the calling goroutine and a panic in it is recovered and logged.
 	OnUsage func(AttemptUsage)
+	// Charge labels the call for the spend ledger: whose money it is and which unit of work it
+	// belongs to. With Options.Recorder set, a nil (or incomplete) Charge is logged as one
+	// warning and the call proceeds unrecorded.
+	Charge *Charge
+}
+
+// UsageKind names the unit of work an LLM call is charged to (the ledger's kind column).
+type UsageKind string
+
+// The kinds a call can be charged to. The CI-ingested run kind is not one of them: those costs
+// arrive through the CI ingest, not through a call.
+const (
+	KindReviewRun       UsageKind = "review_run"
+	KindReviewIntent    UsageKind = "review_intent"
+	KindIntentRefresh   UsageKind = "intent_refresh"
+	KindBrief           UsageKind = "brief"
+	KindOnboarding      UsageKind = "onboarding"
+	KindConventionsScan UsageKind = "conventions_scan"
+	KindEvalCase        UsageKind = "eval_case"
+)
+
+// Valid reports whether k is one of the kinds above.
+func (k UsageKind) Valid() bool {
+	switch k {
+	case KindReviewRun, KindReviewIntent, KindIntentRefresh, KindBrief, KindOnboarding,
+		KindConventionsScan, KindEvalCase:
+		return true
+	}
+	return false
+}
+
+// Charge is the ledger label of one call: the workspace that pays, the kind of work and the id of
+// the unit (review run, pull request, repo, scan or eval case, as the kind says).
+type Charge struct {
+	WorkspaceID string
+	Kind        UsageKind
+	RefID       string
+}
+
+// complete reports whether the label can be recorded: a workspace and a known kind.
+func (c *Charge) complete() bool { return c != nil && c.WorkspaceID != "" && c.Kind.Valid() }
+
+// RecordedUsage is one answered attempt as the Recorder receives it.
+type RecordedUsage struct {
+	Charge   Charge
+	Provider Provider
+	Model    string
+	Tokens   Usage
+	// CostUSD is the provider-reported cost, else the price book's estimate; nil = unpriced.
+	CostUSD *float64
+}
+
+// Recorder receives the usage of every answered attempt of a call that carries a Charge: once per
+// response, schema-invalid and no-choices answers included, never for a request that got no answer,
+// and before the answer is validated. It runs synchronously on the calling goroutine, so an
+// implementation bounds its own work and detaches from the caller's cancellation (a cancelled call
+// has still spent its tokens). A panic in it is recovered and logged.
+type Recorder interface {
+	RecordUsage(ctx context.Context, u RecordedUsage)
 }
 
 // Chunk is the position of a call among the chunks of one review.
@@ -240,6 +299,9 @@ type Options struct {
 	Retry retry.Options
 	// Now is the clock of the default price book (default time.Now).
 	Now func() time.Time
+	// Recorder receives the usage of every answered attempt (see Recorder). Nil = off; pass a
+	// true nil interface, never a typed-nil pointer.
+	Recorder Recorder
 }
 
 // Client runs structured calls and model listings. It is safe for concurrent use.
@@ -251,6 +313,7 @@ type Client struct {
 	book     *PriceBook // owned default price book, or nil
 	budget   time.Duration
 	backoff  retry.Options
+	recorder Recorder
 }
 
 // New builds a Client. It panics when Keys is nil: a wiring error caught at startup.
@@ -265,6 +328,7 @@ func New(opts Options) *Client {
 		prices:   opts.Prices,
 		budget:   opts.TotalBudget,
 		backoff:  opts.Retry,
+		recorder: opts.Recorder,
 	}
 	if c.log == nil {
 		c.log = slog.New(slog.DiscardHandler)

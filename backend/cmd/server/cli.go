@@ -43,6 +43,10 @@ func runMigrate(ctx context.Context, cfg config.Config, args []string, stdout io
 		if err != nil {
 			return err
 		}
+		// The cost ledger backfill summary is logged once, by whichever start sees it first (FR15).
+		if err := reportLedgerBackfill(ctx, db, log); err != nil {
+			log.ErrorContext(ctx, "cost ledger backfill summary not logged", "error", err)
+		}
 		_, err = fmt.Fprintf(stdout, "migrate up: %d version(s) applied\n", n)
 		return err
 	case "down":

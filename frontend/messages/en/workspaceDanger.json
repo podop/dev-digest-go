@@ -28,7 +28,7 @@
       "pulls": "Pull requests, which are marked as not reviewed again"
     },
     "exportNote": "Export does not include run history, so an export is not a backup of what is deleted here.",
-    "spendNote": "This month's spend total will no longer include the deleted runs.",
+    "spendNote": "This month's spend total is kept.",
     "confirmLabel": "Type {name} to confirm",
     "reasonMismatch": "The button stays disabled until the text matches the workspace name exactly.",
     "cancel": "Cancel",

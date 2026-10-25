@@ -93,27 +93,32 @@ func TestStatus_Shape(t *testing.T) {
 		{
 			"no cap: cap and remaining are null",
 			domain.Status{MonthStart: month, Spent: 12_340_000},
-			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":12.34,"cap_usd":null,"remaining_usd":null,"cap_reached":false}`,
+			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":12.34,"cap_usd":null,"remaining_usd":null,"cap_reached":false,"unpriced_count":0}`,
 		},
 		{
 			"under the cap",
 			domain.Status{MonthStart: month, Spent: 12_340_000, Cap: micros(50_000_000)},
-			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":12.34,"cap_usd":50,"remaining_usd":37.66,"cap_reached":false}`,
+			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":12.34,"cap_usd":50,"remaining_usd":37.66,"cap_reached":false,"unpriced_count":0}`,
 		},
 		{
 			"over the cap: remaining is 0, not negative",
 			domain.Status{MonthStart: month, Spent: 50_120_000, Cap: micros(50_000_000)},
-			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":50.12,"cap_usd":50,"remaining_usd":0,"cap_reached":true}`,
+			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":50.12,"cap_usd":50,"remaining_usd":0,"cap_reached":true,"unpriced_count":0}`,
 		},
 		{
 			"cap 0 is reached from the start",
 			domain.Status{MonthStart: month, Cap: micros(0)},
-			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":0,"cap_usd":0,"remaining_usd":0,"cap_reached":true}`,
+			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":0,"cap_usd":0,"remaining_usd":0,"cap_reached":true,"unpriced_count":0}`,
 		},
 		{
 			"six decimals on the wire",
 			domain.Status{MonthStart: month, Spent: 1, Cap: micros(1_000_001)},
-			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":0.000001,"cap_usd":1.000001,"remaining_usd":1,"cap_reached":false}`,
+			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":0.000001,"cap_usd":1.000001,"remaining_usd":1,"cap_reached":false,"unpriced_count":0}`,
+		},
+		{
+			"unpriced calls are counted, not summed",
+			domain.Status{MonthStart: month, Spent: 12_340_000, Unpriced: 3},
+			`{"month_start":"2026-10-01T00:00:00.000Z","spent_usd":12.34,"cap_usd":null,"remaining_usd":null,"cap_reached":false,"unpriced_count":3}`,
 		},
 	}
 	for _, tc := range tests {

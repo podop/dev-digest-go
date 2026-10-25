@@ -340,11 +340,11 @@ func TestLaunch_LogLinesCarryNoContent(t *testing.T) {
 func TestLaunch_TheLLMReceivesTheBindingOfTheRun(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		var mu sync.Mutex
-		type binding struct{ Provider, Model, RunID string }
+		type binding struct{ Provider, Model, RunID, WorkspaceID, CaseID string }
 		var got []binding
 		llm := func(_ context.Context, b executor.LLMBinding, _ reviewerapp.Call) (reviewerapp.CallResult, error) {
 			mu.Lock()
-			got = append(got, binding{b.Provider, b.Model, b.RunID})
+			got = append(got, binding{b.Provider, b.Model, b.RunID, b.WorkspaceID, b.CaseID})
 			mu.Unlock()
 			return emptyReview(), nil
 		}
@@ -352,7 +352,7 @@ func TestLaunch_TheLLMReceivesTheBindingOfTheRun(t *testing.T) {
 		h.launch(evalRun("c1"))
 		synctest.Wait()
 
-		want := []binding{{"openrouter", "m", "run-1"}}
+		want := []binding{{"openrouter", "m", "run-1", "ws-1", "c1"}}
 		if !slices.Equal(got, want) {
 			t.Errorf("bindings = %+v, want %+v", got, want)
 		}

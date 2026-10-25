@@ -99,11 +99,51 @@ type Store interface {
 	// StoredRunKeys returns which of keys are already stored.
 	StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[domain.RunKey]bool, error)
 	// RecordRun writes the ci_runs and agent_runs rows in one transaction with ON CONFLICT
-	// (github_run_id, run_attempt) DO NOTHING; false when another refresh stored the run first.
-	// ErrNotStorable (checked before anything is written) when a value cannot be held.
-	RecordRun(ctx context.Context, run domain.NewRun) (bool, error)
+	// (github_run_id, run_attempt) DO NOTHING; Stored is false when another refresh stored the run
+	// first. It joins the transaction of ctx, so the caller can write more rows with it (the
+	// ledger entry). ErrNotStorable (checked before anything is written) when a value cannot be
+	// held.
+	RecordRun(ctx context.Context, run domain.NewRun) (Recorded, error)
 	// ListRuns returns the runs of the workspace, newest ran_at first, at most f.Limit.
 	ListRuns(ctx context.Context, workspaceID string, f RunFilter) ([]domain.Run, error)
+}
+
+// Recorded is the outcome of Store.RecordRun.
+type Recorded struct {
+	// AgentRunID is the id of the agent_runs row written for the run; empty unless Stored.
+	AgentRunID string
+	// Stored is false when the run (same run id and attempt) was already stored.
+	Stored bool
+}
+
+// CIRun is a newly stored CI run as the cost ledger needs it (spec FR6). It carries ids and the
+// artifact's reported figures only, never the artifact itself.
+type CIRun struct {
+	WorkspaceID string
+	// AgentRunID is the agent_runs row written for the run: the entry's informational reference.
+	AgentRunID string
+	// GithubRunID and Attempt identify the CI run; they make the entry's dedupe key.
+	GithubRunID int64
+	Attempt     int
+	// OccurredAt is the run time the ingest stores for the run.
+	OccurredAt time.Time
+	Provider   string
+	Model      *string
+	// CostUSD is the artifact's reported total; nil when the artifact reports none (unknown).
+	CostUSD *float64
+}
+
+// Ledger appends the cost ledger entry of a CI run. A nil Ledger in IngestDeps switches the ledger
+// off. The append joins the transaction of ctx and an error aborts it; appending the same run
+// again is a no-op.
+type Ledger interface {
+	RecordCIRun(ctx context.Context, run CIRun) error
+}
+
+// Tx runs fn in one database transaction: the stores and the Ledger called with the context fn
+// receives join it, and an error from fn rolls everything back.
+type Tx interface {
+	InTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // RepoRef names a GitHub repository.

@@ -163,23 +163,31 @@ func TestRecordRun(t *testing.T) {
 	ctx := t.Context()
 	inst := f.install(t, f.agentA, "acme/api", "alpha", 3)
 
-	ok, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 1, t0))
-	if err != nil || !ok {
-		t.Fatalf("RecordRun() = %v, %v, want true, nil", ok, err)
+	first, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 1, t0))
+	if err != nil || !first.Stored {
+		t.Fatalf("RecordRun() = %+v, %v, want Stored, nil", first, err)
+	}
+	// The returned id is the agent_runs row the ci_runs row links to.
+	var linked string
+	if err := f.db.Raw(`SELECT agent_run_id::text FROM ci_runs WHERE github_run_id = 100 AND run_attempt = 1`).Scan(&linked).Error; err != nil {
+		t.Fatal(err)
+	}
+	if first.AgentRunID == "" || first.AgentRunID != linked {
+		t.Errorf("RecordRun().AgentRunID = %q, want the linked agent run %q", first.AgentRunID, linked)
 	}
 	failed := newRun(f, inst, f.agentA, 101, 1, t0.Add(time.Hour))
 	failed.Status, failed.Model, failed.CostUSD, failed.DurationMS, failed.FindingsCount, failed.Blockers = domain.RunFailed, nil, nil, nil, 0, 0
 	failed.Error = ptr(domain.FailedRunError)
-	if ok, err := f.store.RecordRun(ctx, failed); err != nil || !ok {
-		t.Fatalf("RecordRun(failed) = %v, %v, want true, nil", ok, err)
+	if rec, err := f.store.RecordRun(ctx, failed); err != nil || !rec.Stored || rec.AgentRunID == "" {
+		t.Fatalf("RecordRun(failed) = %+v, %v, want Stored with an agent run id, nil", rec, err)
 	}
 
 	// The same attempt again stores nothing; a re-run attempt is a separate run.
-	if ok, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 1, t0)); err != nil || ok {
-		t.Errorf("RecordRun(duplicate) = %v, %v, want false, nil", ok, err)
+	if rec, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 1, t0)); err != nil || rec != (app.Recorded{}) {
+		t.Errorf("RecordRun(duplicate) = %+v, %v, want the zero Recorded, nil", rec, err)
 	}
-	if ok, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 2, t0)); err != nil || !ok {
-		t.Errorf("RecordRun(attempt 2) = %v, %v, want true, nil", ok, err)
+	if rec, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 2, t0)); err != nil || !rec.Stored || rec.AgentRunID == first.AgentRunID {
+		t.Errorf("RecordRun(attempt 2) = %+v, %v, want Stored with its own agent run id, nil", rec, err)
 	}
 	if ci, ag := f.count(t, "ci_runs"), f.count(t, "agent_runs"); ci != 3 || ag != 3 {
 		t.Errorf("rows ci_runs, agent_runs = %d, %d, want 3, 3 (a duplicate leaves no agent_runs row)", ci, ag)
@@ -243,9 +251,17 @@ func TestRecordRun_JoinsCallerTransaction(t *testing.T) {
 	f := newFixture(t)
 	inst := f.install(t, f.agentA, "acme/api", "alpha", 3)
 	sentinel := errors.New("roll back")
+	var id string
 	err := platformpg.NewTx(f.db).InTx(t.Context(), func(ctx context.Context) error {
-		if ok, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 1, t0)); err != nil || !ok {
-			t.Errorf("RecordRun() = %v, %v, want true, nil", ok, err)
+		rec, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 1, t0))
+		if err != nil || !rec.Stored || rec.AgentRunID == "" {
+			t.Errorf("RecordRun() = %+v, %v, want Stored with an agent run id, nil", rec, err)
+		}
+		id = rec.AgentRunID
+		// The caller's own writes see the agent run (the ledger entry of the run is written here).
+		var n int64
+		if err := platformpg.Conn(ctx, f.db).Table("agent_runs").Where("id = ?", id).Count(&n).Error; err != nil || n != 1 {
+			t.Errorf("agent run %q visible in the caller tx = %d, %v, want 1, nil", id, n, err)
 		}
 		return sentinel
 	})
@@ -254,6 +270,29 @@ func TestRecordRun_JoinsCallerTransaction(t *testing.T) {
 	}
 	if ci, ag := f.count(t, "ci_runs"), f.count(t, "agent_runs"); ci != 0 || ag != 0 {
 		t.Errorf("rows after rollback ci_runs, agent_runs = %d, %d, want 0, 0", ci, ag)
+	}
+}
+
+// A caller that commits keeps the run and the id it was handed (the ledger entry is written in
+// the same transaction).
+func TestRecordRun_JoinedTransactionCommits(t *testing.T) {
+	f := newFixture(t)
+	inst := f.install(t, f.agentA, "acme/api", "alpha", 3)
+	var id string
+	err := platformpg.NewTx(f.db).InTx(t.Context(), func(ctx context.Context) error {
+		rec, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 100, 1, t0))
+		id = rec.AgentRunID
+		return err
+	})
+	if err != nil {
+		t.Fatalf("InTx() = %v, want nil", err)
+	}
+	var linked string
+	if err := f.db.Raw(`SELECT agent_run_id::text FROM ci_runs WHERE github_run_id = 100`).Scan(&linked).Error; err != nil {
+		t.Fatal(err)
+	}
+	if id == "" || id != linked {
+		t.Errorf("agent run id handed to the caller = %q, want the committed link %q", id, linked)
 	}
 }
 
@@ -288,9 +327,9 @@ func TestRecordRun_NotStorable(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			run := newRun(f, inst, f.agentA, 500, 1, t0)
 			tc.edit(&run)
-			ok, err := f.store.RecordRun(t.Context(), run)
-			if !errors.Is(err, app.ErrNotStorable) || ok {
-				t.Errorf("RecordRun() = %v, %v, want false, ErrNotStorable", ok, err)
+			rec, err := f.store.RecordRun(t.Context(), run)
+			if !errors.Is(err, app.ErrNotStorable) || rec != (app.Recorded{}) {
+				t.Errorf("RecordRun() = %+v, %v, want the zero Recorded, ErrNotStorable", rec, err)
 			}
 		})
 	}
@@ -302,8 +341,8 @@ func TestRecordRun_NotStorable(t *testing.T) {
 	edge := newRun(f, inst, f.agentA, 501, 1, t0)
 	edge.PRNumber, edge.DurationMS, edge.FindingsCount = ptr(math.MaxInt32), ptr(math.MinInt32), math.MaxInt32
 	edge.CostUSD, edge.Model = ptr(999999.999999), ptr("ünï code")
-	if ok, err := f.store.RecordRun(t.Context(), edge); err != nil || !ok {
-		t.Errorf("RecordRun(edge values) = %v, %v, want true, nil", ok, err)
+	if rec, err := f.store.RecordRun(t.Context(), edge); err != nil || !rec.Stored {
+		t.Errorf("RecordRun(edge values) = %+v, %v, want Stored, nil", rec, err)
 	}
 }
 
@@ -327,8 +366,8 @@ func TestListRuns(t *testing.T) {
 	instB := f.install(t, f.agentB, "acme/web", "beta", 1)
 	mustRecord := func(r domain.NewRun) {
 		t.Helper()
-		if ok, err := f.store.RecordRun(ctx, r); err != nil || !ok {
-			t.Fatalf("RecordRun(%d) = %v, %v, want true, nil", r.GithubRunID, ok, err)
+		if rec, err := f.store.RecordRun(ctx, r); err != nil || !rec.Stored {
+			t.Fatalf("RecordRun(%d) = %+v, %v, want Stored, nil", r.GithubRunID, rec, err)
 		}
 	}
 	mustRecord(newRun(f, instA, f.agentA, 1, 1, t0))
@@ -396,8 +435,8 @@ func TestListRuns(t *testing.T) {
 func TestListRuns_DeletedAgent(t *testing.T) {
 	f := newFixture(t)
 	inst := f.install(t, f.agentA, "acme/api", "alpha", 3)
-	if ok, err := f.store.RecordRun(t.Context(), newRun(f, inst, f.agentA, 1, 1, t0)); err != nil || !ok {
-		t.Fatalf("RecordRun() = %v, %v", ok, err)
+	if rec, err := f.store.RecordRun(t.Context(), newRun(f, inst, f.agentA, 1, 1, t0)); err != nil || !rec.Stored {
+		t.Fatalf("RecordRun() = %+v, %v", rec, err)
 	}
 	if err := f.db.Exec(`DELETE FROM agents WHERE id = ?`, f.agentA).Error; err != nil {
 		t.Fatal(err)
@@ -436,8 +475,8 @@ func TestListInstallations(t *testing.T) {
 		newRun(f, older, f.agentA, 2, 1, t0.Add(time.Hour)),
 		newRun(f, older, f.agentA, 3, 1, t0.Add(30*time.Minute)),
 	} {
-		if ok, err := f.store.RecordRun(ctx, r); err != nil || !ok {
-			t.Fatalf("RecordRun(%d) = %v, %v", r.GithubRunID, ok, err)
+		if rec, err := f.store.RecordRun(ctx, r); err != nil || !rec.Stored {
+			t.Fatalf("RecordRun(%d) = %+v, %v", r.GithubRunID, rec, err)
 		}
 	}
 
@@ -473,8 +512,8 @@ func TestListInstallations(t *testing.T) {
 	// Runs of another workspace are not the last run.
 	foreign := newRun(f, older, f.agentO, 9, 1, t0.Add(10*time.Hour))
 	foreign.WorkspaceID = f.other
-	if ok, err := f.store.RecordRun(ctx, foreign); err != nil || !ok {
-		t.Fatalf("RecordRun(foreign) = %v, %v", ok, err)
+	if rec, err := f.store.RecordRun(ctx, foreign); err != nil || !rec.Stored {
+		t.Fatalf("RecordRun(foreign) = %+v, %v", rec, err)
 	}
 	inst, _, _ := f.store.FindInstallation(ctx, f.ws, f.agentA, "acme/api")
 	if inst.LastRun == nil || *inst.LastRun.GithubURL != "https://github.com/acme/api/actions/runs/2" {
@@ -522,8 +561,8 @@ func TestRecordRun_ConcurrentRefreshes(t *testing.T) {
 	results := make(chan bool, 2)
 	errs := make(chan error, 2)
 	record := func() {
-		ok, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 77, 1, t0))
-		results <- ok
+		rec, err := f.store.RecordRun(ctx, newRun(f, inst, f.agentA, 77, 1, t0))
+		results <- rec.Stored
 		errs <- err
 	}
 	go record()

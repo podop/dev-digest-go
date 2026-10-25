@@ -1,12 +1,13 @@
-// Package postgres reads the cost records of every context to total a workspace's spend. It
-// implements the app.Ledger port of the spend context and never writes. Every call gets its
+// Package postgres is the storage of the cost ledger: it appends entries to cost_ledger, keeps
+// the stored month totals of spend_month_totals in step with them, and reads those totals. It
+// implements the app.Totals and app.Entries ports of the spend context. Every call gets its
 // handle from platformpg.Conn, so a store called inside a transaction joins it.
 package postgres
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
+	"hash/fnv"
 	"time"
 
 	"gorm.io/gorm"
@@ -16,7 +17,15 @@ import (
 	"dev-digest-go/backend/internal/spend/domain"
 )
 
-var _ app.Ledger = (*Store)(nil)
+var (
+	_ app.Totals  = (*Store)(nil)
+	_ app.Entries = (*Store)(nil)
+)
+
+// slots is the number of rows that hold the total of one workspace and month (the CHECK of
+// spend_month_totals.slot allows 0..7). Concurrent appends of one workspace land on different
+// rows, so they rarely wait for each other's row lock (NFR3, A8).
+const slots = 8
 
 // Store is the GORM-backed ledger of the spend context.
 type Store struct {
@@ -26,85 +35,92 @@ type Store struct {
 // NewStore builds a Store on a GORM handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 
-// monthSpendSQL totals the cost of the six record kinds that carry a real LLM cost, for one
-// workspace and a half-open time range [@from, @to). It is Raw because the GORM builder cannot
-// express a UNION ALL over six tables with different joins, time columns and cost sources;
-// everything is summed in the database (one row back, no per-record transfer).
+// appendSQL stores one entry and, only when it was stored, adds it to the total of its UTC month
+// in the slot given by @slot. It is one statement, so it is all-or-nothing on its own and joins
+// the caller's transaction when there is one. It is Raw because the builder cannot express a
+// data-modifying CTE feeding an upsert.
 //
-// Sources (cost column / time column): agent_runs.cost_usd / ran_at; eval_runs.cost_usd / ran_at
-// (workspace through eval_cases); convention_scans.cost_usd / started_at; pr_intent.cost_usd /
-// derived_at (workspace through pull_requests); pr_brief.json cost_usd / json generated_at
-// (workspace through pull_requests); onboarding.json cost_usd / generated_at (workspace through
-// repos). ci_runs and eval_suite_runs are left out on purpose: they mirror the cost of an
-// agent_runs row and of its eval_runs rows, so counting them would count the money twice.
-//
-// The pr_brief and onboarding costs live in a jsonb document that is not schema-checked, and
-// pr_brief's time is a string inside it. A cast of a bad value raises an error for the whole
-// query, so each cast sits in a CASE (evaluated in order, unlike a WHERE conjunction) behind
-// jsonb_typeof / pg_input_is_valid (PostgreSQL 16+; a JSON number such as 20261015 would pass
-// pg_input_is_valid as a date, hence the string check); a document that fails the guard yields NULL
-// and is skipped, never an error. NULL costs and NULL times drop out of SUM / the range.
-//
-// The sum is rounded to 6 decimals (the precision of the columns) and returned as integer
-// micro-dollars.
-//
-// Shape, for NFR4 (measured with 100,000 agent_runs and 50,000 eval_runs in the month): each
-// source is summed inside its own branch, so the 150,000 cost rows never travel through the
-// Append node (about 25 ms less); agent_runs and eval_runs are read from the covering indexes of
-// migration 0003 (index-only scans); and the pr_brief document is detoasted once per row: every
-// jsonb operator detoasts its argument again, and the old shape did so about eight times per
-// brief (about 165 ms for 2,000 briefs). "|| '{}'" turns the stored value into one in-memory
-// document that the later operators read without decompressing; OFFSET 0 keeps the planner from
-// folding it back into the operators. For a document that is not an object the result is an
-// array, whose keys are all NULL, so it is skipped exactly as before.
-const monthSpendSQL = `
-SELECT (round(COALESCE(SUM(c), 0), 6) * 1000000)::bigint AS micros
-FROM (
-	SELECT SUM(cost_usd::numeric) AS c
-	FROM agent_runs
-	WHERE workspace_id = @ws AND ran_at >= @from AND ran_at < @to
-	UNION ALL
-	SELECT SUM(r.cost_usd::numeric)
-	FROM eval_runs r
-	JOIN eval_cases k ON k.id = r.case_id
-	WHERE k.workspace_id = @ws AND r.ran_at >= @from AND r.ran_at < @to
-	UNION ALL
-	SELECT SUM(cost_usd::numeric)
-	FROM convention_scans
-	WHERE workspace_id = @ws AND started_at >= @from AND started_at < @to
-	UNION ALL
-	SELECT SUM(i.cost_usd::numeric)
-	FROM pr_intent i
-	JOIN pull_requests p ON p.id = i.pr_id
-	WHERE p.workspace_id = @ws AND i.derived_at >= @from AND i.derived_at < @to
-	UNION ALL
-	SELECT SUM(CASE WHEN jsonb_typeof(d.doc -> 'cost_usd') = 'number' THEN (d.doc ->> 'cost_usd')::numeric END)
-	FROM pr_brief b
-	JOIN pull_requests p ON p.id = b.pr_id
-	CROSS JOIN LATERAL (SELECT b.json || '{}'::jsonb AS doc OFFSET 0) d
-	WHERE p.workspace_id = @ws
-	  AND CASE WHEN jsonb_typeof(d.doc -> 'generated_at') = 'string'
-	            AND pg_input_is_valid(d.doc ->> 'generated_at', 'timestamptz')
-	           THEN (d.doc ->> 'generated_at')::timestamptz END >= @from
-	  AND CASE WHEN jsonb_typeof(d.doc -> 'generated_at') = 'string'
-	            AND pg_input_is_valid(d.doc ->> 'generated_at', 'timestamptz')
-	           THEN (d.doc ->> 'generated_at')::timestamptz END < @to
-	UNION ALL
-	SELECT SUM(CASE WHEN jsonb_typeof(o.json -> 'cost_usd') = 'number'
-	                THEN (o.json ->> 'cost_usd')::numeric END)
-	FROM onboarding o
-	JOIN repos rp ON rp.id = o.repo_id
-	WHERE rp.workspace_id = @ws AND o.generated_at >= @from AND o.generated_at < @to
-) costs`
+// A duplicate dedupe_key inserts nothing (also when a concurrent append of the same key has not
+// committed yet: the insert waits for it), the CTE returns no row and the upsert does nothing, so
+// the statement affects 0 rows. A stored entry affects 1 row. A NULL cost adds 0 to spent_micros
+// and 1 to unpriced_count.
+const appendSQL = `
+WITH ins AS (
+	INSERT INTO cost_ledger
+		(workspace_id, occurred_at, kind, origin, provider, model, tokens_in, tokens_out,
+		 cost_micros, ref_id, dedupe_key)
+	VALUES (@ws, @at, @kind, @origin, @provider, @model, @tin, @tout, @cost, @ref, @key)
+	ON CONFLICT (dedupe_key) DO NOTHING
+	RETURNING workspace_id, occurred_at, cost_micros
+)
+INSERT INTO spend_month_totals (workspace_id, month, slot, spent_micros, unpriced_count, entry_count)
+SELECT workspace_id,
+       date_trunc('month', occurred_at AT TIME ZONE 'UTC')::date,
+       CAST(@slot AS smallint),
+       COALESCE(cost_micros, 0),
+       CASE WHEN cost_micros IS NULL THEN 1 ELSE 0 END,
+       1
+FROM ins
+ON CONFLICT (workspace_id, month, slot) DO UPDATE SET
+	spent_micros   = spend_month_totals.spent_micros + EXCLUDED.spent_micros,
+	unpriced_count = spend_month_totals.unpriced_count + EXCLUDED.unpriced_count,
+	entry_count    = spend_month_totals.entry_count + EXCLUDED.entry_count`
 
-// MonthSpend implements app.Ledger: the workspace's spend with cost records dated in [from, to).
-func (s *Store) MonthSpend(ctx context.Context, workspaceID string, from, to time.Time) (domain.Micros, error) {
-	var micros int64
-	err := platformpg.Conn(ctx, s.db).Raw(monthSpendSQL,
-		sql.Named("ws", workspaceID), sql.Named("from", from.UTC()), sql.Named("to", to.UTC()),
-	).Scan(&micros).Error
-	if err != nil {
-		return 0, fmt.Errorf("sum month spend: %w", err)
+// Append implements app.Entries. An empty RefID is stored as NULL; an empty Provider or Model
+// stays ”.
+func (s *Store) Append(ctx context.Context, e domain.Entry) (bool, error) {
+	var cost, ref any // nil binds as NULL
+	if e.Cost != nil {
+		cost = int64(*e.Cost)
 	}
-	return domain.Micros(micros), nil
+	if e.RefID != "" {
+		ref = e.RefID
+	}
+	res := platformpg.Conn(ctx, s.db).Exec(appendSQL, map[string]any{
+		"ws":       e.WorkspaceID,
+		"at":       e.OccurredAt.UTC(),
+		"kind":     string(e.Kind),
+		"origin":   string(e.Origin),
+		"provider": e.Provider,
+		"model":    e.Model,
+		"tin":      e.TokensIn,
+		"tout":     e.TokensOut,
+		"cost":     cost,
+		"ref":      ref,
+		"key":      e.DedupeKey,
+		"slot":     slotOf(e.DedupeKey),
+	})
+	if res.Error != nil {
+		return false, fmt.Errorf("append ledger entry: %w", res.Error)
+	}
+	return res.RowsAffected > 0, nil
+}
+
+// slotOf picks the total slot of an entry from its dedupe key: random for live entries, so the
+// appends spread evenly, and the same for the same key.
+func slotOf(key string) int {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(key))
+	return int(h.Sum32() % slots)
+}
+
+// monthTotalSQL sums the (at most 8) slot rows of one workspace and month. SUM of bigint is
+// numeric, so it is cast back; no row sums to 0.
+const monthTotalSQL = `
+SELECT COALESCE(SUM(spent_micros), 0)::bigint AS spent, COALESCE(SUM(unpriced_count), 0)::bigint AS unpriced
+FROM spend_month_totals
+WHERE workspace_id = @ws AND month = @month`
+
+// MonthTotal implements app.Totals: the stored total of the workspace and the UTC month that
+// contains month.
+func (s *Store) MonthTotal(ctx context.Context, workspaceID string, month time.Time) (domain.MonthTotal, error) {
+	var row struct{ Spent, Unpriced int64 }
+	err := platformpg.Conn(ctx, s.db).Raw(monthTotalSQL, map[string]any{
+		"ws":    workspaceID,
+		"month": domain.MonthStart(month).Format(time.DateOnly),
+	}).Scan(&row).Error
+	if err != nil {
+		return domain.MonthTotal{}, fmt.Errorf("read month total: %w", err)
+	}
+	return domain.MonthTotal{Spent: domain.Micros(row.Spent), Unpriced: int(row.Unpriced)}, nil
 }

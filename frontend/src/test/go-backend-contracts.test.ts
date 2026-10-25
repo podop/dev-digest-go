@@ -398,7 +398,8 @@ const about = About.extend({
   runner: About.shape.runner.strict(),
   config_format: z.literal("devdigest-plugin/v1"),
 }).strict();
-const spendStatus = SpendStatus.strict();
+// The platform contract keeps unpriced_count optional for older servers; the Go API always sends it.
+const spendStatus = SpendStatus.extend({ unpriced_count: z.number().int().nonnegative() }).strict();
 // The golden is an OpenRouter success: latency_ms, model and model_reachable are present; login and
 // scopes belong to GitHub only (checked in the settings-slice-A test below).
 const testConnectionLlm = ConnTestResult.extend({

@@ -282,6 +282,7 @@ func (s *Service) callModel(ctx context.Context, pull domain.Pull, provider llm.
 		Reprompts:     domain.Reprompts,
 		Feature:       domain.Feature,
 		CorrelationID: correlationID(pull),
+		Charge:        &llm.Charge{WorkspaceID: pull.WorkspaceID, Kind: llm.KindBrief, RefID: pull.ID},
 		Sections:      promptSections(trim.Input),
 		OnUsage:       func(u llm.AttemptUsage) { usages = append(usages, u) },
 	})

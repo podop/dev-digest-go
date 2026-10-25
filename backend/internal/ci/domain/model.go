@@ -214,6 +214,10 @@ type NewRun struct {
 	Blockers      int
 	// Error is the failure note of a RunFailed run.
 	Error *string
+	// FromArtifact is true when the run was built from a verified result artifact: only such a
+	// run is a billable call that belongs in the cost ledger (a run without an artifact reports
+	// no cost and appends no entry).
+	FromArtifact bool
 }
 
 // WorkflowRun is a completed workflow run as GitHub lists it (spec 7.9). CreatedAt is the raw

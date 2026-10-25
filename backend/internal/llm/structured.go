@@ -111,6 +111,9 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 	}
 
 	c.logPrompt(ctx, req)
+	if c.recorder != nil && !req.Charge.complete() {
+		c.log.WarnContext(ctx, "llm call has no usable spend charge; its usage will not be recorded", "schema", req.SchemaName, "feature", req.Feature)
+	}
 	key, err := c.keyFor(req.Provider, ad)
 	if err != nil {
 		return Result{}, err
@@ -147,16 +150,16 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 		res, err := c.send(budgetCtx, ad, pol, key, name, reqTimeout, Attempt{
 			Model: req.Model, Messages: messages, SchemaName: req.SchemaName, Schema: strict,
 			Temperature: req.Temperature, MaxTokens: req.MaxTokens, SessionID: req.SessionID,
-		}, req.SchemaName)
-		if err != nil {
-			if res.Answered {
-				// The provider answered with something unusable: its tokens were spent all the same.
-				usage := res.Usage
-				if usage == nil {
-					usage = c.estimateUsage(req, messages, "")
-				}
-				c.reportUsage(ctx, req, attemptRecord{reported: res.CostUSD, usage: *usage})
+		}, req.SchemaName, func(a Attempt, res AttemptResult) {
+			// The provider answered with something unusable: its tokens were spent all the same.
+			// Reported here, per response, so that a retry of this request cannot lose it.
+			usage := res.Usage
+			if usage == nil {
+				usage = c.estimateUsage(req, a.Messages, "")
 			}
+			c.reportUsage(ctx, req, attemptRecord{reported: res.CostUSD, usage: *usage})
+		})
+		if err != nil {
 			return Result{}, c.fail(ctx, budgetCtx, label, key, err)
 		}
 
@@ -204,7 +207,9 @@ func (c *Client) Structured(ctx context.Context, req Request) (Result, error) {
 }
 
 // send makes one logical request: retried while the failure is transient and the budget lasts.
-func (c *Client) send(budgetCtx context.Context, ad Adapter, pol Policy, key, provider string, reqTimeout time.Duration, a Attempt, schema string) (AttemptResult, error) {
+// answered is called for every request that failed although the provider answered it (a 200 the
+// adapter could not use), also when the request is retried afterwards.
+func (c *Client) send(budgetCtx context.Context, ad Adapter, pol Policy, key, provider string, reqTimeout time.Duration, a Attempt, schema string, answered func(Attempt, AttemptResult)) (AttemptResult, error) {
 	opts := c.backoff
 	opts.Retries = pol.Retries
 	return retry.Value(budgetCtx, opts, func(ctx context.Context) (AttemptResult, error) {
@@ -217,6 +222,9 @@ func (c *Client) send(budgetCtx context.Context, ad Adapter, pol Policy, key, pr
 			own = true
 		}
 		res, err := ad.Complete(rctx, key, a)
+		if err != nil && res.Answered {
+			answered(a, res)
+		}
 		if err != nil && own && rctx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
 			err = &requestTimeoutError{what: fmt.Sprintf("%s request for %s", provider, schema), timeout: reqTimeout}
 		}
@@ -270,23 +278,41 @@ func (c *Client) estimateUsage(req Request, messages []Message, output string) *
 	return u
 }
 
-// reportUsage hands one response's usage to req.OnUsage: the provider's cost, else the price
-// book's estimate for that attempt (nil = unpriced). The hook only observes; a panic in it must
-// not fail the call it observes.
+// reportUsage hands one response's usage to the spend Recorder (when the call carries a usable
+// Charge) and to req.OnUsage: the provider's cost, else the price book's estimate for that attempt
+// (nil = unpriced). Both only observe; a panic in either must not fail the call it observes, nor
+// keep the other from running.
 func (c *Client) reportUsage(ctx context.Context, req Request, a attemptRecord) {
-	if req.OnUsage == nil {
+	recording := c.recorder != nil && req.Charge.complete()
+	if !recording && req.OnUsage == nil {
 		return
 	}
 	cost := a.reported
 	if cost == nil {
 		cost = c.prices.Estimate(req.Model, a.usage.TokensIn, a.usage.TokensOut)
 	}
+	if recording {
+		c.observe(ctx, req, "llm usage recorder panicked", func() {
+			c.recorder.RecordUsage(ctx, RecordedUsage{
+				Charge: *req.Charge, Provider: req.Provider, Model: req.Model, Tokens: a.usage, CostUSD: cost,
+			})
+		})
+	}
+	if req.OnUsage != nil {
+		c.observe(ctx, req, "llm usage observer panicked", func() {
+			req.OnUsage(AttemptUsage{TokensIn: a.usage.TokensIn, TokensOut: a.usage.TokensOut, CostUSD: cost})
+		})
+	}
+}
+
+// observe runs fn and turns its panic into a warning.
+func (c *Client) observe(ctx context.Context, req Request, msg string, fn func()) {
 	defer func() {
 		if r := recover(); r != nil {
-			c.log.WarnContext(ctx, "llm usage observer panicked", "schema", req.SchemaName, "panic", fmt.Sprint(r))
+			c.log.WarnContext(ctx, msg, "schema", req.SchemaName, "panic", fmt.Sprint(r))
 		}
 	}()
-	req.OnUsage(AttemptUsage{TokensIn: a.usage.TokensIn, TokensOut: a.usage.TokensOut, CostUSD: cost})
+	fn()
 }
 
 // attemptRecord is what one attempt cost: the provider's own figure (nil = none) and its tokens.

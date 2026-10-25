@@ -13,6 +13,9 @@ type Status struct {
 	Spent Micros
 	// Cap is the monthly cap; nil means no cap.
 	Cap *Micros
+	// Unpriced is the number of this month's ledger entries whose cost is unknown: they are
+	// not part of Spent (FR7, FR13).
+	Unpriced int
 }
 
 // Reached reports whether new work must be refused: a cap is set and the spend is at or over it.

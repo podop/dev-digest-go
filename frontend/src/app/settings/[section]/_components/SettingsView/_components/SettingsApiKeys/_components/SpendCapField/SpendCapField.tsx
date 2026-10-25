@@ -41,11 +41,20 @@ export function SpendCapField() {
 
   const status = spend.data;
   const spent = status ? formatMoney(status.spent_usd) : "";
-  const hint = status
+  const unpriced = status?.unpriced_count ?? 0;
+  const spendHint = status
     ? t(status.cap_usd === null ? "spendCap.hintNoCap" : "spendCap.hint", { spent })
     : spend.isError
       ? undefined
       : t("spendCap.hintLoading");
+  const hint =
+    spendHint !== undefined && unpriced > 0 ? (
+      <>
+        {spendHint} <span>{t("spendCap.unpriced", { count: unpriced })}</span>
+      </>
+    ) : (
+      spendHint
+    );
   const inputError =
     parsed.kind === "error"
       ? t(`spendCap.errors.${parsed.error}`, {

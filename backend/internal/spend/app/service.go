@@ -8,9 +8,9 @@ import (
 	"dev-digest-go/backend/internal/spend/domain"
 )
 
-// Service implements API over the ledger and the cap provider.
+// Service implements API over the stored month totals and the cap provider.
 type Service struct {
-	ledger Ledger
+	totals Totals
 	caps   Caps
 	now    Clock
 	log    *slog.Logger
@@ -19,11 +19,11 @@ type Service struct {
 var _ API = (*Service)(nil)
 
 // NewService builds the service. now is the clock that decides which month is current.
-func NewService(ledger Ledger, caps Caps, now Clock, log *slog.Logger) *Service {
-	return &Service{ledger: ledger, caps: caps, now: now, log: log}
+func NewService(totals Totals, caps Caps, now Clock, log *slog.Logger) *Service {
+	return &Service{totals: totals, caps: caps, now: now, log: log}
 }
 
-// Status reads the cap and the current UTC month's spend. Both reads must succeed: a status
+// Status reads the cap and the current UTC month's stored total (spend and unknown-cost count). Both reads must succeed: a status
 // computed from half of the data could let work through (D16).
 func (s *Service) Status(ctx context.Context, workspaceID string) (domain.Status, error) {
 	limit, err := s.caps.Cap(ctx, workspaceID)
@@ -33,20 +33,21 @@ func (s *Service) Status(ctx context.Context, workspaceID string) (domain.Status
 	return s.status(ctx, workspaceID, limit)
 }
 
-// status adds the current month's spend to an already read cap.
+// status adds the current month's stored total to an already read cap.
 func (s *Service) status(ctx context.Context, workspaceID string, limit *domain.Micros) (domain.Status, error) {
 	now := s.now()
-	spent, err := s.ledger.MonthSpend(ctx, workspaceID, domain.MonthStart(now), domain.NextMonthStart(now))
+	month := domain.MonthStart(now)
+	total, err := s.totals.MonthTotal(ctx, workspaceID, month)
 	if err != nil {
-		return domain.Status{}, fmt.Errorf("read month spend: %w", err)
+		return domain.Status{}, fmt.Errorf("read month total: %w", err)
 	}
-	return domain.Status{MonthStart: domain.MonthStart(now), Spent: spent, Cap: limit}, nil
+	return domain.Status{MonthStart: month, Spent: total.Spent, Cap: limit, Unpriced: total.Unpriced}, nil
 }
 
 // Admit refuses new work once the cap is reached: it logs one INFO line (operation, workspace,
 // cap, spent; no secrets) and returns the 402 error. A read error fails closed. It reads the cap
-// first and, when none is set, admits without reading the spend: a missing cap can never be
-// reached, and the month-spend query is the expensive read (D24).
+// first and, when none is set, admits without reading the total: a missing cap can never be
+// reached (D24). Unknown-cost entries never block (FR8).
 func (s *Service) Admit(ctx context.Context, workspaceID, op string) error {
 	limit, err := s.caps.Cap(ctx, workspaceID)
 	if err != nil {

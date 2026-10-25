@@ -243,10 +243,11 @@ type repoContext struct {
 func (e *Executor) review(st *runState, specs []reviewer.ProjectDoc) (reviewer.Outcome, error) {
 	agent := st.job.Agent
 	binding := app.LLMBinding{
-		Provider:  agent.Provider,
-		Model:     agent.Model,
-		RunID:     st.job.RunID,
-		SessionID: fmt.Sprintf("%s/%s#%d:%s", st.repo.Owner, st.repo.Name, st.pull.Number, agent.Name),
+		Provider:    agent.Provider,
+		Model:       agent.Model,
+		WorkspaceID: st.wsID,
+		RunID:       st.job.RunID,
+		SessionID:   fmt.Sprintf("%s/%s#%d:%s", st.repo.Owner, st.repo.Name, st.pull.Number, agent.Name),
 		OnUsage: func(u reviewer.Usage) {
 			st.meter.Add(u.TokensIn, u.TokensOut, u.CostUSD)
 		},

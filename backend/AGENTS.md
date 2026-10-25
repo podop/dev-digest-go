@@ -81,6 +81,23 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   `Deps.Spend`). A nil port means the check is off; pass a true nil interface, never a typed-nil
   pointer (prod always passes the service). The 402 `spend_cap_reached` comes after the 404/validation
   checks and before any work.
+- Cost ledger (`spend` context, migration 0005): an append-only `cost_ledger` (one row per answered
+  LLM attempt and per new CI run; never updated or deleted, not even by workspace reset) plus the
+  stored `spend_month_totals` (8 slot rows per workspace and UTC month). The month spend, the unpriced
+  count (`unpriced_count`, entries with an unknown cost) and the cap check read only the totals
+  (`spendapp.Totals`); `Entries.Append` inserts the entry and bumps its slot in one statement.
+  Eight kinds (`review_run`, `review_intent`, `intent_refresh`, `brief`, `onboarding`,
+  `conventions_scan`, `eval_case`, `ci_run`): the seven LLM kinds are `llm.Charge.Kind`, set per
+  request (`Request.Charge`, copied by `llmcall`, `newLLMCaller`/`newEvalLLMCaller` must pass
+  `c.Charge`); `llm.Options.Recorder` (the `spendapp.Recorder`, built before `llm.New`, never nil in
+  prod) is called once per answered attempt, detached from cancellation with a 3 s bound, and a
+  failed append logs one ERROR and loses only that cost. CI ingest records `ci_run` through
+  `cmd/server/ledger.go` (`ciLedger`) inside the transaction that stores the run (`IngestDeps.Ledger`
+  needs `IngestDeps.Tx`); its dedupe key `ci:<github run id>:<attempt>` makes a re-ingest after a
+  history reset a no-op. The migration backfills the pre-ledger costs (origin `backfill`, dedupe
+  `backfill:<source>:<id>`) and leaves a summary row in `cost_ledger_backfill`;
+  `reportLedgerBackfill` logs it once after migrating (server start and `server migrate up`) and sets
+  `logged_at`.
 - `GET /about` (`about` context) reports `version` and `build_id` from the link-time vars
   `main.version` / `main.buildID` (`cmd/server/main.go`, default `dev`), `runner.version` from
   `ci/runner/domain.RunnerVersion`, plus the data dir and secrets file. The Dockerfile stamps them

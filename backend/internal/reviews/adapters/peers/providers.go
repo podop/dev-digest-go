@@ -25,6 +25,9 @@ type CallerConfig struct {
 	SessionID string
 	// OnUsage receives the usage of every response; nil = none.
 	OnUsage func(reviewer.Usage)
+	// Charge labels the run's LLM calls for the spend ledger: the run's workspace, kind review_run
+	// and the run id. The factory copies it into the run's llmcall.Config.
+	Charge *llm.Charge
 }
 
 // CallerFactory builds the engine's LLM port for one run. cmd/server supplies it (it binds
@@ -55,7 +58,10 @@ func (p *Providers) Resolve(_ context.Context, b reviewsapp.LLMBinding) (reviewe
 	if err := p.c.Ready(provider); err != nil {
 		return nil, err
 	}
-	cfg := CallerConfig{Provider: provider, Model: b.Model, RunID: b.RunID, SessionID: b.SessionID}
+	cfg := CallerConfig{
+		Provider: provider, Model: b.Model, RunID: b.RunID, SessionID: b.SessionID,
+		Charge: &llm.Charge{WorkspaceID: b.WorkspaceID, Kind: llm.KindReviewRun, RefID: b.RunID},
+	}
 	if b.OnUsage != nil {
 		on := b.OnUsage
 		cfg.OnUsage = func(u reviewer.Usage) { on(u) }

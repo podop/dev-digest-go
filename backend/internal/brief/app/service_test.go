@@ -287,6 +287,20 @@ func TestGenerate_TheModelCall(t *testing.T) {
 	}
 }
 
+func TestGenerate_TheCallIsChargedToTheBrief(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.svc.Generate(t.Context(), wsID, prID); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if len(f.llm.Requests) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(f.llm.Requests))
+	}
+	want := &llm.Charge{WorkspaceID: wsID, Kind: llm.KindBrief, RefID: prID}
+	if diff := cmp.Diff(want, f.llm.Requests[0].Charge); diff != "" {
+		t.Errorf("Request.Charge mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestGenerate_ModelSettingFromTheBag(t *testing.T) {
 	f := newFixture(t)
 	f.models.Bag = map[string]json.RawMessage{"feature_models": json.RawMessage(`{"risk_brief":{"provider":"anthropic","model":"claude-x"}}`)}

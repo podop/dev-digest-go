@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"slices"
 	"sort"
@@ -16,9 +17,10 @@ import (
 	spendapp "dev-digest-go/backend/internal/spend/app"
 )
 
-// Component tests of the spend context through the real server (plan S28): the month total over the
-// six cost sources (AC9), the cap check on all eight entry routes (AC10, AC11, NFR6) and the
-// workspace default model (AC8). The wiring smoke tests are in spend_wiring_test.go.
+// Component tests of the spend context through the real server (plan S28): the month total, which
+// since the cost ledger is the sum of the ledger entries only (AC9, ledger FR8/FR11), the cap check on
+// all eight entry routes (AC10, AC11, NFR6) and the workspace default model (AC8). The wiring smoke
+// tests are in spend_wiring_test.go.
 
 // refusedMsg is the INFO line one refusal writes (spend/app.Service.Admit).
 const refusedMsg = "spend cap reached: request refused"
@@ -52,9 +54,42 @@ func requireNoSpend(t testing.TB, s *stack) {
 	}
 }
 
+// seedLedgerSpend records a priced ledger entry of usd for workspace ws at the instant at, the way
+// the spend store appends one: a cost_ledger row plus the stored month total (slot 0) it belongs to
+// (the UTC month of at). Plain SQL on the cost ledger tables (migration 0005), so these tests do
+// not depend on the store's code.
+func seedLedgerSpend(t testing.TB, s *stack, ws string, at time.Time, usd float64) {
+	t.Helper()
+	insertLedgerEntry(t, s, ws, at, int64(math.Round(usd*1e6)))
+}
+
+// seedLedgerUnpriced records a ledger entry without a known cost: it adds to the month's unpriced
+// count and to nothing else.
+func seedLedgerUnpriced(t testing.TB, s *stack, ws string, at time.Time) {
+	t.Helper()
+	insertLedgerEntry(t, s, ws, at, nil)
+}
+
+// insertLedgerEntry writes one review_run entry; micros is an int64 amount in micro-USD or nil.
+func insertLedgerEntry(t testing.TB, s *stack, ws string, at time.Time, micros any) {
+	t.Helper()
+	execSQL(t, s, `WITH e AS (
+			INSERT INTO cost_ledger (workspace_id, occurred_at, kind, origin, cost_micros, dedupe_key)
+			VALUES (?, ?::timestamptz, 'review_run', 'live', ?::bigint, 'seed:' || gen_random_uuid()::text)
+			RETURNING workspace_id, occurred_at, cost_micros)
+		INSERT INTO spend_month_totals (workspace_id, month, slot, spent_micros, unpriced_count, entry_count)
+		SELECT workspace_id, date_trunc('month', occurred_at AT TIME ZONE 'UTC')::date, 0,
+			COALESCE(cost_micros, 0), (cost_micros IS NULL)::int, 1
+		FROM e
+		ON CONFLICT (workspace_id, month, slot) DO UPDATE SET
+			spent_micros = spend_month_totals.spent_micros + EXCLUDED.spent_micros,
+			unpriced_count = spend_month_totals.unpriced_count + EXCLUDED.unpriced_count,
+			entry_count = spend_month_totals.entry_count + EXCLUDED.entry_count`, ws, at, micros)
+}
+
 // ---- AC9: the month total ----
 
-func TestSpend_MonthTotalSumsTheSixSourcesAndSkipsMirrors(t *testing.T) { // AC9 (FR12, EC4, EC5, EC7)
+func TestSpend_MonthTotalIsTheLedgerAndIgnoresFeatureRows(t *testing.T) { // AC9 (ledger FR8, FR11; Settings A FR12, EC4, EC5, EC7)
 	s := startStack(t, spec{now: capClock})
 	ws := workspaceID(t, s)
 	acme := repoByName(t, s, "acme/payments-api")
@@ -84,7 +119,9 @@ func TestSpend_MonthTotalSumsTheSixSourcesAndSkipsMirrors(t *testing.T) { // AC9
 	start := time.Date(2031, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2031, 2, 1, 0, 0, 0, 0, time.UTC)
 
-	// In the month: one record of each of the six sources, and one exactly at its first instant.
+	// Feature cost rows as the old month query summed them, written after the upgrade: one of each of
+	// the six sources inside the month, and the mirrors. None of them is a ledger entry, so none moves
+	// the month spend (FR11).
 	execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, 0.01)`, ws, mid)
 	execSQL(t, s, `INSERT INTO eval_runs (case_id, ran_at, cost_usd) VALUES (?, ?, 0.02)`, evalCase(ws), mid)
 	execSQL(t, s, `INSERT INTO convention_scans (workspace_id, repo_id, status, started_at, cost_usd) VALUES (?, ?, 'done', ?, 0.04)`, ws, acme, mid)
@@ -92,15 +129,6 @@ func TestSpend_MonthTotalSumsTheSixSourcesAndSkipsMirrors(t *testing.T) { // AC9
 	brief(ws, acme, 0.16, mid.Format(time.RFC3339))
 	tour(ws, 0.32, mid)
 	execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, 0.64)`, ws, start)
-	// In the month but without a cost: they add nothing (EC7).
-	execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, NULL)`, ws, mid)
-	execSQL(t, s, `INSERT INTO pr_intent (pr_id, intent, cost_usd, derived_at) VALUES (?, 'i', NULL, ?)`, pr(ws, acme), mid)
-	// Outside the month (the upper bound is exclusive), of another workspace, or a mirror: none counts.
-	execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, 2.56)`, ws, end)
-	execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, 5.12)`, ws, start.Add(-time.Millisecond))
-	brief(ws, acme, 0.5, end.Format(time.RFC3339))
-	other := scalar[string](t, s.db.DB, `INSERT INTO workspaces (name) VALUES ('other') RETURNING id::text`)
-	execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, 10.24)`, other, mid)
 	agent := scalar[string](t, s.db.DB, `INSERT INTO agents (workspace_id, name, provider, model, system_prompt)
 		VALUES (?, 'mirror', 'openai', 'm', 'p') RETURNING id::text`, ws)
 	suite := scalar[string](t, s.db.DB, `INSERT INTO eval_suite_runs (workspace_id, agent_id, agent_version, config, case_ids, status, started_at, cost_usd)
@@ -108,9 +136,34 @@ func TestSpend_MonthTotalSumsTheSixSourcesAndSkipsMirrors(t *testing.T) { // AC9
 	execSQL(t, s, `INSERT INTO eval_runs (case_id, ran_at, cost_usd, run_id) VALUES (?, ?, 0, ?)`, evalCase(ws), mid, suite)
 	execSQL(t, s, `INSERT INTO ci_runs (ran_at, cost_usd, source) VALUES (?, 2000, 'ci')`, mid)
 
-	// 0.01 + 0.02 + 0.04 + 0.08 + 0.16 + 0.32 + 0.64
-	const total = 1.27
-	want := map[string]any{"month_start": "2031-01-01T00:00:00.000Z", "spent_usd": total, "cap_usd": nil, "remaining_usd": nil, "cap_reached": false}
+	requireNoSpend(t, s)
+	setCap(t, s, 0.5)
+	wantFree := map[string]any{"month_start": "2031-01-01T00:00:00.000Z", "spent_usd": float64(0), "cap_usd": 0.5, "remaining_usd": 0.5, "cap_reached": false, "unpriced_count": float64(0)}
+	if diff := cmp.Diff(wantFree, s.get("/settings/spend").Obj(t)); diff != "" {
+		t.Errorf("GET /settings/spend with feature cost rows only mismatch (-want +got):\n%s", diff)
+	}
+	setCap(t, s, nil)
+
+	// Ledger entries in the month: 0.01 + 0.02 + 0.04 + 0.08 count; one exactly at its first instant,
+	// one in its last millisecond, and one whose local date is already in February but whose UTC
+	// instant is not (the month is the UTC month).
+	seedLedgerSpend(t, s, ws, mid, 0.01)
+	seedLedgerSpend(t, s, ws, start, 0.02)
+	seedLedgerSpend(t, s, ws, end.Add(-time.Millisecond), 0.04)
+	seedLedgerSpend(t, s, ws, time.Date(2031, 2, 1, 3, 0, 0, 0, time.FixedZone("UTC+5", 5*3600)), 0.08)
+	// In the month but without a known cost: it adds nothing (EC7).
+	seedLedgerUnpriced(t, s, ws, mid)
+	// Outside the month (the upper bound is exclusive; a UTC-5 local time of January 31 is February 1
+	// in UTC) or of another workspace: none counts.
+	seedLedgerSpend(t, s, ws, end, 2.56)
+	seedLedgerSpend(t, s, ws, start.Add(-time.Millisecond), 5.12)
+	seedLedgerSpend(t, s, ws, time.Date(2031, 1, 31, 23, 30, 0, 0, time.FixedZone("UTC-5", -5*3600)), 0.5)
+	other := scalar[string](t, s.db.DB, `INSERT INTO workspaces (name) VALUES ('other') RETURNING id::text`)
+	seedLedgerSpend(t, s, other, mid, 10.24)
+
+	// 0.01 + 0.02 + 0.04 + 0.08
+	const total = 0.15
+	want := map[string]any{"month_start": "2031-01-01T00:00:00.000Z", "spent_usd": total, "cap_usd": nil, "remaining_usd": nil, "cap_reached": false, "unpriced_count": float64(1)}
 	if diff := cmp.Diff(want, s.get("/settings/spend").Obj(t)); diff != "" {
 		t.Errorf("GET /settings/spend without a cap mismatch (-want +got):\n%s", diff)
 	}
@@ -119,10 +172,16 @@ func TestSpend_MonthTotalSumsTheSixSourcesAndSkipsMirrors(t *testing.T) { // AC9
 	if diff := cmp.Diff(want, s.get("/settings/spend").Obj(t)); diff != "" {
 		t.Errorf("GET /settings/spend with the cap equal to the spend mismatch (-want +got):\n%s", diff)
 	}
-	setCap(t, s, 1.28)
-	want["cap_usd"], want["remaining_usd"], want["cap_reached"] = 1.28, 0.01, false
+	setCap(t, s, 0.16)
+	want["cap_usd"], want["remaining_usd"], want["cap_reached"] = 0.16, 0.01, false
 	if diff := cmp.Diff(want, s.get("/settings/spend").Obj(t)); diff != "" {
 		t.Errorf("GET /settings/spend with the cap one cent above the spend mismatch (-want +got):\n%s", diff)
+	}
+
+	// A feature row written now still changes nothing.
+	execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, 3)`, ws, mid)
+	if diff := cmp.Diff(want, s.get("/settings/spend").Obj(t)); diff != "" {
+		t.Errorf("GET /settings/spend after one more feature cost row mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -164,17 +223,17 @@ func newCapFixture(t *testing.T, extra map[string]callFn) *capFixture {
 	return f
 }
 
-// seedSpend records a cost of usd in the fake clock's month, so that a cap below it is reached.
+// seedSpend records a ledger entry of usd in the fake clock's month, so that a cap below it is reached.
 func (f *capFixture) seedSpend(usd float64) {
 	f.t.Helper()
-	execSQL(f.t, f.s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, ?)`, f.ws, capNow, usd)
+	seedLedgerSpend(f.t, f.s, f.ws, capNow, usd)
 }
 
 // work counts everything an entry route could create, plus the model calls made so far.
 func (f *capFixture) work() map[string]int {
 	f.t.Helper()
 	out := map[string]int{"model calls": f.sc.calls()}
-	for _, table := range []string{"agent_runs", "multi_agent_runs", "eval_suite_runs", "eval_runs", "convention_scans", "pr_intent", "pr_brief", "onboarding"} {
+	for _, table := range []string{"agent_runs", "multi_agent_runs", "eval_suite_runs", "eval_runs", "convention_scans", "pr_intent", "pr_brief", "onboarding", "cost_ledger"} {
 		out[table] = count(f.t, f.s.db.DB, "SELECT count(*) FROM "+table)
 	}
 	out["conventions jobs"] = count(f.t, f.s.db.DB, `SELECT count(*) FROM jobs WHERE kind = ?`, conventionsapp.KindExtract)
@@ -361,15 +420,15 @@ func TestCap_SpendReadErrorFailsClosed(t *testing.T) {
 			fixIt: func() { execSQL(t, f.s, `DELETE FROM settings WHERE key = 'monthly_spend_cap_usd'`) },
 		},
 		{
-			// Only the ledger (and the eval executor, which must never start here) reads eval_runs.
-			// A cap is set because without one the check does not read the spend (D24).
+			// The month spend is read from spend_month_totals alone (ledger FR8). A cap is set because
+			// without one the check does not read the spend (D24).
 			name: "failing ledger",
 			breakIt: func() {
 				setCap(t, f.s, 1000)
-				execSQL(t, f.s, `ALTER TABLE eval_runs RENAME TO eval_runs_gone`)
+				execSQL(t, f.s, `ALTER TABLE spend_month_totals RENAME TO spend_month_totals_gone`)
 			},
 			fixIt: func() {
-				execSQL(t, f.s, `ALTER TABLE eval_runs_gone RENAME TO eval_runs`)
+				execSQL(t, f.s, `ALTER TABLE spend_month_totals_gone RENAME TO spend_month_totals`)
 				setCap(t, f.s, nil)
 			},
 		},
@@ -531,7 +590,7 @@ func TestCap_IsCheckedAtStartOnly(t *testing.T) {
 		s := startStack(t, spec{llmAdapters: mockScript().forAll(), now: capClock})
 		requireNoSpend(t, s)
 		ws := workspaceID(t, s)
-		execSQL(t, s, `INSERT INTO agent_runs (workspace_id, ran_at, cost_usd) VALUES (?, ?, 0.99)`, ws, capNow)
+		seedLedgerSpend(t, s, ws, capNow, 0.99)
 		setCap(t, s, 1.0)
 		if got := s.get("/settings/spend").Obj(t); got["cap_reached"] != false || got["remaining_usd"] != 0.01 {
 			t.Fatalf("GET /settings/spend = %v, want 0.01 remaining", got)

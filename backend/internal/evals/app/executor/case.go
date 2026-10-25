@@ -75,7 +75,10 @@ func (e *Executor) review(base context.Context, run domain.Run, c domain.Case, u
 		Provider: run.Config.Provider,
 		Model:    run.Config.Model,
 		RunID:    run.ID,
-		OnUsage:  func(u reviewer.Usage) { usage.Add(u.CostUSD) },
+		// The case's own workspace pays; its id is the ledger reference.
+		WorkspaceID: c.WorkspaceID,
+		CaseID:      c.ID,
+		OnUsage:     func(u reviewer.Usage) { usage.Add(u.CostUSD) },
 	})
 	if err != nil {
 		return domain.CaseScore{}, 0, e.budgetOr(ctx, err)

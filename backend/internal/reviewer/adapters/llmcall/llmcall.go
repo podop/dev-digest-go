@@ -37,6 +37,12 @@ type Config struct {
 	// OnUsage receives the usage of every response, schema-invalid attempts included, as it
 	// arrives. It may be called from several goroutines (concurrent chunk calls); nil = none.
 	OnUsage func(domain.Usage)
+	// Charge labels every call of this run for the spend ledger (llm.Request.Charge). The callers
+	// that build a Caller set it per run: WorkspaceID, Kind (llm.KindReviewRun for a review run,
+	// llm.KindEvalCase for an eval case) and RefID (the run id or the eval case id). The Caller
+	// copies it into each request, so later changes to the caller's value do not reach the calls.
+	// nil = an unlabelled call (the llm client then warns once per call when a Recorder is wired).
+	Charge *llm.Charge
 }
 
 // Caller is the engine's LLM port for one run. It is safe for concurrent use as far as
@@ -86,6 +92,10 @@ func (c *Caller) request(call reviewerapp.Call) llm.Request {
 		Sections:      sections(call.Sections),
 		Chunk:         &llm.Chunk{Index: call.Chunk.Index, Total: call.Chunk.Total},
 		SessionID:     c.cfg.SessionID,
+	}
+	if c.cfg.Charge != nil {
+		charge := *c.cfg.Charge
+		req.Charge = &charge
 	}
 	if on := c.cfg.OnUsage; on != nil {
 		req.OnUsage = func(u llm.AttemptUsage) {

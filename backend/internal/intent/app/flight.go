@@ -75,7 +75,7 @@ func (s *Service) derive(ctx context.Context, in ResolveInput, key derivation, e
 	if err := ctx.Err(); err != nil {
 		return Result{}, context.Cause(ctx)
 	}
-	class, usage, err := s.classify(ctx, in.Pull, key, sources, block)
+	class, usage, err := s.classify(ctx, in, key, sources, block)
 	if err != nil {
 		return Result{}, err
 	}
@@ -155,6 +155,16 @@ func (s *Service) coreSources(ctx context.Context, in ResolveInput, key derivati
 	return sources, nil
 }
 
+// chargeKind is the ledger kind of a derivation: a refresh (Force) is intent_refresh, a review
+// run's derivation review_intent. A flight is shared, so the input is the starter's: the kind of
+// whichever caller started the derivation (spec A7).
+func chargeKind(in ResolveInput) llm.UsageKind {
+	if in.Force {
+		return llm.KindIntentRefresh
+	}
+	return llm.KindReviewIntent
+}
+
 // classification is the model's answer (schema IntentClassification).
 type classification struct {
 	Intent     string   `json:"intent"`
@@ -165,7 +175,8 @@ type classification struct {
 
 // classify makes the one structured call of a derivation and returns the answer with its usage
 // (tokens and cost over all attempts).
-func (s *Service) classify(ctx context.Context, pull domain.Pull, key derivation, sources []domain.Source, block string) (domain.Classification, llm.Result, error) {
+func (s *Service) classify(ctx context.Context, in ResolveInput, key derivation, sources []domain.Source, block string) (domain.Classification, llm.Result, error) {
+	pull := in.Pull
 	temperature := domain.Temperature
 	items := len(sources)
 	res, err := s.d.LLM.Structured(ctx, llm.Request{
@@ -182,6 +193,7 @@ func (s *Service) classify(ctx context.Context, pull domain.Pull, key derivation
 		Reprompts:     domain.Reprompts,
 		Feature:       domain.LogFeature,
 		CorrelationID: domain.CorrelationID(pull.ID, key.hash),
+		Charge:        &llm.Charge{WorkspaceID: in.WorkspaceID, Kind: chargeKind(in), RefID: pull.ID},
 		Sections: []llm.PromptSection{
 			{Name: "system", Source: "engine", Trust: llm.Trusted, Chars: llm.UTF16Len(domain.SystemPrompt)},
 			{Name: "task", Source: "engine", Trust: llm.Trusted, Chars: llm.UTF16Len(domain.TaskText())},

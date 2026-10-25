@@ -40,11 +40,12 @@ func goldenFile(t *testing.T, name string) map[string]string {
 	return m
 }
 
-// rowCounts returns the row count of every public table except the migration bookkeeping.
+// rowCounts returns the row count of every public table except the migration bookkeeping
+// (schema_migrations, and cost_ledger_backfill whose single summary row migration 0005 always inserts).
 func rowCounts(t *testing.T, db *gorm.DB) map[string]int {
 	t.Helper()
 	var tables []string
-	if err := db.Raw(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations'`).Scan(&tables).Error; err != nil {
+	if err := db.Raw(`SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'cost_ledger_backfill')`).Scan(&tables).Error; err != nil {
 		t.Fatal(err)
 	}
 	counts := map[string]int{}

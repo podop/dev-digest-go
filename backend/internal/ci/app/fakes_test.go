@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -228,21 +230,21 @@ func (f *fakeStore) StoredRunKeys(_ context.Context, keys []domain.RunKey) (map[
 	return out, nil
 }
 
-func (f *fakeStore) RecordRun(_ context.Context, run domain.NewRun) (bool, error) {
+func (f *fakeStore) RecordRun(_ context.Context, run domain.NewRun) (app.Recorded, error) {
 	key := domain.RunKey{GithubRunID: run.GithubRunID, Attempt: run.RunAttempt}
 	f.calls.add("recordRun", map[string]any{"key": keyName(key)})
 	if f.recordErr != nil {
-		return false, f.recordErr
+		return app.Recorded{}, f.recordErr
 	}
 	if f.recordFalse[key] || f.stored[key] {
-		return false, nil
+		return app.Recorded{}, nil
 	}
 	if f.stored == nil {
 		f.stored = map[domain.RunKey]bool{}
 	}
 	f.stored[key] = true
 	f.recorded = append(f.recorded, run)
-	return true, nil
+	return app.Recorded{AgentRunID: "agent-run-" + keyName(key), Stored: true}, nil
 }
 
 func (f *fakeStore) ListRuns(_ context.Context, _ string, flt app.RunFilter) ([]domain.Run, error) {
@@ -344,3 +346,37 @@ func (f *fakeGitHub) DownloadArtifact(ctx context.Context, repo app.RepoRef, id,
 }
 
 var _ app.GitHub = (*fakeGitHub)(nil)
+
+// fakeLedger records the CI runs it is asked to append; err makes every append fail.
+type fakeLedger struct {
+	runs []app.CIRun
+	err  error
+}
+
+func (f *fakeLedger) RecordCIRun(_ context.Context, run app.CIRun) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.runs = append(f.runs, run)
+	return nil
+}
+
+// fakeTx runs fn and, like a database, undoes what the store and the ledger wrote inside it when
+// fn fails. It counts the transactions it ran.
+type fakeTx struct {
+	store  *fakeStore
+	ledger *fakeLedger
+	ran    int
+}
+
+func (f *fakeTx) InTx(ctx context.Context, fn func(context.Context) error) error {
+	f.ran++
+	stored := maps.Clone(f.store.stored)
+	recorded := slices.Clone(f.store.recorded)
+	ledgerRuns := slices.Clone(f.ledger.runs)
+	err := fn(ctx)
+	if err != nil {
+		f.store.stored, f.store.recorded, f.ledger.runs = stored, recorded, ledgerRuns
+	}
+	return err
+}

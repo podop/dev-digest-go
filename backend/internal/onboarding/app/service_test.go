@@ -874,6 +874,21 @@ func TestGenerate_ErrorsDoNotCarryProviderText(t *testing.T) {
 	}
 }
 
+func TestGenerate_TheCallIsChargedToTheRepoOnboarding(t *testing.T) {
+	r := newRig(t)
+	r.build(readyState(), nil, fixedNow)
+	if _, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if len(r.llm.requests) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(r.llm.requests))
+	}
+	want := &llm.Charge{WorkspaceID: r.ws, Kind: llm.KindOnboarding, RefID: r.repo.ID}
+	if diff := cmp.Diff(want, r.llm.requests[0].Charge); diff != "" {
+		t.Errorf("Request.Charge mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestGenerate_AMissingKeyNamesTheProvider(t *testing.T) {
 	r := newRig(t)
 	r.llm.do = func(context.Context, llm.Request) (llm.Result, error) {

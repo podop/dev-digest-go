@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/llm/adapters/mock"
 	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
@@ -35,7 +37,7 @@ type testClient interface {
 func newProviders(c testClient) *peers.Providers {
 	return peers.NewProviders(c, func(cc peers.CallerConfig) reviewerapp.LLM {
 		return llmcall.New(llmcall.Config{
-			Client: c, Provider: cc.Provider, Model: cc.Model, RunID: cc.RunID, SessionID: cc.SessionID, OnUsage: cc.OnUsage,
+			Client: c, Provider: cc.Provider, Model: cc.Model, RunID: cc.RunID, SessionID: cc.SessionID, OnUsage: cc.OnUsage, Charge: cc.Charge,
 		})
 	})
 }
@@ -147,5 +149,26 @@ func TestProviders_BindsTheRunIntoTheRequest(t *testing.T) {
 	f.readyErr = errors.New("ANTHROPIC_API_KEY is not configured")
 	if _, err := p.Resolve(t.Context(), reviewsapp.LLMBinding{Provider: "anthropic"}); !errors.Is(err, f.readyErr) {
 		t.Errorf("Resolve() error = %v, want the client's Ready error", err)
+	}
+}
+
+func TestProviders_ChargesTheRunToItsWorkspace(t *testing.T) { // FR1
+	f := &fakeLLMClient{}
+	p := newProviders(f)
+	port, err := p.Resolve(t.Context(), reviewsapp.LLMBinding{
+		Provider: "anthropic", Model: "claude-x", WorkspaceID: "ws-1", RunID: "run-7", SessionID: "o/n#2:Ag",
+	})
+	if err != nil {
+		t.Fatalf("Resolve() error = %v", err)
+	}
+	for range 2 { // every call of the run, chunks included, carries the same label
+		f.req = llm.Request{}
+		if _, err := port.Review(t.Context(), reviewerapp.Call{Chunk: reviewer.ChunkRef{Index: 1, Total: 2}}); err != nil {
+			t.Fatalf("Review() error = %v", err)
+		}
+		want := &llm.Charge{WorkspaceID: "ws-1", Kind: llm.KindReviewRun, RefID: "run-7"}
+		if diff := cmp.Diff(want, f.req.Charge); diff != "" {
+			t.Errorf("Review() request charge mismatch (-want +got):\n%s", diff)
+		}
 	}
 }
