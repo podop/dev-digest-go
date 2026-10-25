@@ -2,6 +2,8 @@
    All hooks build on `apiFetch`. Errors are normalized to ApiError so the
    error-UX taxonomy (toast/inline/full-screen) can branch on status. */
 
+import { fileNameFromDisposition } from "./download";
+
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3001";
 
@@ -18,7 +20,8 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+/** fetch + error normalization shared by `apiFetch` (JSON) and `api.download` (file). */
+async function request(path: string, init?: RequestInit): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -57,12 +60,30 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
     throw new ApiError(message, res.status, code, details);
   }
+  return res;
+}
 
+export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await request(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
+/** A downloaded body and the file name the server chose (`Content-Disposition`), if readable. */
+export interface Download {
+  blob: Blob;
+  /** Null when the header is missing (e.g. not exposed to this origin) or has no usable name. */
+  fileName: string | null;
+}
+
+async function download(path: string): Promise<Download> {
+  const res = await request(path);
+  return { blob: await res.blob(), fileName: fileNameFromDisposition(res.headers.get("content-disposition")) };
+}
+
 export const api = {
+  /** GET a file: the body as a Blob plus the server's file name. */
+  download,
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),

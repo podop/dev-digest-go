@@ -16,11 +16,12 @@ import (
 
 // Zod-style issue codes of the 422 details.
 const (
-	codeInvalidType = "invalid_type"
-	codeInvalidEnum = "invalid_enum_value"
-	codeTooSmall    = "too_small"
-	codeTooBig      = "too_big"
-	codeCustom      = "custom"
+	codeInvalidType  = "invalid_type"
+	codeInvalidEnum  = "invalid_enum_value"
+	codeTooSmall     = "too_small"
+	codeTooBig       = "too_big"
+	codeCustom       = "custom"
+	codeInvalidUnion = "invalid_union"
 )
 
 // Bounds and precision of monthly_spend_cap_usd (the UI contract's SPEND_CAP_* constants).
@@ -33,11 +34,13 @@ const (
 var (
 	featureIDs  = []string{"onboarding", "review_intent", "risk_brief", "conformance", "conventions"}
 	providerIDs = []string{"openai", "anthropic", "openrouter"}
-	themes      = []string{"dark", "light"}
-	densities   = []string{"regular", "compact"}
+	// retentionDays are the accepted retention_days values; null (keep forever) is accepted too.
+	retentionDays = []int{30, 60, 90, 180, 365}
+	themes        = []string{"dark", "light"}
+	densities     = []string{"regular", "compact"}
 
 	// knownKeys are validated in this order; every other key is accepted as is.
-	knownKeys = []string{"polling_interval_min", "theme", "density", "sync_to_folder", "automatic_reviews", "feature_models", "default_model", "monthly_spend_cap_usd"}
+	knownKeys = []string{"polling_interval_min", "theme", "density", "sync_to_folder", "automatic_reviews", "feature_models", "default_model", "monthly_spend_cap_usd", "retention_days", "workspace_name"}
 )
 
 // parseSettingsUpdate validates a PUT /settings body (section 7.2) and returns the entries to
@@ -79,6 +82,12 @@ func parseSettingsUpdate(body []byte) (app.Bag, []httpx.Issue) {
 			value, is = defaultModel(raw, key)
 		case "monthly_spend_cap_usd":
 			value, is = spendCap(raw, key)
+		case "retention_days":
+			value, is = retention(raw, key)
+		case "workspace_name":
+			// The name is written by PUT /workspace only (FR1: trim, 1-80 runes, no control
+			// characters), so PUT /settings cannot bypass those rules.
+			is = []httpx.Issue{issue(codeCustom, "workspace_name is set with PUT /workspace", key)}
 		}
 		issues = append(issues, is...)
 		if is == nil {
@@ -283,6 +292,27 @@ func spendCap(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue)
 		return json.RawMessage("0"), nil // no negative zero
 	}
 	return json.RawMessage(strconv.FormatFloat(f, 'f', -1, 64)), nil
+}
+
+// retention validates retention_days: null (keep forever) or one of 30, 60, 90, 180, 365. Like
+// a Zod union of literals, every other value (any type) is one invalid_union issue.
+func retention(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue) {
+	invalid := []httpx.Issue{issue(codeInvalidUnion, "Invalid input", path...)}
+	switch jsonType(raw) {
+	case "null":
+		return json.RawMessage("null"), nil
+	case "number":
+		f, err := strconv.ParseFloat(string(bytes.TrimSpace(raw)), 64)
+		if err != nil || math.IsInf(f, 0) || math.IsNaN(f) || f != math.Trunc(f) {
+			return nil, invalid
+		}
+		for _, d := range retentionDays {
+			if f == float64(d) {
+				return json.RawMessage(strconv.Itoa(d)), nil
+			}
+		}
+	}
+	return nil, invalid
 }
 
 // atMostDecimals reports whether the decimal number text has no more than n decimals, exactly

@@ -1,4 +1,4 @@
-// Package httpapi exposes the repos and workspace routes. It is the only place of the repos
+// Package httpapi exposes the repos routes. It is the only place of the repos
 // context that knows Echo, JSON field names and status codes.
 package httpapi
 
@@ -15,7 +15,6 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"dev-digest-go/backend/internal/platform/httpx"
-	"dev-digest-go/backend/internal/repos/app"
 	"dev-digest-go/backend/internal/repos/domain"
 	"dev-digest-go/backend/internal/tenancy"
 )
@@ -26,7 +25,6 @@ type service interface {
 	List(ctx context.Context, workspaceID string) ([]domain.Repo, error)
 	Refresh(ctx context.Context, workspaceID, id string) error
 	Delete(ctx context.Context, workspaceID, id string) error
-	Overview(ctx context.Context, workspaceID string) (app.Overview, error)
 }
 
 // resolver finds the workspace and user a request acts as.
@@ -40,15 +38,14 @@ type Handler struct {
 	tenants resolver
 }
 
-// AddRoutes registers POST /repos, GET /repos, POST /repos/:id/refresh, DELETE /repos/:id and
-// GET /workspace.
+// AddRoutes registers POST /repos, GET /repos, POST /repos/:id/refresh and DELETE /repos/:id.
+// The /workspace routes belong to the workspace context.
 func AddRoutes(e *echo.Echo, svc service, tenants resolver) {
 	h := &Handler{svc: svc, tenants: tenants}
 	e.POST("/repos", h.add)
 	e.GET("/repos", h.list)
 	e.POST("/repos/:id/refresh", h.refresh)
 	e.DELETE("/repos/:id", h.remove)
-	e.GET("/workspace", h.workspace)
 }
 
 // repoResponse is the wire shape of a repo (contract: Repo in platform.ts); all keys are
@@ -79,21 +76,6 @@ func wireTime(t *time.Time) *httpx.Time {
 	}
 	w := httpx.NewTime(*t)
 	return &w
-}
-
-type workspaceRepo struct {
-	ID           string      `json:"id"`
-	FullName     string      `json:"full_name"`
-	ClonePath    *string     `json:"clone_path"`
-	LastPolledAt *httpx.Time `json:"last_polled_at"`
-	Cloned       bool        `json:"cloned"`
-}
-
-// workspaceResponse has camelCase workspaceId and cloneDir, as the contract demands.
-type workspaceResponse struct {
-	WorkspaceID string          `json:"workspaceId"`
-	CloneDir    string          `json:"cloneDir"`
-	Repos       []workspaceRepo `json:"repos"`
 }
 
 func (h *Handler) add(c *echo.Context) error {
@@ -168,25 +150,6 @@ func (h *Handler) remove(c *echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, map[string]string{"deleted": repoID})
-}
-
-func (h *Handler) workspace(c *echo.Context) error {
-	id, err := h.tenants.Resolve(c.Request().Context())
-	if err != nil {
-		return err
-	}
-	ov, err := h.svc.Overview(c.Request().Context(), id.WorkspaceID)
-	if err != nil {
-		return err
-	}
-	repos := make([]workspaceRepo, len(ov.Repos))
-	for i, r := range ov.Repos {
-		repos[i] = workspaceRepo{
-			ID: r.ID, FullName: r.FullName, ClonePath: r.ClonePath,
-			LastPolledAt: wireTime(r.LastPolledAt), Cloned: r.Cloned(),
-		}
-	}
-	return c.JSON(http.StatusOK, workspaceResponse{WorkspaceID: ov.WorkspaceID, CloneDir: ov.CloneDir, Repos: repos})
 }
 
 // parseAddBody validates the POST /repos body like the Node schema {url: string}: errors are

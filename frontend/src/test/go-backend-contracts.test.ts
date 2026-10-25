@@ -416,6 +416,9 @@ const contracts: Record<string, z.ZodTypeAny> = {
   workspace: z
     .object({
       workspaceId: uuid,
+      // Settings B: the display name (default when none is stored) and the data directory.
+      name: z.string().min(1),
+      dataDir: z.string().min(1),
       cloneDir: z.string().min(1),
       repos: z.array(
         z

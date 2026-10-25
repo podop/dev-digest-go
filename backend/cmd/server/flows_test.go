@@ -575,7 +575,7 @@ func TestContracts_GoldenResponses(t *testing.T) { // AC26
 	remote := t.TempDir()
 	makeRemote(t, remote, "o", "r")
 	s := startStack(t, spec{remoteDir: remote})
-	g := &goldens{t: t, cloneDir: s.cfg.CloneDir, ids: map[string]string{}}
+	g := &goldens{t: t, cloneDir: s.cfg.CloneDir, dataDir: s.cfg.DataDir, ids: map[string]string{}}
 
 	g.check("health", s.get("/health"), http.StatusOK)
 	g.check("health_ready", s.get("/health/ready"), http.StatusOK)

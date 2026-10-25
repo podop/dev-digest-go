@@ -1,0 +1,11 @@
+{
+  "label": "Retention",
+  "selectAria": "Retention",
+  "hint": "Run traces older than this are pruned on startup and once a day. Runs, reviews and findings are kept.",
+  "loading": "Loading…",
+  "choose": "Choose…",
+  "days": "{days} days",
+  "forever": "Keep forever",
+  "invalid": "Stored value is not valid — nothing is pruned until you choose one",
+  "saveFailed": "Could not save the retention setting."
+}

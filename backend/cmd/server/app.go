@@ -122,6 +122,9 @@ import (
 	spendhttp "dev-digest-go/backend/internal/spend/transport/http"
 	"dev-digest-go/backend/internal/tenancy"
 	tenancypg "dev-digest-go/backend/internal/tenancy/adapters/postgres"
+	workspacepg "dev-digest-go/backend/internal/workspace/adapters/postgres"
+	workspaceapp "dev-digest-go/backend/internal/workspace/app"
+	workspacehttp "dev-digest-go/backend/internal/workspace/transport/http"
 	"dev-digest-go/backend/migrations"
 )
 
@@ -177,6 +180,9 @@ type options struct {
 	// pollTick is how often the background PR poll checks which workspaces are due; 0 = the poller's
 	// own default (1 min). Tests shorten it and move the clock (now) instead of waiting.
 	pollTick time.Duration
+	// pruneInterval is the pause between two trace prunes; 0 = the pruner's own default (24 h). Tests
+	// shorten it instead of waiting.
+	pruneInterval time.Duration
 	// build is what GET /about reports as version and build_id; "" = "dev" (an unstamped build).
 	build buildInfo
 }
@@ -301,6 +307,9 @@ type wired struct {
 	// poller is the background PR poll; nil when PR_POLL_ENABLED=false. listen runs it on the stop
 	// context and waits for it (≤ 5 s) before serve closes the database.
 	poller *pullsapp.Poller
+	// pruner deletes expired run traces (spec FR8); listen runs it on the stop context, after the
+	// startup reaps, and waits for it before serve closes the database.
+	pruner *workspaceapp.Pruner
 }
 
 // intelHandlers are the three repo-intel job handlers.
@@ -598,6 +607,22 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	leaderboardhttp.AddRoutes(e, lbapp.NewService(lbpg.NewStore(db), now), resolver)
 	spendhttp.AddRoutes(e, spendSvc, resolver)
 	dataDir := absPath(cfg.DataDir)
+	workspaceStore := workspacepg.NewStore(db)
+	wsSettings := workspaceSettings{settings: settingsSvc}
+	workspaceSvc := workspaceapp.NewService(workspaceapp.Config{
+		Names:    workspaceNames{settings: settingsSvc},
+		Repos:    reposOverview{repos: reposSvc},
+		Settings: wsSettings,
+		Reader:   workspaceStore,
+		History:  workspaceStore,
+		Clock:    workspaceapp.Clock(now),
+		Log:      log,
+		DataDir:  dataDir,
+		Version:  orDev(o.build.version),
+	})
+	workspacehttp.AddRoutes(e, workspaceSvc, resolver)
+	pruner := workspaceapp.NewPruner(workspaceStore, wsSettings, workspaceStore, log,
+		workspaceapp.WithPruneInterval(o.pruneInterval))
 	abouthttp.AddRoutes(e, abouthttp.Info{
 		Version:       orDev(o.build.version),
 		BuildID:       orDev(o.build.buildID),
@@ -626,7 +651,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	return &wired{
 		echo: e, llm: llmClient, conventions: convSvc, backfill: intelapp.NewBackfill(intelStore, intelJobs),
 		reviews: reviewsSvc, executor: reviewsExec, evalRuns: evalRuns, evalExec: evalExec, intent: intentSvc, brief: briefSvc, onboarding: onbSvc,
-		poller: poller,
+		poller: poller, pruner: pruner,
 	}, nil
 }
 
@@ -635,8 +660,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 // end) in parallel with the eval executor (the same drain), the intent, brief and onboarding
 // generations (cancelled, up to 5 s to return) and the job runner (10 s); only then does Echo get its stop signal and drain
 // the remaining requests (20 s grace, FR43, FR4042). The background PR poll (when enabled) runs on
-// the stop context and returns within 5 s of it, next to the job runner; serve closes the database
-// only after listen has waited for it. Echo runs on its own context for that
+// the stop context and returns within 5 s of it, next to the job runner, and so does the trace
+// pruner (always on); serve closes the database only after listen has waited for both. Echo runs on its own context for that
 // reason: the signal context would stop it before the runs could finish. A server that cannot
 // drain within the grace period makes the process fail; runs and jobs that do not settle in time
 // keep their `running` rows (reaped at the next start) and only produce a warning.
@@ -699,6 +724,10 @@ func listen(ctx context.Context, cfg config.Config, o options, w *wired, runner 
 	} else {
 		log.Info("pull request poller disabled (PR_POLL_ENABLED=false)")
 	}
+	// The trace prune starts here, after the startup reaps and in its own goroutine, so it never
+	// delays the port; it returns when stopCtx ends (a prune in flight is cancelled) and the wait
+	// below holds serve back from closing the database until then.
+	wg.Go(func() { w.pruner.Run(stopCtx) })
 	wg.Go(func() {
 		<-stopCtx.Done()
 		if err := runner.Shutdown(jobs.DefaultShutdownTimeout); err != nil {

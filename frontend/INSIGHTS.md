@@ -26,6 +26,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-25 — src/lib/api.ts api.get<T> only CASTS the payload (no zod parse), so a strict contract type such as RetentionDays (30|60|90|180|365|null) hides an out-of-range stored value like 45 → read such settings as unknown at runtime when the UI must show an 'invalid stored value' state (RetentionField helpers toSelectValue)
 - 2026-10-25 — src/lib/providers.tsx createAppQueryClient(): the global MutationCache error policy (lib/mutation-errors reportMutationError, the always-shown 402 spend_cap_reached toast with a link) only runs on the app's real QueryClient; renderWithProviders builds its own client without those handlers → render with TestProviders + createAppQueryClient() to test global toasts
 - 2026-10-15 — src/lib/repo-context.tsx useActiveRepo: global routes without :repoId in the path (/multi-agent, /multi-agent/new) fall back to localStorage dd-repo, then the first repo; so ?pr=<id> from a PR of a non-active repo is not in the active repo's PR list and nothing is preselected → on a repo-less route, validate any repo-scoped query param against the active repo's data instead of trusting it
 - 2026-10-15 — src/test/fetch-mock.ts (mockFetch): routes match on the pathname only and the query string is recorded separately on each request → assert query params via api.requests('GET /path')[i].search, not by putting ?x=y in the route key (evals.test.tsx period param)

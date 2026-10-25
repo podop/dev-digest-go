@@ -192,3 +192,12 @@ export const leaderboardKeys = {
   /** GET /leaderboard?period=&tz=&repo= */
   view: (period: string, repo: string, tz: string) => [...leaderboardKeys.all, "view", period, repo, tz] as const,
 };
+
+/** Settings › Workspace (specs/2026-10-23-settings-b-workspace.md §7). A reset invalidates the prefix. */
+export const workspaceKeys = {
+  all: ["workspace"] as const,
+  /** GET /workspace — id, name, data dir, repos. */
+  info: () => [...workspaceKeys.all, "info"] as const,
+  /** GET /workspace/stats — the six counts. */
+  stats: () => [...workspaceKeys.all, "stats"] as const,
+};

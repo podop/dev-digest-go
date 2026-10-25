@@ -7,6 +7,7 @@ import {
   SPEND_CAP_MAX_USD,
   SPEND_CAP_MIN_USD,
 } from '../constants/settings.js';
+import { RETENTION_DEFAULT_DAYS } from '../constants/workspace.js';
 
 /**
  * Platform / scaffolding DTOs owned by F1:
@@ -39,6 +40,19 @@ export {
   SPEND_CAP_ERROR_CODE,
 } from '../constants/settings.js';
 
+// ---- Retention (Settings › Workspace) ----
+/** Days a run trace is kept (counted from its run's start); `null` = keep forever. One flat union:
+ *  the Go validator answers a bad value with the same single `invalid_union` issue. */
+export const RetentionDays = z.union([
+  z.literal(30),
+  z.literal(60),
+  z.literal(90),
+  z.literal(180),
+  z.literal(365),
+  z.null(),
+]);
+export type RetentionDays = z.infer<typeof RetentionDays>;
+
 // ---- Settings ----
 /**
  * Non-secret prefs/config. Secrets (API keys) are NOT stored here — they go
@@ -65,6 +79,8 @@ export const SettingsKnown = z.object({
     })
     .nullable()
     .default(null),
+  /** Run-trace retention in days (30|60|90|180|365); null = keep forever; absent = 90. */
+  retention_days: RetentionDays.default(RETENTION_DEFAULT_DAYS),
 });
 export type SettingsKnown = z.infer<typeof SettingsKnown>;
 

@@ -8,7 +8,7 @@ import { type ShellContext } from "@devdigest/ui";
 import { useTheme } from "@/lib/theme";
 import { useActiveRepo } from "@/lib/repo-context";
 import { useConfirmLeave } from "@/lib/leave-guard";
-import { usePulls, useDeleteRepo } from "@/lib/hooks";
+import { usePulls, useDeleteRepo, useWorkspace } from "@/lib/hooks";
 import { activeKeyFor, toShellRepo } from "../helpers";
 
 interface ShellContextOptions {
@@ -27,6 +27,9 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
   const { theme, toggle } = useTheme();
   const { repoId, repos, activeRepo, setRepoId } = useActiveRepo();
   const { data: pulls } = usePulls(repoId);
+  // A failed name load leaves `data` undefined → the switcher shows no name.
+  const { data: workspace } = useWorkspace();
+  const workspaceName = workspace?.name;
   const deleteRepo = useDeleteRepo();
   const confirmLeave = useConfirmLeave();
 
@@ -67,8 +70,9 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
       Link,
       activeKey: activeKeyFor(pathname),
       repoId,
-      repos: repos.map(toShellRepo),
-      activeRepo: activeRepo ? toShellRepo(activeRepo) : null,
+      repos: repos.map((r) => toShellRepo(r)),
+      // Only the active repo's subtitle (the switcher trigger) carries the workspace name.
+      activeRepo: activeRepo ? toShellRepo(activeRepo, workspaceName) : null,
       theme,
       onToggleTheme: toggle,
       onOpenCommandPalette,
@@ -84,6 +88,7 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
       repoId,
       repos,
       activeRepo,
+      workspaceName,
       theme,
       toggle,
       onOpenCommandPalette,

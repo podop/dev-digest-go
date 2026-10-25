@@ -108,6 +108,9 @@ type spec struct {
 	// pollTick is the background PR poll's check interval (0 = 1 min); the poll tests shorten it and
 	// drive the poller's clock through now.
 	pollTick time.Duration
+
+	// pruneInterval is the pause between two trace prunes (0 = 24 h).
+	pruneInterval time.Duration
 }
 
 // stack is a running server with its stubs.
@@ -191,6 +194,7 @@ func startStack(t testing.TB, sp spec) *stack {
 			o.intentBudget, o.briefBudget, o.onboardingBudget = sp.intentBudget, sp.briefBudget, sp.onboardingBudget
 			o.evalCaseBudget, o.runner, o.artifactClient = sp.evalCaseBudget, sp.runner, sp.artifactClient
 			o.pollTick = sp.pollTick
+			o.pruneInterval = sp.pruneInterval
 		},
 	}
 

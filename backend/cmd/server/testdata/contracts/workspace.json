@@ -1,5 +1,7 @@
 {
   "cloneDir": "/data/workspace",
+  "dataDir": "/data",
+  "name": "default",
   "repos": [
     {
       "clone_path": null,

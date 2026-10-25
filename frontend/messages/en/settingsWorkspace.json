@@ -1,0 +1,24 @@
+{
+  "title": "Workspace",
+  "body": "Where this workspace keeps its agents, skills, learnings, and run history.",
+  "name": {
+    "label": "Workspace name",
+    "inputAria": "Workspace name",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "errors": {
+      "empty": "Enter a name.",
+      "too_long": "Use at most {max} characters.",
+      "control_character": "Remove line breaks, tabs and other control characters.",
+      "rejected": "This name was not accepted. Check it and try again."
+    }
+  },
+  "dataDir": {
+    "label": "Data directory",
+    "inputAria": "Data directory",
+    "hint": "Holds the local secrets file and repository clones. Changing it needs a restart.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Could not copy the data directory."
+  }
+}

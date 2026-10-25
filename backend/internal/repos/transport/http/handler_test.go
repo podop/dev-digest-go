@@ -22,8 +22,6 @@ import (
 	reposdb "dev-digest-go/backend/internal/repos/adapters/postgres"
 	"dev-digest-go/backend/internal/repos/app"
 	httpapi "dev-digest-go/backend/internal/repos/transport/http"
-	"dev-digest-go/backend/internal/seed"
-	seedpg "dev-digest-go/backend/internal/seed/adapters/postgres"
 	"dev-digest-go/backend/internal/tenancy"
 	tenancypg "dev-digest-go/backend/internal/tenancy/adapters/postgres"
 )
@@ -510,58 +508,11 @@ func TestDelete_OtherWorkspaceIs404(t *testing.T) {
 	}
 }
 
-func TestWorkspace(t *testing.T) {
-	d := pgtest.Migrated(t)
-	res, err := seed.New(seedpg.NewStore(d.DB), slog.New(slog.DiscardHandler)).Run(t.Context())
-	if err != nil {
-		t.Fatalf("seed error = %v", err)
-	}
-	v := wire(t, d.DB, res.WorkspaceID, res.UserID)
-	cloned := decode[map[string]any](t, post(t, v, "https://github.com/o/r"))["id"].(string)
-	if err := d.DB.Exec(`UPDATE repos SET clone_path = '/data/workspace/o/r', last_polled_at = '2026-10-21 09:15:00+00' WHERE id = ?`, cloned).Error; err != nil {
-		t.Fatal(err)
-	}
-
-	r := v.do(t, http.MethodGet, "/workspace", "")
-	if r.status != http.StatusOK {
-		t.Fatalf("GET /workspace status = %d (%s), want 200", r.status, r.body)
-	}
-	got := decode[map[string]any](t, r)
-	if got["workspaceId"] != res.WorkspaceID || got["cloneDir"] != cloneDir {
-		t.Errorf("workspaceId/cloneDir = %v / %v, want %s / %s", got["workspaceId"], got["cloneDir"], res.WorkspaceID, cloneDir)
-	}
-	repos, _ := got["repos"].([]any)
-	if len(repos) != 2 {
-		t.Fatalf("repos = %v, want the seeded repo and the cloned one", repos)
-	}
-	seeded, clonedRepo := repos[0].(map[string]any), repos[1].(map[string]any)
-	if seeded["full_name"] != "acme/payments-api" || seeded["cloned"] != false || seeded["clone_path"] != nil {
-		t.Errorf("seeded repo = %v, want acme/payments-api cloned=false clone_path=null", seeded)
-	}
-	wantCloned := map[string]any{
-		"id": cloned, "full_name": "o/r", "clone_path": "/data/workspace/o/r",
-		"last_polled_at": "2026-10-21T09:15:00.000Z", "cloned": true,
-	}
-	if diff := cmp.Diff(wantCloned, clonedRepo); diff != "" {
-		t.Errorf("cloned repo mismatch (-want +got):\n%s", diff)
-	}
-}
-
-func TestWorkspace_EmptyReposIsArray(t *testing.T) {
-	v := newEnv(t)
-	r := v.do(t, http.MethodGet, "/workspace", "")
-	want := `{"workspaceId":"` + v.ws + `","cloneDir":"` + cloneDir + `","repos":[]}`
-	if r.status != http.StatusOK || r.body != want {
-		t.Errorf("GET /workspace = %d %s, want 200 %s", r.status, r.body, want)
-	}
-}
-
 func TestNotProvisioned_Is500(t *testing.T) {
 	d := pgtest.Migrated(t) // no workspace, no user
 	v := wire(t, d.DB, "", "")
 	for _, tc := range []struct{ method, path, body string }{
 		{http.MethodGet, "/repos", ""},
-		{http.MethodGet, "/workspace", ""},
 		{http.MethodPost, "/repos", `{"url":"https://github.com/o/r"}`},
 		{http.MethodPost, "/repos/6f1c8b64-6f0b-4b6a-9d0e-3f8f0a1b2c3d/refresh", ""},
 		{http.MethodDelete, "/repos/6f1c8b64-6f0b-4b6a-9d0e-3f8f0a1b2c3d", ""},

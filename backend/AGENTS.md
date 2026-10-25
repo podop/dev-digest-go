@@ -86,6 +86,15 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   `ci/runner/domain.RunnerVersion`, plus the data dir and secrets file. The Dockerfile stamps them
   from the build args `DEVDIGEST_VERSION` (default `dev`; only letters, digits and `. _ + -`, else
   `dev`; a compose build arg) and the sanitised `DEVDIGEST_BUILD_ID`.
+- Workspace (`workspace` context, Settings B): `GET`/`PUT /workspace` (info, rename), `GET /workspace/stats`,
+  `GET /workspace/export` (secret-free JSON download), `POST /workspace/reset-history` (typed name
+  confirms; 409 `run_active`, 422 `confirmation_mismatch`). `GET /workspace` is no longer in `repos`.
+  The display name is the Settings row `workspace_name` (never `workspaces.name`, the lookup key);
+  `retention_days` ∈ {30,60,90,180,365,null} drives the trace pruner. `cmd/server/workspace.go`
+  adapts settings and repos to the ports. The pruner (`workspace/app.Pruner`, always on) is started
+  by `listen` after the startup reaps as `go Run(stopCtx)`, prunes at once and then 24 h after each
+  pass ended, and `listen` waits for it (a prune in flight is cancelled) before `serve` closes the DB.
+  Test seam `options.pruneInterval` (0 = 24 h).
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

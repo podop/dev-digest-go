@@ -1,5 +1,13 @@
 import { z } from 'zod';
 import { Severity } from './findings.js';
+import {
+  CiFailOn,
+  ConventionCategory,
+  ConventionStatus,
+  MemoryKind,
+  MemoryScope,
+  ReviewStrategy,
+} from './knowledge.js';
 import { AgentPeriodMetrics, CostSegment, PeriodInfo, StatPoint } from './observability.js';
 
 /**
@@ -18,15 +26,27 @@ import { AgentPeriodMetrics, CostSegment, PeriodInfo, StatPoint } from './observ
 // Plugin export / import  (.devdigest-plugin/ bundle)
 // ---------------------------------------------------------------------------
 
+/** One immutable version of an exported skill (workspace export; absent in older bundles). */
+export const PluginSkillVersion = z.object({
+  version: z.number().int(),
+  body: z.string(),
+  description: z.string().nullable(),
+  message: z.string().nullable(),
+  created_at: z.string(),
+});
+export type PluginSkillVersion = z.infer<typeof PluginSkillVersion>;
+
 /** An exported skill (config only — no DB ids; round-trippable). */
 export const PluginSkill = z.object({
   name: z.string(),
   description: z.string(),
   type: z.enum(['rubric', 'convention', 'security', 'custom']),
-  source: z.enum(['manual', 'imported_url', 'extracted', 'community']),
+  source: z.enum(['manual', 'imported_file', 'imported_url', 'extracted', 'community']),
   body: z.string(),
   enabled: z.boolean(),
   evidence_files: z.array(z.string()).nullish(),
+  /** Every version, oldest first (workspace export only). */
+  versions: z.array(PluginSkillVersion).optional(),
 });
 export type PluginSkill = z.infer<typeof PluginSkill>;
 
@@ -41,6 +61,10 @@ export const PluginAgent = z.object({
   enabled: z.boolean(),
   /** Names of skills (in this bundle) linked to the agent, in order. */
   skills: z.array(z.string()),
+  /** Run configuration (workspace export only). */
+  strategy: ReviewStrategy.optional(),
+  ci_fail_on: CiFailOn.optional(),
+  repo_intel: z.boolean().optional(),
 });
 export type PluginAgent = z.infer<typeof PluginAgent>;
 
@@ -64,13 +88,38 @@ export const PluginConvention = z.object({
   evidence_snippet: z.string().nullish(),
   confidence: z.number().nullish(),
   accepted: z.boolean(),
+  /** Workspace export only: the repository (`full_name`), category and review status. */
+  repo: z.string().optional(),
+  category: ConventionCategory.optional(),
+  status: ConventionStatus.optional(),
 });
 export type PluginConvention = z.infer<typeof PluginConvention>;
+
+/** An exported learning (workspace export): no id, no embedding, no sources. */
+export const PluginLearning = z.object({
+  scope: MemoryScope,
+  kind: MemoryKind,
+  content: z.string(),
+  confidence: z.number().nullable(),
+  /** Repository `full_name`; null for global/team scope. */
+  repo: z.string().nullable(),
+});
+export type PluginLearning = z.infer<typeof PluginLearning>;
+
+/** An exported Project Context file (workspace export). */
+export const PluginContextFile = z.object({
+  repo: z.string(),
+  path: z.string(),
+  content: z.string(),
+});
+export type PluginContextFile = z.infer<typeof PluginContextFile>;
 
 export const PluginManifest = z.object({
   name: z.string(),
   version: z.string(),
   format: z.literal('devdigest-plugin/v1'),
+  /** `workspace` for GET /workspace/export; absent in older bundles = `plugin`. */
+  kind: z.enum(['plugin', 'workspace']).optional(),
   exported_at: z.string(),
   description: z.string().nullish(),
   counts: z.object({
@@ -78,6 +127,8 @@ export const PluginManifest = z.object({
     skills: z.number().int(),
     eval_cases: z.number().int(),
     conventions: z.number().int(),
+    learnings: z.number().int().optional(),
+    context_files: z.number().int().optional(),
   }),
 });
 export type PluginManifest = z.infer<typeof PluginManifest>;
@@ -89,6 +140,11 @@ export const PluginBundle = z.object({
   skills: z.array(PluginSkill),
   eval_cases: z.array(PluginEvalCase),
   conventions: z.array(PluginConvention),
+  /** Workspace export only. */
+  learnings: z.array(PluginLearning).optional(),
+  context_files: z.array(PluginContextFile).optional(),
+  /** Allow-listed settings of the workspace export (absent keys omitted). */
+  settings: z.record(z.unknown()).optional(),
 });
 export type PluginBundle = z.infer<typeof PluginBundle>;
 

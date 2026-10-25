@@ -1,15 +1,33 @@
 /** Pure helpers for AppShell. */
 
 import type { RepoSummary } from "@devdigest/ui";
+import { WORKSPACE_SWITCHER_NAME_MAX } from "@devdigest/shared/constants/workspace";
 import type { Repo } from "@/lib/types";
 
-/** Map a lib `Repo` to the `RepoSummary` shape the AppFrame shell context expects. */
-export function toShellRepo(r: Repo): RepoSummary {
+/**
+ * The workspace name as the repo switcher shows it: cut at WORKSPACE_SWITCHER_NAME_MAX code
+ * points + "…" (the vendored subtitle takes a plain string, so there is no tooltip — spec D24).
+ * A missing or blank name gives "" (no name is shown).
+ */
+export function switcherWorkspaceName(name: string | null | undefined): string {
+  const trimmed = name?.trim() ?? "";
+  const points = Array.from(trimmed);
+  if (points.length <= WORKSPACE_SWITCHER_NAME_MAX) return trimmed;
+  return `${points.slice(0, WORKSPACE_SWITCHER_NAME_MAX).join("")}…`;
+}
+
+/**
+ * Map a lib `Repo` to the `RepoSummary` shape the AppFrame shell context expects. The switcher
+ * subtitle is `<branch> · <syncedLabel>`, so a workspace name goes into the label: `<label> · <name>`.
+ */
+export function toShellRepo(r: Repo, workspaceName?: string | null): RepoSummary {
+  const label = r.last_polled_at ? "synced" : "not synced";
+  const name = switcherWorkspaceName(workspaceName);
   return {
     id: r.id,
     full_name: r.full_name,
     default_branch: r.default_branch,
-    syncedLabel: r.last_polled_at ? "synced" : "not synced",
+    syncedLabel: name ? `${label} · ${name}` : label,
   };
 }
 

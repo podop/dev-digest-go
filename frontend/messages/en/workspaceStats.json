@@ -1,0 +1,15 @@
+{
+  "groupLabel": "Workspace statistics",
+  "loading": "Loading workspace statistics…",
+  "loadError": "Could not load the workspace statistics.",
+  "retry": "Retry",
+  "unavailable": "—",
+  "tiles": {
+    "agents": "Agents",
+    "skills": "Skills",
+    "evalCases": "Eval cases",
+    "learnings": "Learnings",
+    "repos": "Repositories",
+    "runs": "Runs"
+  }
+}

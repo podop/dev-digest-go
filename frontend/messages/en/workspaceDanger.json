@@ -1,0 +1,39 @@
+{
+  "title": "Danger zone",
+  "body": "Resetting clears runs, traces and learnings for this workspace. Agents and skills are kept. This cannot be undone.",
+  "runHistoryNote": "Run history includes reviews, findings and Agent Performance data.",
+  "export": {
+    "label": "Export workspace",
+    "exporting": "Exporting…",
+    "done": "Exported {fileName}"
+  },
+  "reset": {
+    "label": "Reset run history",
+    "nameUnavailable": "The workspace name has not loaded, so run history cannot be reset yet."
+  },
+  "dialog": {
+    "title": "Reset run history?",
+    "intro": "This permanently deletes the run history of this workspace.",
+    "deletedHeading": "Deleted",
+    "keptHeading": "Kept",
+    "deleted": {
+      "runs": "{count, plural, one {# run} other {# runs}} with their reviews, findings and traces",
+      "runsUnknown": "Runs with their reviews, findings and traces",
+      "learnings": "{count, plural, one {# learning} other {# learnings}}",
+      "learningsUnknown": "Learnings",
+      "other": "Eval runs, CI runs and composed reviews"
+    },
+    "kept": {
+      "config": "Agents, skills, eval cases, repositories and settings",
+      "pulls": "Pull requests, which are marked as not reviewed again"
+    },
+    "exportNote": "Export does not include run history, so an export is not a backup of what is deleted here.",
+    "spendNote": "This month's spend total will no longer include the deleted runs.",
+    "confirmLabel": "Type {name} to confirm",
+    "reasonMismatch": "The button stays disabled until the text matches the workspace name exactly.",
+    "cancel": "Cancel",
+    "confirm": "Reset run history",
+    "resetting": "Resetting…",
+    "done": "Run history reset: {runs, plural, one {# run} other {# runs}}, {findings, plural, one {# finding} other {# findings}} and {learnings, plural, one {# learning} other {# learnings}} deleted."
+  }
+}

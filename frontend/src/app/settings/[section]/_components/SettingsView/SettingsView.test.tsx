@@ -1,5 +1,5 @@
 /* SettingsView — the sub-nav in FR1 order with the current section active, the panel of each
-   section (slice A panels, "coming later" for the rest) and the no-hard-coded-copy check
+   section (panels of slices A and B, "coming later" for the rest) and the no-hard-coded-copy check
    (AC1, AC22). AppShell is a passthrough; the section panels have their own tests and are
    replaced by markers here. */
 import type React from "react";
@@ -21,6 +21,7 @@ vi.mock("@/components/app-shell", () => ({
 }));
 vi.mock("./_components/SettingsApiKeys", () => ({ SettingsApiKeys: () => <div data-testid="panel-api-keys" /> }));
 vi.mock("./_components/SettingsGithub", () => ({ SettingsGithub: () => <div data-testid="panel-github" /> }));
+vi.mock("./_components/SettingsWorkspace", () => ({ SettingsWorkspace: () => <div data-testid="panel-workspace" /> }));
 vi.mock("./_components/SettingsModels", () => ({ SettingsModels: () => <div data-testid="panel-models" /> }));
 vi.mock("./_components/SettingsAbout", () => ({ SettingsAbout: () => <div data-testid="panel-about" /> }));
 
@@ -41,6 +42,7 @@ const LABELS: Record<SettingsSectionKey, string> = {
 const PANEL_TESTID: Partial<Record<SettingsSectionKey, string>> = {
   "api-keys": "panel-api-keys",
   github: "panel-github",
+  workspace: "panel-workspace",
   models: "panel-models",
   about: "panel-about",
 };
