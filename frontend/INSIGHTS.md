@@ -8,6 +8,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Works
 <!-- approaches and solutions that worked here -->
+- 2026-10-25 — a wizard whose current step is derived from live 'first incomplete step' state jumps ahead the moment the shown step completes (a passing test hid Continue on /setup) → resolve the step once from ?step + state and router.replace the resolved step into the URL (setup/SetupView helpers resolveStep)
 - 2026-10-15 — src/lib/hooks/evals.test.tsx (TanStack Query refetchInterval polling): vi.useFakeTimers({ shouldAdvanceTime: true }) + await act(() => vi.advanceTimersByTimeAsync(2000)) drives refetchInterval on the fake clock while waitFor still works → use this to test polling hooks (useEvalRun) instead of real 2 s waits
 - 2026-09-22 — src/app/agents/[id]/…/SkillsTab/SkillsTab.test.tsx (@dnd-kit in jsdom): the keyboard sensor picks drop targets from getBoundingClientRect, which jsdom returns as zeros, so arrow keys move nothing → stub getBoundingClientRect to stack rows by index, then user.keyboard(' ') / ArrowUp / ' ' really reorders
 - 2026-09-22 — src/test/setup.ts: a global vi.mock('@uiw/react-codemirror', importOriginal) swaps CodeMirror for a textarea in every test, but next/dynamic({ssr:false}) still loads it asynchronously, and the first test of a file (cold import) under the full suite takes >1s — findByRole with the default timeout flaked 1 in ~3 runs (SkillEditor.test.tsx) → wait for dynamically loaded editors with findBy…(…, { timeout: 5000 })
@@ -25,6 +26,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-25 — src/lib/providers.tsx createAppQueryClient(): the global MutationCache error policy (lib/mutation-errors reportMutationError, the always-shown 402 spend_cap_reached toast with a link) only runs on the app's real QueryClient; renderWithProviders builds its own client without those handlers → render with TestProviders + createAppQueryClient() to test global toasts
 - 2026-10-15 — src/lib/repo-context.tsx useActiveRepo: global routes without :repoId in the path (/multi-agent, /multi-agent/new) fall back to localStorage dd-repo, then the first repo; so ?pr=<id> from a PR of a non-active repo is not in the active repo's PR list and nothing is preselected → on a repo-less route, validate any repo-scoped query param against the active repo's data instead of trusting it
 - 2026-10-15 — src/test/fetch-mock.ts (mockFetch): routes match on the pathname only and the query string is recorded separately on each request → assert query params via api.requests('GET /path')[i].search, not by putting ?x=y in the route key (evals.test.tsx period param)
 - 2026-10-15 — src/vendor/ui/shell/NavItem.tsx:54 + components/app-shell/hooks/useShellCommands.ts:26: sidebar labels (NAV[].label) are English literals in vendored nav.ts; shell.json nav.* keys feed only the command palette → don't flag a literal sidebar label as an i18n miss; a page <title> goes through generateMetadata + getTranslations (as pulls/[number]/page.tsx)
@@ -55,6 +57,9 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-25 — lint: the repo-wide pnpm lint (biome lint --error-on-warnings .) carries ~158 pre-existing infos and 'pnpm exec next lint' opens an interactive ESLint setup prompt (no ESLint here) → gate a change with pnpm exec biome lint --error-on-warnings <changed dir>
+- 2026-10-25 — next-intl: t('providers.x') inside a component that uses a nested namespace key resolves from the namespace root, and a missing key only LOGS MISSING_MESSAGE (no throw), so tests pass until a text assertion fails → address nested keys with their full path (e.g. defaultModel.providers.x)
+- 2026-10-25 — vendored @devdigest/ui Button spreads props onto <button> without a default type, so a Cancel button inside a <form> submits it (AddRepoForm) → always pass type="button" for non-submit buttons inside forms
 - 2026-10-23 — src/app/leaderboard/…/HotFiles (next-intl t.rich): rich values cannot carry React elements, and a numeric ICU argument like {number} is locale-formatted (1044 → '1,044') → render per-item links through a rich message with the data inside the tag ('<link>#{number}</link>'), pass the number as String(n), and join the items in JSX (HotFiles.test.tsx asserts the #1044 link)
 - 2026-10-23 — pnpm exec vitest run <name>: the filter is a substring of the file path, so 'helpers' or 'helpers.test' ran ~49 unrelated files → filter by a folder fragment without route brackets (e.g. 'LeaderboardView/helpers', 'leaderboard/_components/LeaderboardView/_components/LeaderboardTable')
 - 2026-10-23 — Zod: a schema with .refine() is a ZodEffects, so .strict()/.extend() are not available on it → build a strict variant with Schema.innerType().strict().refine(<same rule>) (src/test/go-backend-contracts.test.ts evalExpectation)

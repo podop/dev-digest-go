@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-24 (PR Leaderboard AC12 closed; Settings A in progress in worktree) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-25 (Settings slice A merged; PR Leaderboard closed) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -70,20 +70,54 @@ Leaderboard follow-ups (not fixed):
 - Load-sensitive tests: `repointel` `TestExtractSymbols_Hostile` and `TestBuild_SubstitutionFanoutIsBounded`
   failed once at load average ≈ 45; they pass on a quiet host.
 
-**Settings** (in progress). Design `docs/design/2026-10-23-settings-first-run.md` (accepted) and specs A–D
-(`specs/2026-10-23-settings-*.md`), commit `74c6ebf`. Order: A, then B ∥ C (C uses the leaderboard poller), then D.
-- Slice A: plan `docs/plans/2026-10-23-settings-first-run-setup.md` (+ `.context.md`), S1–S30 in W0–W5, approved
-  2026-10-24 (A0–A14; spec D23). Commit `bd926b0`.
-- It is being implemented multi-agent in the worktree `../dev-digest-go-settings-a` on branch `feat/settings-a`
-  (from `bd926b0`).
-- W0 and W1 are done and uncommitted. Per the plan, W0–W3 are committed as one change set. Merge into this branch only
-  after slice A's review gate, and only with the user's OK.
-- User decisions in W1:
+**Settings.** Design `docs/design/2026-10-23-settings-first-run.md` (accepted), specs A–D (`specs/2026-10-23-settings-*.md`,
+commit `74c6ebf`). Order: A, then B ∥ C (C uses the leaderboard poller), then D.
+**Slice A: done and merged** (`ac69763`, merging `feat/settings-a`). Plan `docs/plans/2026-10-23-settings-first-run-setup.md`
+(+ `.context.md`, S1–S30, W0–W5; commit `bd926b0`).
+- After the merge, `make check` on `feat/go-backend-phase-1` was green: 137 backend packages, frontend 1134 tests.
+- Commits: `fd9f82b` W0–W3 · `ebcbbf1` W4 · `c9c4689` review fixes (S1 key fragments, S22 tests) · `9dc70ca` fix r3 (AC23).
+- What it adds:
+  - a 7-section Settings (API Keys, GitHub Integration, Models, About + 3 placeholders);
+  - a richer test connection (latency, checked model, GitHub login/scopes), with no redirects and no key fragments;
+  - `default_model`;
+  - a monthly spend cap: `GET /settings/spend`, and 402 `spend_cap_reached` on 8 LLM routes, failing closed;
+  - `GET /about`, with version and build id stamped at link time;
+  - a 3-step `/setup` gated from `/`; `/onboarding` redirects to it;
+  - migration `0003` (spend indexes).
+- Gate (reports in `../dev-digest-go-settings-a/.sdd/review/2026-10-23-settings-first-run-setup/`, git-ignored):
+  - architecture r1/r2 PASS;
+  - security r1/r2 PASS;
+  - plan verification r2: 91 PASS, 0 FAIL;
+  - `make check` green, with known flakes re-run: `platform/github` Retry-After HTTP date and `EvalCasesSection` "200 cases".
+- AC23: accepted deviation D26. GET /settings/spend p95 169 ms; the no-cap path is about the baseline; with a cap set the
+  check adds about 165 ms p95.
+- AC25: **PASS**.
+  - The mock half passed on a throwaway stack.
+  - The real-key half passed on the user's stand (2026-10-25, `.sdd/review/2026-10-23-settings-first-run-setup/ac25-real.md`, git-ignored):
+    OpenRouter and GitHub keyless tests (login, scopes), the 402 on 3 routes plus the toast link, one real LLM call,
+    the UI walk with 0 errors, and the secrets file at 0600.
+- User decisions:
+  - assumptions A0–A14;
+  - spec D23–D26;
   - with the cap reached, 402 wins over 409 and over the 422s checked inside a generation;
   - with the cap reached, starts with no agents also answer 402;
-  - the toast link text is "Review the spend cap in Settings";
-  - KeyField gets an `onResult` prop.
-- S26 additionally owns the `spend/app.Caps` adapter (a plan gap found in W1).
+  - the toast link text;
+  - the KeyField `onResult` prop.
+- Follow-ups:
+  - security S2 / D25: show "N runs with unknown cost";
+  - security I7: the shared llm wire error code scrubs only the exact key (masked 401 echo in `/providers/openai/models` and run
+    errors), so give it the same fixed 401/403 message;
+  - I8: cap the length of the test-connection key;
+  - D26: a stored month rollup, so the check is ≤ 50 ms with a cap;
+  - arch LOW: `settings/app` imports `platform/github` for `github.User`;
+  - 4 views still link to `/onboarding` (Leaderboard, MultiAgentList, ConfigureRun, RepoNotFound);
+  - AC14 stamped build id has no component test (no `spec.build` seam);
+  - `/setup` can't tell a failed index from "no state";
+  - the OpenRouter test passes for any key (public model list).
+  - **spend under-count (AC25 real):** `pr_intent`, `pr_brief` and onboarding keep one row per PR or repo, so a regenerate in the
+    same month REPLACES the earlier cost. The stand measured a $0.00375 refresh with a $0 delta, so the cap can be exceeded.
+    It follows FR12 as written; a fix needs a cost ledger or month rollup, which revises D19 (fits the D26 follow-up). User decision.
+  - setup step 3 says "Add your first repository" even when repos exist.
 - Before slice B, confirm Q4: does "reset run history" also delete learnings?
 
 ## Phase 6 review gate (reports in `.sdd/review/2026-10-23-go-backend-phase-6/`, git-ignored)
