@@ -361,13 +361,14 @@ func TestMigration0003_SpendQueryIndexes(t *testing.T) {
 	}
 	before := catalog(t, db)
 
-	m := newMigrator(t, db, migrations.FS)
-	all, err := migrate.Load(migrations.FS)
+	upTo3 := embeddedFS(t, "0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes")
+	m := newMigrator(t, db, upTo3)
+	all, err := migrate.Load(upTo3)
 	if err != nil {
-		t.Fatalf("Load(migrations.FS) error = %v", err)
+		t.Fatalf("Load(versions 1-3) error = %v", err)
 	}
 	if len(all) != 3 || all[2].Version != 3 || all[2].Name != "spend_query_indexes" {
-		t.Fatalf("Load(migrations.FS) = %d migrations, last %+v, want 3 ending in version 3 spend_query_indexes", len(all), all[len(all)-1])
+		t.Fatalf("Load(versions 1-3) = %d migrations, last %+v, want 3 ending in version 3 spend_query_indexes", len(all), all[len(all)-1])
 	}
 	if n, err := m.Up(t.Context()); err != nil || n != 1 {
 		t.Fatalf("Up() = %d, %v, want 1, nil (version 3 only)", n, err)
@@ -390,6 +391,58 @@ func TestMigration0003_SpendQueryIndexes(t *testing.T) {
 	}
 	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
 		t.Errorf("schema after Down of 0003 differs from version 2 (-v2 +got):\n%s", diff)
+	}
+
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+}
+
+// TestMigration0004_ResetHistoryIndexes: Up adds exactly the index on ci_runs.agent_run_id (the
+// foreign key a history reset scans once per deleted agent run, Settings B D27), Down drops exactly
+// that index (the rest equals version 3), Up restores it.
+func TestMigration0004_ResetHistoryIndexes(t *testing.T) {
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+
+	upTo3 := newMigrator(t, db, embeddedFS(t, "0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes"))
+	if _, err := upTo3.Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-3 error = %v", err)
+	}
+	before := catalog(t, db)
+
+	upTo4 := embeddedFS(t, "0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes")
+	m := newMigrator(t, db, upTo4)
+	all, err := migrate.Load(upTo4)
+	if err != nil {
+		t.Fatalf("Load(versions 1-4) error = %v", err)
+	}
+	if len(all) != 4 || all[3].Version != 4 || all[3].Name != "reset_history_indexes" {
+		t.Fatalf("Load(versions 1-4) = %d migrations, last %+v, want 4 ending in version 4 reset_history_indexes", len(all), all[len(all)-1])
+	}
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 4 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+	want := []string{
+		"index ci_runs ci_runs_agent_run_idx CREATE INDEX ci_runs_agent_run_idx ON public.ci_runs USING btree (agent_run_id)",
+	}
+	if diff := cmp.Diff(want, onlyIn(afterUp, before)); diff != "" {
+		t.Errorf("objects added by 0004 mismatch (-want +got):\n%s", diff)
+	}
+	if removed := onlyIn(before, afterUp); len(removed) != 0 {
+		t.Errorf("objects removed by 0004 = %v, want none", removed)
+	}
+
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 4 {
+		t.Fatalf("Down() = %d, %v, %v, want 4, true, nil", v, ok, err)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0004 differs from version 3 (-v3 +got):\n%s", diff)
 	}
 
 	if n, err := m.Up(t.Context()); err != nil || n != 1 {

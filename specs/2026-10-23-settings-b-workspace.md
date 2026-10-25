@@ -430,6 +430,10 @@ for them to finish or cancel them"). Nothing is deleted on any error.
   the FR14 "no database row id" rule holds once Slice C extends the value (Slice C planner SCR1, 2026-10-25).
 - D27 — If S19 measures reset > 30 s at NFR3 volume because `ci_runs.agent_run_id` has no index, one up/down
   migration may add that index (user pre-approved, 2026-10-25).
+- D28 — S19 measured reset at NFR3 volume at 37–49 s without an index, because of the ci_runs.agent_run_id FK SET NULL scan.
+  Migration 0004 (`ci_runs_agent_run_idx`, under D27) brings it to 23–25 s on a settled disk (30–35 s while the disk is
+  busy). AC23 passes with a thin margin; the remaining cost is the run_traces delete volume. Follow-up if needed.
+  The cost ledger takes migration 0005 and Slice C takes 0006 (2026-10-25).
 
 ## 17. Open questions
 None — Q1 was resolved by D7; Q2–Q15 were resolved on 2026-10-23 by accepting their defaults (D8–D21).
