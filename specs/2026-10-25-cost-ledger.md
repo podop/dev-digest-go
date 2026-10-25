@@ -1,5 +1,5 @@
 # Cost ledger for the monthly spend cap
-Spec: Cost ledger (append-only per-call LLM cost record, month total, unknown-cost count) · Status: ready-for-planning · Date: 2026-10-25
+Spec: Cost ledger (append-only per-call LLM cost record, month total, unknown-cost count) · Status: implemented (2026-10-25, 2180e3a..7c04c15; NFR3 via async commit D22, marginal under heavy load) · Date: 2026-10-25
 Areas: api, ui
 Design sources: the user's brief of 2026-10-25 (text; no frames or screenshots). Material read:
 - `docs/migration/STATUS.md` (Settings section, follow-ups D26 rollup, S2, I7, spend under-count);

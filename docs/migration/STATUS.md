@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-25 (Settings A merged, B done; cost ledger in progress; C next) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-25 (Settings A, B, cost ledger done; C in progress; D planning) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -146,8 +146,32 @@ Plan `docs/plans/2026-10-25-settings-b-workspace.md`; spec D22–D28. Commits: `
   - `/workspace` 5xx toasts on every page.
 - Migration numbers: B took `0004`, the cost ledger takes `0005`, slice C takes `0006`.
 
-**Cost ledger: in progress.** Spec `specs/2026-10-25-cost-ledger.md` (D1–D18), plan `docs/plans/2026-10-25-cost-ledger.md`. W1/W2 run in the main checkout.
-**Slice C:** the plan is approved and waits for the ledger.
+**Cost ledger: done.** Spec `specs/2026-10-25-cost-ledger.md` (D1–D22), plan `docs/plans/2026-10-25-cost-ledger.md`.
+Commits: `2180e3a` W1–W3 · `448156f` W4 + review fixes · `7c04c15` NFR3 async commit.
+- What it adds:
+  - an append-only `cost_ledger` with one entry per answered LLM call, written at the single `internal/llm` Recorder hook,
+    with a Charge label at every call site, guarded by an AST test;
+  - month totals in 8 slot rows;
+  - a backfill inside migration 0005;
+  - `unpriced_count` on `GET /settings/spend`.
+- The cap reads the totals: it is fast, regenerated work adds up, and reset and prune never lower the spend.
+- Gate (reports in `.sdd/review/2026-10-25-cost-ledger/`):
+  - architecture r1 PASS (M1/L1 fixed);
+  - security r1 PASS (L1 CI cost ceiling D19, L2 saturating totals, L3 charge guard — all fixed);
+  - plan verification r1: 53 PASS / 0 FAIL, and the 21 DB rows green on a clean 448156f.
+- S23 measured:
+  - upgrade 25–37 s at NFR4 volume;
+  - parity exact (±1 µ$ D15);
+  - `/settings/spend` p95 10–18 ms;
+  - the cap check +5 ms;
+  - NFR3: the append p95 was 51–145 ms on a durable PG, and is 40–47 ms with async commit (D22), still marginal at load 8+.
+- Follow-ups:
+  - NFR3 headroom (more slots need a migration; a batched recorder);
+  - security I1–I4 (unanswered calls are not recorded; the recorder keeps ctx values; `migrate down` lowers spend; backfill time grows with legacy data);
+  - the 2.5M-row backfill took 546–590 s (outside the spec's NFR4 volume).
+
+**Slice C: in progress.** W1–W3 committed `2a7f422`; W4 tests in progress.
+**Slice D:** planning started (`docs/plans/2026-10-25-settings-d-integrations.md`).
 
 
 ## Phase 6 review gate (reports in `.sdd/review/2026-10-23-go-backend-phase-6/`, git-ignored)

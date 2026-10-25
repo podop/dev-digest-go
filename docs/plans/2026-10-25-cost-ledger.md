@@ -1,5 +1,5 @@
 # Development Plan: Cost ledger
-Plan: Cost ledger · Status: approved (user pre-approval 2026-10-25: no critical remarks; A0–A11 accepted; spec D15–D18) · Spec: specs/2026-10-25-cost-ledger.md · Base: feat/go-backend-phase-1@2673765 + slice B (S0)
+Plan: Cost ledger · Status: done (2026-10-25) · Spec: specs/2026-10-25-cost-ledger.md · Base: feat/go-backend-phase-1@2673765 + slice B (S0)
 Packages: backend, frontend · Context pack: docs/plans/2026-10-25-cost-ledger.context.md ([A], [C1]–[C4], [D])
 Execution: multi-agent, parallel lanes (default, A0)
 
