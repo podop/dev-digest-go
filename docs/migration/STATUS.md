@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-25 (Settings A, B, cost ledger done; C in progress; D planning) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-25 19:20 (see ▶ Resume here) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -14,6 +14,53 @@ plan `docs/plans/2026-10-22-go-backend-phase-5.md` (+ `.context.md`, S1–S38, W
 `docs/plans/2026-10-23-go-backend-phase-6.md` (+ `.context.md`, S1–S38, W0–W4, 24 lanes; W4 split into
 parallel lanes by the user). Backend gate after Phase 6: `make backend-check` exit 0, 128 packages;
 frontend contract test 148/148.
+
+## ▶ Resume here (2026-10-25 19:20)
+Branch `feat/go-backend-phase-1`, HEAD `f1832de`. Not pushed, no PR (the user decides). The user's standing orders:
+- run features autonomously in multi-agent waves and lanes;
+- approve plans by default and escalate only CRITICAL items (spec contradictions that change behaviour, destructive or irreversible choices, security, an NFR failure that needs a spec change);
+- the order is **slice C → slice D** (then custom model providers / GitLab A–C, specs from the user's other session, not yet planned).
+
+| Feature | State |
+|---|---|
+| PR Leaderboard, Settings A, Settings B, Cost ledger | done and committed (specs `implemented`, plans `done`); the stand runs A+B (not yet the ledger/C) |
+| **Settings C** (automatic reviews) | W1–W3 committed `2a7f422`; **W4 tests + fix round uncommitted in the tree** (see below) |
+| **Settings D** (integrations / plugins) | plan approved `f1832de` (spec D15–D18, migration **0008**); implementation not started |
+
+**Uncommitted work in the tree (all slice C), at the moment the session was saved:**
+- W4 tests:
+  - `cmd/server/{autoreview_flow_test,settings_c_test}.go`;
+  - golden `testdata/contracts/automatic_reviews_status.json`;
+  - `autoreview/adapters/postgres/trigger_integration_test.go`;
+  - the frontend contract entry.
+- Fix round, in flight:
+  1. `TestAutoReviewFlow_NotArmedNothingStarts` fails deterministically (line 883: no record after re-arming). Its root cause is not found yet — it is either the test or a real re-arm/enabled_at bug.
+  2. Security M1 → user decision **spec D13: auto-review only same-repo branches**:
+     - migration `0007_pr_head_repo` stores the PR's head repo on poll;
+     - the outcome is `skipped_fork`, and a NULL head repo counts as a fork;
+     - new test `cmd/server/autoreview_fork_test.go`.
+     The files are partly written (pulls/github mapping, pulls store, autoreview domain/store, migrate_test).
+- Spec C edits (uncommitted): D13 and D14 (AC15: text/plain → 422).
+
+**To resume slice C:**
+1. `git status`, then finish the two fixes (re-run `go test -race -count=3 -run TestAutoReviewFlow ./cmd/server`), then `make check`.
+2. Commit "C W4 + fixes r1" together with spec C.
+3. Security delta on the M1 fix (fork filter, migration 0007, NULL head = fork).
+4. W5 (plan S20: AC16 evaluation timing + the AC22 UI walk on a throwaway compose project, tear down only that project).
+5. Plan-verifier.
+6. INSIGHTS wrap-up, STATUS, close spec/plan C.
+7. Rebuild the stand: `docker compose up -d --build backend frontend` — migrations 0005 (ledger backfill), 0006 and 0007 apply. Check `/settings/spend` and `/settings/automatic-reviews-status`.
+
+**Then slice D:** plan `docs/plans/2026-10-25-settings-d-integrations.md` (+ `.context.md`).
+- S0: re-read C's committed files; the migration is 0008.
+- Then W1–W5 multi-agent, the gate, closing, the stand.
+
+**Orchestration notes** (git-ignored): `.sdd/orchestration/`:
+- lane rules `lane-common-{b,c,ledger}.md`;
+- carry-over notes `{b,c,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
+Reports for each feature: `.sdd/review/<date>-<slug>/`.
+
+Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D.
 
 ## After the migration — PR Leaderboard (in progress) and Settings (specs only) · 2026-10-23 night
 **PR Leaderboard** (new feature, not Node parity). Spec `specs/2026-10-23-pr-leaderboard.md` (+D18–D26), plan
