@@ -2,12 +2,13 @@
    user edited, and the two ways to finish (open the PR / download the zip). The preview is
    a query keyed by the options, so changing an option regenerates the workflow; once the
    workflow is edited the options are locked (the edit would otherwise be lost). Also
-   useDialogFocus: Escape, the Tab trap and focus return — the vendored Modal has none. */
+   useDialogFocus (re-exported from @/lib/dialog-focus): Escape, the Tab trap and focus return. */
 "use client";
 
 import React from "react";
 import type { CiFile } from "@devdigest/shared";
 import { useCiExportFiles, useOpenCiPr, useRepos, type CiExportOptions } from "@/lib/hooks";
+import { useDialogFocus } from "@/lib/dialog-focus";
 import { useActiveRepo } from "@/lib/repo-context";
 import {
   DEFAULT_POST_AS,
@@ -18,7 +19,7 @@ import {
   type Trigger,
   type TriggerState,
 } from "./constants";
-import { findWorkflow, focusableIn, slugFromFiles, triggersToList, withEditedWorkflow, wrapTarget, zipFileName } from "./helpers";
+import { findWorkflow, slugFromFiles, triggersToList, withEditedWorkflow, zipFileName } from "./helpers";
 import { buildZip, downloadBlob } from "./zip";
 
 export function useExportWizard({ agentId, initialRepo }: { agentId: string; initialRepo?: string }) {
@@ -100,42 +101,4 @@ export function useExportWizard({ agentId, initialRepo }: { agentId: string; ini
   };
 }
 
-/** Escape closes (unless a Select already used it), Tab stays inside the dialog, and focus
- *  moves in on open and back to the opener on close (NFR10). Returns the wrapper's ref. */
-export function useDialogFocus(onClose: () => void) {
-  const ref = React.useRef<HTMLDivElement>(null);
-  const closeRef = React.useRef(onClose);
-  closeRef.current = onClose;
-
-  React.useEffect(() => {
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const dialog = () => ref.current?.querySelector<HTMLElement>('[role="dialog"]') ?? null;
-    focusableIn(dialog() ?? document.body)[0]?.focus();
-
-    const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented) return;
-      if (e.key === "Escape") {
-        closeRef.current();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      const root = dialog();
-      if (!root) return;
-      const stops = focusableIn(root);
-      const target = wrapTarget(stops, document.activeElement, e.shiftKey, root.contains(document.activeElement));
-      if (target) {
-        e.preventDefault();
-        target.focus();
-      } else if (stops.length === 0) {
-        e.preventDefault();
-      }
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      opener?.focus();
-    };
-  }, []);
-
-  return ref;
-}
+export { useDialogFocus };

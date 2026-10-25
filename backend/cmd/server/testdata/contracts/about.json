@@ -1,0 +1,11 @@
+{
+  "build_id": "dev",
+  "config_format": "devdigest-plugin/v1",
+  "data_dir": "/data",
+  "runner": {
+    "kind": "go",
+    "version": "2"
+  },
+  "secrets_file": "/data/secrets.json",
+  "version": "dev"
+}

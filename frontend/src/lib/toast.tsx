@@ -4,19 +4,28 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 type ToastKind = "success" | "error" | "info";
+
+/** Optional link under a toast message. `label` names a `common.toastActions.*` message. */
+export interface ToastAction {
+  href: string;
+  label: "spendCapSettings";
+}
+
 interface Toast {
   id: number;
   kind: ToastKind;
   message: string;
+  action?: ToastAction;
 }
 
 interface ToastApi {
-  toast: (message: string, kind?: ToastKind) => void;
+  toast: (message: string, kind?: ToastKind, action?: ToastAction) => void;
   success: (m: string) => void;
-  error: (m: string) => void;
+  error: (m: string, action?: ToastAction) => void;
   info: (m: string) => void;
 }
 
@@ -30,12 +39,12 @@ export function useToast(): ToastApi {
 
 /* Module-level bridge so non-React code (e.g. the React Query cache) can raise
    toasts without the hook. The mounted <ToastProvider> registers its pusher. */
-type Pusher = (message: string, kind?: ToastKind) => void;
+type Pusher = (message: string, kind?: ToastKind, action?: ToastAction) => void;
 let activePusher: Pusher | null = null;
 export const notify = {
-  toast: (m: string, k?: ToastKind) => activePusher?.(m, k),
+  toast: (m: string, k?: ToastKind, a?: ToastAction) => activePusher?.(m, k, a),
   success: (m: string) => activePusher?.(m, "success"),
-  error: (m: string) => activePusher?.(m, "error"),
+  error: (m: string, a?: ToastAction) => activePusher?.(m, "error", a),
   info: (m: string) => activePusher?.(m, "info"),
 };
 
@@ -45,23 +54,25 @@ const COLORS: Record<ToastKind, { bg: string; border: string; icon: string }> = 
   info: { bg: "var(--bg-elevated)", border: "var(--border-strong)", icon: "ℹ" },
 };
 
+const ACTION_TOAST_MS = 10_000;
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const tc = useTranslations("common");
   const [items, setItems] = React.useState<Toast[]>([]);
   const seq = React.useRef(1);
 
-  const push = React.useCallback((message: string, kind: ToastKind = "info") => {
+  const push = React.useCallback((message: string, kind: ToastKind = "info", action?: ToastAction) => {
     const id = seq.current++;
-    setItems((prev) => [...prev, { id, kind, message }]);
-    // auto-dismiss after 4s
-    setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), 4000);
+    setItems((prev) => [...prev, { id, kind, message, action }]);
+    // auto-dismiss after 4s; a toast with a link stays long enough to be read and followed
+    setTimeout(() => setItems((prev) => prev.filter((t) => t.id !== id)), action ? ACTION_TOAST_MS : 4000);
   }, []);
 
   const api = React.useMemo<ToastApi>(
     () => ({
       toast: push,
       success: (m) => push(m, "success"),
-      error: (m) => push(m, "error"),
+      error: (m, action) => push(m, "error", action),
       info: (m) => push(m, "info"),
     }),
     [push],
@@ -112,7 +123,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               }}
             >
               <span style={{ color: c.border, fontWeight: 700 }}>{c.icon}</span>
-              <span style={{ flex: 1 }}>{t.message}</span>
+              <span style={{ flex: 1 }}>
+                {t.message}
+                {t.action && (
+                  <>
+                    {" "}
+                    <Link href={t.action.href} style={{ color: "var(--accent-text)", textDecoration: "underline" }}>
+                      {tc(`toastActions.${t.action.label}`)}
+                    </Link>
+                  </>
+                )}
+              </span>
               <button
                 onClick={() => setItems((prev) => prev.filter((x) => x.id !== t.id))}
                 style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 16 }}

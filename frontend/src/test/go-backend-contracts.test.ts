@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  About,
   ActiveRun,
   Agent,
   AgentColumn,
@@ -16,6 +17,7 @@ import {
   AgentStats,
   AgentVersion,
   AgentVersionConfig,
+  ApiErrorBody,
   BlastCaller,
   BlastRadius,
   BriefMissingInput,
@@ -115,6 +117,7 @@ import {
   RunSummary,
   RunTrace,
   PromptAssembly,
+  SPEND_CAP_ERROR_CODE,
   SecretsStatus,
   SeverityBucket,
   Settings,
@@ -128,6 +131,8 @@ import {
   SmartDiff,
   SmartDiffFile,
   SmartDiffGroup,
+  SpendCapDetails,
+  SpendStatus,
   StatPoint,
   ToolCall,
   UsageCount,
@@ -373,6 +378,26 @@ const leaderboard = Leaderboard.extend({
   activity: LeaderboardActivity.extend({ points: z.array(LeaderboardActivityPoint.strict()) }).strict(),
 }).strict();
 
+// ---- Settings slice A (specs/2026-10-23-settings-first-run-setup.md): GET /about, GET /settings/spend,
+// the LLM test-connection answer and the 402 spend_cap_reached envelope. ----
+const about = About.extend({
+  runner: About.shape.runner.strict(),
+  config_format: z.literal("devdigest-plugin/v1"),
+}).strict();
+const spendStatus = SpendStatus.strict();
+// The golden is an OpenRouter success: latency_ms, model and model_reachable are present; login and
+// scopes belong to GitHub only (checked in the settings-slice-A test below).
+const testConnectionLlm = ConnTestResult.extend({
+  latency_ms: z.number().int().nonnegative(),
+  model: z.string().min(1),
+  model_reachable: z.boolean(),
+}).strict();
+const spendCapReached = ApiErrorBody.extend({
+  error: ApiErrorBody.shape.error
+    .extend({ code: z.literal(SPEND_CAP_ERROR_CODE), details: SpendCapDetails.strict() })
+    .strict(),
+}).strict();
+
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
   health: z.object({ status: z.literal("ok") }).strict(),
@@ -380,7 +405,12 @@ const contracts: Record<string, z.ZodTypeAny> = {
   settings_get: Settings,
   settings_put: Settings,
   secrets_status: SecretsStatus.strict(),
-  test_connection: ConnTestResult.strict(),
+  // The golden is a GitHub success: latency_ms, login and scopes (null = not reported) are present.
+  test_connection: ConnTestResult.extend({
+    latency_ms: z.number().int().nonnegative(),
+    login: z.string().min(1),
+    scopes: z.array(z.string()).nullable(),
+  }).strict(),
   repos_create: Repo.strict(),
   repos_list: z.array(Repo.strict()),
   workspace: z
@@ -536,6 +566,12 @@ const contracts: Record<string, z.ZodTypeAny> = {
   leaderboard_week: leaderboard,
   leaderboard_repo_30d: leaderboard,
   leaderboard_empty: leaderboard,
+
+  // ---- Settings slice A ----
+  about,
+  settings_spend: spendStatus,
+  test_connection_llm: testConnectionLlm,
+  spend_cap_reached: spendCapReached,
 };
 
 const read = (name: string): unknown =>
@@ -574,6 +610,19 @@ describe("Go backend golden responses", () => {
       "sync_to_folder",
       "theme",
     ]);
+  });
+
+  it("the settings-slice-A goldens carry what the UI reads", () => {
+    const llm = read("test_connection_llm") as Record<string, unknown>;
+    for (const key of ["login", "scopes"]) expect(llm).not.toHaveProperty(key);
+    expect(llm).toMatchObject({ provider: "openrouter", ok: true, model_reachable: true });
+
+    const spend = SpendStatus.parse(read("settings_spend"));
+    expect(spend.cap_reached).toBe(false);
+    expect(spend.remaining_usd).toBe((spend.cap_usd ?? 0) - spend.spent_usd);
+
+    const refused = spendCapReached.parse(read("spend_cap_reached"));
+    expect(refused.error.details.spent_usd).toBeGreaterThanOrEqual(refused.error.details.cap_usd);
   });
 
   it("the index-state goldens cover a full, a degraded and a synthesised state", () => {

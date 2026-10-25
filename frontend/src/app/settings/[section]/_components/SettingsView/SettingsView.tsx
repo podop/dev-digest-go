@@ -1,48 +1,48 @@
-/* Settings — left sub-nav + sections. API Keys (OpenRouter + GitHub PAT, with
-   Test connection) and Feature Models. Section is deep-linked at
-   /settings/:section. */
+/* Settings — left sub-nav (FR1 order) + the section pane, deep-linked at /settings/:section.
+   The page validates the key; sections without a panel yet show the "coming later" empty state. */
 "use client";
 
-import React from "react";
+import type React from "react";
 import Link from "next/link";
-import { EmptyState, SETTINGS_SECTIONS } from "@devdigest/ui";
+import { EmptyState } from "@devdigest/ui";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/app-shell";
+import { SettingsAbout } from "./_components/SettingsAbout";
 import { SettingsApiKeys } from "./_components/SettingsApiKeys";
+import { SettingsGithub } from "./_components/SettingsGithub";
 import { SettingsModels } from "./_components/SettingsModels";
-import { DEFAULT_SECTION, SECTION_API_KEYS, SECTION_MODELS } from "./constants";
+import { DEFAULT_SECTION, SETTINGS_SECTION_KEYS, sectionHref, type SettingsSectionKey } from "./constants";
 import { s } from "./styles";
 
-export function SettingsView({ section = DEFAULT_SECTION }: { section?: string }) {
-  const t = useTranslations("settings");
-  const current = SETTINGS_SECTIONS.find((sec) => sec.key === section) ?? SETTINGS_SECTIONS[0];
+/** Sections that have a panel; the others render the "coming in a later release" empty state. */
+const PANELS: Partial<Record<SettingsSectionKey, React.ComponentType>> = {
+  "api-keys": SettingsApiKeys,
+  github: SettingsGithub,
+  models: SettingsModels,
+  about: SettingsAbout,
+};
+
+export function SettingsView({ section }: { section: SettingsSectionKey }) {
+  const t = useTranslations("settingsShell");
+  const Panel = PANELS[section];
+  const label = t(`sections.${section}`);
 
   return (
-    <AppShell crumb={[{ label: t("breadcrumb"), href: "/settings/api-keys" }, { label: current.label }]}>
+    <AppShell crumb={[{ label: t("breadcrumb"), href: sectionHref(DEFAULT_SECTION) }, { label }]}>
       <div style={s.layout}>
-        <div style={s.nav}>
+        <nav style={s.nav} aria-label={t("navLabel")}>
           <h1 style={s.navTitle}>{t("title")}</h1>
-          {SETTINGS_SECTIONS.map((sec) => {
-            const on = sec.key === section;
+          {SETTINGS_SECTION_KEYS.map((key) => {
+            const on = key === section;
             return (
-              <Link key={sec.key} href={`/settings/${sec.key}`}>
-                <div style={s.navItem(on)}>{sec.label}</div>
+              <Link key={key} href={sectionHref(key)} aria-current={on ? "page" : undefined}>
+                <div style={s.navItem(on)}>{t(`sections.${key}`)}</div>
               </Link>
             );
           })}
-        </div>
+        </nav>
         <div style={s.pane}>
-          {section === SECTION_API_KEYS ? (
-            <SettingsApiKeys />
-          ) : section === SECTION_MODELS ? (
-            <SettingsModels />
-          ) : (
-            <EmptyState
-              icon="Settings"
-              title={current.label}
-              body={t("fallbackBody", { label: current.label })}
-            />
-          )}
+          {Panel ? <Panel /> : <EmptyState icon="Settings" title={label} body={t("comingSoon")} />}
         </div>
       </div>
     </AppShell>

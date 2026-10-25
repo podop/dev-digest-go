@@ -1,0 +1,29 @@
+{
+  "optional": "Optional",
+  "reveal": "Show key",
+  "placeholderEmpty": "Paste your key",
+  "placeholderSaved": "Key saved — paste a new key to replace it",
+  "test": "Test connection",
+  "testing": "Testing…",
+  "testFailed": "Test failed",
+  "docs": {
+    "key": "Where to get your key",
+    "token": "Create a token"
+  },
+  "badge": {
+    "connected": "Connected",
+    "notConnected": "Not connected",
+    "failed": "Failed"
+  },
+  "providers": {
+    "openrouter": "OpenRouter",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic",
+    "github": "GitHub"
+  },
+  "result": {
+    "verified": "Connection verified · {model} reachable · {latency}ms",
+    "verifiedNoLatency": "Connection verified · {model} reachable",
+    "notListed": "Connected · {model} is not listed by {provider}"
+  }
+}

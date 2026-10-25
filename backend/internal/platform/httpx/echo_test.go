@@ -90,6 +90,9 @@ func appErrorFor(kind string) error {
 		return apperr.Config("missing setting")
 	case "external_service":
 		return apperr.ExternalService("upstream down").WithCause(errors.New("dial tcp 10.0.0.1: refused"))
+	case "payment_required":
+		return apperr.PaymentRequired("cap reached").WithCode("spend_cap_reached").
+			WithDetails(map[string]any{"cap_usd": 50, "spent_usd": 50.12, "month_start": "2026-10-01T00:00:00.000Z"})
 	case "custom_code":
 		return apperr.ExternalService("GitHub unavailable").WithCode("github_unavailable")
 	default:

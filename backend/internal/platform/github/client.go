@@ -191,6 +191,12 @@ func getJSON[T any](ctx context.Context, c *Client, token, path string, query ur
 // do performs one request attempt bounded by c.timeout and decodes a 2xx JSON
 // body into out (when non-nil).
 func (c *Client) do(ctx context.Context, token, method, path string, query url.Values, body any, out any) error {
+	_, err := c.doHeader(ctx, token, method, path, query, body, out)
+	return err
+}
+
+// doHeader is do that also returns the response headers of a 2xx answer.
+func (c *Client) doHeader(ctx context.Context, token, method, path string, query url.Values, body any, out any) (http.Header, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
@@ -198,7 +204,7 @@ func (c *Client) do(ctx context.Context, token, method, path string, query url.V
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("github %s %s: encode body: %w", method, path, err)
+			return nil, fmt.Errorf("github %s %s: encode body: %w", method, path, err)
 		}
 		reader = strings.NewReader(string(raw))
 	}
@@ -208,7 +214,7 @@ func (c *Client) do(ctx context.Context, token, method, path string, query url.V
 	}
 	req, err := http.NewRequestWithContext(ctx, method, target, reader)
 	if err != nil {
-		return fmt.Errorf("github %s %s: %w", method, path, err)
+		return nil, fmt.Errorf("github %s %s: %w", method, path, err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
@@ -220,21 +226,21 @@ func (c *Client) do(ctx context.Context, token, method, path string, query url.V
 
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return fmt.Errorf("github %s %s: %w", method, path, scrub(err, token))
+		return nil, fmt.Errorf("github %s %s: %w", method, path, scrub(err, token))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return statusError(resp, token)
+		return nil, statusError(resp, token)
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxResponseBytes))
-		return nil
+		return resp.Header, nil
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(out); err != nil {
-		return fmt.Errorf("github %s %s: decode response: %w", method, path, err)
+		return nil, fmt.Errorf("github %s %s: decode response: %w", method, path, err)
 	}
-	return nil
+	return resp.Header, nil
 }
 
 // scrub drops the token from a transport error. Transport errors carry only the

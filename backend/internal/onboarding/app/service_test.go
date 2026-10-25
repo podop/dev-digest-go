@@ -434,6 +434,8 @@ type rig struct {
 	repo   domain.Repo
 	ws     string
 	budget time.Duration
+	// spend is the cap check port; nil (an untyped nil interface) leaves the check off.
+	spend app.SpendBudget
 }
 
 var okOutput = json.RawMessage(`{"architecture":{"summary":"s","nodes":[],"edges":[]},"critical_paths":[],"run_steps":[],"reading_path":[],"first_tasks":[]}`)
@@ -460,7 +462,7 @@ func (r *rig) build(states domain.IndexState, bag map[string]json.RawMessage, no
 		Store: r.store, IndexStates: fakeIndexStates{state: states}, Index: r.index, Blobs: r.blobs,
 		LLM: r.llm, Models: fakeModels{bag: bag}, Now: now,
 		Log:    slog.New(slog.NewJSONHandler(r.logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
-		Budget: r.budget,
+		Budget: r.budget, Spend: r.spend,
 	})
 }
 
@@ -1037,4 +1039,163 @@ func TestGet_ARepoOutsideTheWorkspaceIs404(t *testing.T) {
 	if !ok || ae.Kind != apperr.KindNotFound || ae.Code != "repo_not_found" || ae.Message != "Repo not found" {
 		t.Fatalf("Get error = %v, want 404 repo_not_found", err)
 	}
+}
+
+// fakeSpend is the budget port: it records every Admit call and answers err.
+type fakeSpend struct {
+	mu    sync.Mutex
+	err   error
+	calls []admitCall
+}
+
+type admitCall struct{ workspaceID, op string }
+
+func (b *fakeSpend) Admit(_ context.Context, workspaceID, op string) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.calls = append(b.calls, admitCall{workspaceID, op})
+	return b.err
+}
+
+func (b *fakeSpend) setErr(err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.err = err
+}
+
+func capReached() error {
+	return apperr.PaymentRequired("Monthly spend cap of $50.00 reached").WithCode("spend_cap_reached")
+}
+
+func wantAppErr(t *testing.T, err error, kind apperr.Kind, code string) {
+	t.Helper()
+	ae, ok := apperr.As(err)
+	if !ok || ae.Kind != kind || ae.Code != code {
+		t.Fatalf("error = %v, want {%v %q}", err, kind, code)
+	}
+}
+
+func TestGenerate_SpendCap_ReachedIs402AndStartsNothing(t *testing.T) {
+	r := newRig(t)
+	spend := &fakeSpend{err: capReached()}
+	r.spend = spend
+	r.build(readyState(), nil, fixedNow)
+
+	_, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+	wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached")
+	if len(r.llm.requests) != 0 || len(r.store.saved) != 0 || len(r.index.rankedAsked) != 0 {
+		t.Errorf("model calls, saved tours, index reads = %d, %d, %d, want none",
+			len(r.llm.requests), len(r.store.saved), len(r.index.rankedAsked))
+	}
+	if r.logs.Len() != 0 {
+		t.Errorf("log output = %q, want none (no generation started)", r.logs.String())
+	}
+	// No marker was left behind: once the cap is lifted the same repository generates.
+	spend.setErr(nil)
+	if _, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID); err != nil {
+		t.Errorf("Generate() after the refusal = %v, want a tour (the 402 left a marker)", err)
+	}
+}
+
+func TestGenerate_SpendCap_ReadErrorFailsClosedWith500(t *testing.T) {
+	r := newRig(t)
+	boom := errors.New("ledger down")
+	r.spend = &fakeSpend{err: boom}
+	r.build(readyState(), nil, fixedNow)
+
+	_, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+	if !errors.Is(err, boom) {
+		t.Fatalf("Generate() error = %v, want the Admit error unchanged", err)
+	}
+	if _, isApp := apperr.As(err); isApp {
+		t.Errorf("Generate() error = %v, want a plain error that httpx renders as 500", err)
+	}
+	if len(r.llm.requests) != 0 || len(r.store.saved) != 0 {
+		t.Errorf("model calls, saved tours = %d, %d, want none", len(r.llm.requests), len(r.store.saved))
+	}
+}
+
+func TestGenerate_SpendCap_NilBudgetChangesNothing(t *testing.T) {
+	r := newRig(t)
+	r.build(readyState(), nil, fixedNow)
+	got, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+	if err != nil || got.Tour == nil {
+		t.Fatalf("Generate() = %+v, %v, want a tour", got, err)
+	}
+}
+
+func TestGenerate_SpendCap_CheckedOnceWithTheOperation(t *testing.T) {
+	r := newRig(t)
+	spend := &fakeSpend{}
+	r.spend = spend
+	r.build(readyState(), nil, fixedNow)
+	if _, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if diff := cmp.Diff([]admitCall{{"ws-1", "onboarding_generate"}}, spend.calls, cmp.AllowUnexported(admitCall{})); diff != "" {
+		t.Errorf("Admit calls mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestGenerate_SpendCap_UnknownRepoIs404NotChecked(t *testing.T) {
+	r := newRig(t)
+	spend := &fakeSpend{err: capReached()}
+	r.spend = spend
+	r.build(readyState(), nil, fixedNow)
+	_, err := r.svc.Generate(t.Context(), "another-workspace", r.repo.ID)
+	wantAppErr(t, err, apperr.KindNotFound, "repo_not_found")
+	if len(spend.calls) != 0 {
+		t.Errorf("Admit calls = %v, want none: the 404 comes first", spend.calls)
+	}
+}
+
+// A7: the cap check precedes the marker, so a reached cap wins over index_not_ready, and the
+// index check (which runs after the marker) is not reached on a 402.
+func TestGenerate_SpendCap_WinsOverIndexNotReady(t *testing.T) {
+	r := newRig(t)
+	spend := &fakeSpend{err: capReached()}
+	r.spend = spend
+	r.build(domain.IndexState{}, nil, fixedNow)
+
+	_, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+	wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached")
+
+	spend.setErr(nil)
+	_, err = r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+	wantAppErr(t, err, apperr.KindValidation, "index_not_ready")
+}
+
+func TestGenerate_SpendCap_WinsOverTheConflict(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t)
+		spend := &fakeSpend{}
+		r.spend = spend
+		entered, release := make(chan struct{}), make(chan struct{})
+		r.llm.do = func(context.Context, llm.Request) (llm.Result, error) {
+			entered <- struct{}{}
+			<-release
+			return llm.Result{Data: okOutput}, nil
+		}
+		r.build(readyState(), nil, fixedNow)
+
+		first := make(chan error, 1)
+		go func() {
+			_, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+			first <- err
+		}()
+		<-entered
+
+		spend.setErr(capReached())
+		_, err := r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+		wantAppErr(t, err, apperr.KindPaymentRequired, "spend_cap_reached")
+
+		spend.setErr(nil)
+		_, err = r.svc.Generate(t.Context(), r.ws, r.repo.ID)
+		wantAppErr(t, err, apperr.KindConflict, "generation_in_progress")
+
+		release <- struct{}{}
+		if err := <-first; err != nil {
+			t.Fatalf("running Generate() error = %v, want it to finish: a reached cap does not stop admitted work", err)
+		}
+	})
 }

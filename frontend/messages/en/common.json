@@ -10,6 +10,9 @@
     "dismiss": "Dismiss",
     "goHome": "Go to DevDigest"
   },
+  "toastActions": {
+    "spendCapSettings": "Review the spend cap in Settings"
+  },
   "states": {
     "loading": "Loading…",
     "empty": "Nothing here yet",

@@ -1,32 +1,22 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for SettingsApiKeys + its KeyRow. */
+/** Co-located styles for SettingsApiKeys. */
 export const s = {
   wrap: { maxWidth: 640 } satisfies CSSProperties,
-  keyRow: { display: "flex", gap: 10, alignItems: "center" } satisfies CSSProperties,
-  keyInput: { flex: 1 } satisfies CSSProperties,
-  revealIcon: { color: "var(--text-muted)", cursor: "pointer" } satisfies CSSProperties,
-  result: (ok: boolean): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 10,
+  infoBox: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 10,
+    marginTop: 8,
+    padding: "12px 14px",
     fontSize: 13,
-    color: ok ? "var(--ok)" : "var(--crit)",
-    fontWeight: 600,
-  }),
-  badge: (configured: boolean): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 12,
-    fontWeight: 600,
-    color: configured ? "var(--ok)" : "var(--text-muted)",
-  }),
-  badgeDot: (configured: boolean): CSSProperties => ({
-    width: 7,
-    height: 7,
-    borderRadius: "50%",
-    background: configured ? "var(--ok)" : "var(--text-muted)",
-  }),
+    lineHeight: 1.5,
+    color: "var(--text-secondary)",
+    background: "var(--bg-elevated)",
+    border: "1px solid var(--border)",
+    borderRadius: 8,
+  } satisfies CSSProperties,
+  infoIcon: { flexShrink: 0, marginTop: 2, color: "var(--text-muted)" } satisfies CSSProperties,
+  path: { fontFamily: "var(--font-mono)", wordBreak: "break-all" } satisfies CSSProperties,
+  link: { color: "var(--accent-text)" } satisfies CSSProperties,
 } as const;

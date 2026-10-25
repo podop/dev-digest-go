@@ -24,8 +24,11 @@ Routes (`src/app/**/page.tsx`) and the API surface each leans on (via
 
 ```mermaid
 flowchart TD
-  ROOT["/"] -->|"useRepos → GET /repos"| PULLS["/repos/:repoId/pulls<br/>PR list"]
-  ONB["/onboarding<br/>add repo"] -->|"POST /repos"| API[("Fastify API")]
+  ROOT["/<br/>first-run gate"] -->|"GET /settings/secrets-status · GET /repos<br/>all set → first repo"| PULLS["/repos/:repoId/pulls<br/>PR list"]
+  ROOT -->|"no model key → ?step=model<br/>no GitHub token → ?step=github<br/>no repo → ?step=repo"| SETUP["/setup<br/>first-run setup · ?step=model, github, repo"]
+  ONB["/onboarding<br/>old add-repo link"] -->|"server redirect"| SETUP
+  SETUP -->|"POST /settings/test-connection · POST /repos"| API[("Fastify API")]
+  SETUP -->|"Finish"| PULLS
   PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)"]
 
   AGENTS["/agents"] --> AGENT["/agents/:id<br/>editor (config · skills · context · evals · stats · CI)"]
@@ -60,6 +63,14 @@ flowchart TD
   MARUN -->|"GET /multi-agent-runs/:id<br/>POST /findings/:id/(accept|dismiss|learn)"| API
   SETTINGS -->|"/settings · /providers"| API
 ```
+
+**First run.** `/` is the only gated route (`src/app/_components/HomeView`): once
+`GET /settings/secrets-status` and `GET /repos` have loaded it replaces the URL with
+`/setup?step=model` (no key for openai, anthropic or openrouter), else `/setup?step=github`
+(no GitHub token), else `/setup?step=repo` (no repository), else the first repo's PR list.
+It shows a skeleton while loading and an error with Retry when either request fails
+(no redirect). `/onboarding` is a server redirect to `/setup?step=repo`; `/setup` moves to
+an earlier step when a prerequisite is missing. There is no "Skip setup" link.
 
 The agent editor's **CI** tab and the Export wizard, and the `/ci-runs` page, are described in
 [`../docs/export-to-ci.md`](../docs/export-to-ci.md) (hooks: `src/lib/hooks/ci.ts`).

@@ -24,6 +24,13 @@ import (
 	"dev-digest-go/backend/internal/platform/logging"
 )
 
+// version and buildID are stamped at link time (-ldflags "-X main.version=… -X main.buildID=…");
+// an unstamped build reports "dev". They are the only package-level state of the binary.
+var (
+	version = "dev"
+	buildID = "dev"
+)
+
 func main() {
 	if err := run(context.Background(), os.Args, os.Getenv, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -52,7 +59,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout 
 	case "", "serve":
 		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return serve(ctx, cfg, withGetenv(getenv), withLogOutput(stdout))
+		return serve(ctx, cfg, withGetenv(getenv), withLogOutput(stdout), withBuild(buildInfo{version: version, buildID: buildID}))
 	case "migrate":
 		return runMigrate(ctx, cfg, args[2:], stdout, logging.New(stdout, cfg.LogLevel))
 	case "seed":

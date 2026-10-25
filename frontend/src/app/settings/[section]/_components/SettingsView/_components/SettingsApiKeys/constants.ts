@@ -1,16 +1,18 @@
 import type { ConnTestProvider } from "@/lib/types";
 
-/** One configurable provider key row in the API Keys section. */
+/** One configurable provider key row in the API Keys section (FR2). */
 export interface KeyRowSpec {
-  provider: ConnTestProvider;
+  provider: Exclude<ConnTestProvider, "github">;
+  /** Message keys in the `apiKeys` namespace. */
   labelKey: string;
   hintKey: string;
+  /** Shows the "Optional" tag next to the label. */
+  optional?: boolean;
 }
 
-/** The provider key rows shown in API Keys (OpenAI / Anthropic / GitHub). */
+/** The provider key rows in display order: OpenRouter first, then OpenAI, Anthropic. GitHub lives in GitHub Integration. */
 export const KEY_ROWS: readonly KeyRowSpec[] = [
-  { provider: "openai", labelKey: "apiKeys.openaiLabel", hintKey: "apiKeys.openaiHint" },
-  { provider: "anthropic", labelKey: "apiKeys.anthropicLabel", hintKey: "apiKeys.anthropicHint" },
-  { provider: "openrouter", labelKey: "apiKeys.openrouterLabel", hintKey: "apiKeys.openrouterHint" },
-  { provider: "github", labelKey: "apiKeys.githubLabel", hintKey: "apiKeys.githubHint" },
+  { provider: "openrouter", labelKey: "openrouterLabel", hintKey: "openrouterHint" },
+  { provider: "openai", labelKey: "openaiLabel", hintKey: "openaiHint", optional: true },
+  { provider: "anthropic", labelKey: "anthropicLabel", hintKey: "anthropicHint" },
 ];

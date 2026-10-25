@@ -125,15 +125,21 @@ func TestLoad(t *testing.T) {
 
 // baselineFS holds only migration 0001. The Node-parity tests are pinned to it: later
 // versions intentionally add to the schema the Node migrations 0000-0020 produce.
-func baselineFS(t *testing.T) fs.FS {
+func baselineFS(t *testing.T) fs.FS { return embeddedFS(t, "0001_baseline") }
+
+// embeddedFS copies the named embedded migrations (without .up.sql / .down.sql) into a MapFS, so
+// a test can stop at a version whatever is added after it.
+func embeddedFS(t *testing.T, names ...string) fs.FS {
 	t.Helper()
 	out := fstest.MapFS{}
-	for _, name := range []string{"0001_baseline.up.sql", "0001_baseline.down.sql"} {
-		body, err := fs.ReadFile(migrations.FS, name)
-		if err != nil {
-			t.Fatalf("read %s: %v", name, err)
+	for _, base := range names {
+		for _, name := range []string{base + ".up.sql", base + ".down.sql"} {
+			body, err := fs.ReadFile(migrations.FS, name)
+			if err != nil {
+				t.Fatalf("read %s: %v", name, err)
+			}
+			out[name] = &fstest.MapFile{Data: body}
 		}
-		out[name] = &fstest.MapFile{Data: body}
 	}
 	return out
 }
@@ -308,7 +314,7 @@ func TestMigration0002_PRMergeState(t *testing.T) {
 	}
 	baseline := catalog(t, db)
 
-	m := newMigrator(t, db, migrations.FS)
+	m := newMigrator(t, db, embeddedFS(t, "0001_baseline", "0002_pr_merge_state"))
 	n, err := m.Up(t.Context())
 	if err != nil || n != 1 {
 		t.Fatalf("Up() = %d, %v, want 1, nil (version 2 only)", n, err)
@@ -333,6 +339,57 @@ func TestMigration0002_PRMergeState(t *testing.T) {
 	}
 	if diff := cmp.Diff(baseline, catalog(t, db)); diff != "" {
 		t.Errorf("schema after Down of 0002 differs from baseline (-baseline +got):\n%s", diff)
+	}
+
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+}
+
+// TestMigration0003_SpendQueryIndexes: Up adds exactly the two covering indexes of the month-spend
+// query, Down drops exactly those two (the rest equals version 2), Up restores them.
+func TestMigration0003_SpendQueryIndexes(t *testing.T) {
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+
+	upTo2 := newMigrator(t, db, embeddedFS(t, "0001_baseline", "0002_pr_merge_state"))
+	if _, err := upTo2.Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-2 error = %v", err)
+	}
+	before := catalog(t, db)
+
+	m := newMigrator(t, db, migrations.FS)
+	all, err := migrate.Load(migrations.FS)
+	if err != nil {
+		t.Fatalf("Load(migrations.FS) error = %v", err)
+	}
+	if len(all) != 3 || all[2].Version != 3 || all[2].Name != "spend_query_indexes" {
+		t.Fatalf("Load(migrations.FS) = %d migrations, last %+v, want 3 ending in version 3 spend_query_indexes", len(all), all[len(all)-1])
+	}
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 3 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+	want := []string{
+		"index agent_runs agent_runs_ws_ran_idx CREATE INDEX agent_runs_ws_ran_idx ON public.agent_runs USING btree (workspace_id, ran_at) INCLUDE (cost_usd)",
+		"index eval_runs eval_runs_ran_idx CREATE INDEX eval_runs_ran_idx ON public.eval_runs USING btree (ran_at) INCLUDE (case_id, cost_usd)",
+	}
+	if diff := cmp.Diff(want, onlyIn(afterUp, before)); diff != "" {
+		t.Errorf("objects added by 0003 mismatch (-want +got):\n%s", diff)
+	}
+	if removed := onlyIn(before, afterUp); len(removed) != 0 {
+		t.Errorf("objects removed by 0003 = %v, want none", removed)
+	}
+
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 3 {
+		t.Fatalf("Down() = %d, %v, %v, want 3, true, nil", v, ok, err)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0003 differs from version 2 (-v2 +got):\n%s", diff)
 	}
 
 	if n, err := m.Up(t.Context()); err != nil || n != 1 {

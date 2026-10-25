@@ -32,7 +32,3 @@ export const OPENROUTER_SECRET = SECRET_KEYS[0];
 /** Paths the export always contains (FR6). */
 export const RUNNER_BUNDLE_PATH = ".devdigest/runner/index.js";
 export const WORKFLOW_PATH_PATTERN = /^\.github\/workflows\/devdigest-review-(.+)\.yml$/;
-
-/** Tab-stops inside the dialog (focus trap, NFR10). */
-export const FOCUSABLE_SELECTOR =
-  'a[href], button, input, select, textarea, [role="combobox"], [tabindex]:not([tabindex="-1"])';

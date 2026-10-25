@@ -1,0 +1,11 @@
+{
+  "error": {
+    "code": "spend_cap_reached",
+    "details": {
+      "cap_usd": 0,
+      "month_start": "2026-01-01T00:00:00.000Z",
+      "spent_usd": 0
+    },
+    "message": "Monthly spend cap of $0.00 reached: $0.00 used since 2031-01-01 (UTC)."
+  }
+}

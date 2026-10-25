@@ -2,10 +2,10 @@
   "breadcrumb": "DevDigest",
   "title": "Welcome to DevDigest",
   "subtitle": "Local-first AI PR review",
-  "empty": {
-    "title": "No repositories yet",
-    "body": "Add a repository to start reviewing pull requests. Set your API keys once in Settings → API Keys.",
-    "cta": "Add repository"
+  "error": {
+    "title": "Could not check your setup",
+    "body": "DevDigest could not load your settings or repositories. Check that the engine is running, then try again.",
+    "retry": "Retry"
   },
   "redirecting": "Taking you to your repository…",
   "openRepo": "Open {name}"

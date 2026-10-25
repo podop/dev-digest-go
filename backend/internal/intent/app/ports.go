@@ -102,6 +102,8 @@ type Deps struct {
 	Docs     Docs
 	Tickets  Tickets
 	Store    Store
+	// Budget is the spend cap check of Refresh (FR13); nil turns it off.
+	Budget budget
 	// Clock stamps derived_at; nil = time.Now.
 	Clock Clock
 	// Log receives the service's own lines (content-free); nil = discard.

@@ -9,8 +9,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/retry"
@@ -109,17 +111,24 @@ func (e *statusError) Error() string {
 
 func (e *statusError) StatusCode() int { return e.status }
 
-// CountModels lists the provider's models with key and returns how many count: for OpenAI the
-// ids starting with gpt or containing o1 or o3, for Anthropic the first page, for OpenRouter
-// all listed models.
+// CountModels is ListModels reduced to its Count.
 func (c *Client) CountModels(ctx context.Context, provider app.Provider, key string) (int, error) {
+	list, err := c.ListModels(ctx, provider, key)
+	return list.Count, err
+}
+
+// ListModels makes one model-list GET (retried on transient failures for OpenAI and Anthropic,
+// as before) and returns every listed id plus the count of usable ones: for OpenAI the ids
+// starting with gpt or containing o1 or o3, otherwise all of them. Anthropic asks for
+// limit=1000 (its maximum) so one page holds the whole list.
+func (c *Client) ListModels(ctx context.Context, provider app.Provider, key string) (app.ModelList, error) {
 	switch provider {
 	case app.OpenAI:
 		ids, err := c.withRetry(ctx, func(ctx context.Context) ([]string, error) {
 			return c.listIDs(ctx, "OpenAI", c.openAI+"/models", key, map[string]string{"Authorization": "Bearer " + key}, c.timeout)
 		})
 		if err != nil {
-			return 0, err
+			return app.ModelList{}, err
 		}
 		n := 0
 		for _, id := range ids {
@@ -127,18 +136,18 @@ func (c *Client) CountModels(ctx context.Context, provider app.Provider, key str
 				n++
 			}
 		}
-		return n, nil
+		return app.ModelList{IDs: ids, Count: n}, nil
 	case app.Anthropic:
 		ids, err := c.withRetry(ctx, func(ctx context.Context) ([]string, error) {
-			return c.listIDs(ctx, "Anthropic", c.anthropic+"/models", key,
+			return c.listIDs(ctx, "Anthropic", c.anthropic+"/models?limit=1000", key,
 				map[string]string{"x-api-key": key, "anthropic-version": anthropicVersion}, c.timeout)
 		})
-		return len(ids), err
+		return app.ModelList{IDs: ids, Count: len(ids)}, err
 	case app.OpenRouter:
 		ids, err := c.listIDs(ctx, "OpenRouter", c.openRouter+"/models", key, map[string]string{"Authorization": "Bearer " + key}, c.openRouterTimeout)
-		return len(ids), err
+		return app.ModelList{IDs: ids, Count: len(ids)}, err
 	default:
-		return 0, fmt.Errorf("provider %q has no model list", provider)
+		return app.ModelList{}, fmt.Errorf("provider %q has no model list", provider)
 	}
 }
 
@@ -172,7 +181,7 @@ func (c *Client) listIDs(ctx context.Context, name, url, key string, headers map
 		return nil, fmt.Errorf("%s /models: read response: %w", name, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, &statusError{provider: name, status: resp.StatusCode, message: apiMessage(name, key, body)}
+		return nil, &statusError{provider: name, status: resp.StatusCode, message: apiMessage(name, key, resp.StatusCode, body)}
 	}
 	var payload struct {
 		Data []struct {
@@ -189,9 +198,28 @@ func (c *Client) listIDs(ctx context.Context, name, url, key string, headers map
 	return ids, nil
 }
 
-// apiMessage extracts the provider's error text ({"error":{"message":…}}) for OpenAI and
-// Anthropic. OpenRouter errors carry only the status (spec §7.2).
-func apiMessage(name, key string, body []byte) string {
+// authRejectedMessage replaces the provider's own text on a 401/403. Providers echo a masked copy
+// of the key there ("Incorrect API key provided: sk-proj-****abcd"), which spec NFR1 keeps out of
+// every response, so the text is never passed on.
+const authRejectedMessage = "API key rejected by the provider"
+
+// minKeyFragment is the shortest run of the key that is scrubbed from provider text.
+const minKeyFragment = 4
+
+var (
+	// keyLikeRun matches provider key shapes (sk-…, sk-or-…, sk-ant-…, sk-proj-…), masked or not.
+	keyLikeRun = regexp.MustCompile(`(?i)\bsk-[\w*•…-]*`)
+	// maskedRun matches any word run holding a mask (two or more of * • …).
+	maskedRun = regexp.MustCompile(`[\w-]*[*•…]{2,}[\w-]*`)
+)
+
+// apiMessage returns the text for a non-2xx provider response. A 401/403 gets a fixed message;
+// otherwise it is the provider's own error text ({"error":{"message":…}}) for OpenAI and
+// Anthropic, scrubbed of key fragments. OpenRouter errors carry only the status (spec §7.2).
+func apiMessage(name, key string, status int, body []byte) string {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		return authRejectedMessage
+	}
 	if name == "OpenRouter" {
 		return ""
 	}
@@ -203,13 +231,50 @@ func apiMessage(name, key string, body []byte) string {
 	if json.Unmarshal(body, &payload) != nil {
 		return ""
 	}
-	msg := strings.TrimSpace(payload.Error.Message)
+	// Bound the text first so the scrub stays cheap, then scrub, then cut: a cut after the scrub
+	// cannot leave a key fragment of minKeyFragment or more behind.
+	msg := scrubKey(truncate(strings.TrimSpace(payload.Error.Message), 4*maxMessageBytes), key)
+	return truncate(msg, maxMessageBytes)
+}
+
+// scrubKey masks the whole key, key-like runs and every run of msg of at least minKeyFragment
+// bytes that is a substring of key.
+func scrubKey(msg, key string) string {
 	if key != "" {
-		// Scrub before truncating, so a cut can never leave a key prefix behind.
 		msg = strings.ReplaceAll(msg, key, logging.Redacted)
 	}
-	if len(msg) > maxMessageBytes {
-		msg = msg[:maxMessageBytes]
+	msg = keyLikeRun.ReplaceAllString(msg, logging.Redacted)
+	msg = maskedRun.ReplaceAllString(msg, logging.Redacted)
+	if len(key) < minKeyFragment {
+		return msg
 	}
-	return msg
+	var out strings.Builder
+	for i := 0; i < len(msg); {
+		n := 0
+		if i+minKeyFragment <= len(msg) && strings.Contains(key, msg[i:i+minKeyFragment]) {
+			n = minKeyFragment
+			for i+n < len(msg) && strings.Contains(key, msg[i:i+n+1]) {
+				n++
+			}
+		}
+		if n == 0 {
+			out.WriteByte(msg[i])
+			i++
+			continue
+		}
+		out.WriteString(logging.Redacted)
+		i += n
+	}
+	return out.String()
+}
+
+// truncate cuts s to at most n bytes without splitting a UTF-8 sequence.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
 }

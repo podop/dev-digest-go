@@ -26,6 +26,7 @@ func TestConstructors(t *testing.T) {
 		{"config", apperr.Config("m"), apperr.KindConfig, "config_error"},
 		{"external service", apperr.ExternalService("m"), apperr.KindExternalService, "external_service"},
 		{"forbidden", apperr.Forbidden("m"), apperr.KindForbidden, "forbidden"},
+		{"payment required", apperr.PaymentRequired("m"), apperr.KindPaymentRequired, "payment_required"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

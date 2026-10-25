@@ -18,6 +18,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"gorm.io/gorm"
 
+	abouthttp "dev-digest-go/backend/internal/about/transport/http"
 	agentsdb "dev-digest-go/backend/internal/agents/adapters/postgres"
 	agentsapp "dev-digest-go/backend/internal/agents/app"
 	agentshttp "dev-digest-go/backend/internal/agents/transport/http"
@@ -34,6 +35,7 @@ import (
 	"dev-digest-go/backend/internal/ci/adapters/runnerbin"
 	"dev-digest-go/backend/internal/ci/adapters/zipentry"
 	ciapp "dev-digest-go/backend/internal/ci/app"
+	runnerdomain "dev-digest-go/backend/internal/ci/runner/domain"
 	cihttp "dev-digest-go/backend/internal/ci/transport/http"
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/conventions/adapters/clonefiles"
@@ -115,6 +117,9 @@ import (
 	smartdiffpg "dev-digest-go/backend/internal/smartdiff/adapters/postgres"
 	smartdiffapp "dev-digest-go/backend/internal/smartdiff/app"
 	smartdiffhttp "dev-digest-go/backend/internal/smartdiff/transport/http"
+	spendpg "dev-digest-go/backend/internal/spend/adapters/postgres"
+	spendapp "dev-digest-go/backend/internal/spend/app"
+	spendhttp "dev-digest-go/backend/internal/spend/transport/http"
 	"dev-digest-go/backend/internal/tenancy"
 	tenancypg "dev-digest-go/backend/internal/tenancy/adapters/postgres"
 	"dev-digest-go/backend/migrations"
@@ -172,6 +177,19 @@ type options struct {
 	// pollTick is how often the background PR poll checks which workspaces are due; 0 = the poller's
 	// own default (1 min). Tests shorten it and move the clock (now) instead of waiting.
 	pollTick time.Duration
+	// build is what GET /about reports as version and build_id; "" = "dev" (an unstamped build).
+	build buildInfo
+}
+
+// buildInfo is the link-time identity of the binary (-X main.version, -X main.buildID).
+type buildInfo struct{ version, buildID string }
+
+// orDev returns v, or "dev" when the build was not stamped.
+func orDev(v string) string {
+	if v == "" {
+		return "dev"
+	}
+	return v
 }
 
 // llmURLs are the base URLs of the provider adapters.
@@ -181,6 +199,7 @@ type option func(*options)
 
 func withGetenv(getenv func(string) string) option { return func(o *options) { o.getenv = getenv } }
 func withLogOutput(w io.Writer) option             { return func(o *options) { o.logOut = w } }
+func withBuild(b buildInfo) option                 { return func(o *options) { o.build = b } }
 
 // serve runs the API until ctx ends: migrate, seed, start jobs, listen; on stop it cancels the live
 // review and eval runs (up to 5 s to record themselves) in parallel with the job runner (up to 10 s), then
@@ -369,7 +388,12 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Secrets:   sec,
 		GitHub:    gh,
 		Providers: providers.New(o.providers),
+		Clock:     now,
+		Logger:    log,
 	})
+	// The spend context reads the cap through the settings bag. Its service is a non-nil value, so
+	// every Budget/Spend port below holds a real interface; no field is ever a typed-nil pointer.
+	spendSvc := spendapp.NewService(spendpg.NewStore(db), settingsCaps{settings: settingsSvc}, spendapp.Clock(now), log)
 	intelStore := intelpg.NewStore(db)
 	intelFiles := intelclone.New()
 	intelAnalyzer := inteltreesitter.New()
@@ -409,7 +433,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	importer := skillsapp.NewImporter(urlfetch.New(o.urlfetch), cat)
 
 	convStore := conventionspg.NewStore(db)
-	convSvc := conventionsapp.NewService(convStore, convStore, runner, conventionsapp.ServiceOptions{Redact: llmClient})
+	convSvc := conventionsapp.NewService(convStore, convStore, runner, conventionsapp.ServiceOptions{Redact: llmClient, Budget: spendSvc})
 	extractTimeout := o.extractTimeout
 	if extractTimeout <= 0 {
 		extractTimeout = conventionsapp.JobTimeout
@@ -452,6 +476,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Store:    intentStore,
 		Clock:    now,
 		Log:      log,
+		Budget:   spendSvc,
 	}, intentapp.Options{Budget: o.intentBudget})
 	execDeps := executor.Deps{
 		Store:          reviewsStore,
@@ -468,7 +493,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	}
 	reviewsExec := executor.New(execDeps, executor.Options{AgentConcurrency: cfg.ReviewAgentConcurrency, MapConcurrency: cfg.ReviewMapConcurrency})
 	reviewsSvc := reviewsapp.NewService(reviewsapp.Deps{
-		Store: reviewsStore, Tx: tx, Executor: reviewsExec, Bus: runs, Log: log,
+		Store: reviewsStore, Tx: tx, Executor: reviewsExec, Bus: runs, Budget: spendSvc, Log: log,
 	})
 
 	blastSvc := blastapp.NewService(blastpg.NewStore(db), blastpeers.NewRepoIntel(intelReader),
@@ -485,6 +510,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Clock:     now,
 		Log:       log,
 		Budget:    o.briefBudget,
+		Spend:     spendSvc,
 	})
 	onbSvc := onbapp.NewService(onbapp.Deps{
 		Store:       onbpg.NewStore(db),
@@ -496,6 +522,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Now:         now,
 		Log:         log,
 		Budget:      o.onboardingBudget,
+		Spend:       spendSvc,
 	})
 
 	// Evals: the executor is the launcher of the run service; its engine and LLM port are the
@@ -510,7 +537,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	}, evalsexec.Options{CaseBudget: o.evalCaseBudget})
 	evalCases := evalsapp.NewCaseService(evalsStore, evalsStore, now, log)
 	evalRuns := evalsapp.NewRunService(evalsapp.RunDeps{
-		Cases: evalsStore, Runs: evalsStore, Snapshots: evalsStore, Launcher: evalExec, Now: now, Log: log,
+		Cases: evalsStore, Runs: evalsStore, Snapshots: evalsStore, Launcher: evalExec, Budget: spendSvc, Now: now, Log: log,
 	})
 
 	// CI export and ingest: the directories read agents, skills and repos through their use cases.
@@ -569,6 +596,15 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	evalshttp.AddRoutes(e, evalCases, evalRuns, resolver)
 	cihttp.AddRoutes(e, ciExport, ciIngest, resolver)
 	leaderboardhttp.AddRoutes(e, lbapp.NewService(lbpg.NewStore(db), now), resolver)
+	spendhttp.AddRoutes(e, spendSvc, resolver)
+	dataDir := absPath(cfg.DataDir)
+	abouthttp.AddRoutes(e, abouthttp.Info{
+		Version:       orDev(o.build.version),
+		BuildID:       orDev(o.build.buildID),
+		RunnerVersion: runnerdomain.RunnerVersion,
+		DataDir:       dataDir,
+		SecretsFile:   filepath.Join(dataDir, secrets.FileName),
+	})
 
 	// The background PR poll: its GitHub client is its own and never retries, so a repo poll stays
 	// within its page bound (the shared client retries transient failures). The token is read from
@@ -721,4 +757,12 @@ func newEvalLLMCaller(client llmcall.Structured) evalspeers.CallerFactory {
 			Client: client, Provider: c.Provider, Model: c.Model, RunID: c.RunID, OnUsage: c.OnUsage,
 		})
 	}
+}
+
+// absPath returns p as an absolute path, or p itself when the working directory is unknown.
+func absPath(p string) string {
+	if abs, err := filepath.Abs(p); err == nil {
+		return abs
+	}
+	return p
 }

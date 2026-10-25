@@ -1,0 +1,59 @@
+{
+  "brand": "DevDigest",
+  "footer": "Step {n} of 3 · You can change keys later in Settings",
+  "loading": "Loading setup",
+  "error": {
+    "title": "Could not load setup",
+    "body": "DevDigest could not read your keys and repositories. Check that the API is running and try again.",
+    "retry": "Retry"
+  },
+  "stepper": {
+    "label": "Setup steps",
+    "model": "Model provider",
+    "github": "GitHub token",
+    "repo": "Repository",
+    "done": "completed"
+  },
+  "actions": {
+    "back": "Back",
+    "continue": "Continue",
+    "finish": "Finish"
+  },
+  "alreadyConnected": "Already connected",
+  "storedLocally": "Stored locally on your machine — never uploaded.",
+  "model": {
+    "title": "Connect a model provider",
+    "sub": "DevDigest uses your own key for every model call. Nothing runs through our servers.",
+    "providerLegend": "Provider",
+    "providers": {
+      "openrouter": "OpenRouter",
+      "openai": "OpenAI",
+      "anthropic": "Anthropic"
+    },
+    "keyLabel": "{provider} API key"
+  },
+  "github": {
+    "title": "Connect GitHub",
+    "sub": "DevDigest reads pull requests and posts review comments with your personal access token.",
+    "label": "Personal access token",
+    "connectedAs": "Connected as @{login}",
+    "scopes": "Scopes: {scopes}",
+    "scopesNone": "Scopes: none",
+    "scopesNotReported": "Fine-grained token — scopes are not reported by GitHub",
+    "missingRepo": "This token has no repo scope, so DevDigest may not be able to read private repositories or post comments. You can continue anyway."
+  },
+  "repo": {
+    "title": "Add your first repository",
+    "sub": "Paste a GitHub repository URL. DevDigest clones it locally and imports open PRs.",
+    "existingTitle": "Your repositories",
+    "indexing": "Indexing {name}…",
+    "indexed": "{name} is indexed",
+    "indexStatus": {
+      "full": "Full index",
+      "partial": "Partial index",
+      "degraded": "Limited index — search falls back to ripgrep",
+      "failed": "Indexing failed"
+    },
+    "background": "Indexing continues in the background."
+  }
+}

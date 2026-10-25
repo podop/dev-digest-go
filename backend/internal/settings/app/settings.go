@@ -6,8 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"slices"
 	"strings"
+	"time"
 
+	"dev-digest-go/backend/internal/platform/github"
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/secrets"
 )
@@ -64,10 +68,31 @@ type SecretsStatus struct {
 }
 
 // ConnTestResult is the outcome of a connection test; a failed test is data, not an error.
+// The optional fields are set only on success, and only the ones that belong to the provider:
+// LatencyMS for all, Model and ModelReachable for the LLM providers, Login and Scopes for GitHub.
 type ConnTestResult struct {
-	Provider Provider `json:"provider"`
-	OK       bool     `json:"ok"`
-	Message  string   `json:"message"`
+	Provider Provider
+	OK       bool
+	Message  string
+	// LatencyMS is the wall time of the provider call.
+	LatencyMS *int
+	// Model is the checked model id; nil when none could be chosen (an LLM provider that listed
+	// no model and has no default).
+	Model *string
+	// ModelReachable says whether Model is in the provider's full model list.
+	ModelReachable *bool
+	// Login is the owner of the GitHub token.
+	Login *string
+	// Scopes is the X-OAuth-Scopes list of the token: empty when the header was empty, nil
+	// when GitHub did not report scopes (fine-grained token).
+	Scopes []string
+}
+
+// referenceModels is the model a test checks for a provider without a workspace default_model;
+// Anthropic has none, its first listed model is checked.
+var referenceModels = map[Provider]string{
+	OpenRouter: "deepseek/deepseek-v4-flash",
+	OpenAI:     "gpt-4.1",
 }
 
 // store persists the settings bag.
@@ -84,22 +109,25 @@ type secretStore interface {
 	Set(name, value string) error
 }
 
-// githubClient checks the GitHub token (platform/github.Client).
+// githubClient checks the GitHub token (platform/github.Client); it never follows redirects.
 type githubClient interface {
-	CurrentLogin(ctx context.Context) (string, error)
+	CurrentUser(ctx context.Context) (github.User, error)
 }
 
-// modelLister counts the models a provider lists for a key (adapters/providers).
+// modelLister lists the models a provider offers for a key (adapters/providers).
 type modelLister interface {
-	CountModels(ctx context.Context, provider Provider, key string) (int, error)
+	ListModels(ctx context.Context, provider Provider, key string) (ModelList, error)
 }
 
-// Deps are the ports a Service needs.
+// Deps are the ports a Service needs. Clock and Logger are optional: the clock defaults to
+// time.Now and a missing logger discards its output.
 type Deps struct {
 	Store     store
 	Secrets   secretStore
 	GitHub    githubClient
 	Providers modelLister
+	Clock     func() time.Time
+	Logger    *slog.Logger
 }
 
 // Service implements the settings use cases.
@@ -107,10 +135,16 @@ type Service struct {
 	d Deps
 }
 
-// NewService builds a Service. A nil dependency is a wiring bug and panics.
+// NewService builds a Service. A nil required dependency is a wiring bug and panics.
 func NewService(d Deps) *Service {
 	if d.Store == nil || d.Secrets == nil || d.GitHub == nil || d.Providers == nil {
 		panic("settings/app.NewService: every dependency is required")
+	}
+	if d.Clock == nil {
+		d.Clock = time.Now
+	}
+	if d.Logger == nil {
+		d.Logger = slog.New(slog.DiscardHandler)
 	}
 	return &Service{d: d}
 }
@@ -146,8 +180,23 @@ func (s *Service) SecretsStatus() SecretsStatus {
 
 // TestConnection saves key (when given) under the provider's secret name, then checks the
 // provider with the stored key. The key stays saved when the check fails. Every failure comes
-// back as ok=false with the key value scrubbed from the message.
-func (s *Service) TestConnection(ctx context.Context, provider Provider, key string) ConnTestResult {
+// back as ok=false with the key value scrubbed from the message and no optional fields.
+//
+// workspaceID picks the default_model whose model an LLM provider's check reports; it may be
+// empty (the route has no workspace on a database that was never seeded), then the provider's
+// reference model is checked. Each test logs one INFO line with provider, ok and latency; the
+// key never reaches a log line.
+func (s *Service) TestConnection(ctx context.Context, workspaceID string, provider Provider, key string) ConnTestResult {
+	start := s.d.Clock()
+	res := s.testConnection(ctx, workspaceID, provider, key)
+	s.d.Logger.InfoContext(ctx, "settings test connection",
+		slog.String("provider", string(provider)),
+		slog.Bool("ok", res.OK),
+		slog.Int64("latency_ms", s.d.Clock().Sub(start).Milliseconds()))
+	return res
+}
+
+func (s *Service) testConnection(ctx context.Context, workspaceID string, provider Provider, key string) ConnTestResult {
 	fail := func(msg string) ConnTestResult { return ConnTestResult{Provider: provider, Message: msg} }
 	name := provider.SecretName()
 	if name == "" {
@@ -165,18 +214,82 @@ func (s *Service) TestConnection(ctx context.Context, provider Provider, key str
 	}
 
 	if provider == GitHub {
-		login, err := s.d.GitHub.CurrentLogin(ctx)
+		started := s.d.Clock()
+		user, err := s.d.GitHub.CurrentUser(ctx)
+		latency := s.latencyMS(started)
 		if err != nil {
 			return fail(scrub(err.Error(), stored))
 		}
-		return ConnTestResult{Provider: provider, OK: true, Message: "Connected as @" + login}
+		res := ConnTestResult{Provider: provider, OK: true, Message: "Connected as @" + user.Login, LatencyMS: &latency, Login: &user.Login}
+		if user.ScopesReported {
+			res.Scopes = slices.Clone(user.Scopes)
+			if res.Scopes == nil {
+				res.Scopes = []string{}
+			}
+		}
+		return res
 	}
 
-	n, err := s.d.Providers.CountModels(ctx, provider, stored)
+	started := s.d.Clock()
+	list, err := s.d.Providers.ListModels(ctx, provider, stored)
+	latency := s.latencyMS(started)
 	if err != nil {
 		return fail(scrub(err.Error(), stored))
 	}
-	return ConnTestResult{Provider: provider, OK: true, Message: fmt.Sprintf("OK — %d models available", n)}
+	res := ConnTestResult{
+		Provider: provider, OK: true, LatencyMS: &latency,
+		Message: fmt.Sprintf("OK — %d models available", list.Count),
+	}
+	if model := s.checkedModel(ctx, workspaceID, provider, list.IDs); model != "" {
+		reachable := slices.Contains(list.IDs, model)
+		res.Model, res.ModelReachable = &model, &reachable
+	}
+	return res
+}
+
+// checkedModel is the model id whose presence in ids a test reports: the workspace default_model
+// when it names this provider, else the provider's reference model (Anthropic: the first listed
+// id). "" means there is none. A workspace that cannot be read is not an error: the reference
+// model is used and a warning logged.
+func (s *Service) checkedModel(ctx context.Context, workspaceID string, provider Provider, ids []string) string {
+	if model, ok := s.defaultModelFor(ctx, workspaceID, provider); ok {
+		return model
+	}
+	if model, ok := referenceModels[provider]; ok {
+		return model
+	}
+	if len(ids) > 0 {
+		return ids[0]
+	}
+	return ""
+}
+
+// defaultModelFor returns the model of the workspace's default_model when it is set for provider.
+func (s *Service) defaultModelFor(ctx context.Context, workspaceID string, provider Provider) (string, bool) {
+	if workspaceID == "" {
+		s.d.Logger.WarnContext(ctx, "settings test connection: no workspace, checking the reference model",
+			slog.String("provider", string(provider)))
+		return "", false
+	}
+	bag, err := s.d.Store.List(ctx, workspaceID)
+	if err != nil {
+		s.d.Logger.WarnContext(ctx, "settings test connection: default_model unreadable, checking the reference model",
+			slog.String("provider", string(provider)), slog.String("error", err.Error()))
+		return "", false
+	}
+	var choice struct {
+		Provider string `json:"provider"`
+		Model    string `json:"model"`
+	}
+	if json.Unmarshal(bag["default_model"], &choice) != nil || Provider(choice.Provider) != provider || choice.Model == "" {
+		return "", false
+	}
+	return choice.Model, true
+}
+
+// latencyMS is the whole milliseconds since started, never negative.
+func (s *Service) latencyMS(started time.Time) int {
+	return max(0, int(s.d.Clock().Sub(started).Milliseconds()))
 }
 
 // scrub replaces every occurrence of the secret in msg.

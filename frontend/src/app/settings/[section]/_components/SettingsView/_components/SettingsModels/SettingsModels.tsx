@@ -15,8 +15,8 @@ import { s } from "./styles";
 /**
  * Settings → Feature Models. One picker per system LLM feature; the model list +
  * prices come LIVE from OpenRouter (useProviderModels), and the choice persists
- * to `settings.feature_models`. Each feature falls back to its registry default
- * when unset.
+ * to `settings.feature_models`. A feature without its own choice uses the workspace
+ * `default_model` when set (FR10), else its registry default.
  */
 export function SettingsModels() {
   const t = useTranslations("settings");
@@ -25,6 +25,7 @@ export function SettingsModels() {
   const { data: models } = useProviderModels("openrouter");
 
   const chosen = (settings?.feature_models ?? {}) as Partial<Record<FeatureModelId, FeatureModelChoice>>;
+  const defaultModel = settings?.default_model ?? null;
   const baseOptions = toModelOptions(models);
   const noModels = models !== undefined && models.length === 0;
 
@@ -38,8 +39,8 @@ export function SettingsModels() {
       <SectionTitle title={t("models.title")} body={t("models.body")} />
 
       {FEATURE_MODELS.map((f) => {
-        const current = chosen[f.id]?.model ?? f.defaultModel;
-        const isDefault = !chosen[f.id];
+        const own = chosen[f.id];
+        const current = own?.model ?? defaultModel?.model ?? f.defaultModel;
         // Ensure the current value is selectable even if it isn't in the live
         // OpenRouter list (e.g. an OpenAI registry default, or an empty list).
         const options = baseOptions.some((o) => (typeof o === "string" ? o : o.value) === current)
@@ -51,7 +52,13 @@ export function SettingsModels() {
               label={
                 <>
                   {f.label}
-                  {isDefault && <span style={s.defaultTag}>{t("models.usingDefault")}</span>}
+                  {!own && (
+                    <span style={s.defaultTag}>
+                      {defaultModel
+                        ? t("models.usingDefaultModel", { model: `${defaultModel.provider}/${defaultModel.model}` })
+                        : t("models.usingDefault")}
+                    </span>
+                  )}
                 </>
               }
               hint={f.description}

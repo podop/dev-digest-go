@@ -630,6 +630,17 @@ consumers keep working, because every addition is optional or a new route.
   2026-10-23).
 - D23 — AC2 example corrected from 16 to 17 dots: the 21-character key gives 17 under FR3 (planner SCR1, user
   approved 2026-10-24).
+- D24 — AC23/NFR4 failed at NFR4 volume (GET /settings/spend p95 412–543 ms; the cap check added ~430 ms p95 to each
+  FR13 route, even without a cap). Fix: Admit skips the spend read when no cap is set, and ONE new up/down migration
+  may add the time indexes the spend query needs (supersedes "no migrations" for slice A). No wire change; AC23 is
+  re-measured (user, 2026-10-24).
+- D25 — Runs on models with no known price store a NULL cost and count as $0 (FR12 unchanged). Follow-up: show
+  "N runs with unknown cost this month" next to the spend (security r1 S2; user, 2026-10-24).
+- D26 — AC23 accepted with a deviation after fix r3 (Admit skips the spend read without a cap; migration 0003 adds
+  agent_runs(workspace_id, ran_at) and eval_runs(ran_at) covering indexes; the brief json is detoasted once): at NFR4
+  volume GET /settings/spend p95 169 ms (PASS) and the no-cap route path ≈ baseline (PASS); with a cap set, the check
+  adds ~165 ms p95 per FR13 start (limit +50). The floor is ~90 ms of DB time. Follow-up: a stored month rollup
+  (would revise D19) (user, 2026-10-24).
 
 ## 17. Open questions
 None — Q1–Q6 were resolved on 2026-10-23 by accepting their defaults (D17–D22).

@@ -1,0 +1,17 @@
+{
+  "title": "About",
+  "body": "Version and build of this DevDigest install. Quote them when you report an issue.",
+  "tableLabel": "About this install",
+  "loading": "Loading about information…",
+  "loadError": "Could not load the about information.",
+  "retry": "Retry",
+  "rows": {
+    "version": "Version",
+    "build": "Build",
+    "runner": "Runner",
+    "configFormat": "Config format",
+    "dataDir": "Data directory"
+  },
+  "runnerValue": "Go runner v{version}",
+  "setupAgain": "Run setup again"
+}

@@ -22,7 +22,9 @@ type fakeService struct {
 	gotEntries app.Bag
 	gotProv    app.Provider
 	gotKey     string
+	gotWS      string
 	updates    int
+	result     *app.ConnTestResult // returned by TestConnection when set
 }
 
 func (f *fakeService) Get(context.Context, string) (app.Bag, error) { return app.Bag{}, nil }
@@ -35,8 +37,11 @@ func (f *fakeService) Update(_ context.Context, _, _ string, e app.Bag) (app.Bag
 
 func (f *fakeService) SecretsStatus() app.SecretsStatus { return app.SecretsStatus{} }
 
-func (f *fakeService) TestConnection(_ context.Context, p app.Provider, key string) app.ConnTestResult {
-	f.gotProv, f.gotKey = p, key
+func (f *fakeService) TestConnection(_ context.Context, ws string, p app.Provider, key string) app.ConnTestResult {
+	f.gotWS, f.gotProv, f.gotKey = ws, p, key
+	if f.result != nil {
+		return *f.result
+	}
 	return app.ConnTestResult{Provider: p, OK: true, Message: "ok"}
 }
 
@@ -116,6 +121,26 @@ func TestPutSettings_validation(t *testing.T) {
 			{Keyword: "invalid_type", InstancePath: "/feature_models/risk_brief/provider"},
 			{Keyword: "invalid_type", InstancePath: "/feature_models/risk_brief/model"},
 		}},
+		{name: "default_model string", body: `{"default_model":"x"}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/default_model"}}},
+		{name: "default_model provider unknown", body: `{"default_model":{"provider":"foo","model":"m"}}`, want: []issueView{{Keyword: "invalid_enum_value", InstancePath: "/default_model/provider"}}},
+		{name: "default_model provider only", body: `{"default_model":{"provider":"foo"}}`, want: []issueView{
+			{Keyword: "invalid_enum_value", InstancePath: "/default_model/provider"},
+			{Keyword: "invalid_type", InstancePath: "/default_model/model"},
+		}},
+		{name: "default_model model missing", body: `{"default_model":{"provider":"openai"}}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/default_model/model"}}},
+		{name: "default_model model empty", body: `{"default_model":{"provider":"openai","model":""}}`, want: []issueView{{Keyword: "too_small", InstancePath: "/default_model/model"}}},
+		{name: "cap negative", body: `{"monthly_spend_cap_usd":-1}`, want: []issueView{{Keyword: "too_small", InstancePath: "/monthly_spend_cap_usd"}}},
+		{name: "cap above the maximum", body: `{"monthly_spend_cap_usd":1000000.01}`, want: []issueView{
+			{Keyword: "too_big", InstancePath: "/monthly_spend_cap_usd"},
+		}},
+		{name: "cap three decimals", body: `{"monthly_spend_cap_usd":1.234}`, want: []issueView{{Keyword: "custom", InstancePath: "/monthly_spend_cap_usd"}}},
+		{name: "cap negative with three decimals", body: `{"monthly_spend_cap_usd":-1.234}`, want: []issueView{
+			{Keyword: "too_small", InstancePath: "/monthly_spend_cap_usd"},
+			{Keyword: "custom", InstancePath: "/monthly_spend_cap_usd"},
+		}},
+		{name: "cap string", body: `{"monthly_spend_cap_usd":"50"}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/monthly_spend_cap_usd"}}},
+		{name: "cap boolean", body: `{"monthly_spend_cap_usd":true}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/monthly_spend_cap_usd"}}},
+		{name: "cap overflow", body: `{"monthly_spend_cap_usd":1e999}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/monthly_spend_cap_usd"}}},
 		{name: "array body", body: `[]`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/"}}},
 		{name: "string body", body: `"x"`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/"}}},
 		{name: "null body", body: `null`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/"}}},
@@ -167,6 +192,16 @@ func TestPutSettings_acceptedEntries(t *testing.T) {
 		{name: "feature_models subset, extra fields dropped", body: `{"feature_models":{"risk_brief":{"provider":"openai","model":"gpt-4.1","extra":1}}}`,
 			want: map[string]string{"feature_models": `{"risk_brief":{"provider":"openai","model":"gpt-4.1"}}`}},
 		{name: "feature_models empty", body: `{"feature_models":{}}`, want: map[string]string{"feature_models": `{}`}},
+		{name: "default_model, extra fields dropped", body: `{"default_model":{"provider":"openrouter","model":"a/x","extra":1}}`,
+			want: map[string]string{"default_model": `{"provider":"openrouter","model":"a/x"}`}},
+		{name: "default_model null clears it", body: `{"default_model":null}`, want: map[string]string{"default_model": "null"}},
+		{name: "cap null", body: `{"monthly_spend_cap_usd":null}`, want: map[string]string{"monthly_spend_cap_usd": "null"}},
+		{name: "cap zero", body: `{"monthly_spend_cap_usd":0}`, want: map[string]string{"monthly_spend_cap_usd": "0"}},
+		{name: "cap negative zero is zero", body: `{"monthly_spend_cap_usd":-0}`, want: map[string]string{"monthly_spend_cap_usd": "0"}},
+		{name: "cap integer", body: `{"monthly_spend_cap_usd":50}`, want: map[string]string{"monthly_spend_cap_usd": "50"}},
+		{name: "cap two decimals", body: `{"monthly_spend_cap_usd":0.07}`, want: map[string]string{"monthly_spend_cap_usd": "0.07"}},
+		{name: "cap trailing zeros and exponent", body: `{"monthly_spend_cap_usd":5.10e1}`, want: map[string]string{"monthly_spend_cap_usd": "51"}},
+		{name: "cap maximum", body: `{"monthly_spend_cap_usd":1000000}`, want: map[string]string{"monthly_spend_cap_usd": "1000000"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -223,6 +258,31 @@ func TestTestConnection_validation(t *testing.T) {
 	}
 }
 
+func TestPutSettings_capIssueMessages(t *testing.T) {
+	tests := []struct {
+		body        string
+		wantCode    string
+		wantMessage string
+	}{
+		{`{"monthly_spend_cap_usd":-1}`, "too_small", "Number must be greater than or equal to 0"},
+		{`{"monthly_spend_cap_usd":1000000.01}`, "too_big", "Number must be less than or equal to 1000000"},
+		{`{"monthly_spend_cap_usd":1.234}`, "custom", "At most 2 decimals"},
+		{`{"monthly_spend_cap_usd":"50"}`, "invalid_type", "Expected number, received string"},
+		{`{"default_model":"x"}`, "invalid_type", "Expected object, received string"},
+		{`{"default_model":{"provider":"foo","model":"m"}}`, "invalid_enum_value",
+			"Invalid enum value. Expected 'openai' | 'anthropic' | 'openrouter', received 'foo'"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.body, func(t *testing.T) {
+			rec := do(newRouter(&fakeService{}, fakeIdentities{}), http.MethodPut, "/settings", "application/json", tc.body)
+			got := issues(t, rec)
+			if len(got) != 1 || got[0].Keyword != tc.wantCode || got[0].Message != tc.wantMessage {
+				t.Errorf("PUT /settings %s issues = %+v, want one %s %q", tc.body, got, tc.wantCode, tc.wantMessage)
+			}
+		})
+	}
+}
+
 func TestTestConnection_passesProviderAndKey(t *testing.T) {
 	svc := &fakeService{}
 	rec := do(newRouter(svc, fakeIdentities{}), http.MethodPost, "/settings/test-connection", "application/json",
@@ -237,10 +297,59 @@ func TestTestConnection_passesProviderAndKey(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(map[string]any{"provider": "github", "ok": true, "message": "ok"}, got); diff != "" {
+	want := map[string]any{"provider": "github", "ok": true, "message": "ok", "latency_ms": nil, "login": nil, "scopes": nil}
+	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("response mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestTestConnection_workspaceForLLMProvidersOnly(t *testing.T) {
+	for provider, want := range map[string]string{"openrouter": "ws", "openai": "ws", "anthropic": "ws", "github": ""} {
+		svc := &fakeService{}
+		do(newRouter(svc, fakeIdentities{}), http.MethodPost, "/settings/test-connection", "application/json", `{"provider":"`+provider+`"}`)
+		if svc.gotWS != want {
+			t.Errorf("TestConnection(%s) workspace = %q, want %q", provider, svc.gotWS, want)
+		}
+	}
+	svc := &fakeService{}
+	h := newRouter(svc, fakeIdentities{err: errors.New("not provisioned")})
+	if rec := do(h, http.MethodPost, "/settings/test-connection", "application/json", `{"provider":"openrouter"}`); rec.Code != http.StatusOK || svc.gotWS != "" {
+		t.Errorf("unresolvable workspace: status = %d workspace = %q, want 200 and an empty workspace", rec.Code, svc.gotWS)
+	}
+}
+
+func TestTestConnection_responseShapes(t *testing.T) { // FR5, FR16, A14: absent is not null
+	tests := []struct {
+		name   string
+		result app.ConnTestResult
+		want   string
+	}{
+		{"llm success", app.ConnTestResult{Provider: app.OpenRouter, OK: true, Message: "OK — 2 models available",
+			LatencyMS: ptr(12), Model: ptr("a/x"), ModelReachable: ptr(false)},
+			`{"provider":"openrouter","ok":true,"message":"OK — 2 models available","latency_ms":12,"model":"a/x","model_reachable":false}`},
+		{"llm failure has null extras and no github fields", app.ConnTestResult{Provider: app.OpenAI, Message: "nope"},
+			`{"provider":"openai","ok":false,"message":"nope","latency_ms":null,"model":null,"model_reachable":null}`},
+		{"github success", app.ConnTestResult{Provider: app.GitHub, OK: true, Message: "Connected as @ann",
+			LatencyMS: ptr(3), Login: ptr("ann"), Scopes: []string{"repo", "read:org"}},
+			`{"provider":"github","ok":true,"message":"Connected as @ann","latency_ms":3,"login":"ann","scopes":["repo","read:org"]}`},
+		{"github empty scopes", app.ConnTestResult{Provider: app.GitHub, OK: true, Message: "m", LatencyMS: ptr(0), Login: ptr("ann"), Scopes: []string{}},
+			`{"provider":"github","ok":true,"message":"m","latency_ms":0,"login":"ann","scopes":[]}`},
+		{"github failure has null extras and no model fields", app.ConnTestResult{Provider: app.GitHub, Message: "bad"},
+			`{"provider":"github","ok":false,"message":"bad","latency_ms":null,"login":null,"scopes":null}`},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			svc := &fakeService{result: &tc.result}
+			rec := do(newRouter(svc, fakeIdentities{}), http.MethodPost, "/settings/test-connection", "application/json",
+				`{"provider":"`+string(tc.result.Provider)+`"}`)
+			if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != tc.want {
+				t.Errorf("POST test-connection = %d %s, want 200 %s", rec.Code, got, tc.want)
+			}
+		})
+	}
+}
+
+func ptr[T any](v T) *T { return &v }
 
 func TestRoutes_missingContextIs500ExceptTestConnection(t *testing.T) {
 	h := newRouter(&fakeService{}, fakeIdentities{err: errors.New("not provisioned")})

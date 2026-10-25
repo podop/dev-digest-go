@@ -29,7 +29,7 @@ type service interface {
 	Get(ctx context.Context, workspaceID string) (app.Bag, error)
 	Update(ctx context.Context, workspaceID, userID string, entries app.Bag) (app.Bag, error)
 	SecretsStatus() app.SecretsStatus
-	TestConnection(ctx context.Context, provider app.Provider, key string) app.ConnTestResult
+	TestConnection(ctx context.Context, workspaceID string, provider app.Provider, key string) app.ConnTestResult
 }
 
 // identities resolves the single-tenant context (*tenancy.Resolver).
@@ -95,7 +95,8 @@ func (h *Handler) secretsStatus(c *echo.Context) error {
 	return c.JSON(http.StatusOK, h.svc.SecretsStatus())
 }
 
-// testConnection needs no workspace: it works on a database that was never seeded.
+// testConnection works on a database that was never seeded: the workspace is looked up only to
+// find the default_model of an LLM check and, when that fails, the check goes on without it.
 func (h *Handler) testConnection(c *echo.Context) error {
 	body, err := readBody(c)
 	if err != nil {
@@ -105,7 +106,45 @@ func (h *Handler) testConnection(c *echo.Context) error {
 	if issues != nil {
 		return httpx.NewValidationError(issues...)
 	}
-	return c.JSON(http.StatusOK, h.svc.TestConnection(c.Request().Context(), req.Provider, req.Key))
+	ctx := c.Request().Context()
+	workspaceID := ""
+	if req.Provider != app.GitHub {
+		if id, err := h.ids.Resolve(ctx); err == nil {
+			workspaceID = id.WorkspaceID
+		}
+	}
+	return c.JSON(http.StatusOK, connTestResponse(h.svc.TestConnection(ctx, workspaceID, req.Provider, req.Key)))
+}
+
+// llmConnTest is the test-connection answer for openai, anthropic and openrouter. The optional
+// fields are always present, null when the test failed.
+type llmConnTest struct {
+	Provider       app.Provider `json:"provider"`
+	OK             bool         `json:"ok"`
+	Message        string       `json:"message"`
+	LatencyMS      *int         `json:"latency_ms"`
+	Model          *string      `json:"model"`
+	ModelReachable *bool        `json:"model_reachable"`
+}
+
+// githubConnTest is the test-connection answer for github. The optional fields are always
+// present; scopes is null when the token's scopes are unknown.
+type githubConnTest struct {
+	Provider  app.Provider `json:"provider"`
+	OK        bool         `json:"ok"`
+	Message   string       `json:"message"`
+	LatencyMS *int         `json:"latency_ms"`
+	Login     *string      `json:"login"`
+	Scopes    []string     `json:"scopes"`
+}
+
+// connTestResponse picks the DTO of the result's provider, so a field that does not belong to
+// it is absent rather than null.
+func connTestResponse(r app.ConnTestResult) any {
+	if r.Provider == app.GitHub {
+		return githubConnTest{Provider: r.Provider, OK: r.OK, Message: r.Message, LatencyMS: r.LatencyMS, Login: r.Login, Scopes: r.Scopes}
+	}
+	return llmConnTest{Provider: r.Provider, OK: r.OK, Message: r.Message, LatencyMS: r.LatencyMS, Model: r.Model, ModelReachable: r.ModelReachable}
 }
 
 // readBody returns the request body as a JSON document (see httpx.ReadJSONBody); the body
