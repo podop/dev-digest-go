@@ -84,7 +84,7 @@ commit `74c6ebf`). Order: A, then B ∥ C (C uses the leaderboard poller), then 
   - `GET /about`, with version and build id stamped at link time;
   - a 3-step `/setup` gated from `/`; `/onboarding` redirects to it;
   - migration `0003` (spend indexes).
-- Gate (reports in `../dev-digest-go-settings-a/.sdd/review/2026-10-23-settings-first-run-setup/`, git-ignored):
+- Gate (reports in `.sdd/review/2026-10-23-settings-first-run-setup/`, git-ignored):
   - architecture r1/r2 PASS;
   - security r1/r2 PASS;
   - plan verification r2: 91 PASS, 0 FAIL;
