@@ -443,7 +443,7 @@ No other route, status code or field changes.
   Traces: FR14, NFR8 · Verify: component
 - AC17 [api] — Given the NFR1 volume in a throwaway stack, when 200 requests each hit GET `/settings/spend` and POST
   `/pulls/:id/review` (cap reached), then GET p95 ≤ 50 ms and the 402 p95 is ≤ 50 ms above the 404 baseline. With 50
-  concurrent appends, an append adds ≤ 10 ms p95.
+  concurrent appends, an append adds ≤ 50 ms p95 (D21).
   Traces: NFR1, NFR2, NFR3 · Verify: manual
 - AC18 [api] — Given a PR whose title and diff contain the canary `CANARY-7f3a`, when a review, an intent refresh and a
   brief run, then no stored entry field and no log line of this feature contains the canary.
@@ -528,6 +528,12 @@ No other route, status code or field changes.
 - D20 — AC2 and AC4 wording aligned with D3 and with the 2-decimal cap input (W4 findings, 2026-10-25).
 - D21 — NFR3 threshold relaxed by the user: an append adds ≤ 50 ms p95 at 50 concurrent calls (was 10 ms), pool wait
   included. A local noisy run measured 24–40 ms (user, 2026-10-25).
+- D22 — S23 measured NFR3 on a durable Postgres at p95 51–145 ms (50 concurrent appends, pool 20; the cost is the per-commit
+  WAL flush). Ledger appends commit asynchronously (`SET LOCAL synchronous_commit = off`): measured p95 42–43 ms (S23 diagnostic). After the fix, on a durable Postgres with the host at load 8–12: append p95
+  40–47 ms in 3 runs and 63–70 ms in 2 extra runs (median of 5 = 47 ms) — passes on a quieter host, marginal under heavy
+  host load; the remaining contention is the 8 slot rows plus pool queueing (follow-up). If the
+  Postgres server crashes, the last fraction of a second of entries may be lost (never torn; an app crash loses nothing)
+  (user, 2026-10-25).
 
 ## 17. Open questions
 None — Q1–Q8 were resolved on 2026-10-25 by accepting their defaults (D6–D13).

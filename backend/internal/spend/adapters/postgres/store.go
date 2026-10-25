@@ -45,8 +45,17 @@ func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 // the statement affects 0 rows. A stored entry affects 1 row. A NULL cost adds 0 to spent_micros
 // and 1 to unpriced_count. The slot total saturates at the bigint maximum instead of failing the
 // append with an overflow (D19): the sum is taken in numeric and clamped.
+//
+// The cfg CTE is the transaction-local SET of D22 (see Append), kept inside this statement on
+// purpose: a separate BEGIN / SET LOCAL / COMMIT cost three more round trips per append, which
+// measured worse than the WAL flush it saves. set_config(..., true) is SET LOCAL: it lasts until
+// the end of the transaction, and a commit looks at it before that (the GUC is reset after the
+// commit record is written). @sync = NULL keeps the current setting. cfg is joined into the final
+// SELECT, because a CTE that nothing reads is not executed.
 const appendSQL = `
-WITH ins AS (
+WITH cfg AS (
+	SELECT set_config('synchronous_commit', COALESCE(CAST(@sync AS text), current_setting('synchronous_commit')), true)
+), ins AS (
 	INSERT INTO cost_ledger
 		(workspace_id, occurred_at, kind, origin, provider, model, tokens_in, tokens_out,
 		 cost_micros, ref_id, dedupe_key)
@@ -61,7 +70,7 @@ SELECT workspace_id,
        COALESCE(cost_micros, 0),
        CASE WHEN cost_micros IS NULL THEN 1 ELSE 0 END,
        1
-FROM ins
+FROM ins, cfg
 ON CONFLICT (workspace_id, month, slot) DO UPDATE SET
 	spent_micros   = LEAST(spend_month_totals.spent_micros::numeric + EXCLUDED.spent_micros, 9223372036854775807::numeric)::bigint,
 	unpriced_count = spend_month_totals.unpriced_count + EXCLUDED.unpriced_count,
@@ -69,6 +78,20 @@ ON CONFLICT (workspace_id, month, slot) DO UPDATE SET
 
 // Append implements app.Entries. An empty RefID is stored as NULL; an empty Provider or Model
 // stays ”.
+//
+// Durability (D22). A standalone append, the live LLM-call path, commits asynchronously: the
+// statement starts with SET LOCAL synchronous_commit = off (the cfg CTE of appendSQL), so its
+// commit does not wait for the WAL flush. That flush is what made 50 concurrent appends miss the
+// 50 ms p95 of NFR3 on a durable Postgres (S23). The setting is local to the statement's own
+// transaction: other statements and the pooled connection are not affected. The trade-off the
+// user accepted in D22: if the Postgres server itself crashes, the last fraction of a second of
+// entries may be lost. The entry and its total are still one atomic step, so nothing is ever
+// torn, and an app crash loses nothing (the commit record is already in the server's WAL buffers).
+//
+// An append that joins the caller's transaction (CI ingest via RecordCIRun) does NOT change it:
+// SET LOCAL would make the whole caller transaction asynchronous, including the run records
+// stored with the entry, and that is not a ledger decision to take. The caller's commit stays
+// durable, and a CI ingest is not on the LLM-call latency path that NFR3 measures.
 func (s *Store) Append(ctx context.Context, e domain.Entry) (bool, error) {
 	var cost, ref any // nil binds as NULL
 	if e.Cost != nil {
@@ -77,7 +100,13 @@ func (s *Store) Append(ctx context.Context, e domain.Entry) (bool, error) {
 	if e.RefID != "" {
 		ref = e.RefID
 	}
-	res := platformpg.Conn(ctx, s.db).Exec(appendSQL, map[string]any{
+	h := platformpg.Conn(ctx, s.db)
+	// Inside a caller's transaction the setting is left as it is (NULL keeps it).
+	var sync any
+	if _, inTx := h.Statement.ConnPool.(gorm.TxCommitter); !inTx {
+		sync = "off"
+	}
+	res := h.Exec(appendSQL, map[string]any{
 		"ws":       e.WorkspaceID,
 		"at":       e.OccurredAt.UTC(),
 		"kind":     string(e.Kind),
@@ -90,6 +119,7 @@ func (s *Store) Append(ctx context.Context, e domain.Entry) (bool, error) {
 		"ref":      ref,
 		"key":      e.DedupeKey,
 		"slot":     slotOf(e.DedupeKey),
+		"sync":     sync,
 	})
 	if res.Error != nil {
 		return false, fmt.Errorf("append ledger entry: %w", res.Error)

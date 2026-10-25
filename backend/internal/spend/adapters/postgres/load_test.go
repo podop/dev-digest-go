@@ -31,7 +31,7 @@ package postgres_test
 //	-ledger.appends=40      measured appends per worker (50 x 40 = 2,000 samples).
 //	-ledger.warmup=5        unmeasured appends per worker first, so the pool is warm like in a
 //	                        running backend.
-//	-ledger.budget=10ms     p95 budget of an append (NFR3); the test fails above it. 0 = report only.
+//	-ledger.budget=50ms     p95 budget of an append (NFR3, D21); the test fails above it. 0 = report only.
 //	-ledger.seed-month=N    first seed N entries into the current UTC month of the workspace.
 //	-ledger.seed-earlier=N  and N entries into the 12 months before it.
 //
@@ -78,7 +78,7 @@ var (
 	loadWorkers     = flag.Int("ledger.workers", 50, "load harness: concurrent appenders")
 	loadAppends     = flag.Int("ledger.appends", 40, "load harness: measured appends per worker")
 	loadWarmup      = flag.Int("ledger.warmup", 5, "load harness: unmeasured appends per worker first")
-	loadBudget      = flag.Duration("ledger.budget", 10*time.Millisecond, "load harness: append p95 budget (0 = report only)")
+	loadBudget      = flag.Duration("ledger.budget", 50*time.Millisecond, "load harness: append p95 budget (0 = report only)")
 	loadSeedMonth   = flag.Int("ledger.seed-month", 0, "load harness: entries to seed into the current month first")
 	loadSeedEarlier = flag.Int("ledger.seed-earlier", 0, "load harness: entries to seed into the 12 months before it first")
 )
