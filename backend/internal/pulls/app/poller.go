@@ -52,7 +52,9 @@ type PollerDeps struct {
 }
 
 // Poller keeps every repository's PRs fresh in the background. Each workspace has its own due
-// time, derived from its Settings polling interval, which is read at the start of each cycle.
+// time: the start of its last cycle plus its CURRENT Settings polling interval, worked out again on
+// every tick, so a changed interval applies within one tick (spec D17). A rate-limit resume time
+// still wins over it.
 // Repositories are polled one at a time. Run must not be called concurrently with itself.
 type Poller struct {
 	targets   PollTargets
@@ -66,7 +68,8 @@ type Poller struct {
 	opts      PollerOptions
 
 	// State below belongs to the goroutine that runs Run.
-	nextDue     map[string]time.Time // workspace id -> next cycle
+	lastStart   map[string]time.Time // workspace id -> start of its last cycle
+	holdUntil   map[string]time.Time // workspace id -> rate-limit resume time: not due before it
 	cutoffs     map[string]time.Time // repo id -> start of its last successful background poll
 	pausedUntil time.Time            // rate limit: nothing is polled before this
 }
@@ -100,7 +103,7 @@ func NewPoller(deps PollerDeps, opts PollerOptions) *Poller {
 	return &Poller{
 		targets: deps.Targets, intervals: deps.Intervals, pages: deps.Pages, stats: deps.Stats, store: deps.Store,
 		observer: deps.Observer, log: log, now: now, opts: opts,
-		nextDue: map[string]time.Time{}, cutoffs: map[string]time.Time{},
+		lastStart: map[string]time.Time{}, holdUntil: map[string]time.Time{}, cutoffs: map[string]time.Time{},
 	}
 }
 
@@ -139,11 +142,26 @@ func (p *Poller) round(ctx context.Context) {
 		}
 		// Ticks are Tick apart, so a cycle that began a hair after its tick would otherwise miss
 		// the next one; half a tick of slack keeps a 1-minute interval at one minute.
-		if now.Add(p.opts.Tick / 2).Before(p.nextDue[group.workspaceID]) {
+		if now.Add(p.opts.Tick / 2).Before(p.dueAt(ctx, group.workspaceID)) {
 			continue
 		}
 		p.cycle(ctx, group)
 	}
+}
+
+// dueAt is when the workspace's next cycle is due: its last cycle start plus the interval it has
+// now, but not before a rate-limit resume time. A workspace never polled by this process is due
+// at once (the zero time), without reading its interval.
+func (p *Poller) dueAt(ctx context.Context, workspaceID string) time.Time {
+	last, ok := p.lastStart[workspaceID]
+	if !ok {
+		return time.Time{}
+	}
+	due := last.Add(p.interval(ctx, workspaceID))
+	if hold := p.holdUntil[workspaceID]; hold.After(due) {
+		return hold
+	}
+	return due
 }
 
 // cycle polls one workspace and, when the cycle polled successfully, tells the observer.
@@ -174,8 +192,8 @@ func (p *Poller) notify(ctx context.Context, workspaceID string) {
 func (p *Poller) pollRepos(ctx context.Context, g workspaceTargets) bool {
 	polled := 0
 	start := p.now()
-	due := start.Add(p.interval(ctx, g.workspaceID))
-	p.nextDue[g.workspaceID] = due
+	p.lastStart[g.workspaceID] = start
+	delete(p.holdUntil, g.workspaceID)
 
 	for _, repo := range g.repos {
 		if ctx.Err() != nil {
@@ -197,8 +215,8 @@ func (p *Poller) pollRepos(ctx context.Context, g workspaceTargets) bool {
 			return false
 		}
 		if reset, limited := rateLimit(err); limited {
-			resume := domain.ResumeAfterRateLimit(start, due, reset)
-			p.nextDue[g.workspaceID] = resume
+			resume := domain.ResumeAfterRateLimit(start, start.Add(p.interval(ctx, g.workspaceID)), reset)
+			p.holdUntil[g.workspaceID] = resume
 			p.pausedUntil = resume
 			p.log.WarnContext(ctx, "background poll paused: GitHub rate limit reached",
 				"workspace_id", g.workspaceID, "repo_id", repo.ID, "resume_at", resume)
@@ -305,9 +323,10 @@ func (p *Poller) forget(targets []domain.PollTarget) {
 			delete(p.cutoffs, id)
 		}
 	}
-	for id := range p.nextDue {
+	for id := range p.lastStart {
 		if !workspaces[id] {
-			delete(p.nextDue, id)
+			delete(p.lastStart, id)
+			delete(p.holdUntil, id)
 		}
 	}
 }

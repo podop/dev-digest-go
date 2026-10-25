@@ -9,7 +9,7 @@ import { useTranslations } from "next-intl";
 import { Skeleton, EmptyState, ErrorState, AutoTriggerStatus } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
-import { usePulls, useRefreshRepo } from "@/lib/hooks";
+import { useAutomaticReviewsStatus, usePulls, useRefreshRepo } from "@/lib/hooks";
 import { useActiveRepo, useRepoNotFound } from "@/lib/repo-context";
 import { ApiError } from "@/lib/api";
 import { COLUMN_KEYS, SKELETON_ROWS } from "../../constants";
@@ -27,6 +27,9 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
   const repoNotFound = useRepoNotFound(repoId);
   const { data: pulls, isLoading, isError, error, refetch } = usePulls(repoId);
   const refresh = useRefreshRepo();
+  // Pill state comes straight from the status route; while it loads or has failed
+  // there is no data and the pill is not rendered (no misleading ON/OFF).
+  const { data: autoStatus } = useAutomaticReviewsStatus();
   const [query, setQuery] = React.useState("");
 
   const navigate = (next: Partial<PullsSearch>) =>
@@ -59,7 +62,17 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
           </p>
         </div>
         <div style={s.headerActions}>
-          <AutoTriggerStatus on={false} />
+          {autoStatus && (
+            <AutoTriggerStatus
+              on={autoStatus.state === "active"}
+              detail={
+                autoStatus.state === "active"
+                  ? t("list.autoReviewPolling", { minutes: autoStatus.poll_interval_min })
+                  : undefined
+              }
+              onClick={() => router.push("/settings/automatic-reviews")}
+            />
+          )}
         </div>
       </div>
 

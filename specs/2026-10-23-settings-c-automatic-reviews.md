@@ -399,6 +399,13 @@ condition selected"; `paused_spend_cap` (warn) "Paused — spend cap reached" + 
   p95 360–372 ms (implementer), 528–589 ms under host load ~8 (verifier r2), 423–550 ms (orchestrator re-run). A burst (700 undecided PRs in one
   evaluation) is measured but not bound (p95 1.4–2.8 s, linear in per-record INSERT commits); only its candidates read
   is bound by the 750 ms limit (p95 144–208 ms). Batching record-only decisions into one INSERT is a follow-up (user, 2026-10-25).
+- D17 — Interval changes apply within one poll tick (stand finding, 2026-10-25): the poller computes a workspace's
+  due time on every tick as its last cycle start + the CURRENT `polling_interval_min`, so lowering 60 → 1 polls within
+  a minute (it used to wait out the old 60-minute due time; leaderboard AC3 "takes effect on the next cycle" is
+  tightened accordingly). A rate-limit resume time still wins over the interval (user, 2026-10-25).
+- D18 — The PR list pill "Auto-review: ON/OFF" is built (G10 reversed; it was hard-coded OFF): ON when
+  GET /settings/automatic-reviews-status answers `active`, with the detail "polling <N>m" from `poll_interval_min`;
+  OFF otherwise; it links to `/settings/automatic-reviews` (user, 2026-10-25).
 
 ## 17. Open questions
 None — Q1–Q9 were resolved on 2026-10-23 by accepting their defaults (D4–D12).

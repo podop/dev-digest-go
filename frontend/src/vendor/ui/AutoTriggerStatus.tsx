@@ -5,12 +5,16 @@ import React from "react";
 export function AutoTriggerStatus({
   on = true,
   detail,
+  onClick,
 }: {
   on?: boolean;
   detail?: string;
+  onClick?: () => void;
 }) {
   return (
     <button
+      type="button"
+      onClick={onClick}
       title="Settings → Automatic Reviews"
       style={{
         display: "inline-flex",

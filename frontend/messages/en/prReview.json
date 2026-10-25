@@ -116,6 +116,7 @@
     "title": "Pull Requests",
     "summary": "{open} open · {needsReview} need review · {merged} merged",
     "loading": "Loading pull requests…",
+    "autoReviewPolling": "polling {minutes}m",
     "status": {
       "open": "Open",
       "closed": "Closed",

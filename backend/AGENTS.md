@@ -44,7 +44,7 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   `smartdiff`, `blast`, `brief`, `onboarding`, `performance` (brief and the review hook reach
   intent, blast, documents and roles through peers adapters). `PR_POLL_ENABLED` (default on, off only on `false`; the zero `config.Config` of the component tests is off)
   starts the background PR poll (`pulls/app.Poller`, its own non-retrying GitHub client; interval = each
-  workspace's Settings `polling_interval_min`, read through `settingsIntervals` in `cmd/server/poll.go`).
+  workspace's Settings `polling_interval_min`, read through `settingsIntervals` in `cmd/server/poll.go` on every tick: due = last cycle start + the current interval, so a change applies within one tick; a rate-limit resume time still wins).
   `REVIEW_INTENT_ENABLED` (default on,
   off only on `false`) decides whether `cmd` wires `executor.Deps.Intent`; off leaves it nil, which
   is Phase 4 behaviour exactly. Test seams in `cmd/server`: `options.now` (clock) and

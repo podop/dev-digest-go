@@ -297,23 +297,28 @@ func TestPRPoll_IntervalComesFromSettings(t *testing.T) {
 		t.Errorf("most GitHub requests in flight at once = %d, want 1", got)
 	}
 
-	// The cycle at +3 min has read 1 minute, so the next one is due at +4. Changing the setting to 2
-	// minutes does not move it; the cycle at +4 reads the new value and the one after is due at +6.
+	// The cycle at +3 min began at +3. The due time is its start plus the CURRENT interval (spec D17),
+	// so changing the setting to 2 minutes moves it to +5: +4 polls nothing, +5 polls, +6 nothing, +7 polls.
 	h.setInterval(2)
 	h.idle()
 	if got := len(h.lists("r1")); got != 4 {
 		t.Fatalf("list requests of o/r1 after the setting changed = %d, want 4 (nothing is due yet)", got)
 	}
-	h.clock.Advance(time.Minute) // +4 min
+	h.clock.Advance(time.Minute) // +4 min: one minute would be due, two are not
+	h.idle()
+	if got := len(h.lists("r1")); got != 4 {
+		t.Errorf("list requests of o/r1 one minute after a cycle at a 2-minute interval = %d, want 4", got)
+	}
+	h.clock.Advance(time.Minute) // +5 min
 	h.waitLists("r1", 5)
 	h.waitLists("r2", 5)
 	h.waitPolled(r2, h.clock.Now())
-	h.clock.Advance(time.Minute) // +5 min: one minute would be due, two are not
+	h.clock.Advance(time.Minute) // +6 min
 	h.idle()
 	if got := len(h.lists("r1")); got != 5 {
 		t.Errorf("list requests of o/r1 one minute after a 2-minute cycle = %d, want 5", got)
 	}
-	h.clock.Advance(time.Minute) // +6 min
+	h.clock.Advance(time.Minute) // +7 min
 	h.waitLists("r1", 6)
 	h.waitLists("r2", 6)
 }

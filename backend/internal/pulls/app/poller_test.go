@@ -348,19 +348,90 @@ func TestPoller_pollsEveryRepoEveryInterval(t *testing.T) {
 	})
 }
 
-func TestPoller_aChangedIntervalTakesEffectOnTheNextCycle(t *testing.T) {
+func TestPoller_aChangedIntervalTakesEffectWithinOneTick(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		base := time.Now()
 		r := newRig(target("ws", "a"))
 		r.intervals.setAll(time.Minute, "ws")
 		stop := r.start(t)
 		advance(30 * time.Second)
-		r.intervals.setAll(2*time.Minute, "ws") // the cycle at 0 already read 1 min
+		r.intervals.setAll(2*time.Minute, "ws") // the due time is the last start + the interval of the moment
 		advance(5 * time.Minute)
 		stop()
 
-		// 0 (reads 1) -> 1 (reads 2) -> 3 (reads 2) -> 5.
-		if diff := cmp.Diff(minutes(0, 1, 3, 5), r.gh.firstPageTimes("a", base)); diff != "" {
+		// 0 (due at 2 min once the interval changed: the tick at 1 min skips) -> 2 -> 4.
+		if diff := cmp.Diff(minutes(0, 2, 4), r.gh.firstPageTimes("a", base)); diff != "" {
+			t.Errorf("poll times mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestPoller_aLoweredIntervalPollsAtTheNextTickNotAfterTheOldOne(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+		r := newRig(target("ws", "a"))
+		r.intervals.setAll(time.Hour, "ws")
+		stop := r.start(t)
+		advance(10*time.Minute + 30*time.Second)
+		if got := r.gh.firstPageTimes("a", base); len(got) != 1 {
+			t.Errorf("polls before the interval is lowered = %v, want only the first", got)
+		}
+		r.intervals.setAll(time.Minute, "ws")
+		advance(2*time.Minute + 30*time.Second) // now 13 min
+		stop()
+
+		// The last cycle began at 0; with 1 min the next tick (11 min) is due, then each interval.
+		if diff := cmp.Diff(minutes(0, 11, 12, 13), r.gh.firstPageTimes("a", base)); diff != "" {
+			t.Errorf("poll times mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestPoller_aRaisedIntervalDelaysTheNextCycleFromTheLastStart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+		r := newRig(target("ws", "a"))
+		r.intervals.setAll(time.Minute, "ws")
+		stop := r.start(t)
+		advance(30 * time.Second)
+		r.intervals.setAll(time.Hour, "ws")
+		advance(59 * time.Minute) // now 59 min 30 s
+		if diff := cmp.Diff(minutes(0), r.gh.firstPageTimes("a", base)); diff != "" {
+			t.Errorf("poll times before the raised interval ends mismatch (-want +got):\n%s", diff)
+		}
+		advance(time.Minute) // now 60 min 30 s
+		stop()
+
+		if diff := cmp.Diff(minutes(0, 60), r.gh.firstPageTimes("a", base)); diff != "" {
+			t.Errorf("poll times mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+func TestPoller_aRateLimitPauseHoldsWhenALoweredIntervalWouldBeDueEarlier(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+		r := newRig(target("ws", "a"))
+		r.intervals.setAll(5*time.Minute, "ws")
+		var first sync.Once
+		r.gh.respond = func(string, int) ([]domain.Listed, error) {
+			var err error
+			first.Do(func() {
+				err = &app.GitHubError{Status: 403, RateLimited: true, RateLimitReset: base.Add(10 * time.Minute)}
+			})
+			return nil, err
+		}
+		stop := r.start(t)
+		advance(2 * time.Minute)
+		r.intervals.setAll(time.Minute, "ws") // due again at 1 min, but GitHub says wait until 10 (the resume time wins)
+		advance(7*time.Minute + 30*time.Second)
+		if diff := cmp.Diff(minutes(0), r.gh.firstPageTimes("a", base)); diff != "" {
+			t.Errorf("poll times during the pause mismatch (-want +got):\n%s", diff)
+		}
+		advance(3 * time.Minute) // now 12 min 30 s
+		stop()
+
+		if diff := cmp.Diff(minutes(0, 10, 11, 12), r.gh.firstPageTimes("a", base)); diff != "" {
 			t.Errorf("poll times mismatch (-want +got):\n%s", diff)
 		}
 	})
