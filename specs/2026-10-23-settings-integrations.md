@@ -449,6 +449,14 @@ Changed existing routes: `POST /pulls/:id/review`, `POST /agents/:id/eval-runs`,
 - D13 — Q9 Imported learnings are stored as workspace learnings without a repository (user approved default, 2026-10-23).
 - D14 — Q10 Limits: 5 MiB upload, 20 MiB inflated, 500 entries, ≤ 100 agents, ≤ 200 skills, ≤ 1,000 eval cases,
   ≤ 5,000 learnings, system prompt ≤ 100,000 chars, 10 requests per minute for import and export (user approved default, 2026-10-23).
+- D15 — CR1 accepted: the down migration is lossy (plugin ownership and descriptions dropped), documented in the down
+  file (user, 2026-10-25).
+- D16 — CR2 accepted: plugin import is the only route with a raw (non-JSON) body; route-scoped httpx rules, 415 for
+  text/plain and multipart there, every other route unchanged, Origin/Host guards kept, 10/min (user, 2026-10-25).
+- D17 — CR3 accepted: an enabled plugin runs fully trusted; plugins install disabled and the enabled check guards all 7 run
+  entry points, each tested (user, 2026-10-25).
+- D18 — Planner defaults SCR1–SCR8 and A0–A14 accepted; the migration number is 0008 (Slice C took 0007 for D13)
+  (user pre-approval, 2026-10-25).
 
 ## 17. Open questions
 None — Q5 was resolved by D4; Q1–Q4 and Q6–Q10 were resolved on 2026-10-23 by accepting their defaults (D6–D14).
