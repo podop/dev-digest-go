@@ -95,6 +95,11 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   by `listen` after the startup reaps as `go Run(stopCtx)`, prunes at once and then 24 h after each
   pass ended, and `listen` waits for it (a prune in flight is cancelled) before `serve` closes the DB.
   Test seam `options.pruneInterval` (0 = 24 h).
+  The workspace adapter deletes from other contexts' tables in the reset: a new table that references
+  agent runs, eval runs, reviews or findings must be added to `resetSteps` (and to its test). The reset
+  holds `SHARE ROW EXCLUSIVE` on `agent_runs` and `eval_suite_runs` for its duration (≤ ~30 s), which
+  pauses run starts and CI ingest in all workspaces — acceptable for the local tool. A prune batch waits
+  up to 60 s for the history lock (a reset waits 10 s), so a prune that meets a reset waits it out.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

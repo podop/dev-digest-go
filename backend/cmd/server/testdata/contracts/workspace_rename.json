@@ -1,0 +1,22 @@
+{
+  "cloneDir": "/data/workspace",
+  "dataDir": "/data",
+  "name": "acme · payments",
+  "repos": [
+    {
+      "clone_path": null,
+      "cloned": false,
+      "full_name": "org/x",
+      "id": "00000000-0000-4000-8000-000000000002",
+      "last_polled_at": null
+    },
+    {
+      "clone_path": null,
+      "cloned": false,
+      "full_name": "Org/y",
+      "id": "00000000-0000-4000-8000-000000000003",
+      "last_polled_at": null
+    }
+  ],
+  "workspaceId": "00000000-0000-4000-8000-000000000001"
+}

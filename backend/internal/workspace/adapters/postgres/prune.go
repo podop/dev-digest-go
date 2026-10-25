@@ -18,7 +18,8 @@ const pruneBatch = 5000
 
 // PruneTraces deletes the run traces of the workspace's agent runs whose ran_at is strictly
 // before cutoff, at most pruneBatch per transaction, and returns the total. Each batch takes the
-// advisory lock a reset takes, so the two never run at once; ctx is checked between batches and a
+// advisory lock a reset takes (waiting up to pruneLockTimeout, longer than a reset runs), so the
+// two never run at once and neither fails; ctx is checked between batches and a
 // cancelled ctx returns what was deleted so far with the error. It deletes nothing but traces:
 // runs, reviews and findings stay.
 func (s *Store) PruneTraces(ctx context.Context, workspaceID string, cutoff time.Time) (int64, error) {
@@ -30,7 +31,7 @@ func (s *Store) PruneTraces(ctx context.Context, workspaceID string, cutoff time
 		var n int64
 		err := postgres.NewTx(s.db).InTx(ctx, func(ctx context.Context) error {
 			tx := postgres.Conn(ctx, s.db)
-			if err := lockHistory(tx, workspaceID); err != nil {
+			if err := lockHistory(tx, workspaceID, pruneLockTimeout); err != nil {
 				return err
 			}
 			// A set delete over a LIMITed subselect has no GORM builder, hence Exec.

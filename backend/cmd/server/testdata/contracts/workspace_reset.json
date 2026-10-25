@@ -1,0 +1,15 @@
+{
+  "deleted": {
+    "agent_runs": 2,
+    "ci_runs": 3,
+    "composed_reviews": 1,
+    "eval_runs": 2,
+    "eval_suite_runs": 1,
+    "findings": 3,
+    "learnings": 2,
+    "multi_agent_runs": 1,
+    "reviews": 3,
+    "run_traces": 2
+  },
+  "prs_unmarked": 2
+}

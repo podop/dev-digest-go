@@ -92,6 +92,15 @@ import {
   OnboardingTourReady,
   PerfSummary,
   PeriodInfo,
+  PluginAgent,
+  PluginBundle,
+  PluginContextFile,
+  PluginConvention,
+  PluginEvalCase,
+  PluginLearning,
+  PluginManifest,
+  PluginSkill,
+  PluginSkillVersion,
   PrBrief,
   PrBriefResponse,
   PrDetail,
@@ -136,6 +145,11 @@ import {
   StatPoint,
   ToolCall,
   UsageCount,
+  WORKSPACE_RESET_ACTIVE_CODE,
+  WorkspaceInfo,
+  WorkspaceRepo,
+  WorkspaceResetResult,
+  WorkspaceStats,
 } from "@devdigest/shared";
 
 // The Go backend's component tests record the response of every Phase-1 to Phase-6 route in
@@ -398,6 +412,40 @@ const spendCapReached = ApiErrorBody.extend({
     .strict(),
 }).strict();
 
+// ---- Settings slice B (specs/2026-10-23-settings-b-workspace.md): rename, stats, export, reset. ----
+const workspaceInfo = WorkspaceInfo.extend({
+  workspaceId: uuid,
+  repos: z.array(WorkspaceRepo.strict()),
+}).strict();
+// The reset answer lists every kind; `.strict()` on both levels makes a missing or extra kind a failure.
+const workspaceResetResult = WorkspaceResetResult.extend({
+  deleted: WorkspaceResetResult.shape.deleted.strict(),
+}).strict();
+const resetRunActive = ApiErrorBody.extend({
+  error: ApiErrorBody.shape.error
+    .extend({ code: z.literal(WORKSPACE_RESET_ACTIVE_CODE) })
+    .strict(),
+}).strict();
+// The export is a plugin bundle of kind "workspace": the optional workspace-only parts are all present.
+const workspaceExport = PluginBundle.extend({
+  manifest: PluginManifest.extend({
+    kind: z.literal("workspace"),
+    description: z.string().nullable(),
+    counts: PluginManifest.shape.counts.required().strict(),
+  }).strict(),
+  agents: z.array(PluginAgent.required({ strategy: true, ci_fail_on: true, repo_intel: true }).strict()),
+  skills: z.array(
+    PluginSkill.required({ versions: true })
+      .extend({ versions: z.array(PluginSkillVersion.strict()) })
+      .strict(),
+  ),
+  eval_cases: z.array(PluginEvalCase.strict()),
+  conventions: z.array(PluginConvention.required({ repo: true, category: true, status: true }).strict()),
+  learnings: z.array(PluginLearning.strict()),
+  context_files: z.array(PluginContextFile.strict()),
+  settings: z.record(z.unknown()),
+}).strict();
+
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
   health: z.object({ status: z.literal("ok") }).strict(),
@@ -575,6 +623,13 @@ const contracts: Record<string, z.ZodTypeAny> = {
   settings_spend: spendStatus,
   test_connection_llm: testConnectionLlm,
   spend_cap_reached: spendCapReached,
+
+  // ---- Settings slice B ----
+  workspace_rename: workspaceInfo,
+  workspace_stats: WorkspaceStats.strict(),
+  workspace_export: workspaceExport,
+  workspace_reset: workspaceResetResult,
+  workspace_reset_run_active: resetRunActive,
 };
 
 const read = (name: string): unknown =>
@@ -626,6 +681,44 @@ describe("Go backend golden responses", () => {
 
     const refused = spendCapReached.parse(read("spend_cap_reached"));
     expect(refused.error.details.spent_usd).toBeGreaterThanOrEqual(refused.error.details.cap_usd);
+  });
+
+  it("the settings-slice-B goldens carry what the UI reads", () => {
+    const info = workspaceInfo.parse(read("workspace_rename"));
+    expect(info.name).toBe("acme · payments");
+    expect(info.dataDir.startsWith("/")).toBe(true);
+
+    const bundle = workspaceExport.parse(read("workspace_export"));
+    expect(bundle.manifest.kind).toBe("workspace");
+    const { counts } = bundle.manifest;
+    expect(counts).toEqual({
+      agents: bundle.agents.length,
+      skills: bundle.skills.length,
+      eval_cases: bundle.eval_cases.length,
+      conventions: bundle.conventions.length,
+      learnings: bundle.learnings.length,
+      context_files: bundle.context_files.length,
+    });
+    // Duplicate agent names are suffixed, an imported skill keeps its source and all its versions,
+    // and every eval case points at a bundle agent or skill.
+    expect(bundle.agents.map((a) => a.name)).toEqual(["Reviewer", "Reviewer (2)", "Auditor"]);
+    const imported = bundle.skills.find((x) => x.source === "imported_file");
+    expect(imported?.versions.map((v) => v.version)).toEqual([1, 2, 3]);
+    for (const c of bundle.eval_cases) {
+      const owners = c.owner_kind === "agent" ? bundle.agents : bundle.skills;
+      expect(owners.map((o) => o.name)).toContain(c.owner_ref);
+    }
+    // The settings are the allow-list only: no ids, no unknown keys, no workspace name.
+    expect(Object.keys(bundle.settings).sort()).toEqual(["automatic_reviews", "retention_days", "theme"]);
+    expect(bundle.settings.automatic_reviews).toEqual({ enabled: true });
+    // The same document is a valid plain PluginBundle for the importer's schema.
+    expect(PluginBundle.safeParse(read("workspace_export")).success).toBe(true);
+
+    expect(read("workspace_stats")).toEqual({ agents: 3, skills: 6, eval_cases: 12, learnings: 24, repos: 2, runs: 7 });
+    const reset = workspaceResetResult.parse(read("workspace_reset"));
+    expect(reset.deleted.agent_runs).toBe(2);
+    expect(reset.prs_unmarked).toBe(2);
+    expect(resetRunActive.parse(read("workspace_reset_run_active")).error.message).toMatch(/in progress/);
   });
 
   it("the index-state goldens cover a full, a degraded and a synthesised state", () => {

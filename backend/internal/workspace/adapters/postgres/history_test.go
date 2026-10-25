@@ -11,7 +11,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"gorm.io/gorm"
 
-	evalspg "dev-digest-go/backend/internal/evals/adapters/postgres"
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
 	pgstore "dev-digest-go/backend/internal/workspace/adapters/postgres"
 	"dev-digest-go/backend/internal/workspace/domain"
@@ -210,12 +209,12 @@ func historyTenantCount(table string) string {
 	}
 }
 
-// An eval case made from a finding stays readable after its finding, review and PR link stop
-// resolving (EC6, AC16).
+// An eval case made from a finding survives Reset with its source ids and the columns the evals
+// store reads (EC6, AC16). Read with plain SQL: adapters do not import each other; the HTTP read
+// path is proven in cmd/server (TestWorkspaceHistory_ResetDeletesHistoryAndKeepsTheRest).
 func TestReset_CaseBuiltFromFindingStillReads(t *testing.T) {
 	e := newHistoryEnv(t)
 	a := e.seedTenant("a")
-	cases := evalspg.NewStore(e.db)
 
 	if _, _, err := e.store.Reset(t.Context(), a.ws); err != nil {
 		t.Fatalf("Reset(a): %v", err)
@@ -223,15 +222,38 @@ func TestReset_CaseBuiltFromFindingStillReads(t *testing.T) {
 	if n := e.count(`SELECT count(*) FROM findings WHERE id = ?`, a.finding1); n != 0 {
 		t.Fatalf("finding %s still exists after Reset", a.finding1)
 	}
-	view, err := cases.GetCaseView(t.Context(), a.ws, a.findingCase)
+	type caseRow struct {
+		Name            string
+		InputDiff       string
+		SourceFindingID *string
+		SourceReviewID  *string
+		SourcePRID      *string
+		ExpectedOutput  string
+	}
+	var got []caseRow
+	err := e.db.Raw(`SELECT name, input_diff, source_finding_id, source_review_id, source_pr_id, expected_output::text AS expected_output
+		FROM eval_cases WHERE id = ? AND workspace_id = ?`, a.findingCase, a.ws).Scan(&got).Error
 	if err != nil {
-		t.Fatalf("GetCaseView(%s) after Reset: %v", a.findingCase, err)
+		t.Fatalf("read case %s after Reset: %v", a.findingCase, err)
 	}
-	if view.Case.SourceFindingID == nil || *view.Case.SourceFindingID != a.finding1 || view.Case.InputDiff != "diff" {
-		t.Errorf("GetCaseView(%s) = source finding %v, diff %q; want the finding %s and diff", a.findingCase, view.Case.SourceFindingID, view.Case.InputDiff, a.finding1)
+	if len(got) != 1 {
+		t.Fatalf("eval case %s rows after Reset = %d, want 1", a.findingCase, len(got))
 	}
-	if id, ok, err := cases.CaseBySourceFinding(t.Context(), a.ws, a.finding1); err != nil || !ok || id != a.findingCase {
-		t.Errorf("CaseBySourceFinding(%s) = %q, %v, %v; want %q", a.finding1, id, ok, err, a.findingCase)
+	c := got[0]
+	if c.Name != "from finding" || c.InputDiff != "diff" {
+		t.Errorf("case %s = name %q, diff %q; want %q and %q", a.findingCase, c.Name, c.InputDiff, "from finding", "diff")
+	}
+	if c.SourceFindingID == nil || *c.SourceFindingID != a.finding1 {
+		t.Errorf("case %s source_finding_id = %v, want %s", a.findingCase, c.SourceFindingID, a.finding1)
+	}
+	if c.SourceReviewID == nil || c.SourcePRID == nil {
+		t.Errorf("case %s source review %v / PR %v, want both kept", a.findingCase, c.SourceReviewID, c.SourcePRID)
+	}
+	if !strings.Contains(c.ExpectedOutput, `"kind"`) || !strings.Contains(c.ExpectedOutput, "f.go") {
+		t.Errorf("case %s expected_output = %s, want the finding expectation intact", a.findingCase, c.ExpectedOutput)
+	}
+	if n := e.count(`SELECT count(*) FROM eval_cases WHERE workspace_id = ? AND source_finding_id = ?`, a.ws, a.finding1); n != 1 {
+		t.Errorf("cases with source_finding_id %s = %d, want 1", a.finding1, n)
 	}
 }
 
@@ -449,6 +471,51 @@ func TestPruneTraces_ConcurrentWithResetBothFinish(t *testing.T) {
 	}
 	if got := <-pr; got.err != nil || got.n != 0 {
 		t.Errorf("PruneTraces after the reset = %d, %v; want 0 and no error (the reset took the traces)", got.n, got.err)
+	}
+}
+
+// A prune batch waits for the history lock longer than a reset can hold it (EC11, NFR3): the lock
+// is held for 12 s, past the 10 s a reset waits, and the prune still finishes without error once
+// it is released.
+func TestPruneTraces_WaitsOutALockHeldPastTheResetTimeout(t *testing.T) {
+	if testing.Short() {
+		t.Skip("holds the history lock for 12 s")
+	}
+	e := newHistoryEnv(t)
+	a := e.seedTenant("a")
+
+	hold := e.db.Begin()
+	if hold.Error != nil {
+		t.Fatalf("begin hold: %v", hold.Error)
+	}
+	var once sync.Once
+	release := func() { once.Do(func() { _ = hold.Rollback().Error }) }
+	t.Cleanup(release)
+	if err := hold.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?, 0))`, "workspace-history:"+a.ws).Error; err != nil {
+		t.Fatalf("hold history lock: %v", err)
+	}
+
+	type pruned struct {
+		n   int64
+		err error
+	}
+	pr := make(chan pruned, 1)
+	go func() {
+		n, err := e.store.PruneTraces(t.Context(), a.ws, time.Now().Add(time.Hour))
+		pr <- pruned{n, err}
+	}()
+	e.waitUntil("the prune to wait for the history lock", ungrantedAdvisory, 1)
+
+	select {
+	case got := <-pr:
+		t.Fatalf("PruneTraces returned %d, %v while the lock was held; want it to wait", got.n, got.err)
+	case <-time.After(12 * time.Second):
+	}
+	release()
+
+	got := <-pr
+	if got.err != nil || got.n != 2 {
+		t.Errorf("PruneTraces after the lock was released = %d, %v; want 2 traces and no error", got.n, got.err)
 	}
 }
 

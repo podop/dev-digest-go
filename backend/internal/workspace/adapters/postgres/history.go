@@ -14,16 +14,24 @@ import (
 
 var _ app.History = (*Store)(nil)
 
-// lockTimeout bounds every wait for the workspace-history lock and the table lock (spec A4): a
-// reset or a prune batch that cannot get them in time fails with an error and changes nothing.
-const lockTimeout = "10s"
+// resetLockTimeout bounds every wait of a reset for the workspace-history lock and the table
+// locks (spec A4): a reset that cannot get them in time fails with an error and changes nothing.
+//
+// pruneLockTimeout is the wait of a prune batch for the history lock. It is longer than a reset
+// can run (NFR3: about 30 s), so a prune that meets a reset waits it out instead of failing (spec
+// EC11); a cancelled ctx still ends the wait at once.
+const (
+	resetLockTimeout = "10s"
+	pruneLockTimeout = "60s"
+)
 
 // lockHistory is the first step of every writing transaction of this package. It sets the lock
 // timeout and takes the advisory lock `workspace-history:<workspace>`, which serialises a reset
 // and the prune batches of one workspace (spec EC11). The lock is released with the transaction.
-// Advisory locks have no GORM builder, hence Exec.
-func lockHistory(tx *gorm.DB, workspaceID string) error {
-	if err := tx.Exec("SET LOCAL lock_timeout = '" + lockTimeout + "'").Error; err != nil {
+// timeout is one of the package constants above, never request input. Advisory locks have no GORM
+// builder, hence Exec.
+func lockHistory(tx *gorm.DB, workspaceID, timeout string) error {
+	if err := tx.Exec("SET LOCAL lock_timeout = '" + timeout + "'").Error; err != nil {
 		return fmt.Errorf("set lock timeout: %w", err)
 	}
 	if err := tx.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?, 0))`, "workspace-history:"+workspaceID).Error; err != nil {
@@ -48,7 +56,7 @@ func (s *Store) Reset(ctx context.Context, workspaceID string) (domain.Deleted, 
 	)
 	err := postgres.NewTx(s.db).InTx(ctx, func(ctx context.Context) error {
 		tx := postgres.Conn(ctx, s.db)
-		if err := lockHistory(tx, workspaceID); err != nil {
+		if err := lockHistory(tx, workspaceID, resetLockTimeout); err != nil {
 			return err
 		}
 		if err := tx.Exec(`LOCK TABLE agent_runs, eval_suite_runs IN SHARE ROW EXCLUSIVE MODE`).Error; err != nil {
