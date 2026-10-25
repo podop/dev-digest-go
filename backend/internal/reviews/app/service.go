@@ -50,8 +50,9 @@ type Service struct {
 }
 
 var (
-	_ API       = (*Service)(nil)
-	_ Lifecycle = (*Service)(nil)
+	_ API         = (*Service)(nil)
+	_ AutoStarter = (*Service)(nil)
+	_ Lifecycle   = (*Service)(nil)
 )
 
 // NewService builds a Service. A missing store, transaction runner, executor or bus is a

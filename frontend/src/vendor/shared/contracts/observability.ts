@@ -218,7 +218,7 @@ export const RunHistoryItem = z.object({
   run_id: z.string(),
   ran_at: z.string(),
   status: z.enum(["done", "failed", "cancelled"]),
-  source: z.enum(["local", "ci"]),
+  source: z.enum(["local", "ci", "auto"]),
   /** The PR the run reviewed; null when the PR was deleted or the run had none. */
   pr: z.object({ id: z.string(), repo_id: z.string(), number: z.number().int() }).nullable(),
   /** tokens_in + tokens_out; null when no usage was recorded (CI runs). */

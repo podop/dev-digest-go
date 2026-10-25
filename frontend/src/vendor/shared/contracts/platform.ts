@@ -3,6 +3,7 @@ import { Provider } from './knowledge.js';
 import { FEATURE_MODEL_IDS } from '../constants/feature-models.js';
 import {
   ABOUT_RUNNER_KIND,
+  AUTO_REVIEW_MAX_AGENTS,
   SPEND_CAP_MAX_DECIMALS,
   SPEND_CAP_MAX_USD,
   SPEND_CAP_MIN_USD,
@@ -38,6 +39,7 @@ export {
   SPEND_CAP_MAX_USD,
   SPEND_CAP_MAX_DECIMALS,
   SPEND_CAP_ERROR_CODE,
+  AUTO_REVIEW_MAX_AGENTS,
 } from '../constants/settings.js';
 
 // ---- Retention (Settings › Workspace) ----
@@ -53,6 +55,60 @@ export const RetentionDays = z.union([
 ]);
 export type RetentionDays = z.infer<typeof RetentionDays>;
 
+// ---- Automatic reviews (Settings › Automatic Reviews) ----
+/**
+ * The stored `automatic_reviews` value: GET /settings always answers the full object. A stored
+ * boolean `b` (the pre-object shape) reads as `{enabled: b, …defaults}`, a missing value as the
+ * same with `enabled: false`. `enabled_at` is server-set (null while not armed).
+ */
+export const AutomaticReviews = z.preprocess(
+  (v) => (typeof v === 'boolean' ? { enabled: v } : v),
+  z.object({
+    enabled: z.boolean().default(false),
+    agent_ids: z.array(z.string().uuid()).max(AUTO_REVIEW_MAX_AGENTS).default([]),
+    on_new_pr: z.boolean().default(true),
+    on_new_commits: z.boolean().default(true),
+    enabled_at: z.string().nullable().default(null),
+  }),
+);
+export type AutomaticReviews = z.output<typeof AutomaticReviews>;
+
+/** PUT /settings input for `automatic_reviews`: a boolean (= `{enabled}`) or any subset of the
+ *  editable fields; omitted fields keep the stored value, `enabled_at` is never accepted. */
+export const AutomaticReviewsInput = z.union([
+  z.boolean(),
+  z
+    .object({
+      enabled: z.boolean(),
+      agent_ids: z.array(z.string().uuid()).max(AUTO_REVIEW_MAX_AGENTS),
+      on_new_pr: z.boolean(),
+      on_new_commits: z.boolean(),
+    })
+    .partial(),
+]);
+export type AutomaticReviewsInput = z.infer<typeof AutomaticReviewsInput>;
+
+/** GET /settings/automatic-reviews-status — state precedence off > poll_disabled > no_github_token >
+ *  no_agents > no_triggers > paused_spend_cap > active. */
+export const AutomaticReviewsStatus = z.object({
+  state: z.enum([
+    'off',
+    'poll_disabled',
+    'no_github_token',
+    'no_agents',
+    'no_triggers',
+    'paused_spend_cap',
+    'active',
+  ]),
+  /** Newest last-polled time of the workspace's repos (ISO UTC ms); null before the first poll. */
+  last_poll_at: z.string().nullable(),
+  /** Stored open PRs of the workspace, drafts included. */
+  prs_tracked: z.number().int().nonnegative(),
+  /** Effective polling interval after clamping to 1–1,440 minutes. */
+  poll_interval_min: z.number().int().positive(),
+});
+export type AutomaticReviewsStatus = z.infer<typeof AutomaticReviewsStatus>;
+
 // ---- Settings ----
 /**
  * Non-secret prefs/config. Secrets (API keys) are NOT stored here — they go
@@ -64,7 +120,7 @@ export const SettingsKnown = z.object({
   theme: z.enum(['dark', 'light']).default('dark'),
   density: z.enum(['regular', 'compact']).default('regular'),
   sync_to_folder: z.boolean().default(true),
-  automatic_reviews: z.boolean().default(false),
+  automatic_reviews: AutomaticReviews.default({}),
   /** Per-feature model overrides (provider+model), keyed by FeatureModelId. */
   feature_models: z.record(FeatureModelId, FeatureModelChoice).default({}),
   /** Workspace default model for features without their own choice; null = built-in defaults. */
@@ -88,7 +144,9 @@ export type SettingsKnown = z.infer<typeof SettingsKnown>;
 export const Settings = SettingsKnown.passthrough();
 export type Settings = z.infer<typeof Settings>;
 
-export const SettingsUpdate = Settings.partial();
+export const SettingsUpdate = Settings.partial().extend({
+  automatic_reviews: AutomaticReviewsInput.optional(),
+});
 export type SettingsUpdate = z.infer<typeof SettingsUpdate>;
 
 // ---- Connection test ----

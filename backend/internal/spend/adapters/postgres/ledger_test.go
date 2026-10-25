@@ -75,7 +75,8 @@ func (l *ledger) migrator(fsys fs.FS) *migrate.Migrator {
 // upgrade applies the cost ledger migration, which backfills the ledger and the totals.
 func (l *ledger) upgrade() {
 	l.t.Helper()
-	if n, err := l.migrator(migrations.FS).Up(context.Background()); err != nil || n != 1 {
+	// Only the ledger's own migration: later migrations (0006 and on) are not part of this upgrade.
+	if n, err := l.migrator(upToVersion(l.t, preLedgerVersion+1)).Up(context.Background()); err != nil || n != 1 {
 		l.t.Fatalf("Up() = %d, %v, want 1, nil (the cost ledger migration only)", n, err)
 	}
 }

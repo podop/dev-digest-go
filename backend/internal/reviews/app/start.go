@@ -12,6 +12,22 @@ import (
 // Start validates the request, resolves its target agents, creates the run rows in one
 // transaction and hands the batch to the executor, which runs it in the background.
 func (s *Service) Start(ctx context.Context, workspaceID, prID string, req StartRequest) (StartResult, error) {
+	return s.start(ctx, workspaceID, prID, req, domain.SourceLocal)
+}
+
+// StartAuto is Start for the automatic-review trigger: the named agents (1-MaxAgentIDs ids; 2 or
+// more create the parent multi-agent run) review the pull request, and every run is recorded with
+// source "auto". The spend cap is checked like in Start; a reached cap returns the Budget's 402
+// *apperr.Error unchanged (errors.As, Kind apperr.KindPaymentRequired) and creates nothing.
+func (s *Service) StartAuto(ctx context.Context, workspaceID, prID string, agentIDs []string) (StartResult, error) {
+	// A nil slice would read as an absent agentIds; an empty one is refused by PlanTargets.
+	if agentIDs == nil {
+		agentIDs = []string{}
+	}
+	return s.start(ctx, workspaceID, prID, StartRequest{AgentIDs: agentIDs}, domain.SourceAuto)
+}
+
+func (s *Service) start(ctx context.Context, workspaceID, prID string, req StartRequest, source string) (StartResult, error) {
 	plan, err := domain.PlanTargets(req.AgentID, req.All, req.AgentIDs)
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidRunRequest) {
@@ -56,6 +72,7 @@ func (s *Service) Start(ctx context.Context, workspaceID, prID string, req Start
 		for _, a := range agents {
 			runID, err := s.store.CreateRun(ctx, domain.NewRun{
 				WorkspaceID:     workspaceID,
+				Source:          source,
 				AgentID:         a.ID,
 				PRID:            prID,
 				Provider:        a.Provider,
@@ -80,7 +97,7 @@ func (s *Service) Start(ctx context.Context, workspaceID, prID string, req Start
 			"multiAgentRunID", *res.MultiAgentRunID, "prID", prID, "agentCount", len(jobs))
 	}
 
-	s.executor.Start(ctx, domain.Batch{WorkspaceID: workspaceID, Pull: pull, Repo: repo, Jobs: jobs})
+	s.executor.Start(ctx, domain.Batch{WorkspaceID: workspaceID, Pull: pull, Repo: repo, Jobs: jobs, Source: source})
 	return res, nil
 }
 

@@ -224,7 +224,7 @@ type Lookups interface {
 type RunStore interface {
 	// CreateMultiAgentRun inserts the parent row of a 2+ agent request and returns its id.
 	CreateMultiAgentRun(ctx context.Context, workspaceID, prID string) (string, error)
-	// CreateRun inserts an agent_runs row (status running, source domain.SourceLocal) and
+	// CreateRun inserts an agent_runs row (status running, source r.Source, domain.SourceLocal when empty) and
 	// returns its id.
 	CreateRun(ctx context.Context, r domain.NewRun) (string, error)
 	// FindRun returns a run of the workspace.

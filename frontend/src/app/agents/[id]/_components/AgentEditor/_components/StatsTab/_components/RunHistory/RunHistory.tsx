@@ -1,6 +1,6 @@
 /* RunHistory — "Run history" (mockup Agent Editor · Stats): the agent's newest counted runs of the
    period (≤ 20, from the stats response): start time, PR (link to the PR page), tokens, estimated
-   cost, findings, source (local / CI, plus failed / cancelled) and "View trace", which opens the
+   cost, findings, source (local / CI / auto, plus failed / cancelled) and "View trace", which opens the
    run trace drawer. CI runs have no trace, so they get no button. Unknown values read "—". */
 "use client";
 

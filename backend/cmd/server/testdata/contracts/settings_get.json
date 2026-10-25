@@ -1,4 +1,11 @@
 {
+  "automatic_reviews": {
+    "agent_ids": [],
+    "enabled": false,
+    "enabled_at": null,
+    "on_new_commits": true,
+    "on_new_pr": true
+  },
   "density": "regular",
   "polling_interval_min": 5,
   "sync_to_folder": true,

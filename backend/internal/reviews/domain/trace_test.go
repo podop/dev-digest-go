@@ -189,3 +189,27 @@ func TestUnavailableIntentTrace(t *testing.T) {
 		t.Errorf("UnavailableIntentTrace(boom) mismatch (-want +got):\n%s", diff)
 	}
 }
+
+func TestTraceConfigSource(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{"empty is local", "", domain.SourceLocal},
+		{"local", domain.SourceLocal, "local"},
+		{"auto", domain.SourceAuto, "auto"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			done := domain.CompletedTrace(domain.CompletedTraceInput{Agent: traceAgent, PRNumber: 7, Source: tc.source})
+			if done.Config.Source != tc.want {
+				t.Errorf("CompletedTrace(source %q).Config.Source = %q, want %q", tc.source, done.Config.Source, tc.want)
+			}
+			ended := domain.EndedTrace(domain.EndedTraceInput{Agent: traceAgent, PRNumber: 7, Source: tc.source})
+			if ended.Config.Source != tc.want {
+				t.Errorf("EndedTrace(source %q).Config.Source = %q, want %q", tc.source, ended.Config.Source, tc.want)
+			}
+		})
+	}
+}

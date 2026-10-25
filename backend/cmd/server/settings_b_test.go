@@ -541,8 +541,11 @@ func TestSettingsB_ExportOfAnEmptyWorkspace(t *testing.T) { // AC15
 			t.Errorf("empty export %s = %v, want []", key, body[key])
 		}
 	}
-	if settings, ok := body["settings"].(map[string]any); !ok || len(settings) != 0 {
-		t.Errorf("empty export settings = %v, want {}", body["settings"])
+	// Settings C: automatic_reviews is always part of the settings, as the defaults, and never
+	// carries agent_ids or enabled_at (D26).
+	wantSettings := map[string]any{"automatic_reviews": map[string]any{"enabled": false, "on_new_pr": true, "on_new_commits": true}}
+	if diff := cmp.Diff(wantSettings, body["settings"]); diff != "" {
+		t.Errorf("empty export settings mismatch (-want +got):\n%s", diff)
 	}
 }
 

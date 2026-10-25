@@ -81,16 +81,18 @@ const (
 // RunSource is the source of a counted run.
 type RunSource string
 
-// The counted sources.
+// The counted sources. SourceAuto is an automatic review run; Agent Performance counts it as a
+// local run (spec Settings C, D10) and adds no field of its own.
 const (
 	SourceLocal RunSource = "local"
 	SourceCI    RunSource = "ci"
+	SourceAuto  RunSource = "auto"
 )
 
 // AgentRef is an agent of the workspace, enabled or not.
 type AgentRef struct{ ID, Name string }
 
-// RunFact is one counted run (status done, failed or cancelled; source local or ci) with ran_at
+// RunFact is one counted run (status done, failed or cancelled; source local, ci or auto) with ran_at
 // inside the window.
 type RunFact struct {
 	// AgentID is nil for a run without an agent; a run whose agent is not an agent of the

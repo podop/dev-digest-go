@@ -77,6 +77,24 @@ func TestAgentMetrics(t *testing.T) {
 	})
 }
 
+func TestAgentMetrics_AutoRunsCountAsLocal(t *testing.T) {
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	runs := []domain.RunFact{
+		run("a", domain.RunDone, domain.SourceAuto, ptr(0.1), ptr(10), at),
+		run("a", domain.RunFailed, domain.SourceAuto, nil, nil, at.Add(time.Hour)),
+		run("a", domain.RunDone, domain.SourceLocal, nil, nil, at),
+		run("a", domain.RunDone, domain.SourceCI, nil, nil, at),
+	}
+	got := domain.AgentMetrics(runs, nil)
+	if got.Runs != 4 || got.RunsLocal != 3 || got.RunsCI != 1 || got.RunsDone != 3 || got.RunsFailed != 1 {
+		t.Errorf("AgentMetrics(2 auto, 1 local, 1 ci) = runs %d, local %d, ci %d, done %d, failed %d; want 4, 3, 1, 3, 1",
+			got.Runs, got.RunsLocal, got.RunsCI, got.RunsDone, got.RunsFailed)
+	}
+	if got.PricedRuns != 1 || got.UnpricedRuns != 3 {
+		t.Errorf("AgentMetrics() priced = %d, unpriced = %d; want 1, 3", got.PricedRuns, got.UnpricedRuns)
+	}
+}
+
 func TestGroupFacts_DeletedAgents(t *testing.T) {
 	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	gone := "gone"

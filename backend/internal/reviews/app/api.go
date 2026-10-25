@@ -80,6 +80,15 @@ type API interface {
 	Learn(ctx context.Context, workspaceID, findingID string) (LearnResult, error)
 }
 
+// AutoStarter is what the automatic-review trigger needs (bound in cmd/ through its own consumer-side
+// port); *Service implements it. It is not part of API: no route exposes it.
+type AutoStarter interface {
+	// StartAuto is Start for the automatic-review trigger: it reviews with the named agents
+	// (1-domain.MaxAgentIDs, same checks and order as Start, same spend-cap check) and records every
+	// run with source "auto". A reached cap is Budget's 402 *apperr.Error, returned unchanged.
+	StartAuto(ctx context.Context, workspaceID, prID string, agentIDs []string) (StartResult, error)
+}
+
 // Lifecycle is what the composition root calls on the use cases outside any request.
 type Lifecycle interface {
 	// FailInterrupted sets every run left running by a previous process to failed and returns how

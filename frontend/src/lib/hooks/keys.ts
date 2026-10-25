@@ -13,6 +13,8 @@ export const settingsKeys = {
   secretsStatus: () => [...settingsKeys.all, "secrets-status"] as const,
   /** GET /settings/spend — month-to-date spend vs the cap. */
   spend: () => [...settingsKeys.all, "spend"] as const,
+  /** GET /settings/automatic-reviews-status — derived on read, refetched while mounted. */
+  autoReviewsStatus: () => [...settingsKeys.all, "automatic-reviews-status"] as const,
 };
 
 /** GET /about — build/runtime facts; never changes while the server runs. */

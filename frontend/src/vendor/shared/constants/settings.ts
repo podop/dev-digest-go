@@ -11,5 +11,8 @@ export const SPEND_CAP_MAX_DECIMALS = 2;
 /** Error code of the 402 answered by the LLM entry routes once the cap is reached. */
 export const SPEND_CAP_ERROR_CODE = 'spend_cap_reached';
 
+/** Most agents `automatic_reviews.agent_ids` can hold (the server answers 422 `too_big` above it). */
+export const AUTO_REVIEW_MAX_AGENTS = 20;
+
 /** Runner kind reported by GET /about. */
 export const ABOUT_RUNNER_KIND = 'go' as const;

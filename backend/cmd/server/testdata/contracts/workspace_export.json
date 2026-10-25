@@ -160,7 +160,9 @@
   },
   "settings": {
     "automatic_reviews": {
-      "enabled": true
+      "enabled": true,
+      "on_new_commits": true,
+      "on_new_pr": true
     },
     "retention_days": 30,
     "theme": "dark"

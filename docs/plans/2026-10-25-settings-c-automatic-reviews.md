@@ -1,5 +1,5 @@
 # Development Plan: Settings C — Automatic Reviews
-Plan: Settings C · Status: approved, ON HOLD until a cost ledger lands (user 2026-10-25); then S0 rebases on slice B and the ledger · Spec: specs/2026-10-23-settings-c-automatic-reviews.md · Base: feat/go-backend-phase-1@efaa348 + slice B (S0)
+Plan: Settings C · Status: in progress (2026-10-25; ledger landed 448156f; S0 done: migration 0006) · Spec: specs/2026-10-23-settings-c-automatic-reviews.md · Base: feat/go-backend-phase-1@efaa348 + slice B (S0)
 Packages: backend, frontend · Context pack: docs/plans/2026-10-25-settings-c-automatic-reviews.context.md ([A] aliases, [C1]–[C4], [D])
 Execution: multi-agent, parallel lanes (default, A0)
 

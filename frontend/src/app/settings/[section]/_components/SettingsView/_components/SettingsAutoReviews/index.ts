@@ -1,0 +1,1 @@
+export { SettingsAutoReviews } from "./SettingsAutoReviews";

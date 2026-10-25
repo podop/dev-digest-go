@@ -100,3 +100,11 @@ type PollStore interface {
 	ListWithoutDiffStats(ctx context.Context, workspaceID, repoID string, updatedSince time.Time, limit int) ([]domain.Pull, error)
 	SetDiffStats(ctx context.Context, prID string, stats domain.DiffStats) error
 }
+
+// CycleObserver is told after a workspace's background-poll cycle that polled successfully: at
+// least one repo had its PR pages read and was marked polled (a cycle cut short by a rate limit
+// after that still counts; a missing token or a cancelled ctx does not). It runs in the poller's
+// goroutine, so it must return promptly once ctx is cancelled. The poller recovers its panics.
+type CycleObserver interface {
+	AfterCycle(ctx context.Context, workspaceID string)
+}

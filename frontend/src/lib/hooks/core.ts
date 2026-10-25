@@ -14,6 +14,7 @@ import type {
   ConnTestResult,
   SecretsStatus,
   SpendStatus,
+  AutomaticReviewsStatus,
   About,
   Repo,
   PrMeta,
@@ -36,6 +37,8 @@ export function useUpdateSettings() {
     onSuccess: (data) => {
       qc.setQueryData(settingsKeys.current(), data);
       qc.invalidateQueries({ queryKey: settingsKeys.spend() });
+      // A save can change the automatic-reviews state (toggle, agents, triggers, interval).
+      qc.invalidateQueries({ queryKey: settingsKeys.autoReviewsStatus() });
     },
   });
 }
@@ -73,6 +76,18 @@ export function useSpend() {
   return useQuery({
     queryKey: settingsKeys.spend(),
     queryFn: () => api.get<SpendStatus>("/settings/spend"),
+  });
+}
+
+/** Status line refresh period while a consumer is mounted (spec FR17). */
+export const AUTO_REVIEWS_STATUS_REFETCH_MS = 30_000;
+
+/** GET /settings/automatic-reviews-status — refetched every 30 s while mounted and after every save. */
+export function useAutomaticReviewsStatus() {
+  return useQuery({
+    queryKey: settingsKeys.autoReviewsStatus(),
+    queryFn: () => api.get<AutomaticReviewsStatus>("/settings/automatic-reviews-status"),
+    refetchInterval: AUTO_REVIEWS_STATUS_REFETCH_MS,
   });
 }
 

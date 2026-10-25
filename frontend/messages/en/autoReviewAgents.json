@@ -1,0 +1,9 @@
+{
+  "label": "Agents to run",
+  "hint": "These agents review every pull request that an automatic review starts for.",
+  "groupAria": "Agents to run",
+  "skippedDisabled": "skipped — disabled",
+  "limit": "Up to {max} agents",
+  "empty": "No agents yet",
+  "create": "Create an agent"
+}

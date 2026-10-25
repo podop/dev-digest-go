@@ -50,10 +50,11 @@ func AgentMetrics(runs []RunFact, findings *FindingCounts) Metrics {
 		default:
 			m.RunsCancelled++
 		}
-		if r.Source == SourceLocal {
-			m.RunsLocal++
-		} else {
+		// auto runs count as local: RunsLocal is "not CI" (spec Settings C, D10).
+		if r.Source == SourceCI {
 			m.RunsCI++
+		} else {
+			m.RunsLocal++
 		}
 		if r.CostUSD != nil {
 			m.PricedRuns++

@@ -32,7 +32,7 @@ func (s *Store) conn(ctx context.Context) *gorm.DB { return platformpg.Conn(ctx,
 // countedStatuses and countedSources are the values a counted run may have.
 var (
 	countedStatuses = []string{string(domain.RunDone), string(domain.RunFailed), string(domain.RunCancelled)}
-	countedSources  = []string{string(domain.SourceLocal), string(domain.SourceCI)}
+	countedSources  = []string{string(domain.SourceLocal), string(domain.SourceCI), string(domain.SourceAuto)}
 )
 
 // counted restricts a query that has agent_runs aliased as r to the counted runs of the window:

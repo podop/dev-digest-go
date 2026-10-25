@@ -48,8 +48,11 @@ const (
 	NoGrounding = "0/0 passed"
 	// CancelledNote is the error stored on a run the user (or shutdown) cancelled.
 	CancelledNote = "Cancelled by user"
-	// SourceLocal is the run source of every Phase 4 run and the trace's config.source.
+	// SourceLocal is the run source of a review a user started and the trace's config.source.
 	SourceLocal = "local"
+	// SourceAuto is the run source of a review the automatic-review trigger started
+	// (agent_runs.source and the trace's config.source).
+	SourceAuto = "auto"
 	// BusTTL is how long the run bus keeps a completed run's buffer and cancel flag.
 	BusTTL = 5 * time.Minute
 	// ShutdownDrain is how long shutdown waits for cancelled runs to record themselves.
@@ -144,15 +147,19 @@ type Batch struct {
 	Repo        ReviewRepo
 	// Jobs are in target order.
 	Jobs []Job
+	// Source is the source of every run of the batch (SourceLocal or SourceAuto); empty = SourceLocal.
+	Source string
 }
 
-// NewRun is a new agent_runs row; it starts running with source SourceLocal.
+// NewRun is a new agent_runs row; it starts running with source Source (SourceLocal when empty).
 type NewRun struct {
 	WorkspaceID string
-	AgentID     string
-	PRID        string
-	Provider    string
-	Model       string
+	// Source is SourceLocal or SourceAuto; empty = SourceLocal.
+	Source   string
+	AgentID  string
+	PRID     string
+	Provider string
+	Model    string
 	// MultiAgentRunID is the parent run of a 2+ agent request; nil otherwise.
 	MultiAgentRunID *string
 }
@@ -454,7 +461,7 @@ type TraceConfig struct {
 	Model    string
 	// PR is the pull request number.
 	PR int
-	// Source is SourceLocal.
+	// Source is SourceLocal or SourceAuto.
 	Source string
 }
 

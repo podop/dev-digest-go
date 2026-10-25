@@ -41,6 +41,35 @@ func TestCreateRun_StartsRunningLocal(t *testing.T) {
 	}
 }
 
+// TestCreateRun_SourceAuto covers FR7: a run created with source auto is stored as such (the
+// agent_runs CHECK of migration 0006 allows it) and reads back through the trace of that run.
+func TestCreateRun_SourceAuto(t *testing.T) {
+	f := newFixture(t)
+	agent := f.agent(t, f.ws, "Alpha", true)
+	id, err := f.store.CreateRun(t.Context(), domain.NewRun{
+		WorkspaceID: f.ws, Source: domain.SourceAuto, AgentID: agent, PRID: f.pr, Provider: "openai", Model: "gpt",
+	})
+	if err != nil {
+		t.Fatalf("CreateRun(auto) error = %v", err)
+	}
+	if got := f.str(t, `SELECT source FROM agent_runs WHERE id = ?`, id); got != "auto" {
+		t.Errorf("source = %q, want auto", got)
+	}
+
+	tr := completedTrace()
+	tr.Config.Source = domain.SourceAuto
+	if err := f.store.SaveTrace(t.Context(), id, tr); err != nil {
+		t.Fatalf("SaveTrace(auto) error = %v", err)
+	}
+	got, err := f.store.FindTrace(t.Context(), f.ws, id)
+	if err != nil {
+		t.Fatalf("FindTrace() error = %v", err)
+	}
+	if got.Config.Source != "auto" {
+		t.Errorf("FindTrace().Config.Source = %q, want auto", got.Config.Source)
+	}
+}
+
 func TestCreateRun_AgentGone(t *testing.T) {
 	f := newFixture(t)
 	_, err := f.store.CreateRun(t.Context(), domain.NewRun{WorkspaceID: f.ws, AgentID: missingID, PRID: f.pr})

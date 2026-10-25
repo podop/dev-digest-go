@@ -451,7 +451,7 @@ func DecodeTrace(raw []byte) (domain.Trace, error) {
 		switch source {
 		case "":
 			source = domain.SourceLocal
-		case "local", "ci":
+		case domain.SourceLocal, "ci", domain.SourceAuto:
 		default:
 			p.fail("config.source")
 		}

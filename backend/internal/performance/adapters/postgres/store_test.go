@@ -234,6 +234,33 @@ func TestCountedRuns_FiltersByWorkspaceStatusSourceAndWindow(t *testing.T) {
 	})
 }
 
+// An automatic review run (source auto) is a counted run, in the counts and in the run history
+// (spec Settings C, FR11, AC12); a source outside local, ci and auto never reaches the table.
+func TestCountedRuns_AutoSourceIsCounted(t *testing.T) {
+	f := newFixture(t)
+	auto := f.run(t, runSpec{agent: f.agentA, at: t0.Add(time.Hour), source: "auto", tokensIn: ptr(3), tokensOut: ptr(4)})
+	f.run(t, runSpec{agent: f.agentA, at: t0.Add(2 * time.Hour), source: "auto", status: "running"}) // not counted
+
+	runs, err := f.store.CountedRuns(t.Context(), f.ws, custom(), f.agentA)
+	if err != nil {
+		t.Fatalf("CountedRuns() error = %v", err)
+	}
+	if len(runs) != 1 || runs[0].Source != domain.SourceAuto {
+		t.Errorf("CountedRuns() = %+v, want the one finished auto run with source auto", runs)
+	}
+	if m := domain.AgentMetrics(runs, nil); m.Runs != 1 || m.RunsLocal != 1 || m.RunsCI != 0 {
+		t.Errorf("AgentMetrics(auto run) = runs %d, local %d, ci %d; want 1, 1, 0", m.Runs, m.RunsLocal, m.RunsCI)
+	}
+
+	history, err := f.store.RunHistory(t.Context(), f.ws, custom(), f.agentA, domain.RunHistoryLimit)
+	if err != nil {
+		t.Fatalf("RunHistory() error = %v", err)
+	}
+	if len(history) != 1 || history[0].RunID != auto || history[0].Source != domain.SourceAuto || history[0].Tokens == nil || *history[0].Tokens != 7 {
+		t.Errorf("RunHistory() = %+v, want the auto run %s with source auto and 7 tokens", history, auto)
+	}
+}
+
 // nameOf finds the fixture name of a run by its distinguishing facts.
 func nameOf(t *testing.T, r domain.RunFact) string {
 	t.Helper()

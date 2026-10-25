@@ -20,6 +20,7 @@ const (
 	OpIntentRefresh      = "intent_refresh"
 	OpBriefGenerate      = "brief_generate"
 	OpOnboardingGenerate = "onboarding_generate"
+	OpAutoReviewStart    = "auto_review_start"
 )
 
 // API is the spend use cases as transport and the entry-point contexts see them; *Service

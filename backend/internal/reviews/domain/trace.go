@@ -47,8 +47,10 @@ func UnavailableIntentTrace(warning string) *IntentTrace {
 
 // CompletedTraceInput is what the trace of a successfully persisted run is built from.
 type CompletedTraceInput struct {
-	Agent      ReviewAgent
-	PRNumber   int
+	Agent    ReviewAgent
+	PRNumber int
+	// Source is the run's source; empty = SourceLocal.
+	Source     string
 	DurationMS int
 	// Usage is the engine's usage (its cost is the unrounded sum).
 	Usage reviewer.Usage
@@ -78,7 +80,7 @@ func CompletedTrace(in CompletedTraceInput) Trace {
 		calls[i] = ToolCall{Tool: ToolReviewFile, Args: label, Meta: string(in.Mode), MS: ms}
 	}
 	return Trace{
-		Config: traceConfig(in.Agent, in.PRNumber),
+		Config: traceConfig(in.Agent, in.PRNumber, in.Source),
 		Stats: TraceStats{
 			DurationMS: in.DurationMS,
 			TokensIn:   in.Usage.TokensIn,
@@ -100,8 +102,10 @@ func CompletedTrace(in CompletedTraceInput) Trace {
 
 // EndedTraceInput is what the minimal trace of a failed, cancelled or diff-failed run is built from.
 type EndedTraceInput struct {
-	Agent      ReviewAgent
-	PRNumber   int
+	Agent    ReviewAgent
+	PRNumber int
+	// Source is the run's source; empty = SourceLocal.
+	Source     string
 	Log        []LogLine
 	DurationMS int
 	// Usage is the usage spent so far; nil means none (zero tokens and a zero cost).
@@ -124,7 +128,7 @@ func EndedTrace(in EndedTraceInput) Trace {
 	}
 	return Trace{
 		Ended:  true,
-		Config: traceConfig(in.Agent, in.PRNumber),
+		Config: traceConfig(in.Agent, in.PRNumber, in.Source),
 		Stats: TraceStats{
 			DurationMS: in.DurationMS,
 			TokensIn:   usage.TokensIn,
@@ -176,14 +180,17 @@ func LogFromEvents(events []RunEvent) []LogLine {
 	return lines
 }
 
-func traceConfig(a ReviewAgent, prNumber int) TraceConfig {
+func traceConfig(a ReviewAgent, prNumber int, source string) TraceConfig {
+	if source == "" {
+		source = SourceLocal
+	}
 	return TraceConfig{
 		Agent:    a.Name,
 		Version:  strconv.Itoa(a.Version),
 		Provider: a.Provider,
 		Model:    a.Model,
 		PR:       prNumber,
-		Source:   SourceLocal,
+		Source:   source,
 	}
 }
 

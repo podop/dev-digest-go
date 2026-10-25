@@ -1,4 +1,11 @@
 import type { CSSProperties } from "react";
+import type { RunHistoryItem } from "@devdigest/shared";
+
+const SOURCE_COLORS: Record<RunHistoryItem["source"], { color: string; background: string }> = {
+  local: { color: "var(--text-secondary)", background: "var(--bg-hover)" },
+  ci: { color: "var(--warn)", background: "var(--warn-bg)" },
+  auto: { color: "var(--accent-text)", background: "var(--accent-bg)" },
+};
 
 export const s = {
   scroll: { overflowX: "auto", border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-elevated)" } satisfies CSSProperties,
@@ -18,15 +25,14 @@ export const s = {
   td: { padding: "11px 14px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" } satisfies CSSProperties,
   muted: { color: "var(--text-muted)" } satisfies CSSProperties,
   link: { color: "var(--accent-text)" } satisfies CSSProperties,
-  source: (source: "local" | "ci"): CSSProperties => ({
+  source: (source: RunHistoryItem["source"]): CSSProperties => ({
     display: "inline-block",
     minWidth: 52,
     fontSize: 11.5,
     fontWeight: 600,
     padding: "2px 8px",
     borderRadius: 4,
-    color: source === "ci" ? "var(--warn)" : "var(--text-secondary)",
-    background: source === "ci" ? "var(--warn-bg)" : "var(--bg-hover)",
+    ...SOURCE_COLORS[source],
   }),
   status: { marginLeft: 8, fontSize: 11.5, color: "var(--crit)" } satisfies CSSProperties,
   traceButton: {

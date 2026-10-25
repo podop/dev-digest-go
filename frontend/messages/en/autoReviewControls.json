@@ -1,0 +1,22 @@
+{
+  "toggle": {
+    "title": "Auto-run review on new PR detection",
+    "on": "On for every repository in this workspace",
+    "off": "Off — start reviews from a pull request"
+  },
+  "interval": {
+    "label": "Polling interval",
+    "selectAria": "Polling interval",
+    "hint": "Also sets how often PRs are synced for PR Leaderboard.",
+    "everyMinute": "Every minute",
+    "everyMinutes": "Every {minutes} minutes",
+    "everyHour": "Every hour"
+  },
+  "triggers": {
+    "label": "Trigger conditions",
+    "groupAria": "Trigger conditions",
+    "onNewPr": "On new PR",
+    "onNewCommits": "On new commits to existing PR",
+    "hint": "New commits are reviewed only on PRs that were automatically reviewed before."
+  }
+}

@@ -1,5 +1,11 @@
 {
-  "automatic_reviews": true,
+  "automatic_reviews": {
+    "agent_ids": [],
+    "enabled": true,
+    "enabled_at": null,
+    "on_new_commits": true,
+    "on_new_pr": true
+  },
   "density": "regular",
   "feature_models": {
     "risk_brief": {

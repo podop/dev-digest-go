@@ -19,7 +19,8 @@ func (s *Store) CreateMultiAgentRun(ctx context.Context, workspaceID, prID strin
 	return row.ID, nil
 }
 
-// CreateRun inserts a running agent_runs row of source "local"; ran_at is the database's now().
+// CreateRun inserts a running agent_runs row of source r.Source ("local" when empty); ran_at is the
+// database's now().
 func (s *Store) CreateRun(ctx context.Context, r domain.NewRun) (string, error) {
 	status := string(domain.StatusRunning)
 	row := runRow{
@@ -29,7 +30,7 @@ func (s *Store) CreateRun(ctx context.Context, r domain.NewRun) (string, error) 
 		Provider:        &r.Provider,
 		Model:           &r.Model,
 		Status:          &status,
-		Source:          domain.SourceLocal,
+		Source:          orLocal(r.Source),
 		MultiAgentRunID: r.MultiAgentRunID,
 	}
 	if err := s.conn(ctx).Create(&row).Error; err != nil {

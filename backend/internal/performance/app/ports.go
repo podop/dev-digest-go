@@ -20,7 +20,7 @@ type Clock func() time.Time
 
 // Reader is the read-only persistence of the context (SELECT only; the adapter reads the tables
 // of other contexts with its own row types). Every method is workspace-scoped and counts runs
-// with one filter: status done, failed or cancelled, source local or ci, ran_at inside the
+// with one filter: status done, failed or cancelled, source local, ci or auto, ran_at inside the
 // window ([From, To] when ToInclusive, else [From, To)). agentID "" means every agent; otherwise
 // only that agent's runs.
 type Reader interface {

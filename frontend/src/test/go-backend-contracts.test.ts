@@ -662,13 +662,22 @@ describe("Go backend golden responses", () => {
     expect(state.conventions).toHaveLength(3);
   });
 
-  it("settings carry the four seeded keys (Settings fills defaults, so check the raw body)", () => {
+  it("settings carry the four seeded keys and the automatic-reviews object (Settings fills defaults, so check the raw body)", () => {
     expect(Object.keys(read("settings_get") as object).sort()).toEqual([
+      "automatic_reviews",
       "density",
       "polling_interval_min",
       "sync_to_folder",
       "theme",
     ]);
+    // GET /settings always carries the full object, off by default, with both triggers ticked.
+    expect(read("settings_get")).toMatchObject({
+      automatic_reviews: { enabled: false, agent_ids: [], on_new_pr: true, on_new_commits: true, enabled_at: null },
+    });
+    // A PUT of the legacy boolean answers the object; without an agent it is not armed (enabled_at null).
+    expect(read("settings_put")).toMatchObject({
+      automatic_reviews: { enabled: true, agent_ids: [], enabled_at: null },
+    });
   });
 
   it("the settings-slice-A goldens carry what the UI reads", () => {
@@ -711,7 +720,8 @@ describe("Go backend golden responses", () => {
     }
     // The settings are the allow-list only: no ids, no unknown keys, no workspace name.
     expect(Object.keys(bundle.settings).sort()).toEqual(["automatic_reviews", "retention_days", "theme"]);
-    expect(bundle.settings.automatic_reviews).toEqual({ enabled: true });
+    // The export never carries agent_ids or enabled_at (they are workspace-local).
+    expect(bundle.settings.automatic_reviews).toEqual({ enabled: true, on_new_pr: true, on_new_commits: true });
     // The same document is a valid plain PluginBundle for the importer's schema.
     expect(PluginBundle.safeParse(read("workspace_export")).success).toBe(true);
 

@@ -117,6 +117,24 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   holds `SHARE ROW EXCLUSIVE` on `agent_runs` and `eval_suite_runs` for its duration (≤ ~30 s), which
   pauses run starts and CI ingest in all workspaces — acceptable for the local tool. A prune batch waits
   up to 60 s for the history lock (a reset waits 10 s), so a prune that meets a reset waits it out.
+- Automatic reviews (`autoreview` context, Settings C, migration 0006): the Settings key
+  `automatic_reviews` is the object `{enabled, agent_ids, on_new_pr, on_new_commits, enabled_at}`
+  (`settings/app.AutomaticReviewsFromStored`; `enabled_at` is stamped by the server when the value becomes
+  armed, so PRs opened earlier are never reviewed). The hook: `autoreview/app.Service` is the poller's
+  `PollerDeps.Observer`; `AfterCycle(ctx, ws)` runs in the poller goroutine after each workspace cycle that
+  polled, one evaluation at a time per process, and starts reviews through `reviewsapp.AutoStarter`
+  (`StartAuto`, runs with source `auto`). `cmd/server/autoreview.go` holds the adapters (settings, clamped
+  interval, starter that turns a 402 into `ErrCapReached`, budget = spend `Admit` with `auto_review_start`,
+  caps = spend `Status().Reached()` without logging, GitHub-token check). At most once: the store claims
+  `(pr_id, head_sha)` in `auto_review_records` (unique key, `INSERT … ON CONFLICT DO NOTHING`) BEFORE the
+  start and settles it after, so two evaluations or processes never review one head twice; the table has no
+  FK to `agent_runs` (B's reset deletes runs but keeps the records). Rate limits: ≤ 5 starts per evaluation
+  and ≤ 20 per rolling hour per workspace (over the limit a PR is deferred, not recorded). The spend cap is
+  asked once per evaluation; a reached cap records `skipped_spend_cap`, a failed check defers. Shutdown: the
+  poller runs on the stop ctx and returns ≤ 5 s; a claim/start/settle runs on a ctx detached from it
+  (bounded to 3 s) so a started review is never left half-recorded. `GET /settings/automatic-reviews-status`
+  (`autoreview/transport/http`) derives the state on read; the service is built even with
+  `PR_POLL_ENABLED=false` (state `poll_disabled`).
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

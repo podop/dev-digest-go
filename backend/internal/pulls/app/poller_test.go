@@ -275,6 +275,7 @@ type pollRig struct {
 	logs      *logSink
 	targets   pollTargets
 	opts      app.PollerOptions
+	observer  app.CycleObserver
 }
 
 func newRig(targets ...domain.PollTarget) *pollRig {
@@ -289,7 +290,7 @@ func newRig(targets ...domain.PollTarget) *pollRig {
 func (r *pollRig) start(t *testing.T) (stop func()) {
 	t.Helper()
 	p := app.NewPoller(app.PollerDeps{
-		Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Stats: r.stats, Store: r.store, Log: slog.New(r.logs),
+		Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Stats: r.stats, Store: r.store, Observer: r.observer, Log: slog.New(r.logs),
 	}, r.opts)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
@@ -890,6 +891,250 @@ func TestPoller_aFailedStatsListingIsLoggedAndTheCycleGoesOn(t *testing.T) {
 		}
 		if got := r.logs.warns(); len(got) != 2 {
 			t.Errorf("WARN lines = %q, want one per repo for the failed listing", got)
+		}
+	})
+}
+
+// cycleLog is a CycleObserver that records its calls; onCall, when set, runs inside AfterCycle.
+type cycleLog struct {
+	mu     sync.Mutex
+	calls  []observed
+	onCall func(ctx context.Context, ws string)
+}
+
+type observed struct {
+	ws string
+	at time.Time
+}
+
+func (c *cycleLog) AfterCycle(ctx context.Context, ws string) {
+	c.mu.Lock()
+	c.calls = append(c.calls, observed{ws: ws, at: time.Now()})
+	onCall := c.onCall
+	c.mu.Unlock()
+	if onCall != nil {
+		onCall(ctx, ws)
+	}
+}
+
+func (c *cycleLog) workspaces() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []string
+	for _, o := range c.calls {
+		out = append(out, o.ws)
+	}
+	return out
+}
+
+func TestPoller_observerIsToldAfterEachSuccessfulCycleOfAWorkspace(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+		r := newRig(target("w1", "a"), target("w1", "b"), target("w2", "c"))
+		r.intervals.setAll(time.Minute, "w1", "w2")
+		obs := &cycleLog{}
+		var markedAtCall []int
+		obs.onCall = func(context.Context, string) {
+			r.store.mu.Lock()
+			markedAtCall = append(markedAtCall, len(r.store.marked))
+			r.store.mu.Unlock()
+		}
+		r.observer = obs
+		stop := r.start(t)
+		advance(time.Minute + 30*time.Second) // cycles at 0 and 1 min
+		stop()
+
+		if diff := cmp.Diff([]string{"w1", "w2", "w1", "w2"}, obs.workspaces()); diff != "" {
+			t.Errorf("AfterCycle workspaces mismatch (-want +got):\n%s", diff)
+		}
+		// w1 has 2 repos, w2 has 1: each call comes after its workspace's repos were marked polled.
+		if diff := cmp.Diff([]int{2, 3, 5, 6}, markedAtCall); diff != "" {
+			t.Errorf("repos marked polled at each AfterCycle mismatch (-want +got):\n%s", diff)
+		}
+		if got := obs.calls[0].at.Sub(base); got != 0 {
+			t.Errorf("first AfterCycle at %v, want at once after the first cycle", got)
+		}
+	})
+}
+
+func TestPoller_observerIsNotToldWithoutAToken(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(target("ws", "a"), target("ws", "b"))
+		r.intervals.setAll(time.Minute, "ws")
+		r.gh.respond = func(string, int) ([]domain.Listed, error) { return nil, app.ErrNoToken }
+		obs := &cycleLog{}
+		r.observer = obs
+		stop := r.start(t)
+		advance(2*time.Minute + 30*time.Second)
+		stop()
+
+		if got := obs.workspaces(); len(got) != 0 {
+			t.Errorf("AfterCycle calls without a token = %v, want none", got)
+		}
+	})
+}
+
+func TestPoller_observerAfterARateLimit(t *testing.T) {
+	limited := func() error { return &app.GitHubError{Status: 429} }
+	tests := []struct {
+		name       string
+		failOnRepo string // the page request of this repo hits the limit
+		failStats  bool   // the stats fetch of repo a hits the limit
+		want       []string
+	}{
+		{"limit on the first repo", "a", false, nil},
+		{"limit on the second repo after one was polled", "b", false, []string{"ws"}},
+		{"limit in the stats of the first polled repo", "", true, []string{"ws"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				r := newRig(target("ws", "a"), target("ws", "b"))
+				r.intervals.setAll(time.Hour, "ws")
+				r.gh.respond = func(repo string, _ int) ([]domain.Listed, error) {
+					if repo == tc.failOnRepo {
+						return nil, limited()
+					}
+					return nil, nil
+				}
+				if tc.failStats {
+					r.store.pulls = map[string][]storedPull{"a": pendingPulls("a", 1)}
+					r.stats.respond = func(string, int) (domain.DiffStats, error) { return domain.DiffStats{}, limited() }
+				}
+				obs := &cycleLog{}
+				r.observer = obs
+				stop := r.start(t)
+				advance(time.Second)
+				stop()
+
+				if diff := cmp.Diff(tc.want, obs.workspaces()); diff != "" {
+					t.Errorf("AfterCycle workspaces mismatch (-want +got):\n%s", diff)
+				}
+			})
+		})
+	}
+}
+
+func TestPoller_observerNeedsOneRepoPolledDespiteFailures(t *testing.T) {
+	tests := []struct {
+		name string
+		fail map[string]bool // repos whose page request fails
+		want []string
+	}{
+		{"every repo fails", map[string]bool{"a": true, "b": true}, nil},
+		{"one repo fails, the other is polled", map[string]bool{"a": true}, []string{"ws"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				r := newRig(target("ws", "a"), target("ws", "b"))
+				r.intervals.setAll(time.Hour, "ws")
+				r.gh.respond = func(repo string, _ int) ([]domain.Listed, error) {
+					if tc.fail[repo] {
+						return nil, errors.New("boom")
+					}
+					return nil, nil
+				}
+				obs := &cycleLog{}
+				r.observer = obs
+				stop := r.start(t)
+				advance(time.Second)
+				stop()
+
+				if diff := cmp.Diff(tc.want, obs.workspaces()); diff != "" {
+					t.Errorf("AfterCycle workspaces mismatch (-want +got):\n%s", diff)
+				}
+			})
+		})
+	}
+}
+
+func TestPoller_observerIsNotToldOfACycleCancelledAfterARepoWasPolled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(target("ws", "a"), target("ws", "b"))
+		r.intervals.setAll(time.Hour, "ws")
+		obs := &cycleLog{}
+		r.observer = obs
+		p := app.NewPoller(app.PollerDeps{
+			Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Stats: r.stats, Store: r.store,
+			Observer: obs, Log: slog.New(r.logs),
+		}, r.opts)
+		ctx, cancel := context.WithCancel(t.Context())
+		// Repo b's request is the one in flight when the shutdown comes; repo a was polled before.
+		r.gh.respond = func(repo string, _ int) ([]domain.Listed, error) {
+			if repo == "b" {
+				cancel()
+			}
+			return nil, nil
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			p.Run(ctx)
+		}()
+		advance(time.Second)
+		<-done
+
+		if got := obs.workspaces(); len(got) != 0 {
+			t.Errorf("AfterCycle calls for a cancelled cycle = %v, want none", got)
+		}
+	})
+}
+
+func TestPoller_aPanickingObserverIsRecoveredAndPollingGoesOn(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		base := time.Now()
+		r := newRig(target("ws", "a"))
+		r.intervals.setAll(time.Minute, "ws")
+		obs := &cycleLog{onCall: func(context.Context, string) { panic("observer bug") }}
+		r.observer = obs
+		stop := r.start(t)
+		advance(2*time.Minute + 30*time.Second) // cycles at 0, 1 and 2 min
+		stop()
+
+		if got := len(obs.workspaces()); got != 3 {
+			t.Errorf("AfterCycle calls = %d, want 3 (the poller survives the panics)", got)
+		}
+		if diff := cmp.Diff(minutes(0, 1, 2), r.gh.firstPageTimes("a", base)); diff != "" {
+			t.Errorf("repo a request times mismatch (-want +got):\n%s", diff)
+		}
+		r.logs.mu.Lock()
+		defer r.logs.mu.Unlock()
+		var errs int
+		for _, rec := range r.logs.recs {
+			if rec.Level == slog.LevelError {
+				errs++
+			}
+		}
+		if errs != 3 {
+			t.Errorf("ERROR lines = %d, want one per recovered panic (3)", errs)
+		}
+	})
+}
+
+func TestPoller_stopsWithinFiveSecondsOfCancelInsideTheObserver(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(target("ws", "a"))
+		r.intervals.setAll(time.Hour, "ws")
+		obs := &cycleLog{}
+		inHook := make(chan struct{})
+		obs.onCall = func(ctx context.Context, _ string) {
+			close(inHook)
+			<-ctx.Done() // an observer that honours its ctx, as the port requires
+		}
+		r.observer = obs
+		stop := r.start(t)
+		<-inHook
+		synctest.Wait()
+		finished := make(chan struct{})
+		go func() {
+			defer close(finished)
+			stop()
+		}()
+		select {
+		case <-finished:
+		case <-time.After(5 * time.Second):
+			t.Fatal("Run did not return within 5 s of the cancel while the observer ran")
 		}
 	})
 }

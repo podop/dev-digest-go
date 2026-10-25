@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/app-shell";
 import { SettingsAbout } from "./_components/SettingsAbout";
 import { SettingsApiKeys } from "./_components/SettingsApiKeys";
+import { SettingsAutoReviews } from "./_components/SettingsAutoReviews";
 import { SettingsGithub } from "./_components/SettingsGithub";
 import { SettingsModels } from "./_components/SettingsModels";
 import { SettingsWorkspace } from "./_components/SettingsWorkspace";
@@ -20,6 +21,7 @@ const PANELS: Partial<Record<SettingsSectionKey, React.ComponentType>> = {
   "api-keys": SettingsApiKeys,
   github: SettingsGithub,
   workspace: SettingsWorkspace,
+  "automatic-reviews": SettingsAutoReviews,
   models: SettingsModels,
   about: SettingsAbout,
 };

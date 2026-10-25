@@ -216,7 +216,7 @@ func TestWorkspaceHistory_ExportLeaksNothing(t *testing.T) {
 	if !ok {
 		t.Fatalf("export settings[automatic_reviews] = %v, want an object without ids", settings["automatic_reviews"])
 	}
-	if diff := cmp.Diff(map[string]any{"enabled": true}, auto); diff != "" {
+	if diff := cmp.Diff(map[string]any{"enabled": true, "on_new_pr": true, "on_new_commits": true}, auto); diff != "" {
 		t.Errorf("export automatic_reviews mismatch (-want +got), want no agent_ids and no enabled_at:\n%s", diff)
 	}
 }

@@ -1,13 +1,28 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, it, expect, afterEach } from "vitest";
-import { About, ConnTestResult, Settings, SettingsUpdate, SpendStatus } from "@devdigest/shared";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import {
+  About,
+  AUTO_REVIEW_MAX_AGENTS,
+  AutomaticReviews,
+  AutomaticReviewsInput,
+  AutomaticReviewsStatus,
+  ConnTestResult,
+  RunHistoryItem,
+  RunTrace,
+  Settings,
+  SettingsUpdate,
+  SpendStatus,
+} from "@devdigest/shared";
 import { renderHookWithProviders, cleanup, act, waitFor, createTestQueryClient } from "@/test/render";
 import { mockFetch } from "@/test/fetch-mock";
 import { aboutKeys, settingsKeys } from "./keys";
-import { useAbout, useSpend, useUpdateSettings } from "./core";
+import { AUTO_REVIEWS_STATUS_REFETCH_MS, useAbout, useAutomaticReviewsStatus, useSpend, useUpdateSettings } from "./core";
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
 
 const SPEND = {
   month_start: "2026-10-01T00:00:00.000Z",
@@ -55,6 +70,119 @@ describe("settings hooks", () => {
     await waitFor(() => expect(result.current.data).toEqual(ABOUT));
     expect(qc.getQueryData(aboutKeys.all)).toEqual(ABOUT);
     expect(api.requests("GET", "/about")).toHaveLength(1);
+  });
+});
+
+const AUTO_STATUS = {
+  state: "active",
+  last_poll_at: "2026-10-25T10:00:00.000Z",
+  prs_tracked: 7,
+  poll_interval_min: 5,
+};
+const AGENT_ID = "6f1c2c9e-4a54-4f0b-8d5e-0c2f6d9b7a11";
+
+describe("automatic reviews hooks", () => {
+  it("useAutomaticReviewsStatus reads the status route and a saved setting refetches it", async () => {
+    const api = mockFetch({
+      "GET /settings/automatic-reviews-status": AUTO_STATUS,
+      "PUT /settings": { automatic_reviews: { enabled: true } },
+    });
+    const qc = createTestQueryClient();
+    const { result } = renderHookWithProviders(
+      () => ({ status: useAutomaticReviewsStatus(), update: useUpdateSettings() }),
+      { queryClient: qc },
+    );
+
+    await waitFor(() => expect(result.current.status.data).toEqual(AUTO_STATUS));
+    expect(qc.getQueryData(settingsKeys.autoReviewsStatus())).toEqual(AUTO_STATUS);
+    expect(api.requests("GET", "/settings/automatic-reviews-status")).toHaveLength(1);
+
+    await act(() => result.current.update.mutateAsync({ automatic_reviews: { enabled: true } }));
+
+    await waitFor(() =>
+      expect(api.requests("GET", "/settings/automatic-reviews-status").length).toBeGreaterThan(1),
+    );
+  });
+
+  it("useAutomaticReviewsStatus polls every 30 s while mounted", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const api = mockFetch({ "GET /settings/automatic-reviews-status": AUTO_STATUS });
+    const { result, unmount } = renderHookWithProviders(() => useAutomaticReviewsStatus());
+
+    await waitFor(() => expect(result.current.data).toEqual(AUTO_STATUS));
+    expect(AUTO_REVIEWS_STATUS_REFETCH_MS).toBe(30_000);
+    expect(api.requests("GET", "/settings/automatic-reviews-status")).toHaveLength(1);
+
+    await act(() => vi.advanceTimersByTimeAsync(AUTO_REVIEWS_STATUS_REFETCH_MS + 100));
+    await waitFor(() =>
+      expect(api.requests("GET", "/settings/automatic-reviews-status")).toHaveLength(2),
+    );
+    unmount();
+  });
+});
+
+describe("automatic reviews contract", () => {
+  const defaults = { enabled: false, agent_ids: [], on_new_pr: true, on_new_commits: true, enabled_at: null };
+
+  it("a stored boolean or a missing value reads as the full object (FR1)", () => {
+    expect(Settings.parse({}).automatic_reviews).toEqual(defaults);
+    expect(Settings.parse({ automatic_reviews: true }).automatic_reviews).toEqual({ ...defaults, enabled: true });
+    expect(Settings.parse({ automatic_reviews: false }).automatic_reviews).toEqual(defaults);
+    const full = {
+      enabled: true,
+      agent_ids: [AGENT_ID],
+      on_new_pr: false,
+      on_new_commits: true,
+      enabled_at: "2026-10-25T10:00:00.000Z",
+    };
+    expect(Settings.parse({ automatic_reviews: full }).automatic_reviews).toEqual(full);
+    expect(AutomaticReviews.parse({ enabled: true }).on_new_pr).toBe(true);
+    expect(AutomaticReviews.safeParse("yes").success).toBe(false);
+  });
+
+  it("the PUT input is a boolean or a partial without enabled_at, at most 20 uuids (FR2)", () => {
+    for (const ok of [true, false, {}, { enabled: true }, { agent_ids: [AGENT_ID], on_new_pr: false }]) {
+      expect(AutomaticReviewsInput.safeParse(ok).success, JSON.stringify(ok)).toBe(true);
+      expect(SettingsUpdate.safeParse({ automatic_reviews: ok }).success, JSON.stringify(ok)).toBe(true);
+    }
+    const tooMany = Array.from({ length: AUTO_REVIEW_MAX_AGENTS + 1 }, (_, i) =>
+      `6f1c2c9e-4a54-4f0b-8d5e-${String(i).padStart(12, "0")}`,
+    );
+    for (const bad of ["on", 1, null, { enabled: "yes" }, { agent_ids: ["nope"] }, { agent_ids: tooMany }]) {
+      expect(SettingsUpdate.safeParse({ automatic_reviews: bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+    expect(AUTO_REVIEW_MAX_AGENTS).toBe(20);
+    // Absent key stays absent: a PUT of another key must not send automatic_reviews.
+    expect(SettingsUpdate.parse({ theme: "light" })).toEqual({ theme: "light" });
+    // enabled_at is dropped from the input.
+    expect(AutomaticReviewsInput.parse({ enabled: true, enabled_at: "x" })).toEqual({ enabled: true });
+  });
+
+  it("AutomaticReviewsStatus parses the seven states and rejects others", () => {
+    for (const state of ["off", "poll_disabled", "no_github_token", "no_agents", "no_triggers", "paused_spend_cap", "active"]) {
+      expect(AutomaticReviewsStatus.safeParse({ ...AUTO_STATUS, state }).success, state).toBe(true);
+    }
+    expect(AutomaticReviewsStatus.parse({ ...AUTO_STATUS, last_poll_at: null }).last_poll_at).toBeNull();
+    expect(AutomaticReviewsStatus.safeParse({ ...AUTO_STATUS, state: "paused" }).success).toBe(false);
+  });
+
+  it("run source auto is accepted in the trace config and the run history (FR11)", () => {
+    const item = {
+      run_id: "r1",
+      ran_at: "2026-10-25T10:00:00.000Z",
+      status: "done",
+      source: "auto",
+      pr: null,
+      tokens: null,
+      cost_usd: null,
+      findings_count: null,
+      has_trace: true,
+    };
+    expect(RunHistoryItem.parse(item).source).toBe("auto");
+    expect(RunHistoryItem.safeParse({ ...item, source: "cron" }).success).toBe(false);
+    const config = RunTrace.shape.config;
+    expect(config.parse({ agent: "a", model: "m", source: "auto" }).source).toBe("auto");
+    expect(config.parse({ agent: "a", model: "m" }).source).toBe("local");
   });
 });
 

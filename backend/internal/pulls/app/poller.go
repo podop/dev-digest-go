@@ -45,8 +45,10 @@ type PollerDeps struct {
 	// Stats must be a GitHub client of its own that never retries; one fetch is one request.
 	Stats StatsFetcher
 	Store PollStore
-	Log   *slog.Logger // nil discards
-	Now   func() time.Time
+	// Observer is told when a workspace's cycle polled successfully (nil = off).
+	Observer CycleObserver
+	Log      *slog.Logger // nil discards
+	Now      func() time.Time
 }
 
 // Poller keeps every repository's PRs fresh in the background. Each workspace has its own due
@@ -58,6 +60,7 @@ type Poller struct {
 	pages     PageLister
 	stats     StatsFetcher
 	store     PollStore
+	observer  CycleObserver
 	log       *slog.Logger
 	now       func() time.Time
 	opts      PollerOptions
@@ -96,7 +99,7 @@ func NewPoller(deps PollerDeps, opts PollerOptions) *Poller {
 	}
 	return &Poller{
 		targets: deps.Targets, intervals: deps.Intervals, pages: deps.Pages, stats: deps.Stats, store: deps.Store,
-		log: log, now: now, opts: opts,
+		observer: deps.Observer, log: log, now: now, opts: opts,
 		nextDue: map[string]time.Time{}, cutoffs: map[string]time.Time{},
 	}
 }
@@ -143,30 +146,55 @@ func (p *Poller) round(ctx context.Context) {
 	}
 }
 
-// cycle polls every repo of one workspace: its PR pages, then the diff stats of stored PRs that
-// have none. A failed repo is logged and skipped; a missing token or a rate limit ends the cycle.
+// cycle polls one workspace and, when the cycle polled successfully, tells the observer.
 func (p *Poller) cycle(ctx context.Context, g workspaceTargets) {
+	if p.pollRepos(ctx, g) && p.observer != nil && ctx.Err() == nil {
+		p.notify(ctx, g.workspaceID)
+	}
+}
+
+// notify calls the observer inside the poller goroutine. A panic in it is recovered and logged: it
+// must not take the server down, nor end the poller. The observer gets the poller's ctx and must
+// return promptly once it is cancelled.
+func (p *Poller) notify(ctx context.Context, workspaceID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			p.log.ErrorContext(ctx, "background poll: the cycle observer panicked",
+				"workspace_id", workspaceID, "panic", fmt.Sprint(r))
+		}
+	}()
+	p.observer.AfterCycle(ctx, workspaceID)
+}
+
+// pollRepos polls every repo of one workspace: its PR pages, then the diff stats of stored PRs that
+// have none. A failed repo is logged and skipped; a missing token or a rate limit ends the cycle.
+// It reports whether the cycle polled successfully: at least one repo had its pages read and was
+// marked polled, and the cycle was not cut short by a missing token or a cancelled ctx (a rate
+// limit after a polled repo does not count against it).
+func (p *Poller) pollRepos(ctx context.Context, g workspaceTargets) bool {
+	polled := 0
 	start := p.now()
 	due := start.Add(p.interval(ctx, g.workspaceID))
 	p.nextDue[g.workspaceID] = due
 
 	for _, repo := range g.repos {
 		if ctx.Err() != nil {
-			return
+			return false
 		}
 		err := p.pollRepo(ctx, g.workspaceID, repo)
 		if err == nil {
+			polled++
 			err = p.backfillStats(ctx, g.workspaceID, repo)
 		}
 		if err == nil {
 			continue
 		}
 		if ctx.Err() != nil {
-			return
+			return false
 		}
 		if errors.Is(err, ErrNoToken) {
 			p.log.WarnContext(ctx, "background poll skipped: no GitHub token is configured", "workspace_id", g.workspaceID)
-			return
+			return false
 		}
 		if reset, limited := rateLimit(err); limited {
 			resume := domain.ResumeAfterRateLimit(start, due, reset)
@@ -174,11 +202,12 @@ func (p *Poller) cycle(ctx context.Context, g workspaceTargets) {
 			p.pausedUntil = resume
 			p.log.WarnContext(ctx, "background poll paused: GitHub rate limit reached",
 				"workspace_id", g.workspaceID, "repo_id", repo.ID, "resume_at", resume)
-			return
+			return polled > 0
 		}
 		p.log.WarnContext(ctx, "background poll of a repository failed",
 			"workspace_id", g.workspaceID, "repo_id", repo.ID, "repo", repo.Owner+"/"+repo.Name, "err", err)
 	}
+	return polled > 0
 }
 
 // interval reads the workspace's polling interval; an error reads as the default.

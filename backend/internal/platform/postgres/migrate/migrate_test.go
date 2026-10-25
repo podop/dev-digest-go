@@ -757,6 +757,189 @@ func TestMigration0005_CostLedger(t *testing.T) {
 	})
 }
 
+// autoReviewFixture is the data of TestMigration0006_AutoReviewRecords at version 5: one workspace,
+// two repositories with one PR each, and a local and a CI agent run.
+const autoReviewFixture = `
+INSERT INTO workspaces (id, name) VALUES ('00000000-0000-0000-0000-0000000000a1', 'w1');
+INSERT INTO repos (id, workspace_id, owner, name, full_name) VALUES
+  ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000a1', 'o', 'r1', 'o/r1'),
+  ('00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000a1', 'o', 'r2', 'o/r2');
+INSERT INTO pull_requests (id, workspace_id, repo_id, number, title, author, branch, base, head_sha) VALUES
+  ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1', 1, 't', 'a', 'b', 'main', 'sha1'),
+  ('00000000-0000-0000-0000-0000000000c2', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b2', 1, 't', 'a', 'b', 'main', 'sha1');
+INSERT INTO agent_runs (id, workspace_id, pr_id, source, status) VALUES
+  ('00000000-0000-0000-0000-0000000000d1', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000c1', 'local', 'done'),
+  ('00000000-0000-0000-0000-0000000000d2', '00000000-0000-0000-0000-0000000000a1', NULL, 'ci', 'done');
+`
+
+// TestMigration0006_AutoReviewRecords: Up creates exactly the record table and widens the run
+// source rule to 'auto' (FR10); the table keeps one record per (PR, head SHA), goes with its PR and
+// repository, and does not reference agent runs; Down drops the table, turns 'auto' runs into
+// 'local' (lossy) and restores the old rule; Up again restores version 6 (AC4).
+func TestMigration0006_AutoReviewRecords(t *testing.T) {
+	upTo5Names := []string{"0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes", "0005_cost_ledger"}
+	upTo6Names := append(append([]string{}, upTo5Names...), "0006_auto_review_records")
+
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+	if _, err := newMigrator(t, db, embeddedFS(t, upTo5Names...)).Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-5 error = %v", err)
+	}
+	if _, err := db.ExecContext(t.Context(), autoReviewFixture); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	before := catalog(t, db)
+	runsBefore := queryStrings(t, db, `SELECT id || ' ' || source FROM agent_runs ORDER BY id`)
+
+	upTo6 := embeddedFS(t, upTo6Names...)
+	all, err := migrate.Load(upTo6)
+	if err != nil {
+		t.Fatalf("Load(versions 1-6) error = %v", err)
+	}
+	if len(all) != 6 || all[5].Version != 6 || all[5].Name != "auto_review_records" {
+		t.Fatalf("Load(versions 1-6) = %d migrations, last %+v, want 6 ending in version 6 auto_review_records", len(all), all[len(all)-1])
+	}
+	m := newMigrator(t, db, upTo6)
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 6 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+
+	const oldRule = "constraint agent_runs agent_runs_source_chk c CHECK ((source = ANY (ARRAY['local'::text, 'ci'::text])))"
+	if diff := cmp.Diff([]string{oldRule}, onlyIn(before, afterUp)); diff != "" {
+		t.Errorf("objects removed by 0006 mismatch (-want +got):\n%s", diff)
+	}
+	var added []string
+	for _, line := range onlyIn(afterUp, before) {
+		if !strings.Contains(line, "auto_review_records") && !strings.Contains(line, "agent_runs_source_chk") {
+			t.Errorf("0006 added %q, which names neither its table nor the source rule", line)
+		}
+		if strings.HasPrefix(line, "table ") || strings.HasPrefix(line, "index ") || strings.Contains(line, "agent_runs_source_chk") {
+			added = append(added, line)
+		}
+	}
+	wantAdded := []string{
+		"constraint agent_runs agent_runs_source_chk c CHECK ((source = ANY (ARRAY['local'::text, 'ci'::text, 'auto'::text])))",
+		"index auto_review_records auto_review_records_pkey CREATE UNIQUE INDEX auto_review_records_pkey ON public.auto_review_records USING btree (id)",
+		"index auto_review_records auto_review_records_pr_head_key CREATE UNIQUE INDEX auto_review_records_pr_head_key ON public.auto_review_records USING btree (pr_id, head_sha)",
+		"index auto_review_records auto_review_records_ws_decided_idx CREATE INDEX auto_review_records_ws_decided_idx ON public.auto_review_records USING btree (workspace_id, decided_at)",
+		"table auto_review_records",
+	}
+	if diff := cmp.Diff(wantAdded, added); diff != "" {
+		t.Errorf("tables, indexes and source rule added by 0006 mismatch (-want +got):\n%s", diff)
+	}
+	// The record table does not reference agent_runs: a history reset deletes the runs of every
+	// source and must neither be blocked by the records nor delete them.
+	wantFKs := []string{"auto_review_records_pr_id_pull_requests_id_fk", "auto_review_records_workspace_id_workspaces_id_fk"}
+	gotFKs := queryStrings(t, db, `SELECT conname FROM pg_constraint WHERE conrelid = 'auto_review_records'::regclass AND contype = 'f' ORDER BY 1`)
+	if diff := cmp.Diff(wantFKs, gotFKs); diff != "" {
+		t.Errorf("foreign keys of auto_review_records mismatch (-want +got):\n%s", diff)
+	}
+
+	exec := func(q string) error {
+		_, err := db.ExecContext(t.Context(), q)
+		return err
+	}
+	const ws = "00000000-0000-0000-0000-0000000000a1"
+	const pr1, pr2 = "00000000-0000-0000-0000-0000000000c1", "00000000-0000-0000-0000-0000000000c2"
+	record := func(pr, sha, event, outcome, runs string) string {
+		return `INSERT INTO auto_review_records (workspace_id, pr_id, head_sha, event, outcome, runs_started, decided_at)
+		  VALUES ('` + ws + `', '` + pr + `', '` + sha + `', '` + event + `', '` + outcome + `', ` + runs + `, '2026-10-25 12:00:00+00')`
+	}
+
+	if err := exec(`INSERT INTO agent_runs (id, workspace_id, pr_id, source, status) VALUES
+	  ('00000000-0000-0000-0000-0000000000d3', '` + ws + `', '` + pr1 + `', 'auto', 'running')`); err != nil {
+		t.Fatalf("insert an auto run: %v", err)
+	}
+	if err := exec(`INSERT INTO agent_runs (workspace_id, source, status) VALUES ('` + ws + `', 'bogus', 'done')`); err == nil {
+		t.Errorf("inserting source 'bogus' succeeded, want the source rule to reject it")
+	}
+	if err := exec(record(pr1, "sha1", "new_pr", "started", "2")); err != nil {
+		t.Fatalf("insert a record: %v", err)
+	}
+	if err := exec(record(pr1, "sha1", "new_commits", "failed", "0")); err == nil || !strings.Contains(err.Error(), "auto_review_records_pr_head_key") {
+		t.Errorf("second record for (PR, head SHA) error = %v, want a violation of auto_review_records_pr_head_key", err)
+	}
+	if err := exec(record(pr1, "sha2", "new_commits", "skipped_spend_cap", "0")); err != nil {
+		t.Errorf("record for another head of the same PR: %v", err)
+	}
+	if err := exec(record(pr2, "sha1", "new_pr", "skipped_trigger_off", "0")); err != nil {
+		t.Errorf("record for the same head of another PR: %v", err)
+	}
+	rejected := map[string]string{
+		"unknown event":    record(pr2, "x1", "other", "started", "0"),
+		"unknown outcome":  record(pr2, "x2", "new_pr", "done", "0"),
+		"negative runs":    record(pr2, "x3", "new_pr", "started", "-1"),
+		"unknown PR":       record("00000000-0000-0000-0000-0000000000ff", "x4", "new_pr", "started", "0"),
+		"missing decision": `INSERT INTO auto_review_records (workspace_id, pr_id, head_sha, event, outcome) VALUES ('` + ws + `', '` + pr2 + `', 'x5', 'new_pr', 'started')`,
+	}
+	for name, q := range rejected {
+		if err := exec(q); err == nil {
+			t.Errorf("insert with %s succeeded, want a constraint to reject it", name)
+		}
+	}
+	for _, outcome := range []string{"started", "skipped_trigger_off", "skipped_already_reviewed", "skipped_no_agents", "skipped_spend_cap", "failed"} {
+		if err := exec(record(pr1, "o-"+outcome, "new_commits", outcome, "0")); err != nil {
+			t.Errorf("record with outcome %q: %v", outcome, err)
+		}
+	}
+	if err := exec(`DELETE FROM auto_review_records WHERE head_sha LIKE 'o-%'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// A history reset deletes the runs of every source; the records stay.
+	if err := exec(`DELETE FROM agent_runs`); err != nil {
+		t.Fatalf("delete all agent runs: %v", err)
+	}
+	if got := queryStrings(t, db, `SELECT count(*)::text FROM auto_review_records`); !cmp.Equal(got, []string{"3"}) {
+		t.Errorf("records after deleting every agent run = %v, want 3", got)
+	}
+	// Deleting a repository removes its PRs' records.
+	if err := exec(`DELETE FROM repos WHERE id = '00000000-0000-0000-0000-0000000000b2'`); err != nil {
+		t.Fatalf("delete repo: %v", err)
+	}
+	wantRecords := []string{pr1 + " sha1", pr1 + " sha2"}
+	if diff := cmp.Diff(wantRecords, queryStrings(t, db, `SELECT pr_id || ' ' || head_sha FROM auto_review_records ORDER BY head_sha`)); diff != "" {
+		t.Errorf("records after deleting the repository of PR 2 mismatch (-want +got):\n%s", diff)
+	}
+
+	// Down: the auto run becomes local, nothing else about the runs changes.
+	if err := exec(`INSERT INTO agent_runs (id, workspace_id, pr_id, source, status) VALUES
+	  ('00000000-0000-0000-0000-0000000000d1', '` + ws + `', '` + pr1 + `', 'local', 'done'),
+	  ('00000000-0000-0000-0000-0000000000d2', '` + ws + `', NULL, 'ci', 'done'),
+	  ('00000000-0000-0000-0000-0000000000d3', '` + ws + `', '` + pr1 + `', 'auto', 'done')`); err != nil {
+		t.Fatalf("re-insert runs: %v", err)
+	}
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 6 {
+		t.Fatalf("Down() = %d, %v, %v, want 6, true, nil", v, ok, err)
+	}
+	wantRuns := append(append([]string{}, runsBefore...), "00000000-0000-0000-0000-0000000000d3 local")
+	if diff := cmp.Diff(wantRuns, queryStrings(t, db, `SELECT id || ' ' || source FROM agent_runs ORDER BY id`)); diff != "" {
+		t.Errorf("agent runs after Down mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0006 differs from version 5 (-v5 +got):\n%s", diff)
+	}
+	if err := exec(`UPDATE agent_runs SET source = 'auto'`); err == nil {
+		t.Errorf("source 'auto' accepted after Down, want the old rule")
+	}
+
+	// Up again: the same schema, an empty record table, 'auto' accepted.
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, `SELECT count(*)::text FROM auto_review_records`); !cmp.Equal(got, []string{"0"}) {
+		t.Errorf("records after Down->Up = %v, want none", got)
+	}
+	if err := exec(`UPDATE agent_runs SET source = 'auto' WHERE id = '00000000-0000-0000-0000-0000000000d3'`); err != nil {
+		t.Errorf("source 'auto' after Down->Up: %v", err)
+	}
+}
+
 // onlyIn returns the entries of a that are not in b (both sorted).
 func onlyIn(a, b []string) []string {
 	have := make(map[string]bool, len(b))

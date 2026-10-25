@@ -9,6 +9,7 @@ import (
 
 	"dev-digest-go/backend/internal/platform/apperr"
 	"dev-digest-go/backend/internal/reviews/app"
+	"dev-digest-go/backend/internal/reviews/domain"
 )
 
 // fakeBudget is a scripted app.Budget that records every Admit call.
@@ -137,6 +138,101 @@ func TestStart_ValidationAndNotFoundWinOverBudget(t *testing.T) {
 			}
 			if len(b.calls) != 0 {
 				t.Errorf("Admit calls = %v, want none before the 422/404 checks", b.calls)
+			}
+		})
+	}
+}
+
+func TestStartAuto_RecordsSourceAutoOnRunsAndBatch(t *testing.T) {
+	h := newHarness(t)
+	h.withPull()
+	h.withAgent("a", "Alpha", true)
+	h.withAgent("b", "Beta", true)
+	b := &fakeBudget{}
+	h.withBudget(b)
+
+	got, err := h.svc.StartAuto(t.Context(), ws, "pr", []string{"a", "b"})
+	if err != nil {
+		t.Fatalf("StartAuto() error = %v", err)
+	}
+	if len(got.Runs) != 2 || got.MultiAgentRunID == nil {
+		t.Errorf("StartAuto() = %+v, want 2 runs under a multi-agent run", got)
+	}
+	if len(h.store.createdRuns) != 2 {
+		t.Fatalf("created runs = %d, want 2", len(h.store.createdRuns))
+	}
+	for _, r := range h.store.createdRuns {
+		if r.Source != domain.SourceAuto {
+			t.Errorf("CreateRun(%s).Source = %q, want %q", r.AgentID, r.Source, domain.SourceAuto)
+		}
+	}
+	if len(h.exec.batches) != 1 || h.exec.batches[0].Source != domain.SourceAuto {
+		t.Errorf("executor batches = %+v, want one batch with source auto", h.exec.batches)
+	}
+	if want := []budgetCall{{ws, "review_start"}}; !slices.Equal(b.calls, want) {
+		t.Errorf("Admit calls = %v, want %v", b.calls, want)
+	}
+}
+
+func TestStart_RecordsSourceLocal(t *testing.T) {
+	h := newHarness(t)
+	h.withPull()
+	h.withAgent("a", "Alpha", true)
+	if _, err := h.svc.Start(t.Context(), ws, "pr", app.StartRequest{AgentID: "a"}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if got := h.store.createdRuns[0].Source; got != domain.SourceLocal {
+		t.Errorf("CreateRun().Source = %q, want %q", got, domain.SourceLocal)
+	}
+	if got := h.exec.batches[0].Source; got != domain.SourceLocal {
+		t.Errorf("batch.Source = %q, want %q", got, domain.SourceLocal)
+	}
+}
+
+// TestStartAuto_BudgetReachedIsRecognisable covers the S8 contract: the cap's 402 comes back as an
+// *apperr.Error of KindPaymentRequired that errors.As finds, with nothing created.
+func TestStartAuto_BudgetReachedIsRecognisable(t *testing.T) {
+	h := newHarness(t)
+	h.withPull()
+	h.withAgent("a", "Alpha", true)
+	b := &fakeBudget{err: capReached}
+	h.withBudget(b)
+
+	_, err := h.svc.StartAuto(t.Context(), ws, "pr", []string{"a"})
+	var ae *apperr.Error
+	if !errors.As(err, &ae) || ae.Kind != apperr.KindPaymentRequired {
+		t.Fatalf("StartAuto() error = %v, want an apperr of kind payment required", err)
+	}
+	if len(h.j.all()) != 0 || len(h.exec.batches) != 0 {
+		t.Errorf("StartAuto() made calls %v and %d batches, want nothing", h.j.all(), len(h.exec.batches))
+	}
+}
+
+func TestStartAuto_Refusals(t *testing.T) {
+	tests := []struct {
+		name string
+		ids  []string
+		want apperr.Kind
+		code string
+	}{
+		{"no ids", nil, apperr.KindInvalidInput, "invalid_run_request"},
+		{"empty ids", []string{}, apperr.KindInvalidInput, "invalid_run_request"},
+		{"unknown agent", []string{"missing"}, apperr.KindNotFound, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.withPull()
+			h.withAgent("a", "Alpha", true)
+			b := &fakeBudget{}
+			h.withBudget(b)
+			_, err := h.svc.StartAuto(t.Context(), ws, "pr", tc.ids)
+			var ae *apperr.Error
+			if !errors.As(err, &ae) || ae.Kind != tc.want {
+				t.Fatalf("StartAuto(%v) error = %v, want kind %v", tc.ids, err, tc.want)
+			}
+			if len(b.calls) != 0 || len(h.exec.batches) != 0 {
+				t.Errorf("StartAuto(%v) admitted %d times and started %d batches, want none", tc.ids, len(b.calls), len(h.exec.batches))
 			}
 		})
 	}

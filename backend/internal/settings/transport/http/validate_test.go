@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -113,6 +114,19 @@ func TestPutSettings_validation(t *testing.T) {
 		{name: "density unknown", body: `{"density":"tiny"}`, want: []issueView{{Keyword: "invalid_enum_value", InstancePath: "/density"}}},
 		{name: "sync_to_folder string", body: `{"sync_to_folder":"yes"}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/sync_to_folder"}}},
 		{name: "automatic_reviews null", body: `{"automatic_reviews":null}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews"}}},
+		{name: "automatic_reviews string", body: `{"automatic_reviews":"on"}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews"}}},
+		{name: "automatic_reviews number", body: `{"automatic_reviews":1}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews"}}},
+		{name: "automatic_reviews array", body: `{"automatic_reviews":[]}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews"}}},
+		{name: "automatic_reviews enabled number", body: `{"automatic_reviews":{"enabled":1}}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews/enabled"}}},
+		{name: "automatic_reviews triggers not boolean", body: `{"automatic_reviews":{"on_new_pr":"yes","on_new_commits":null}}`, want: []issueView{
+			{Keyword: "invalid_type", InstancePath: "/automatic_reviews/on_new_pr"},
+			{Keyword: "invalid_type", InstancePath: "/automatic_reviews/on_new_commits"},
+		}},
+		{name: "automatic_reviews agent_ids string", body: `{"automatic_reviews":{"agent_ids":"a"}}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews/agent_ids"}}},
+		{name: "automatic_reviews agent_ids null", body: `{"automatic_reviews":{"agent_ids":null}}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews/agent_ids"}}},
+		{name: "automatic_reviews agent id not a uuid", body: `{"automatic_reviews":{"agent_ids":["x"]}}`, want: []issueView{{Keyword: "invalid_string", InstancePath: "/automatic_reviews/agent_ids/0"}}},
+		{name: "automatic_reviews agent id not a string", body: `{"automatic_reviews":{"agent_ids":[` + autoUUID(1) + `,5]}}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/automatic_reviews/agent_ids/1"}}},
+		{name: "automatic_reviews 21 distinct agent ids", body: `{"automatic_reviews":{"agent_ids":[` + autoUUIDs(21) + `]}}`, want: []issueView{{Keyword: "too_big", InstancePath: "/automatic_reviews/agent_ids"}}},
 		{name: "feature_models array", body: `{"feature_models":[]}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/feature_models"}}},
 		{name: "feature id unknown", body: `{"feature_models":{"nope":{"provider":"openai","model":"m"}}}`, want: []issueView{{Keyword: "invalid_enum_value", InstancePath: "/feature_models/nope"}}},
 		{name: "provider unknown", body: `{"feature_models":{"risk_brief":{"provider":"x","model":"m"}}}`, want: []issueView{{Keyword: "invalid_enum_value", InstancePath: "/feature_models/risk_brief/provider"}}},
@@ -181,6 +195,34 @@ func TestPutSettings_validation(t *testing.T) {
 	}
 }
 
+func TestPutSettings_automaticReviewsMessages(t *testing.T) { // A8
+	tests := []struct {
+		name string
+		body string
+		want issueView
+	}{
+		{name: "string", body: `{"automatic_reviews":"on"}`, want: issueView{"invalid_type", "/automatic_reviews", "Expected object, received string"}},
+		{name: "null", body: `{"automatic_reviews":null}`, want: issueView{"invalid_type", "/automatic_reviews", "Expected object, received null"}},
+		{name: "array", body: `{"automatic_reviews":[]}`, want: issueView{"invalid_type", "/automatic_reviews", "Expected object, received array"}},
+		{name: "enabled", body: `{"automatic_reviews":{"enabled":1}}`, want: issueView{"invalid_type", "/automatic_reviews/enabled", "Expected boolean, received number"}},
+		{name: "agent_ids", body: `{"automatic_reviews":{"agent_ids":"a"}}`, want: issueView{"invalid_type", "/automatic_reviews/agent_ids", "Expected array, received string"}},
+		{name: "uuid", body: `{"automatic_reviews":{"agent_ids":["x"]}}`, want: issueView{"invalid_string", "/automatic_reviews/agent_ids/0", "Invalid uuid"}},
+		{name: "element type", body: `{"automatic_reviews":{"agent_ids":[true]}}`, want: issueView{"invalid_type", "/automatic_reviews/agent_ids/0", "Expected string, received boolean"}},
+		{name: "21 ids", body: `{"automatic_reviews":{"agent_ids":[` + autoUUIDs(21) + `]}}`, want: issueView{"too_big", "/automatic_reviews/agent_ids", "Array must contain at most 20 element(s)"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := do(newRouter(&fakeService{}, fakeIdentities{}), http.MethodPut, "/settings", "application/json", tc.body)
+			if rec.Code != http.StatusUnprocessableEntity {
+				t.Fatalf("PUT /settings %s status = %d, want 422 (%s)", tc.body, rec.Code, rec.Body)
+			}
+			if diff := cmp.Diff([]issueView{tc.want}, issues(t, rec)); diff != "" {
+				t.Errorf("PUT /settings %s issues mismatch (-want +got):\n%s", tc.body, diff)
+			}
+		})
+	}
+}
+
 func TestPutSettings_noBodyIs422(t *testing.T) {
 	rec := do(newRouter(&fakeService{}, fakeIdentities{}), http.MethodPut, "/settings", "", "")
 	if rec.Code != http.StatusUnprocessableEntity {
@@ -196,7 +238,16 @@ func TestPutSettings_acceptedEntries(t *testing.T) {
 	}{
 		{name: "empty object", body: `{}`, want: map[string]string{}},
 		{name: "known keys", body: `{"polling_interval_min":10,"theme":"light","density":"compact","sync_to_folder":false,"automatic_reviews":true}`,
-			want: map[string]string{"polling_interval_min": "10", "theme": `"light"`, "density": `"compact"`, "sync_to_folder": "false", "automatic_reviews": "true"}},
+			want: map[string]string{"polling_interval_min": "10", "theme": `"light"`, "density": `"compact"`, "sync_to_folder": "false", "automatic_reviews": `{"enabled":true}`}},
+		{name: "automatic_reviews false is the patch enabled false", body: `{"automatic_reviews":false}`, want: map[string]string{"automatic_reviews": `{"enabled":false}`}},
+		{name: "automatic_reviews empty object is an empty patch", body: `{"automatic_reviews":{}}`, want: map[string]string{"automatic_reviews": `{}`}},
+		{name: "automatic_reviews keeps only the sent fields, drops enabled_at and unknown", body: `{"automatic_reviews":{"enabled":true,"on_new_pr":false,"enabled_at":"x","mode":"all"}}`,
+			want: map[string]string{"automatic_reviews": `{"enabled":true,"on_new_pr":false}`}},
+		{name: "automatic_reviews agent ids: duplicates removed keeping the first, lower-cased", body: `{"automatic_reviews":{"agent_ids":[` + autoUUID(2) + `,` + autoUUID(1) + `,"` + strings.ToUpper(autoID(2)) + `"]}}`,
+			want: map[string]string{"automatic_reviews": `{"agent_ids":["` + autoID(2) + `","` + autoID(1) + `"]}`}},
+		{name: "automatic_reviews 20 distinct agent ids", body: `{"automatic_reviews":{"agent_ids":[` + autoUUIDs(20) + `]}}`, want: map[string]string{"automatic_reviews": `{"agent_ids":[` + autoUUIDs(20) + `]}`}},
+		{name: "automatic_reviews 22 ids with duplicates fit after removing them", body: `{"automatic_reviews":{"agent_ids":[` + autoUUIDs(20) + `,` + autoUUID(1) + `,` + autoUUID(2) + `]}}`, want: map[string]string{"automatic_reviews": `{"agent_ids":[` + autoUUIDs(20) + `]}`}},
+		{name: "automatic_reviews empty agent_ids", body: `{"automatic_reviews":{"agent_ids":[]}}`, want: map[string]string{"automatic_reviews": `{"agent_ids":[]}`}},
 		{name: "integral float is an integer", body: `{"polling_interval_min":10.0}`, want: map[string]string{"polling_interval_min": "10"}},
 		{name: "unknown keys keep any value including null", body: `{"x_custom":null,"y":{"a":[1,2]}}`,
 			want: map[string]string{"x_custom": "null", "y": `{"a":[1,2]}`}},
@@ -405,4 +456,19 @@ func TestRateLimitBuckets(t *testing.T) {
 	if diff := cmp.Diff(want, settingshttp.RateLimitBuckets()); diff != "" {
 		t.Errorf("RateLimitBuckets() mismatch (-want +got):\n%s", diff)
 	}
+}
+
+// autoID is a valid UUID that differs per n.
+func autoID(n int) string { return fmt.Sprintf("6f1c0d2e-0000-4000-8000-%012x", n) }
+
+// autoUUID is autoID as a JSON string literal.
+func autoUUID(n int) string { return `"` + autoID(n) + `"` }
+
+// autoUUIDs is the JSON list body of n distinct UUID strings, 1..n.
+func autoUUIDs(n int) string {
+	parts := make([]string, n)
+	for i := range parts {
+		parts[i] = autoUUID(i + 1)
+	}
+	return strings.Join(parts, ",")
 }

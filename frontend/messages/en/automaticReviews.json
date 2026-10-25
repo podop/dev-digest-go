@@ -1,0 +1,9 @@
+{
+  "title": "Automatic Reviews",
+  "body": "Poll GitHub for new PRs and run agents without manual triggering.",
+  "loading": "Loading automatic reviews…",
+  "loadError": "Could not load the automatic review settings.",
+  "agentsLoading": "Loading agents…",
+  "agentsLoadError": "Could not load the agents.",
+  "info": "Polling is the default. For instant triggers and CI execution, install the GitHub Action under <integrations>Integrations</integrations>."
+}

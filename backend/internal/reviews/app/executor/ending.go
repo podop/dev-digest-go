@@ -13,7 +13,9 @@ import (
 type endInput struct {
 	job  domain.Job
 	pull domain.ReviewPull
-	log  *runLog
+	// source is the batch's run source (empty = local), written into the ended trace.
+	source string
+	log    *runLog
 	// start is when the run began; nil = it never ran (diff failure): duration 0.
 	start  *time.Time
 	ending domain.Ending
@@ -59,6 +61,7 @@ func (e *Executor) endRun(ctx context.Context, in endInput) {
 	trace := domain.EndedTrace(domain.EndedTraceInput{
 		Agent:          in.job.Agent,
 		PRNumber:       in.pull.Number,
+		Source:         in.source,
 		Log:            domain.LogFromEvents(e.bus.Buffer(in.job.RunID)),
 		DurationMS:     durationMS,
 		Usage:          &usage,

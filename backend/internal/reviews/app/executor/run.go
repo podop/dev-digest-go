@@ -15,13 +15,15 @@ import (
 
 // runState is one agent run in flight.
 type runState struct {
-	job   domain.Job
-	pull  domain.ReviewPull
-	repo  domain.ReviewRepo
-	wsID  string
-	diff  reviewer.Diff
-	log   *runLog
-	start time.Time
+	job  domain.Job
+	pull domain.ReviewPull
+	repo domain.ReviewRepo
+	wsID string
+	// source is the batch's run source (empty = local).
+	source string
+	diff   reviewer.Diff
+	log    *runLog
+	start  time.Time
 	// meter sums the usage of every LLM response: the only record of what a failed or
 	// cancelled run spent.
 	meter *domain.UsageMeter
@@ -66,7 +68,7 @@ func (e *Executor) runJob(ctx context.Context, br *batchRun, job domain.Job) {
 	defer stop()
 
 	st := &runState{
-		job: job, pull: br.b.Pull, repo: br.b.Repo, wsID: br.b.WorkspaceID, diff: br.diff, log: log,
+		job: job, pull: br.b.Pull, repo: br.b.Repo, wsID: br.b.WorkspaceID, source: br.b.Source, diff: br.diff, log: log,
 		start: start, meter: domain.NewUsageMeter(), runCtx: runCtx, intent: br.intent, intentTrace: br.intentTrace,
 		isCancelled: func() bool { return runCtx.Err() != nil || e.bus.IsCancelled(job.RunID) },
 	}
@@ -80,7 +82,7 @@ func (e *Executor) runJob(ctx context.Context, br *batchRun, job domain.Job) {
 	ending := domain.EndingFor(err, st.isCancelled())
 	ending.Note = e.redact(ending.Note)
 	e.endRun(ctx, endInput{
-		job: job, pull: st.pull, log: log, start: &start, ending: ending, announce: true,
+		job: job, pull: st.pull, source: br.b.Source, log: log, start: &start, ending: ending, announce: true,
 		usage: ptr(st.meter.Snapshot()), skills: st.skills, pc: st.pc, intent: st.intentTrace,
 	})
 	if ending.Status == domain.StatusCancelled {
@@ -116,7 +118,7 @@ func (e *Executor) endedWhileQueued(ctx context.Context, br *batchRun, job domai
 	case run.Status == domain.StatusCancelled:
 		e.log.Info("review: run skipped, it was cancelled while queued", "runId", job.RunID, "agent", job.Agent.Name)
 		e.endRun(ctx, endInput{
-			job: job, pull: br.b.Pull, log: log,
+			job: job, pull: br.b.Pull, source: br.b.Source, log: log,
 			ending: domain.EndingFor(domain.ErrRunCancelled, true), announce: true, intent: br.intentTrace,
 		})
 		return true
@@ -161,6 +163,7 @@ func (e *Executor) execute(ctx context.Context, st *runState) (findings int, err
 	trace := domain.CompletedTrace(domain.CompletedTraceInput{
 		Agent:          agent,
 		PRNumber:       st.pull.Number,
+		Source:         st.source,
 		DurationMS:     durationMS,
 		Usage:          outcome.Usage,
 		Findings:       kept,

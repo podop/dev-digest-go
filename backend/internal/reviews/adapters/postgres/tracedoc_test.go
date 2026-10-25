@@ -183,6 +183,14 @@ func TestDecodeTrace_AcceptsTheContract(t *testing.T) {
 	if got, err := postgres.DecodeTrace([]byte(doc)); err != nil || got.Config.Source != "ci" {
 		t.Errorf("DecodeTrace(source ci) = %q, %v", got.Config.Source, err)
 	}
+	doc = strings.Replace(minimalDoc, `"model":"m"`, `"model":"m","source":"auto"`, 1)
+	if got, err := postgres.DecodeTrace([]byte(doc)); err != nil || got.Config.Source != "auto" {
+		t.Errorf("DecodeTrace(source auto) = %q, %v", got.Config.Source, err)
+	}
+	doc = strings.Replace(minimalDoc, `"model":"m"`, `"model":"m","source":"cron"`, 1)
+	if _, err := postgres.DecodeTrace([]byte(doc)); !errors.Is(err, domain.ErrTraceInvalid) {
+		t.Errorf("DecodeTrace(source cron) error = %v, want ErrTraceInvalid", err)
+	}
 }
 
 func TestDecodeTrace_RejectsContractViolations(t *testing.T) {

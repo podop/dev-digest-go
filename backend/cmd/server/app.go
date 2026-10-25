@@ -22,6 +22,9 @@ import (
 	agentsdb "dev-digest-go/backend/internal/agents/adapters/postgres"
 	agentsapp "dev-digest-go/backend/internal/agents/app"
 	agentshttp "dev-digest-go/backend/internal/agents/transport/http"
+	autoreviewpg "dev-digest-go/backend/internal/autoreview/adapters/postgres"
+	autoreviewapp "dev-digest-go/backend/internal/autoreview/app"
+	autoreviewhttp "dev-digest-go/backend/internal/autoreview/transport/http"
 	blastpeers "dev-digest-go/backend/internal/blast/adapters/peers"
 	blastpg "dev-digest-go/backend/internal/blast/adapters/postgres"
 	blastapp "dev-digest-go/backend/internal/blast/app"
@@ -617,6 +620,23 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	cihttp.AddRoutes(e, ciExport, ciIngest, resolver)
 	leaderboardhttp.AddRoutes(e, lbapp.NewService(lbpg.NewStore(db), now), resolver)
 	spendhttp.AddRoutes(e, spendSvc, resolver)
+	// Automatic reviews (Settings C): the trigger runs after each background-poll cycle (the poller's
+	// Observer below); the service is built even with PR_POLL_ENABLED=false so the status line can say
+	// poll_disabled. Starts go through the reviews start with source "auto"; the cap is checked once per
+	// evaluation (Budget) and again by the start itself.
+	autoSvc := autoreviewapp.NewService(autoreviewapp.Deps{
+		Settings:    autoSettings{settings: settingsSvc},
+		Interval:    autoInterval{intervals: settingsIntervals{settings: settingsSvc}},
+		Store:       autoreviewpg.NewStore(db),
+		Starter:     autoStarter{reviews: reviewsSvc},
+		Budget:      autoBudget{spend: spendSvc},
+		Caps:        autoCaps{spend: spendSvc},
+		Tokens:      autoTokens{token: githubToken},
+		PollEnabled: cfg.PRPollEnabled,
+		Now:         autoreviewapp.Clock(now),
+		Log:         log,
+	})
+	autoreviewhttp.AddRoutes(e, autoSvc, resolver)
 	dataDir := absPath(cfg.DataDir)
 	workspaceStore := workspacepg.NewStore(db)
 	wsSettings := workspaceSettings{settings: settingsSvc}
@@ -655,6 +675,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 			Pages:     pollGH,
 			Stats:     pollGH,
 			Store:     pullsStore,
+			Observer:  autoSvc,
 			Log:       log,
 			Now:       now,
 		}, pullsapp.PollerOptions{Tick: o.pollTick})

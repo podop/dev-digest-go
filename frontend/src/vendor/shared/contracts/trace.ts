@@ -118,7 +118,7 @@ export const RunTrace = z.object({
     provider: z.string().nullish(),
     model: z.string(),
     pr: z.number().int().nullish(),
-    source: z.enum(['local', 'ci']).default('local'),
+    source: z.enum(['local', 'ci', 'auto']).default('local'),
   }),
   stats: RunStats,
   prompt_assembly: PromptAssembly,

@@ -1,0 +1,24 @@
+{
+  "checking": "Checking status…",
+  "unavailable": "Status unavailable",
+  "states": {
+    "active": "<b>Active</b> · last poll {when} · {count, plural, one {# PR} other {# PRs}} tracked",
+    "off": "Off — PRs are reviewed only when you start a review",
+    "poll_disabled": "Paused — background poll is off for this server (PR_POLL_ENABLED)",
+    "no_github_token": "Paused — no GitHub token",
+    "no_agents": "Paused — no enabled agent selected",
+    "no_triggers": "Paused — no trigger condition selected",
+    "paused_spend_cap": "Paused — spend cap reached"
+  },
+  "links": {
+    "github": "GitHub Integration",
+    "apiKeys": "API Keys"
+  },
+  "lastPoll": {
+    "never": "never",
+    "justNow": "just now",
+    "minutes": "{count} min ago",
+    "hours": "{count} h ago",
+    "days": "{count} d ago"
+  }
+}

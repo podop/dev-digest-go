@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ const (
 	codeTooBig       = "too_big"
 	codeCustom       = "custom"
 	codeInvalidUnion = "invalid_union"
+	codeInvalidStr   = "invalid_string"
 )
 
 // Bounds and precision of monthly_spend_cap_usd (the UI contract's SPEND_CAP_* constants).
@@ -74,8 +76,10 @@ func parseSettingsUpdate(body []byte) (app.Bag, []httpx.Issue) {
 			value, is = enumString(raw, themes, key)
 		case "density":
 			value, is = enumString(raw, densities, key)
-		case "sync_to_folder", "automatic_reviews":
+		case "sync_to_folder":
 			value, is = boolean(raw, key)
+		case "automatic_reviews":
+			value, is = automaticReviews(raw, key)
 		case "feature_models":
 			value, is = featureModels(raw, key)
 		case "default_model":
@@ -194,6 +198,97 @@ func boolean(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue) 
 		return nil, []httpx.Issue{issue(codeInvalidType, "Expected boolean, received "+t, path...)}
 	}
 	return raw, nil
+}
+
+// uuidPattern accepts any UUID version and variant, case-insensitive (same rule as httpx.PathUUID).
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+// automaticReviews validates the PUT input of automatic_reviews (spec 7.1): a boolean (stored as
+// the patch {enabled: b}) or an object with any subset of enabled, on_new_pr, on_new_commits
+// (booleans) and agent_ids (UUID strings, duplicates removed keeping the first, then at most
+// app.MaxAutoReviewAgents). The returned patch holds only the fields that were sent; enabled_at
+// and unknown fields are dropped, and the settings use case merges the patch into the stored value.
+func automaticReviews(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue) {
+	switch t := jsonType(raw); t {
+	case "boolean":
+		return json.RawMessage(`{"enabled":` + strings.TrimSpace(string(raw)) + `}`), nil
+	case "object":
+	default:
+		return nil, []httpx.Issue{issue(codeInvalidType, "Expected object, received "+t, path...)}
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return nil, []httpx.Issue{issue(codeInvalidType, "Expected object, received "+jsonType(raw), path...)}
+	}
+
+	var issues []httpx.Issue
+	patch := make(map[string]any, len(fields))
+	for _, key := range []string{"enabled", "on_new_pr", "on_new_commits"} {
+		v, ok := fields[key]
+		if !ok {
+			continue
+		}
+		if t := jsonType(v); t != "boolean" {
+			issues = append(issues, issue(codeInvalidType, "Expected boolean, received "+t, append(slices.Clone(path), key)...))
+			continue
+		}
+		patch[key] = strings.TrimSpace(string(v)) == "true"
+	}
+	if v, ok := fields["agent_ids"]; ok {
+		ids, is := agentIDs(v, append(slices.Clone(path), "agent_ids"))
+		issues = append(issues, is...)
+		if is == nil {
+			patch["agent_ids"] = ids
+		}
+	}
+	if issues != nil {
+		return nil, issues
+	}
+	out, err := json.Marshal(patch)
+	if err != nil {
+		return nil, []httpx.Issue{issue(codeInvalidType, "Invalid automatic_reviews", path...)}
+	}
+	return out, nil
+}
+
+// agentIDs validates an array of UUID strings: every element is checked, then duplicates are
+// removed (keeping the first, ids compared case-insensitively and stored lower-case) and the
+// remaining count is capped.
+func agentIDs(raw json.RawMessage, path []any) ([]string, []httpx.Issue) {
+	if t := jsonType(raw); t != "array" {
+		return nil, []httpx.Issue{issue(codeInvalidType, "Expected array, received "+t, path...)}
+	}
+	var elems []json.RawMessage
+	if err := json.Unmarshal(raw, &elems); err != nil {
+		return nil, []httpx.Issue{issue(codeInvalidType, "Expected array, received "+jsonType(raw), path...)}
+	}
+	var issues []httpx.Issue
+	ids := make([]string, 0, len(elems))
+	seen := make(map[string]struct{}, len(elems))
+	for i, e := range elems {
+		at := append(slices.Clone(path), i)
+		var s string
+		switch {
+		case !decodeString(e, &s):
+			issues = append(issues, typeIssue("string", e, at...))
+		case !uuidPattern.MatchString(s):
+			issues = append(issues, issue(codeInvalidStr, "Invalid uuid", at...))
+		default:
+			s = strings.ToLower(s)
+			if _, dup := seen[s]; !dup {
+				seen[s] = struct{}{}
+				ids = append(ids, s)
+			}
+		}
+	}
+	if issues != nil {
+		return nil, issues
+	}
+	if len(ids) > app.MaxAutoReviewAgents {
+		return nil, []httpx.Issue{issue(codeTooBig,
+			fmt.Sprintf("Array must contain at most %d element(s)", app.MaxAutoReviewAgents), path...)}
+	}
+	return ids, nil
 }
 
 type featureModelChoice struct {

@@ -204,7 +204,10 @@ func jsonMap(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	return m
 }
 
-var seededSettings = map[string]any{"polling_interval_min": 5.0, "theme": "dark", "density": "regular", "sync_to_folder": true}
+// defaultAutomaticReviews is what GET /settings reports while no value is stored (FR1).
+var defaultAutomaticReviews = map[string]any{"enabled": false, "agent_ids": []any{}, "on_new_pr": true, "on_new_commits": true, "enabled_at": nil}
+
+var seededSettings = map[string]any{"polling_interval_min": 5.0, "theme": "dark", "density": "regular", "sync_to_folder": true, "automatic_reviews": defaultAutomaticReviews}
 
 func TestGetSettings_seeded(t *testing.T) { // AC37
 	s := newStack(t, stackOpts{seed: true})
@@ -217,14 +220,18 @@ func TestGetSettings_seeded(t *testing.T) { // AC37
 	}
 }
 
-func TestGetSettings_emptyStoreIsEmptyObject(t *testing.T) {
+func TestGetSettings_emptyStoreHoldsOnlyTheAutomaticReviewsDefault(t *testing.T) {
 	s := newStack(t, stackOpts{seed: true})
 	if err := s.db.Exec(`DELETE FROM settings`).Error; err != nil {
 		t.Fatal(err)
 	}
 	rec := s.call(http.MethodGet, "/settings", "")
-	if got := strings.TrimSpace(rec.Body.String()); rec.Code != http.StatusOK || got != "{}" {
-		t.Errorf("GET /settings on an empty store = %d %s, want 200 {}", rec.Code, got)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /settings on an empty store status = %d, want 200", rec.Code)
+	}
+	want := map[string]any{"automatic_reviews": defaultAutomaticReviews}
+	if diff := cmp.Diff(want, jsonMap(t, rec)); diff != "" {
+		t.Errorf("GET /settings on an empty store mismatch (-want +got):\n%s", diff)
 	}
 }
 
@@ -236,13 +243,70 @@ func TestPutSettings_returnsFullBag(t *testing.T) { // AC38
 	}
 	want := map[string]any{
 		"polling_interval_min": 5.0, "theme": "dark", "density": "regular", "sync_to_folder": true,
-		"feature_models": map[string]any{"risk_brief": map[string]any{"provider": "openai", "model": "gpt-4.1"}},
+		"feature_models":    map[string]any{"risk_brief": map[string]any{"provider": "openai", "model": "gpt-4.1"}},
+		"automatic_reviews": defaultAutomaticReviews,
 	}
 	if diff := cmp.Diff(want, jsonMap(t, rec)); diff != "" {
 		t.Errorf("PUT /settings mismatch (-want +got):\n%s", diff)
 	}
 	if diff := cmp.Diff(want, jsonMap(t, s.call(http.MethodGet, "/settings", ""))); diff != "" {
 		t.Errorf("GET /settings after PUT mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPutSettings_automaticReviews(t *testing.T) { // AC2, AC3, FR2
+	s := newStack(t, stackOpts{seed: true})
+	const a, b = "6f1c0d2e-0000-4000-8000-00000000000a", "6f1c0d2e-0000-4000-8000-00000000000b"
+	stored := func() map[string]any {
+		t.Helper()
+		return jsonMap(t, s.call(http.MethodGet, "/settings", ""))["automatic_reviews"].(map[string]any)
+	}
+	put := func(body string) map[string]any {
+		t.Helper()
+		rec := s.call(http.MethodPut, "/settings", `{"automatic_reviews":`+body+`}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT automatic_reviews=%s status = %d, want 200 (%s)", body, rec.Code, rec.Body)
+		}
+		got := jsonMap(t, rec)["automatic_reviews"].(map[string]any)
+		if diff := cmp.Diff(got, stored()); diff != "" {
+			t.Errorf("PUT automatic_reviews=%s answered something other than GET stores (-put +get):\n%s", body, diff)
+		}
+		return got
+	}
+
+	got := put(`{"enabled":true,"enabled_at":"x"}`)
+	if got["enabled"] != true || got["enabled_at"] != nil {
+		t.Errorf("enable without agents = %v, want enabled true and enabled_at null (not armed)", got)
+	}
+	got = put(`{"agent_ids":["` + a + `","` + a + `"]}`)
+	at, _ := got["enabled_at"].(string)
+	if diff := cmp.Diff([]any{a}, got["agent_ids"]); diff != "" {
+		t.Errorf("duplicate ids mismatch (-want +got):\n%s", diff)
+	}
+	if !strings.HasSuffix(at, "Z") || len(at) != len("2006-01-02T15:04:05.000Z") {
+		t.Errorf("enabled_at after arming = %q, want ISO-8601 UTC with milliseconds", at)
+	}
+	if got = put(`{"agent_ids":["` + b + `"],"on_new_pr":false}`); got["enabled_at"] != at || got["on_new_pr"] != false {
+		t.Errorf("edit while armed = %v, want enabled_at %s kept and on_new_pr false", got, at)
+	}
+	if got = put(`false`); got["enabled"] != false || got["enabled_at"] != nil || got["on_new_pr"] != false {
+		t.Errorf("pause = %v, want enabled false, enabled_at null, other fields kept", got)
+	}
+}
+
+func TestPutSettings_automaticReviewsInvalidChangesNothing(t *testing.T) { // AC3
+	s := newStack(t, stackOpts{seed: true})
+	rec := s.call(http.MethodPut, "/settings", `{"automatic_reviews":{"agent_ids":["x"]}}`)
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("PUT status = %d, want 422 (%s)", rec.Code, rec.Body)
+	}
+	for _, want := range []string{`"validation_error"`, `"invalid_string"`, `"Invalid uuid"`, `"automatic_reviews"`, `"agent_ids"`} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("422 body %s lacks %s", rec.Body, want)
+		}
+	}
+	if diff := cmp.Diff(seededSettings, jsonMap(t, s.call(http.MethodGet, "/settings", ""))); diff != "" {
+		t.Errorf("GET /settings after an invalid PUT mismatch (-want +got):\n%s", diff)
 	}
 }
 

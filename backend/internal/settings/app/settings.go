@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -149,7 +150,8 @@ func NewService(d Deps) *Service {
 	return &Service{d: d}
 }
 
-// Get returns every stored setting of the workspace; no defaults are injected.
+// Get returns every stored setting of the workspace. Only automatic_reviews gets a default: it
+// is always present, as the full object (FR1); no other defaults are injected.
 func (s *Service) Get(ctx context.Context, workspaceID string) (Bag, error) {
 	bag, err := s.d.Store.List(ctx, workspaceID)
 	if err != nil {
@@ -158,11 +160,27 @@ func (s *Service) Get(ctx context.Context, workspaceID string) (Bag, error) {
 	if bag == nil {
 		bag = Bag{}
 	}
+	bag[AutomaticReviewsKey] = AutomaticReviewsFromStored(bag[AutomaticReviewsKey]).JSON()
 	return bag, nil
 }
 
 // Update upserts every entry for the user and returns the full stored bag after the write.
+// An automatic_reviews input (a validated boolean or partial object) is first merged into the
+// stored value and written as the full object with the server-set enabled_at (FR2). The merge is
+// a read then a write without a lock: concurrent updates are last write wins (A10).
 func (s *Service) Update(ctx context.Context, workspaceID, userID string, entries Bag) (Bag, error) {
+	if input, ok := entries[AutomaticReviewsKey]; ok {
+		current, err := s.d.Store.List(ctx, workspaceID)
+		if err != nil {
+			return nil, fmt.Errorf("list settings: %w", err)
+		}
+		merged, err := mergeAutomaticReviews(input, current[AutomaticReviewsKey], s.d.Clock())
+		if err != nil {
+			return nil, err
+		}
+		entries = maps.Clone(entries)
+		entries[AutomaticReviewsKey] = merged
+	}
 	if len(entries) > 0 {
 		if err := s.d.Store.Upsert(ctx, workspaceID, userID, entries); err != nil {
 			return nil, fmt.Errorf("upsert settings: %w", err)

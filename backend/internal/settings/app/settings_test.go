@@ -120,13 +120,14 @@ func newRig(gh fakeGitHub) *rig {
 
 func ids(ids ...string) app.ModelList { return app.ModelList{IDs: ids, Count: len(ids)} }
 
-func TestGet_emptyStoreIsEmptyBag(t *testing.T) {
+func TestGet_emptyStoreHoldsOnlyTheAutomaticReviewsDefault(t *testing.T) { // AC1
 	r := newRig(fakeGitHub{})
 	got, err := r.svc.Get(t.Context(), "ws")
 	if err != nil {
 		t.Fatalf("Get() error = %v", err)
 	}
-	if diff := cmp.Diff(app.Bag{}, got); diff != "" {
+	want := app.Bag{app.AutomaticReviewsKey: json.RawMessage(`{"enabled":false,"agent_ids":[],"on_new_pr":true,"on_new_commits":true,"enabled_at":null}`)}
+	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Get() mismatch (-want +got):\n%s", diff)
 	}
 }
@@ -139,7 +140,7 @@ func TestUpdate_returnsFullBagAfterWrite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Update() error = %v", err)
 	}
-	want := app.Bag{"theme": json.RawMessage(`"light"`), "density": json.RawMessage(`"regular"`)}
+	want := app.Bag{"theme": json.RawMessage(`"light"`), "density": json.RawMessage(`"regular"`), app.AutomaticReviewsKey: defaultAutoJSON}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("Update() mismatch (-want +got):\n%s", diff)
 	}

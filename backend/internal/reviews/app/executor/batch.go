@@ -157,6 +157,7 @@ func (e *Executor) failAll(ctx context.Context, b domain.Batch, shared *runLog, 
 			e.endRun(ctx, endInput{
 				job:      job,
 				pull:     b.Pull,
+				source:   b.Source,
 				log:      shared.forRun(job.RunID),
 				ending:   ending,
 				announce: ending.Status == domain.StatusCancelled,
