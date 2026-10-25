@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-25 (Settings slice A merged; PR Leaderboard closed) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-25 (Settings A merged, B done; cost ledger in progress; C next) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -118,7 +118,37 @@ commit `74c6ebf`). Order: A, then B ∥ C (C uses the leaderboard poller), then 
     same month REPLACES the earlier cost. The stand measured a $0.00375 refresh with a $0 delta, so the cap can be exceeded.
     It follows FR12 as written; a fix needs a cost ledger or month rollup, which revises D19 (fits the D26 follow-up). User decision.
   - setup step 3 says "Add your first repository" even when repos exist.
-- Before slice B, confirm Q4: does "reset run history" also delete learnings?
+**Slice B: done** (Workspace: name, data directory, retention prune, stats, export, reset history).
+Plan `docs/plans/2026-10-25-settings-b-workspace.md`; spec D22–D28. Commits: `43bb6d3` W0–W2 · `16a25d8` W3 + review fixes ·
+`69c2ab5` W4 migration 0004 (`ci_runs_agent_run_idx`).
+- New `internal/workspace` context, with routes `GET`/`PUT /workspace`, `/workspace/stats`, `/workspace/export` and
+  `POST /workspace/reset-history`. `GET /workspace` moved out of `repos`.
+- The reset runs in one transaction: an advisory lock, then SHARE ROW EXCLUSIVE on `agent_runs` and `eval_suite_runs`, then the deletes.
+- A daily trace pruner runs in `listen`.
+- The Settings › Workspace section and the name in the repo switcher.
+- Gate (reports in `.sdd/review/2026-10-25-settings-b-workspace/`, git-ignored):
+  - arch r1: PASS (MEDIUM fixed);
+  - security r1: PASS (I3 fixed: prune lock 60 s);
+  - plan verification r1: 71 PASS / 0 FAIL, and r2 covers W4;
+  - S19 measured at NFR3 volume:
+    - stats p95 31 ms;
+    - export 0.2–0.7 s;
+    - reset 23–25 s with migration 0004 (37–49 s without it; thin margin, D28);
+    - the startup prune keeps `/health` and trace reads p95 ≤ 31 ms;
+    - the AC24 UI walk passed 21/21.
+- Follow-ups:
+  - the export is built in memory (about 8–9× the bundle; security L1): stream it;
+  - a failed reset logs the raw PG error (L3);
+  - the reset margin depends on the run_traces delete volume;
+  - one 3.5 s stall seen during the prune (NFR4 probe);
+  - AC21 invalidations are only partly asserted;
+  - `useUpdateSettings` / `useWorkspace` show both an inline error and a global toast;
+  - `/workspace` 5xx toasts on every page.
+- Migration numbers: B took `0004`, the cost ledger takes `0005`, slice C takes `0006`.
+
+**Cost ledger: in progress.** Spec `specs/2026-10-25-cost-ledger.md` (D1–D18), plan `docs/plans/2026-10-25-cost-ledger.md`. W1/W2 run in the main checkout.
+**Slice C:** the plan is approved and waits for the ledger.
+
 
 ## Phase 6 review gate (reports in `.sdd/review/2026-10-23-go-backend-phase-6/`, git-ignored)
 | Reviewer | r1 (`4735965`) | r2 (fix delta `95da9b9`) |

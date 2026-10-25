@@ -75,7 +75,8 @@ In scope:
 
 Out of scope:
 - No route or UI changes `DEVDIGEST_DATA_DIR`; the data directory field is read-only.
-- No new up/down schema migration is added by this slice.
+- No new up/down schema migration is added by this slice, except the reset index migration 0004 allowed by D27
+  and recorded in D28.
 - The retention prune never deletes or updates agent runs, reviews, findings, multi-agent runs, eval runs, eval suite runs, CI runs or learnings.
 - The export never contains a secret, a setting outside the allow-list of FR14, a filesystem path, a database row id, or any run-history record (§7).
 - No import of a workspace bundle in this slice; import is Slice D.
@@ -304,7 +305,7 @@ for them to finish or cancel them"). Nothing is deleted on any error.
 ## 12. Dependencies and rollout
 - Shared-contract change: yes, additive (§7) — `platform.ts` Settings, `productionize.ts` bundle, new workspace
   schemas; changed together with the Go side and its goldens.
-- Persisted data change: no migration. New setting key `retention_days`. Reset deletes data permanently, and the first
+- Persisted data change: one index-only migration (0004, D27/D28). New setting key `retention_days`. Reset deletes data permanently, and the first
   prune after release deletes traces older than 90 days on installs that never set retention.
 - Order: after Slice A (Settings sub-nav with "Workspace", `GET /about` version). Slice D consumes the `kind:
   "workspace"` bundle and decides how a `.json` bundle is uploaded (Q7). Slice C's auto-review idempotency rows are not
