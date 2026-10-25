@@ -419,6 +419,17 @@ for them to finish or cancel them"). Nothing is deleted on any error.
 - D19 — Q13 Slice C auto-review records are kept on reset (user approved default, 2026-10-23).
 - D20 — Q14 Daily prune every 24 h after the previous one, not at a wall-clock time (user approved default, 2026-10-23).
 - D21 — Q15 Trace age is measured from the run's `ran_at` (user approved default, 2026-10-23).
+- D22 — Q4 confirmed: reset also deletes learnings (user, 2026-10-25).
+- D23 — The workspace display name is stored as the settings row `workspace_name`; `workspaces.name` stays `default`
+  (planner SCR1; no migration for it) (user pre-approved plan defaults, 2026-10-25).
+- D24 — The repo switcher shows the name cut at 32 code points + "…", with no tooltip, because the vendored switcher takes a plain
+  string and `vendor/ui` stays untouched. This supersedes the tooltip part of FR5/EC16/AC5 (planner SCR2, 2026-10-25).
+- D25 — AC14 is scoped to text that exists only in run, review and finding rows. Eval cases built from findings
+  legitimately carry their title and diff (planner SCR4, 2026-10-25).
+- D26 — The export writes `automatic_reviews` without `agent_ids` and `enabled_at` (row ids and instance state), so
+  the FR14 "no database row id" rule holds once Slice C extends the value (Slice C planner SCR1, 2026-10-25).
+- D27 — If S19 measures reset > 30 s at NFR3 volume because `ci_runs.agent_run_id` has no index, one up/down
+  migration may add that index (user pre-approved, 2026-10-25).
 
 ## 17. Open questions
 None — Q1 was resolved by D7; Q2–Q15 were resolved on 2026-10-23 by accepting their defaults (D8–D21).
