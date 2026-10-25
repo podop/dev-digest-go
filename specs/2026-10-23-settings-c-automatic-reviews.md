@@ -1,5 +1,5 @@
 # Settings Slice C — Automatic Reviews
-Spec: Settings Slice C — Automatic Reviews (settings object, auto-review trigger on the background poll, status, UI) · Status: ready-for-planning · Date: 2026-10-23
+Spec: Settings Slice C — Automatic Reviews (settings object, auto-review trigger on the background poll, status, UI) · Status: implemented (2026-10-25, 2a7f422..0722f1a; D13–D18: fork guard, AC22 waived, NFR1 p95 ≤ 750 ms, interval within a tick, PR list pill) · Date: 2026-10-23
 Areas: api, auto, db, ui
 Design sources: accepted design `docs/design/2026-10-23-settings-first-run.md` (§4 Slice C, §5, §6, §7 P3/P7, §8 — binding);
 prototype extraction `proto-screens.md` §3.4 (screen_settings.jsx "Automatic Reviews"); screenshot `images/7.png`
@@ -57,7 +57,7 @@ Automatic Reviews shows the switch, the poll interval, the agents, the trigger c
 - Manual polls (POST `/repos/:id/poll`) and PR list requests never start an automatic review.
 - PRs opened before Automatic Reviews was last armed are never reviewed automatically, also not on new commits (P7).
 - No webhook or GitHub Action trigger; the Integrations section is Slice D.
-- The Repo Dashboard pill "Auto-review: ON · polling 5m · 2 agents" is not built.
+- The Repo Dashboard pill "Auto-review: ON · polling 5m · 2 agents" is not built (superseded by D18: the PR list pill is built).
 - No per-repository selection: Automatic Reviews applies to every repository of the workspace.
 - The spend cap value, its month total and the 402 `spend_cap_reached` answer are defined by Slice A and not changed here.
 - POST `/pulls/:id/review` keeps its path, body, responses and its 10/min bucket; `polling_interval_min` keeps its validation.
@@ -370,7 +370,7 @@ condition selected"; `paused_spend_cap` (warn) "Paused — spend cap reached" + 
 | G7 | States "no agents" / "no triggers" not in the design | design §4 C | api, ui | added (FR12) — accepted |
 | G8 | Interval options not in the prototype | proto caveat | ui | 1, 2, 5, 10, 15, 30, 60 min (FR14) — resolved, D9 |
 | G9 | `auto` breaks the source CHECK and the local/CI split | schema, performance | db, api | migration + counted as local (FR10, FR11) — resolved, D10 |
-| G10 | Dashboard pill "Auto-review: ON …" | proto §1 | ui | out of scope — accepted |
+| G10 | Dashboard pill "Auto-review: ON …" | proto §1 | ui | out of scope — accepted; superseded by D18 (PR list pill built) |
 | G11 | Toggle subline "Currently active" lies when paused | screenshot | ui | neutral sublines; status line tells the truth (FR13) — accepted |
 
 ## 16. Decisions

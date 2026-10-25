@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-25 19:20 (see ▶ Resume here) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-25 21:40 (see ▶ Resume here; Settings C done, D next — user starts it) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -15,45 +15,21 @@ plan `docs/plans/2026-10-22-go-backend-phase-5.md` (+ `.context.md`, S1–S38, W
 parallel lanes by the user). Backend gate after Phase 6: `make backend-check` exit 0, 128 packages;
 frontend contract test 148/148.
 
-## ▶ Resume here (2026-10-25 19:20)
-Branch `feat/go-backend-phase-1`, HEAD `f1832de`. Not pushed, no PR (the user decides). The user's standing orders:
+## ▶ Resume here (2026-10-25 21:40)
+Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user's standing orders:
 - run features autonomously in multi-agent waves and lanes;
 - approve plans by default and escalate only CRITICAL items (spec contradictions that change behaviour, destructive or irreversible choices, security, an NFR failure that needs a spec change);
-- the order is **slice C → slice D** (then custom model providers / GitLab A–C, specs from the user's other session, not yet planned).
+- the order is **slice D next** (then custom model providers / GitLab A–C, specs from the user's other session, not yet planned).
+- **The user said (2026-10-25 night): do NOT start slice D until they come back** — they start it themselves.
 
 | Feature | State |
 |---|---|
-| PR Leaderboard, Settings A, Settings B, Cost ledger | done and committed (specs `implemented`, plans `done`); the stand runs A+B (not yet the ledger/C) |
-| **Settings C** (automatic reviews) | W1–W3 committed `2a7f422`; **W4 tests + fix round uncommitted in the tree** (see below) |
-| **Settings D** (integrations / plugins) | plan approved `f1832de` (spec D15–D18, migration **0008**); implementation not started |
+| PR Leaderboard, Settings A, B, Cost ledger, **Settings C** | done and committed (specs `implemented`, plans `done`); the stand runs all of them (rebuilt from `0722f1a`, migrations up to 0007) |
+| **Settings D** (integrations / plugins) | plan approved `f1832de` (spec D15–D18, migration **0008**); implementation NOT started |
 
-**Uncommitted work in the tree (all slice C), at the moment the session was saved:**
-- W4 tests:
-  - `cmd/server/{autoreview_flow_test,settings_c_test}.go`;
-  - golden `testdata/contracts/automatic_reviews_status.json`;
-  - `autoreview/adapters/postgres/trigger_integration_test.go`;
-  - the frontend contract entry.
-- Fix round, in flight:
-  1. `TestAutoReviewFlow_NotArmedNothingStarts` fails deterministically (line 883: no record after re-arming). Its root cause is not found yet — it is either the test or a real re-arm/enabled_at bug.
-  2. Security M1 → user decision **spec D13: auto-review only same-repo branches**:
-     - migration `0007_pr_head_repo` stores the PR's head repo on poll;
-     - the outcome is `skipped_fork`, and a NULL head repo counts as a fork;
-     - new test `cmd/server/autoreview_fork_test.go`.
-     The files are partly written (pulls/github mapping, pulls store, autoreview domain/store, migrate_test).
-- Spec C edits (uncommitted): D13 and D14 (AC15: text/plain → 422).
-
-**To resume slice C:**
-1. `git status`, then finish the two fixes (re-run `go test -race -count=3 -run TestAutoReviewFlow ./cmd/server`), then `make check`.
-2. Commit "C W4 + fixes r1" together with spec C.
-3. Security delta on the M1 fix (fork filter, migration 0007, NULL head = fork).
-4. W5 (plan S20: AC16 evaluation timing + the AC22 UI walk on a throwaway compose project, tear down only that project).
-5. Plan-verifier.
-6. INSIGHTS wrap-up, STATUS, close spec/plan C.
-7. Rebuild the stand: `docker compose up -d --build backend frontend` — migrations 0005 (ledger backfill), 0006 and 0007 apply. Check `/settings/spend` and `/settings/automatic-reviews-status`.
-
-**Then slice D:** plan `docs/plans/2026-10-25-settings-d-integrations.md` (+ `.context.md`).
-- S0: re-read C's committed files; the migration is 0008.
-- Then W1–W5 multi-agent, the gate, closing, the stand.
+**To start slice D:** plan `docs/plans/2026-10-25-settings-d-integrations.md` (+ `.context.md`).
+- S0: re-read C's committed files (autoreview, pulls poller D17, settings object); the migration is 0008.
+- Then W1–W5 multi-agent (lane rules: copy `.sdd/orchestration/lane-common-c.md` → `lane-common-d.md`, fix its stale carry-over path), the gate, closing, the stand.
 
 **Orchestration notes** (git-ignored): `.sdd/orchestration/`:
 - lane rules `lane-common-{b,c,ledger}.md`;
@@ -217,8 +193,21 @@ Commits: `2180e3a` W1–W3 · `448156f` W4 + review fixes · `7c04c15` NFR3 asyn
   - security I1–I4 (unanswered calls are not recorded; the recorder keeps ctx values; `migrate down` lowers spend; backfill time grows with legacy data);
   - the 2.5M-row backfill took 546–590 s (outside the spec's NFR4 volume).
 
-**Slice C: in progress.** W1–W3 committed `2a7f422`; W4 tests in progress.
-**Slice D:** planning started (`docs/plans/2026-10-25-settings-d-integrations.md`).
+**Slice C (automatic reviews): done.** Spec `specs/2026-10-23-settings-c-automatic-reviews.md` (D1–D18), plan `docs/plans/2026-10-25-settings-c-automatic-reviews.md`.
+Commits: `2a7f422` W1–W3 · `15b6892` W4 + fix r1 · `7e13032` W5 · `0722f1a` fix r2 (stand findings).
+- What it adds: the `automatic_reviews` settings object; an evaluation after each background poll cycle that starts `auto` review runs (at most once per PR head via `auto_review_records`, ≤ 5 starts per evaluation, ≤ 20 per hour, spend cap asked once); `GET /settings/automatic-reviews-status`; the Settings › Automatic Reviews section; the PR list pill (D18).
+- Decisions after planning: D13 fork guard (only same-repo heads; migration 0007 `pull_requests.head_is_fork`; a NULL head repository defers until a poll stores it); D14 AC15 → 422; D15 AC22 waived; D16 NFR1 relaxed to steady p95 ≤ 750 ms on pgtest; D17 interval changes apply within one poll tick; D18 PR list pill built.
+- Gate (reports in `.sdd/review/2026-10-25-settings-c-automatic-reviews/`): architecture r1–r3 PASS (r3 MEDIUM: vendor/ui edit → documented exception in frontend/AGENTS.md); security r1 M1 → D13, r2 L1 fixed, r3/r4 PASS; plan verification r1 (93 PASS) → r2 FAIL on AC16 under load → D16 → r3 PASS → r4 PASS (D17/D18).
+- Stand: rebuilt from `0722f1a`; a real PR (#2 podop/TaskTracker) was auto-reviewed with 2 agents, both runs done. Stand finding fixed in r2: a lowered interval used to wait out the old due time (D17); the PR list pill was hard-coded OFF (D18).
+- Measured (AC16, `-autoreview.load`): steady p95 360–589 ms by host load; burst 700 undecided p95 1.4–2.8 s (Candidates read 144–208 ms).
+- Follow-ups:
+  - batch record-only decisions into one INSERT (D16; also removes the per-fork INSERT cost);
+  - security r1 L1 (a concurrent PUT can re-arm with an old enabled_at), L2 (migrate down/up re-reviews heads), I1; r2 I1 (compare repo ids instead of names);
+  - arch r1 LOWs (two copies of `Armed()`; the autoreview adapter imports app for PollFacts);
+  - migration 0007's comment still says "unknown = fork" (code defers; committed migrations are not edited);
+  - a rate-limit pause without a later reset still lasts until start + the interval read at limit time;
+  - an unreadable interval now logs a WARN per tick (was per cycle).
+**Slice D:** plan approved `f1832de`; not started (user starts it).
 
 
 ## Phase 6 review gate (reports in `.sdd/review/2026-10-23-go-backend-phase-6/`, git-ignored)

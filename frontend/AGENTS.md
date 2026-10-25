@@ -30,7 +30,9 @@
   image bakes it at build time (compose passes `http://localhost:${API_PORT:-3101}`).
 
 ## Do not touch
-- `src/vendor/ui` (`@devdigest/ui`) — vendored primitives; compose, don't edit.
+- `src/vendor/ui` (`@devdigest/ui`) — vendored primitives; compose, don't edit. Local exceptions (keep them on
+  any re-sync): registration lists `icons.tsx`/`nav.ts` (9ef3155) and the additive `onClick` prop of
+  `AutoTriggerStatus.tsx` (0722f1a, Settings C D18).
 - Lint = Biome, linter only, config `biome.jsonc` here (copied from dev-digest's root; must stay
   `.jsonc`, `vcs.root` points at the repo root `.gitignore`). Never run `biome check --write`,
   `biome format` or enable the formatter — it would rewrite the whole package. Rules set to
