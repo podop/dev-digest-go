@@ -511,6 +511,16 @@ No other route, status code or field changes.
 - D14 — Settings B ships its reset-dialog sentence unchanged, because it stays true while spend is derived from the run
   tables. This ledger slice updates the dialog copy (FR16) and B's FR19, §12 line and D16 when it lands (user, via the
   coordinator, 2026-10-25).
+- D15 — Backfilled entries are rounded half away from zero to 6 decimals; sources stored with more decimals (convention
+  scans, brief/tour JSON) may differ by ≤ 1 micro-USD per entry from the pre-upgrade sum; AC13 equality is exact on
+  fixtures with ≤ 6 decimals (planner SCR1; user pre-approved plan defaults, 2026-10-25).
+- D16 — Entry references: review run → run, intent/brief → PR, onboarding → repo, conventions → scan, eval → eval case,
+  CI → the CI agent run; CI entries carry a dedupe key (GitHub run id + attempt) so a re-ingest after a reset never counts
+  twice (planner SCR3, A11; 2026-10-25).
+- D17 — Tests for AC1 (onboarding) and AC3 (NaN / negative / string cost) use scripted adapters or provider stubs, not the
+  mock provider (planner SCR2, SCR5; 2026-10-25).
+- D18 — The startup seed's demo costs get no ledger entries; a fresh database shows $0 for the seed month (planner A5;
+  2026-10-25).
 
 ## 17. Open questions
 None — Q1–Q8 were resolved on 2026-10-25 by accepting their defaults (D6–D13).
