@@ -74,7 +74,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 - Spend cap (`spend` context): `GET /settings/spend`; the cap is the Settings key
   `monthly_spend_cap_usd` (USD number or null), read through `settingsCaps` in `cmd/server/spend.go`
   (exact `big.Rat` conversion to `spend/domain.Micros`; a bad value is an error, so a check fails
-  closed). `spendapp.Service.Admit` is the one check; each entry context declares its own
+  closed). `spendapp.Service.Admit` is the one check; it reads the cap first and skips the spend query
+  when no cap is set (D24; migration 0003 indexes the query); each entry context declares its own
   consumer-side port and `cmd` passes the service to all six (reviews `Deps.Budget`, evals
   `RunDeps.Budget`, conventions `ServiceOptions.Budget`, intent `Deps.Budget`, brief and onboarding
   `Deps.Spend`). A nil port means the check is off; pass a true nil interface, never a typed-nil

@@ -33,6 +33,14 @@ func (f *fakeLedger) MonthSpend(_ context.Context, ws string, from, to time.Time
 	return f.spent, f.err
 }
 
+// forbiddenLedger fails the test when the month spend is read: Admit must not read it without a cap (D24).
+type forbiddenLedger struct{ t *testing.T }
+
+func (f forbiddenLedger) MonthSpend(context.Context, string, time.Time, time.Time) (domain.Micros, error) {
+	f.t.Error("MonthSpend was called, want no spend read when no cap is set")
+	return 0, errors.New("unexpected MonthSpend call")
+}
+
 type fakeCaps struct {
 	limit *domain.Micros
 	err   error
@@ -154,6 +162,31 @@ func TestService_Admit_Allowed(t *testing.T) {
 	}
 }
 
+func TestService_Admit_NoCapSkipsTheSpendRead(t *testing.T) {
+	var buf bytes.Buffer
+	svc := app.NewService(forbiddenLedger{t}, fakeCaps{}, func() time.Time { return october }, slog.New(slog.NewJSONHandler(&buf, nil)))
+
+	if err := svc.Admit(t.Context(), "ws-1", app.OpReviewStart); err != nil {
+		t.Errorf("Admit() without a cap = %v, want nil", err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("Admit() logged %q, want no log line when admitted", buf.String())
+	}
+}
+
+func TestService_Status_NoCapStillReadsTheSpend(t *testing.T) {
+	ledger := &fakeLedger{spent: 12_340_000}
+	svc, _ := newService(ledger, fakeCaps{})
+
+	got, err := svc.Status(t.Context(), "ws-1")
+	if err != nil {
+		t.Fatalf("Status() error = %v", err)
+	}
+	if got.Spent != 12_340_000 || len(ledger.calls) != 1 {
+		t.Errorf("Status() spent = %d after %d ledger calls, want 12340000 after 1 (the Settings screen shows it)", got.Spent, len(ledger.calls))
+	}
+}
+
 func TestService_Admit_Refused(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -211,7 +244,6 @@ func TestService_Admit_FailsClosedOnReadError(t *testing.T) {
 		caps   fakeCaps
 	}{
 		{"ledger fails", &fakeLedger{err: boom}, fakeCaps{limit: micros(50_000_000)}},
-		{"ledger fails without a cap", &fakeLedger{err: boom}, fakeCaps{}},
 		{"cap fails", &fakeLedger{}, fakeCaps{err: boom}},
 	}
 	for _, tc := range tests {

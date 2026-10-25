@@ -362,9 +362,16 @@ func TestCap_SpendReadErrorFailsClosed(t *testing.T) {
 		},
 		{
 			// Only the ledger (and the eval executor, which must never start here) reads eval_runs.
-			name:    "failing ledger",
-			breakIt: func() { execSQL(t, f.s, `ALTER TABLE eval_runs RENAME TO eval_runs_gone`) },
-			fixIt:   func() { execSQL(t, f.s, `ALTER TABLE eval_runs_gone RENAME TO eval_runs`) },
+			// A cap is set because without one the check does not read the spend (D24).
+			name: "failing ledger",
+			breakIt: func() {
+				setCap(t, f.s, 1000)
+				execSQL(t, f.s, `ALTER TABLE eval_runs RENAME TO eval_runs_gone`)
+			},
+			fixIt: func() {
+				execSQL(t, f.s, `ALTER TABLE eval_runs_gone RENAME TO eval_runs`)
+				setCap(t, f.s, nil)
+			},
 		},
 	}
 	for _, cause := range causes {
