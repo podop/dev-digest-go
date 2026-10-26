@@ -1313,6 +1313,59 @@ func TestCustomCalls_OneLogLinePerAttemptAndNoSecretsInTheLog(t *testing.T) {
 	ccAbsent(t, "a stored error", ccSecrets, scalar[string](t, s.db.DB, `SELECT coalesce(string_agg(error, ' '), '') FROM agent_runs`))
 }
 
+// NFR6: a test-connection and a model-list GET each write one "custom provider request" line with
+// operation list_models, the status of the gateway's answer and no secret.
+func TestCustomCalls_ModelListWritesOneLogLineWithOperationListModels(t *testing.T) {
+	g := newCCGateway(t, mock.Review)
+	status := http.StatusOK
+	g.handle = func(r ccReq, _ int) (ccReply, bool) {
+		if r.completion() || status == http.StatusOK {
+			return ccReply{}, false
+		}
+		return ccReply{Status: status, Body: `{"error":{"message":"no list for ` + ccKey + ` ` + ccTenant + `"}}`}, true
+	}
+	s := ccStack(t, spec{})
+	ccDefine(t, s, ccInput("synapse", "Synapse", "openai", g.base(), map[string]any{
+		"api_key": ccKey, "extra_headers": []any{map[string]any{"name": "X-Tenant", "value": ccTenant}},
+	}))
+
+	want := func(what string, n int, wantStatus string) {
+		t.Helper()
+		lines := logLines(t, s.logs, "custom provider request")
+		if len(lines) != n {
+			t.Fatalf("%s: log holds %d custom provider request lines, want %d: %v", what, len(lines), n, lines)
+		}
+		l := lines[n-1]
+		latency, has := l["latency_ms"].(float64)
+		if l["provider"] != "custom:synapse" || l["host"] != g.host() || l["operation"] != "list_models" ||
+			l["status"] != wantStatus || l["attempt"] != float64(1) || !has || latency < 0 || l["level"] != "INFO" {
+			t.Errorf("%s: log line = %v, want INFO provider custom:synapse host %s operation list_models status %s attempt 1 and a latency", what, l, g.host(), wantStatus)
+		}
+	}
+
+	if res := ccTestConn(t, s, "custom:synapse"); res["ok"] != true {
+		t.Fatalf("test-connection = %v, want ok:true", res)
+	}
+	want("test-connection", 1, "2xx")
+	if r := s.get("/providers/custom:synapse/models"); r.Status != http.StatusOK {
+		t.Fatalf("GET models = %d %s, want 200", r.Status, r.Body)
+	}
+	want("GET models", 2, "2xx")
+
+	status = http.StatusNotFound
+	if res := ccTestConn(t, s, "custom:synapse"); res["ok"] != true {
+		t.Fatalf("test-connection with a 404 list = %v, want ok:true with the warning", res)
+	}
+	want("test-connection 404", 3, "404")
+	status = http.StatusInternalServerError
+	if r := s.get("/providers/custom:synapse/models"); r.Status != http.StatusOK {
+		t.Fatalf("GET models with a 500 list = %d %s, want 200 (the manual list)", r.Status, r.Body)
+	}
+	want("GET models 500", 4, "500")
+
+	ccAbsent(t, "the server log", ccSecrets, s.logs.String())
+}
+
 // ---- AC15: bundles and workspace exports (FR15, NFR1) ----
 
 // AC15 (FR15, EC16, NFR1): the plugin export and the workspace export of agents, a default model
@@ -1538,4 +1591,105 @@ func TestCustomCalls_TimeoutsRetriesResponseCapAndBudget(t *testing.T) {
 			}
 		})
 	})
+}
+
+// ---- fix round r1 (security r1: L1, L2, L4 and the INFO items) ----
+
+// L1: a gateway that echoes a partial copy of the key ("ab...yz") on a rejection leaves no part of
+// it in the run error, the trace, the stored errors or the log; a 401 carries a fixed message.
+func TestCustomCalls_PartialKeyEchoesNeverReachErrorsTraceOrLogs(t *testing.T) {
+	const (
+		head = "SYNAPSE-KE"
+		tail = "9f3a7c21"
+	)
+	echo := `{"error":{"message":"Incorrect API key provided: ` + head + `...` + tail + `e5 (header ` + ccTenant[:12] + `)"}}`
+	for _, tc := range []struct {
+		name   string
+		status int
+		want   string
+	}{
+		{"401 gets the fixed message", http.StatusUnauthorized, "returned 401: API key rejected by the provider"},
+		{"400 is scrubbed of fragments", http.StatusBadRequest, "returned 400: Incorrect API key provided: [REDACTED]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := newCCGateway(t, mock.Review)
+			g.handle = func(r ccReq, _ int) (ccReply, bool) {
+				if r.completion() {
+					return ccReply{Status: tc.status, Body: echo}, true
+				}
+				return ccReply{}, false
+			}
+			s := ccStack(t, spec{})
+			pr := pr482(t, s)
+			ccDefine(t, s, ccInput("synapse", "Synapse", "openai", g.base(), map[string]any{
+				"api_key": ccKey, "structured_output": "prompt_only",
+				"extra_headers": []any{map[string]any{"name": "X-Tenant", "value": ccTenant}},
+			}))
+			run, status := ccReview(t, s, pr, ccAgent(t, s, "Echo agent", "custom:synapse", "gw-model"))
+			msg := ccRunError(t, s, run)
+			if status != "failed" || !strings.Contains(msg, tc.want) {
+				t.Errorf("review = %s %q, want failed with %q", status, msg, tc.want)
+			}
+			parts := []string{head, tail, ccTenant[:12]}
+			ccAbsent(t, "the run error", parts, msg)
+			ccAbsent(t, "the trace", parts, string(waitTrace(t, s, run).Body))
+			ccAbsent(t, "the server log", parts, s.logs.String())
+			ccAbsent(t, "the stored errors", parts, scalar[string](t, s.db.DB, `SELECT coalesce(string_agg(error, ' '), '') FROM agent_runs`))
+		})
+	}
+}
+
+// L2: hop-by-hop and connection-specific names are refused as extra headers with a 422.
+func TestCustomCalls_HopByHopExtraHeadersAreRefused(t *testing.T) {
+	s := ccStack(t, spec{})
+	for _, name := range []string{"Upgrade", "keep-alive", "Proxy-Connection", "TE", "Trailer"} {
+		r := s.post("/settings/custom-providers", ccInput("hop", "Hop", "openai", "https://gateway.example.com/v1", map[string]any{
+			"extra_headers": []any{map[string]any{"name": name, "value": "x-value-1"}},
+		}))
+		if r.Status != http.StatusUnprocessableEntity || !strings.Contains(string(r.Body), "/extra_headers/0/name") {
+			t.Errorf("POST with extra header %q = %d %s, want 422 at /extra_headers/0/name", name, r.Status, r.Body)
+		}
+	}
+	if n := count(t, s.db.DB, `SELECT count(*) FROM custom_providers`); n != 0 {
+		t.Errorf("custom_providers rows after the refused creates = %d, want 0", n)
+	}
+}
+
+// L4: a reported cost of 1e7 USD is unknown (not stored in agent_runs.cost_usd numeric(12,6), not
+// in the ledger as a spend) and the run still completes.
+func TestCustomCalls_AnAbsurdReportedCostIsUnknownAndTheRunCompletes(t *testing.T) {
+	g := newCCGateway(t, mock.Review)
+	g.usage = &ccUsage{In: 1200, Out: 180, Cost: "10000000"}
+	s := ccStack(t, spec{})
+	pr := pr482(t, s)
+	ccDefine(t, s, ccInput("synapse", "Synapse", "openai", g.base(), map[string]any{"api_key": ccKey}))
+	run, status := ccReview(t, s, pr, ccAgent(t, s, "Costly agent", "custom:synapse", "gw-model"))
+	if status != "done" {
+		t.Fatalf("review = %s (%s), want done", status, ccRunError(t, s, run))
+	}
+	if n := count(t, s.db.DB, `SELECT count(*) FROM agent_runs WHERE id = ? AND cost_usd IS NULL`, run); n != 1 {
+		t.Errorf("agent_runs.cost_usd of the run is not NULL, want unknown")
+	}
+	if diff := cmp.Diff([]*int64{nil}, ccCosts(t, s, "custom:synapse")["gw-model"]); diff != "" {
+		t.Errorf("ledger cost mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// INFO: a transport failure does not put the base URL into the run error, the trace or the log.
+func TestCustomCalls_TransportFailureTextHasNoBaseURL(t *testing.T) {
+	g := newCCGateway(t, mock.Review)
+	s := ccStack(t, spec{})
+	pr := pr482(t, s)
+	ccDefine(t, s, ccInput("synapse", "Synapse", "openai", g.base(), map[string]any{"api_key": ccKey}))
+	agent := ccAgent(t, s, "Down agent", "custom:synapse", "gw-model")
+	g.srv.Close()
+	run, status := ccReview(t, s, pr, agent)
+	msg := ccRunError(t, s, run)
+	if status != "failed" || msg == "" {
+		t.Fatalf("review = %s %q, want failed with an error", status, msg)
+	}
+	needles := []string{g.base(), "http://", "/v1/"}
+	ccAbsent(t, "the run error", needles, msg)
+	ccAbsent(t, "the trace", needles, string(waitTrace(t, s, run).Body))
+	ccAbsent(t, "the server log", needles, s.logs.String())
 }

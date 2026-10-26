@@ -62,7 +62,8 @@ type Secrets interface {
 	RestoreCustom(workspaceID, id string, prev secrets.CustomSecret) error
 }
 
-// References tells what uses a provider; `cmd` adapts the agents and settings stores to it.
+// References tells what uses a provider. Its Postgres adapter reads the agents and settings tables
+// directly (adapters/postgres/references.go); a new table that stores a provider id must be added there.
 type References interface {
 	// Find returns the agents (enabled or not), feature_models entries and default_model that name
 	// the provider. It runs inside the delete's transaction (ctx carries it), after the provider

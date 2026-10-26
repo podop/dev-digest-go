@@ -24,6 +24,13 @@ var reservedHeaders = map[string]struct{}{
 	"connection":        {},
 	"authorization":     {},
 	"cookie":            {},
+	// Hop-by-hop and connection-specific names: HTTP/2 refuses them with an error that quotes the
+	// value, and a gateway hop must not see them (RFC 9113 8.2.2).
+	"upgrade":          {},
+	"keep-alive":       {},
+	"proxy-connection": {},
+	"te":               {},
+	"trailer":          {},
 }
 
 // CheckHeaderName validates the name of an extra header and returns "" when it is acceptable,
@@ -31,7 +38,8 @@ var reservedHeaders = map[string]struct{}{
 // there is none, e.g. bearer auth); the name must differ from it case-insensitively.
 //
 // Rules: an HTTP token (RFC 9110 tchar) of 1-64 characters, and not Host, Content-Length,
-// Content-Type, Transfer-Encoding, Connection, Authorization or Cookie. Uniqueness among the
+// Content-Type, Transfer-Encoding, Connection, Authorization, Cookie or a hop-by-hop name
+// (Upgrade, Keep-Alive, Proxy-Connection, TE, Trailer). Uniqueness among the
 // headers and the count limit are the caller's.
 func CheckHeaderName(name, authHeader string) string {
 	if n := len(name); n < 1 || n > MaxHeaderNameLen {

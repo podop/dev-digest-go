@@ -3,6 +3,7 @@ package postgres_test
 import (
 	"context"
 	"errors"
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -135,6 +136,43 @@ func TestCompleteRunIfRunning(t *testing.T) {
 	again, err := f.store.CompleteRunIfRunning(t.Context(), run, completion())
 	if err != nil || again {
 		t.Errorf("CompleteRunIfRunning(done run) = %v, %v, want false, nil", again, err)
+	}
+}
+
+// security r1 L4: a cost numeric(12,6) cannot hold must not fail the final write of a run.
+func TestCompleteRunIfRunning_UnstorableCostIsStoredUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cost *float64
+	}{
+		{"1e7", floatp(1e7)},
+		{"just over the column", floatp(1_000_000)},
+		{"negative", floatp(-1)},
+		{"NaN", floatp(math.NaN())},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			run := f.run(t, f.agent(t, f.ws, "Alpha", true), nil)
+			c := completion()
+			c.CostUSD = tc.cost
+			ok, err := f.store.CompleteRunIfRunning(t.Context(), run, c)
+			if err != nil || !ok {
+				t.Fatalf("CompleteRunIfRunning(cost %v) = %v, %v, want true, nil", *tc.cost, ok, err)
+			}
+			if n := f.count(t, `SELECT count(*) FROM agent_runs WHERE id = ? AND status = 'done' AND cost_usd IS NULL AND findings_count = 2`, run); n != 1 {
+				t.Errorf("run with cost %v not completed with an unknown cost", *tc.cost)
+			}
+		})
+	}
+	f := newFixture(t)
+	run := f.run(t, f.agent(t, f.ws, "Alpha", true), nil)
+	c := completion()
+	c.CostUSD = floatp(999_999.999999)
+	if ok, err := f.store.CompleteRunIfRunning(t.Context(), run, c); err != nil || !ok {
+		t.Fatalf("CompleteRunIfRunning(cost at the column maximum) = %v, %v, want true, nil", ok, err)
+	}
+	if n := f.count(t, `SELECT count(*) FROM agent_runs WHERE id = ? AND cost_usd = 999999.999999`, run); n != 1 {
+		t.Errorf("the column maximum was not stored as is")
 	}
 }
 

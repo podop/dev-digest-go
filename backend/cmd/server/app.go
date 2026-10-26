@@ -421,6 +421,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, rootCAs, log)
 	}
 	llmOpts.Custom = cpSvc
+	llmOpts.ExtraRedactions = sec.CustomValues
 	if cfg.LLMProviderOverride == config.LLMProviderMock {
 		llmOpts.Custom = mockCustomResolver{delay: cfg.LLMMockDelay}
 	}

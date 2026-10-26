@@ -191,6 +191,7 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
     byte-identical to before; an openai/anthropic agent is exportable (`pricing` from the price book, via
     `llm.Client.PerM`), a custom one gets `custom_provider` and manual pricing in the manifest, and an undefined
     one answers 422 `provider_not_configured`. The runner reads `DEVDIGEST_LLM_*` from the workflow env.
+  - References: `customproviders/adapters/postgres/references.go` `Find` reads the agents and settings tables directly; a new table that stores a provider id must be added there, or delete-in-use misses it.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

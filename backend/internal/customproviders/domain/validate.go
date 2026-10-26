@@ -281,8 +281,11 @@ func (v *validator) models(in []Model) []Model {
 		}
 		model := Model{ID: m.ID}
 		if m.Label != nil && *m.Label != "" {
-			if utf16Len(*m.Label) > MaxLabelLen {
+			switch {
+			case utf16Len(*m.Label) > MaxLabelLen:
 				v.add(CodeTooBig, fmt.Sprintf("String must contain at most %d character(s)", MaxLabelLen), "models", i, "label")
+			case strings.IndexFunc(*m.Label, unicode.IsControl) >= 0:
+				v.add(CodeInvalidStr, "Model label must not contain control characters", "models", i, "label")
 			}
 			label := *m.Label
 			model.Label = &label

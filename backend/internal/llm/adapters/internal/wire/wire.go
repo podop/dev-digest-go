@@ -13,8 +13,13 @@ import (
 	"net/http"
 	"strings"
 
+	"dev-digest-go/backend/internal/llm/custom"
+	"dev-digest-go/backend/internal/platform/egress"
 	"dev-digest-go/backend/internal/platform/logging"
 )
+
+// MessageKeyRejected is the fixed text of a 401 or 403 from a custom gateway that was sent a key.
+const MessageKeyRejected = "API key rejected by the provider"
 
 const (
 	maxBodyBytes    = 16 << 20
@@ -52,6 +57,18 @@ type Call struct {
 	Key string
 	// ErrorMessage includes the provider's own error message in a StatusError.
 	ErrorMessage bool
+	// Gateway marks a call to a custom gateway, whose error text is untrusted (spec NFR1): the
+	// *url.Error of a transport failure is unwrapped (its text embeds the request URL), a 401 or
+	// 403 carries a fixed message and any other provider message is scrubbed before it is cut.
+	Gateway *Gateway
+}
+
+// Gateway is what Do needs to keep a custom gateway's error text clean.
+type Gateway struct {
+	// Secrets are the key and the extra header values of the provider.
+	Secrets []string
+	// Keyed says a key is configured; it only picks the wording of the fixed 401/403 message.
+	Keyed bool
 }
 
 // Do performs the call and decodes a 2xx JSON response into out. The key never appears in the
@@ -79,6 +96,9 @@ func Do(ctx context.Context, hc *http.Client, c Call, out any) error {
 	}
 	resp, err := hc.Do(req)
 	if err != nil {
+		if c.Gateway != nil {
+			err = egress.Unwrap(err)
+		}
 		// The transport error carries the URL, never the headers.
 		return fmt.Errorf("%s %s: %w", c.Provider, c.Op, err)
 	}
@@ -89,7 +109,10 @@ func Do(ctx context.Context, hc *http.Client, c Call, out any) error {
 	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		se := &StatusError{Provider: c.Provider, Op: c.Op, Status: resp.StatusCode}
-		if c.ErrorMessage {
+		switch {
+		case c.Gateway != nil:
+			se.Message = c.Gateway.message(resp.StatusCode, raw, c.ErrorMessage)
+		case c.ErrorMessage:
 			se.Message = apiMessage(c.Key, raw)
 		}
 		return se
@@ -98,6 +121,22 @@ func Do(ctx context.Context, hc *http.Client, c Call, out any) error {
 		return errors.New(c.Provider + " " + c.Op + " returned an unreadable response")
 	}
 	return nil
+}
+
+// message is the text of a gateway's non-2xx answer: fixed for 401 and 403 (gateways echo a masked
+// copy of the key there, which no scrub catches reliably), else the provider's message scrubbed
+// of every secret and fragment of one before it is cut.
+func (g *Gateway) message(status int, body []byte, withMessage bool) string {
+	if status == http.StatusUnauthorized || status == http.StatusForbidden {
+		if g.Keyed {
+			return MessageKeyRejected
+		}
+		return fmt.Sprintf("The gateway rejected the request without a key (HTTP %d)", status)
+	}
+	if !withMessage {
+		return ""
+	}
+	return cutMessage(custom.Scrub(errorMessage(body), g.Secrets, logging.Redacted))
 }
 
 func scrub(s, key string) string {
@@ -109,6 +148,11 @@ func scrub(s, key string) string {
 
 // apiMessage extracts {"error":{"message":…}}, scrubbed of the key before it is cut.
 func apiMessage(key string, body []byte) string {
+	return cutMessage(scrub(errorMessage(body), key))
+}
+
+// errorMessage is the trimmed {"error":{"message":…}} of a body, "" when there is none.
+func errorMessage(body []byte) string {
 	var payload struct {
 		Error struct {
 			Message string `json:"message"`
@@ -117,7 +161,10 @@ func apiMessage(key string, body []byte) string {
 	if json.Unmarshal(body, &payload) != nil {
 		return ""
 	}
-	msg := scrub(strings.TrimSpace(payload.Error.Message), key)
+	return strings.TrimSpace(payload.Error.Message)
+}
+
+func cutMessage(msg string) string {
 	if len(msg) > maxMessageBytes {
 		msg = strings.ToValidUTF8(msg[:maxMessageBytes], "")
 	}

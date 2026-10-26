@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -369,7 +371,7 @@ func (s *Service) TestConnection(ctx context.Context, workspaceID, id, key strin
 	}
 
 	started := s.now()
-	models, err := s.listModels(ctx, ad, sec)
+	models, err := s.listModels(ctx, prov, ad, sec)
 	latency := max(0, int(s.now().Sub(started).Milliseconds()))
 	if err != nil {
 		if ctx.Err() != nil {
@@ -421,19 +423,53 @@ func (s *Service) loadForTest(ctx context.Context, workspaceID, id, key string) 
 	return prov, sec, nil
 }
 
-// listModels performs the one model-list request, bounded by the adapter's list timeout (30 s).
-func (s *Service) listModels(ctx context.Context, ad llm.Adapter, sec secrets.CustomSecret) ([]llm.ModelInfo, error) {
+// listModels performs the one model-list request, bounded by the adapter's list timeout (30 s),
+// and logs the request line of NFR6.
+func (s *Service) listModels(ctx context.Context, prov domain.Provider, ad llm.Adapter, sec secrets.CustomSecret) ([]llm.ModelInfo, error) {
 	timeout := ad.Policy().ListTimeout
 	if timeout <= 0 {
 		timeout = listTimeout
 	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	started := time.Now()
 	models, err := ad.ListModels(ctx, sec.Key)
+	s.logRequest(ctx, prov, err, time.Since(started))
 	if err != nil && errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return nil, fmt.Errorf("model list timed out after %s", timeout.Round(time.Millisecond))
 	}
 	return models, err
+}
+
+// logRequest writes the one line a custom-provider request leaves (NFR6): the same message and
+// fields as the completion line of internal/llm (provider, host, operation, status, attempt,
+// latency_ms). The adapter retries nothing inside ListModels, so each call is attempt 1. It never
+// carries a key, a header value or a body.
+func (s *Service) logRequest(ctx context.Context, prov domain.Provider, err error, took time.Duration) {
+	s.log.InfoContext(ctx, "custom provider request",
+		"provider", prov.ID, "host", prov.Host(), "operation", "list_models",
+		"status", requestStatus(ctx, err), "attempt", 1, "latency_ms", took.Milliseconds())
+}
+
+// requestStatus is the HTTP status of a failed request, "2xx" for a success, else the error class
+// (timeout, canceled, error), like internal/llm's request line.
+func requestStatus(ctx context.Context, err error) string {
+	var (
+		se statusError
+		ne net.Error
+	)
+	switch {
+	case err == nil:
+		return "2xx"
+	case errors.As(err, &se) && se.StatusCode() != 0:
+		return strconv.Itoa(se.StatusCode())
+	case errors.Is(err, context.Canceled), errors.Is(ctx.Err(), context.Canceled):
+		return "canceled"
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(ctx.Err(), context.DeadlineExceeded),
+		errors.As(err, &ne) && ne.Timeout():
+		return "timeout"
+	}
+	return "error"
 }
 
 // failedTest turns a listing failure into an ok=false result with a user-safe message.
@@ -496,7 +532,7 @@ func (s *Service) Models(ctx context.Context, workspaceID, id string) ([]llm.Mod
 	var live []llm.ModelInfo
 	ad, err := s.d.Adapters.Build(prov, sec)
 	if err == nil {
-		live, err = s.listModels(ctx, ad, sec)
+		live, err = s.listModels(ctx, prov, ad, sec)
 	}
 	if err != nil {
 		if ctx.Err() != nil {

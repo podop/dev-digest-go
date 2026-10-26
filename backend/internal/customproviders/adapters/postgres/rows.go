@@ -17,6 +17,12 @@ const (
 	uniqueViolation = "23505"
 )
 
+// Table names, for the builder calls of the store.
+const (
+	providersTable = "custom_providers"
+	modelsTable    = "custom_provider_models"
+)
+
 // providerColumns lists the columns of custom_providers as providerRow reads them. The header
 // names come back as JSON text, which keeps the driver's array types out of this package.
 const providerColumns = `workspace_id::text AS workspace_id, id, name, protocol, base_url, auth_mode, auth_header,

@@ -356,6 +356,11 @@ type Options struct {
 	// are never priced (spec D30, SCR7). Off = the price book prices estimated usage, as the
 	// studio's ledger does.
 	PriceReportedUsageOnly bool
+	// ExtraRedactions lists secrets Redact masks besides the built-in keys: the custom providers'
+	// keys and header values (NFR1), read at each Redact call so a rotation applies at once. Nil =
+	// none. Only values of at least minRedactLen bytes are used: Redact runs over unrelated text,
+	// where a short header value ("1", "v2") would mask ordinary characters.
+	ExtraRedactions func() []string
 }
 
 // Client runs structured calls and model listings. It is safe for concurrent use.
@@ -369,6 +374,8 @@ type Client struct {
 	backoff  retry.Options
 	recorder Recorder
 	custom   CustomResolver
+	// extraRedactions is Options.ExtraRedactions.
+	extraRedactions func() []string
 	// reportedOnly is Options.PriceReportedUsageOnly.
 	reportedOnly bool
 }
@@ -388,7 +395,8 @@ func New(opts Options) *Client {
 		recorder: opts.Recorder,
 		custom:   opts.Custom,
 
-		reportedOnly: opts.PriceReportedUsageOnly,
+		extraRedactions: opts.ExtraRedactions,
+		reportedOnly:    opts.PriceReportedUsageOnly,
 	}
 	if c.log == nil {
 		c.log = slog.New(slog.DiscardHandler)

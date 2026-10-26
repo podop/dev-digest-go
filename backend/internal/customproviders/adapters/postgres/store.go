@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"dev-digest-go/backend/internal/customproviders/app"
 	"dev-digest-go/backend/internal/customproviders/domain"
@@ -39,14 +40,14 @@ func (s *Store) InTx(ctx context.Context, fn func(ctx context.Context) error) er
 func (s *Store) List(ctx context.Context, workspaceID string) ([]domain.Provider, error) {
 	conn := pg.Conn(ctx, s.db)
 	var rows []providerRow
-	err := conn.Raw(`SELECT `+providerColumns+` FROM custom_providers WHERE workspace_id = ?
-		ORDER BY name COLLATE "C", id COLLATE "C"`, workspaceID).Scan(&rows).Error
+	err := conn.Table(providersTable).Select(providerColumns).Where("workspace_id = ?", workspaceID).
+		Order(`name COLLATE "C", id COLLATE "C"`).Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select custom providers: %w", err)
 	}
 	var models []modelRow
-	err = conn.Raw(`SELECT `+modelColumns+` FROM custom_provider_models WHERE workspace_id = ?
-		ORDER BY provider_id COLLATE "C", "position"`, workspaceID).Scan(&models).Error
+	err = conn.Table(modelsTable).Select(modelColumns).Where("workspace_id = ?", workspaceID).
+		Order(`provider_id COLLATE "C", "position"`).Scan(&models).Error
 	if err != nil {
 		return nil, fmt.Errorf("select custom provider models: %w", err)
 	}
@@ -67,32 +68,35 @@ func (s *Store) List(ctx context.Context, workspaceID string) ([]domain.Provider
 
 // Get returns one provider; domain.ErrNotFound when the workspace does not define it.
 func (s *Store) Get(ctx context.Context, workspaceID, id string) (domain.Provider, error) {
-	return s.get(ctx, workspaceID, id, "")
+	return s.get(ctx, workspaceID, id, nil)
 }
 
 // GetForUpdate is Get that locks the provider row FOR UPDATE until the transaction ends.
 func (s *Store) GetForUpdate(ctx context.Context, workspaceID, id string) (domain.Provider, error) {
-	return s.get(ctx, workspaceID, id, " FOR UPDATE")
+	return s.get(ctx, workspaceID, id, &clause.Locking{Strength: clause.LockingStrengthUpdate})
 }
 
-func (s *Store) get(ctx context.Context, workspaceID, id, lock string) (domain.Provider, error) {
+// get reads the provider and its models; a non-nil lock is applied to the provider row.
+func (s *Store) get(ctx context.Context, workspaceID, id string, lock *clause.Locking) (domain.Provider, error) {
 	slug, ok := custom.ParseID(id)
 	if !ok {
 		return domain.Provider{}, domain.ErrNotFound
 	}
 	conn := pg.Conn(ctx, s.db)
 	var rows []providerRow
-	res := conn.Raw(`SELECT `+providerColumns+` FROM custom_providers WHERE workspace_id = ? AND id = ?`+lock,
-		workspaceID, slug).Scan(&rows)
-	if res.Error != nil {
-		return domain.Provider{}, fmt.Errorf("select custom provider: %w", res.Error)
+	q := conn.Table(providersTable).Select(providerColumns).Where("workspace_id = ? AND id = ?", workspaceID, slug)
+	if lock != nil {
+		q = q.Clauses(*lock)
+	}
+	if err := q.Scan(&rows).Error; err != nil {
+		return domain.Provider{}, fmt.Errorf("select custom provider: %w", err)
 	}
 	if len(rows) == 0 {
 		return domain.Provider{}, domain.ErrNotFound
 	}
 	var models []modelRow
-	err := conn.Raw(`SELECT `+modelColumns+` FROM custom_provider_models WHERE workspace_id = ? AND provider_id = ?
-		ORDER BY "position"`, workspaceID, slug).Scan(&models).Error
+	err := conn.Table(modelsTable).Select(modelColumns).Where("workspace_id = ? AND provider_id = ?", workspaceID, slug).
+		Order(`"position"`).Scan(&models).Error
 	if err != nil {
 		return domain.Provider{}, fmt.Errorf("select custom provider models: %w", err)
 	}
@@ -101,23 +105,26 @@ func (s *Store) get(ctx context.Context, workspaceID, id, lock string) (domain.P
 
 // Exists reports whether the workspace defines the provider.
 func (s *Store) Exists(ctx context.Context, workspaceID, id string) (bool, error) {
-	return s.exists(ctx, workspaceID, id, "")
+	return s.exists(ctx, workspaceID, id, nil)
 }
 
 // LockDefined is Exists that locks the provider row FOR SHARE until the transaction ends.
 func (s *Store) LockDefined(ctx context.Context, workspaceID, id string) (bool, error) {
-	return s.exists(ctx, workspaceID, id, " FOR SHARE")
+	return s.exists(ctx, workspaceID, id, &clause.Locking{Strength: clause.LockingStrengthShare})
 }
 
-func (s *Store) exists(ctx context.Context, workspaceID, id, lock string) (bool, error) {
+// exists looks the provider id up; a non-nil lock is applied to the provider row.
+func (s *Store) exists(ctx context.Context, workspaceID, id string, lock *clause.Locking) (bool, error) {
 	slug, ok := custom.ParseID(id)
 	if !ok {
 		return false, nil
 	}
 	var found []string
-	err := pg.Conn(ctx, s.db).Raw(`SELECT id FROM custom_providers WHERE workspace_id = ? AND id = ?`+lock,
-		workspaceID, slug).Scan(&found).Error
-	if err != nil {
+	q := pg.Conn(ctx, s.db).Table(providersTable).Where("workspace_id = ? AND id = ?", workspaceID, slug)
+	if lock != nil {
+		q = q.Clauses(*lock)
+	}
+	if err := q.Pluck("id", &found).Error; err != nil {
 		return false, fmt.Errorf("select custom provider id: %w", err)
 	}
 	return len(found) > 0, nil
@@ -136,12 +143,13 @@ func (s *Store) Insert(ctx context.Context, workspaceID string, p domain.Provide
 	}
 	return s.tx.InTx(ctx, func(ctx context.Context) error {
 		conn := pg.Conn(ctx, s.db)
+		// Raw SQL: an advisory lock and the ::text[] cast have no builder form.
 		if err := conn.Exec(`SELECT pg_advisory_xact_lock(hashtextextended(?, 0))`,
 			"custom_providers:"+workspaceID).Error; err != nil {
 			return fmt.Errorf("lock custom providers of workspace: %w", err)
 		}
 		var ids []string
-		if err := conn.Raw(`SELECT id FROM custom_providers WHERE workspace_id = ?`, workspaceID).Scan(&ids).Error; err != nil {
+		if err := conn.Table(providersTable).Where("workspace_id = ?", workspaceID).Pluck("id", &ids).Error; err != nil {
 			return fmt.Errorf("select custom provider ids: %w", err)
 		}
 		for _, id := range ids {
@@ -176,6 +184,7 @@ func (s *Store) Replace(ctx context.Context, workspaceID string, p domain.Provid
 	}
 	return s.tx.InTx(ctx, func(ctx context.Context) error {
 		conn := pg.Conn(ctx, s.db)
+		// Raw SQL: the ::text[] cast of the header names has no builder form.
 		res := conn.Exec(`UPDATE custom_providers SET name = ?, protocol = ?, base_url = ?, auth_mode = ?,
 			auth_header = ?, extra_header_names = ?::text[], structured_output = ?, updated_at = COALESCE(?, now())
 			WHERE workspace_id = ? AND id = ?`,
@@ -187,8 +196,8 @@ func (s *Store) Replace(ctx context.Context, workspaceID string, p domain.Provid
 		if res.RowsAffected == 0 {
 			return domain.ErrNotFound
 		}
-		if err := conn.Exec(`DELETE FROM custom_provider_models WHERE workspace_id = ? AND provider_id = ?`,
-			workspaceID, slug).Error; err != nil {
+		if err := conn.Table(modelsTable).Where("workspace_id = ? AND provider_id = ?", workspaceID, slug).
+			Delete(&modelRow{}).Error; err != nil {
 			return fmt.Errorf("delete custom provider models: %w", err)
 		}
 		return s.insertModels(ctx, workspaceID, slug, p.Models)
@@ -201,7 +210,8 @@ func (s *Store) Delete(ctx context.Context, workspaceID, id string) error {
 	if !ok {
 		return domain.ErrNotFound
 	}
-	res := pg.Conn(ctx, s.db).Exec(`DELETE FROM custom_providers WHERE workspace_id = ? AND id = ?`, workspaceID, slug)
+	res := pg.Conn(ctx, s.db).Table(providersTable).Where("workspace_id = ? AND id = ?", workspaceID, slug).
+		Delete(&providerRow{})
 	if res.Error != nil {
 		return fmt.Errorf("delete custom provider: %w", res.Error)
 	}
@@ -216,6 +226,7 @@ func (s *Store) insertModels(ctx context.Context, workspaceID, slug string, mode
 	if len(models) == 0 {
 		return nil
 	}
+	// Raw SQL: one multi-row insert with ::numeric casts so a price never passes through a float.
 	var b strings.Builder
 	b.WriteString(`INSERT INTO custom_provider_models
 		(workspace_id, provider_id, model_id, label, prompt_per_m, completion_per_m, "position") VALUES `)

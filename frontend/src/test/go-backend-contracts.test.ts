@@ -440,7 +440,10 @@ const customProvider = CustomProvider.extend({
 // A conflict that names what uses the provider; the details object is strict.
 const customProviderInUse = ApiErrorBody.extend({
   error: ApiErrorBody.shape.error
-    .extend({ code: z.literal("provider_in_use"), details: CustomProviderInUseDetails.strict() })
+    .extend({
+      code: z.literal("provider_in_use"),
+      details: CustomProviderInUseDetails.extend({ agents: z.array(CustomProviderInUseDetails.shape.agents.element.strict()) }).strict(),
+    })
     .strict(),
 }).strict();
 // The connection test of a custom provider: warning is present (null when the list was read).
@@ -755,7 +758,9 @@ const contracts: Record<string, z.ZodTypeAny> = {
       })
       .strict(),
   }).strict(),
-  custom_providers_models: z.array(ModelInfo.extend({ provider: z.string().regex(/^custom:[a-z0-9-]{1,32}$/) }).strict()),
+  custom_providers_models: z.array(
+    ModelInfo.extend({ provider: z.string().regex(/^custom:[a-z0-9-]{1,32}$/), pricing: ModelPricing.strict().nullish() }).strict(),
+  ),
   custom_providers_test_ok: customProviderTest.extend({ model_reachable: z.boolean(), warning: z.undefined() }).strict(),
   custom_providers_test_warning: customProviderTest
     .extend({ model_reachable: z.null(), warning: z.literal("Model list not available; key not verified") })

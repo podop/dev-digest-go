@@ -239,6 +239,12 @@ func TestCustom_costPerAttempt(t *testing.T) { // FR12, EC9, AC12
 			llm.AttemptResult{Raw: validAnswer, Usage: &llm.Usage{TokensIn: 1e6, TokensOut: 5e5}, CostUSD: f(-1)}, f(6), f(6)},
 		{"NaN cost ignored", price,
 			llm.AttemptResult{Raw: validAnswer, Usage: &llm.Usage{TokensIn: 1e6, TokensOut: 5e5}, CostUSD: f(math.NaN())}, f(6), f(6)},
+		{"a cost above the bound is unknown", nil,
+			llm.AttemptResult{Raw: validAnswer, Usage: &llm.Usage{TokensIn: 1, TokensOut: 1}, CostUSD: f(1e7)}, nil, nil},
+		{"a cost above the bound falls back to the manual price", price,
+			llm.AttemptResult{Raw: validAnswer, Usage: &llm.Usage{TokensIn: 1e6, TokensOut: 5e5}, CostUSD: f(1e7)}, f(6), f(6)},
+		{"the bound itself is a cost", nil,
+			llm.AttemptResult{Raw: validAnswer, Usage: &llm.Usage{TokensIn: 1, TokensOut: 1}, CostUSD: f(1e5)}, f(1e5), f(1e5)},
 		{"infinite cost ignored, no price", nil,
 			llm.AttemptResult{Raw: validAnswer, Usage: &llm.Usage{TokensIn: 1, TokensOut: 1}, CostUSD: f(math.Inf(1))}, nil, nil},
 		{"no usage at all: estimated tokens are never priced", price,
@@ -448,7 +454,7 @@ func TestCustom_strictRefusalGetsTheHint(t *testing.T) { // FR33, EC15, AC41
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			ad := &fakeAdapter{reply: func(int, context.Context, llm.Attempt) (llm.AttemptResult, error) {
-				return llm.AttemptResult{}, statusErrText{status: tc.status, text: "gateway said no, key " + customKey + " hdr " + customHeader}
+				return llm.AttemptResult{}, statusErrText{status: tc.status, text: "upstream said no, key " + customKey + " hdr " + customHeader}
 			}, policy: llm.Policy{RequestTimeout: 1e9, Retries: 0}}
 			c, _, _ := customClient(t, ad, func(cc *llm.CustomCall) { cc.Protocol, cc.Mode = tc.protocol, tc.mode })
 			_, err := c.Structured(t.Context(), customRequest())
@@ -459,7 +465,7 @@ func TestCustom_strictRefusalGetsTheHint(t *testing.T) { // FR33, EC15, AC41
 			if strings.Contains(ae.Message, customKey) || strings.Contains(ae.Message, customHeader) {
 				t.Errorf("message = %q, want key and header value scrubbed", ae.Message)
 			}
-			if !strings.Contains(ae.Message, "gateway said no") {
+			if !strings.Contains(ae.Message, "upstream said no") {
 				t.Errorf("message = %q, want the gateway message", ae.Message)
 			}
 			if tc.hint != "" && !strings.HasSuffix(ae.Message, "\n"+tc.hint) {
@@ -622,5 +628,50 @@ func TestCustom_modelInfoJSON(t *testing.T) { // FR10 shape
 				t.Errorf("Marshal(%+v) = %s, %v; want %s", tc.in, got, err, tc.want)
 			}
 		})
+	}
+}
+
+func TestCustom_partialSecretEchoesAreScrubbed(t *testing.T) { // security r1 L1
+	t.Parallel()
+	const key = "gwkey-ABCDEFGH-1234-wxyz"
+	tests := []struct {
+		name string
+		text string
+		gone []string
+	}{
+		{"plain dots mask", "Incorrect API key provided: gwkey-AB...wxyz", []string{"gwkey-AB", "wxyz"}},
+		{"middle of the key", "unknown credential ...EFGH-1234-...", []string{"EFGH-1234"}},
+		{"a header value in part", "header " + customHeader[4:14] + " invalid", []string{customHeader[4:14]}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			ad := &fakeAdapter{reply: func(int, context.Context, llm.Attempt) (llm.AttemptResult, error) {
+				return llm.AttemptResult{}, statusErrText{status: 400, text: tc.text}
+			}, policy: llm.Policy{RequestTimeout: 1e9, Retries: 0}}
+			c, _, logs := customClient(t, ad, func(cc *llm.CustomCall) { cc.Secrets = []string{key, customHeader} })
+			_, err := c.Structured(t.Context(), customRequest())
+			var ae *apperr.Error
+			if !errors.As(err, &ae) {
+				t.Fatalf("Structured() error = %v, want an apperr", err)
+			}
+			for _, part := range tc.gone {
+				if strings.Contains(ae.Message, part) || strings.Contains(fmt.Sprint(logs.records(t)), part) {
+					t.Errorf("message %q or the log holds %q, want it masked", ae.Message, part)
+				}
+			}
+		})
+	}
+}
+
+func TestClient_RedactMasksCustomSecretsOfAtLeastEightBytes(t *testing.T) { // security r1 INFO
+	t.Parallel()
+	ad := &fakeAdapter{reply: answer(validAnswer)}
+	c, _ := newClient(t, ad, newKeys(), func(o *llm.Options) {
+		o.ExtraRedactions = func() []string { return []string{"v2", "short", customHeader, customKey} }
+	})
+	got := c.Redact("a " + customKey + " b " + customHeader + " v2 short")
+	if want := "a [REDACTED] b [REDACTED] v2 short"; got != want {
+		t.Errorf("Redact() = %q, want %q (short values are left alone)", got, want)
 	}
 }

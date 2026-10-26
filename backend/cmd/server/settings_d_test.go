@@ -20,6 +20,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	agentsdomain "dev-digest-go/backend/internal/agents/domain"
+	cidomain "dev-digest-go/backend/internal/ci/domain"
 	evalsdomain "dev-digest-go/backend/internal/evals/domain"
 	customllm "dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
@@ -1738,6 +1739,13 @@ func TestSettingsD_PluginDomainLimitsMatchTheirOrigins(t *testing.T) { // P3
 			if got := pluginsdomain.IsCustomProvider(id); got != parsed || got != pattern.MatchString(id) {
 				t.Errorf("custom id %q: plugins IsCustomProvider = %v, llm/custom ParseID = %v, CHECK pattern = %v; want all equal",
 					id, got, parsed, pattern.MatchString(id))
+			}
+			// The ci/domain copy (CustomSlug, IsCustomProvider) follows the same rule.
+			slug, ciOK := cidomain.CustomSlug(id)
+			wantSlug, _ := customllm.ParseID(id)
+			if ciOK != parsed || slug != wantSlug || cidomain.IsCustomProvider(id) != parsed {
+				t.Errorf("custom id %q: ci CustomSlug = (%q, %v), llm/custom ParseID = (%q, %v); want equal",
+					id, slug, ciOK, wantSlug, parsed)
 			}
 		}
 		for _, name := range pluginsdomain.AgentProviders() {

@@ -168,6 +168,9 @@ func TestValidate_Rejects(t *testing.T) {
 		{name: "model id empty", edit: func(in *domain.Input) { in.Models = []domain.Model{{ID: ""}} }, wantPaths: []string{"models.0.id"}},
 		{name: "model id 201", edit: func(in *domain.Input) { in.Models = []domain.Model{{ID: strings.Repeat("m", 201)}} }, wantPaths: []string{"models.0.id"}},
 		{name: "label 201", edit: func(in *domain.Input) { in.Models = []domain.Model{{ID: "a", Label: str(strings.Repeat("l", 201))}} }, wantPaths: []string{"models.0.label"}},
+		{name: "label NUL", edit: func(in *domain.Input) { in.Models = []domain.Model{{ID: "a", Label: str("bad\x00label")}} }, wantPaths: []string{"models.0.label"}},
+		{name: "label newline", edit: func(in *domain.Input) { in.Models = []domain.Model{{ID: "a", Label: str("two\nlines")}} }, wantPaths: []string{"models.0.label"}},
+		{name: "model id NUL", edit: func(in *domain.Input) { in.Models = []domain.Model{{ID: "a\x00b"}} }, wantPaths: []string{"models.0.id"}},
 		{name: "price negative", edit: func(in *domain.Input) {
 			in.Models = []domain.Model{{ID: "a", Pricing: &domain.Pricing{PromptPerM: -1}}}
 		}, wantPaths: []string{"models.0.pricing.promptPerM"}},

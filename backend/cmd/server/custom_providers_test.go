@@ -521,6 +521,7 @@ func TestCustomProviders_ValidationRefusesAndStoresNothing(t *testing.T) { // AC
 		{name: "header value with CR LF", id: "custom:a", over: map[string]any{"extra_headers": []any{header("X-Team", "a\r\nX-Evil: 1")}}, want: "/extra_headers/0/value custom"},
 		{name: "201 manual models", id: "custom:a", over: map[string]any{"models": manyModels}, want: "/models too_big"},
 		{name: "duplicate model id", id: "custom:a", over: map[string]any{"models": []any{map[string]any{"id": "m"}, map[string]any{"id": "m"}}}, want: "/models/1/id custom"},
+		{name: "model label with NUL", id: "custom:a", over: map[string]any{"models": []any{map[string]any{"id": "m", "label": "bad\x00label"}}}, want: "/models/0/label invalid_string"},
 		{name: "header mode without a header", id: "custom:a", over: map[string]any{"auth_mode": "header"}, want: "/auth_header invalid_type"},
 	}
 	for _, tc := range tests {

@@ -100,6 +100,12 @@ func TestCheckHeaderName(t *testing.T) {
 		{"Transfer-Encoding", "", false},
 		{"Connection", "", false},
 		{"Cookie", "", false},
+		// Hop-by-hop and connection-specific names (security r1 L2).
+		{"Upgrade", "", false},
+		{"keep-alive", "", false},
+		{"Proxy-Connection", "", false},
+		{"TE", "", false},
+		{"Trailer", "", false},
 		{"X-Key", "x-key", false},
 		{"x-KEY", "X-Key", false},
 		// Not a token / bad length.

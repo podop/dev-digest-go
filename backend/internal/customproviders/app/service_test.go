@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1106,6 +1107,113 @@ func TestModels_TimeoutAndBuildFailureGiveTheManualList(t *testing.T) {
 	got, err = r.svc.Models(t.Context(), ws, synapse)
 	if err != nil || len(got) != 1 {
 		t.Errorf("Models() on build failure = %v, %v; want the manual list", got, err)
+	}
+}
+
+// requestLines are the "custom provider request" lines of the captured log, as field maps.
+func (r *rig) requestLines(t *testing.T) []map[string]string {
+	t.Helper()
+	var out []map[string]string
+	for _, line := range strings.Split(r.logs.String(), "\n") {
+		if !strings.Contains(line, `msg="custom provider request"`) {
+			continue
+		}
+		fields := map[string]string{}
+		for _, f := range strings.Fields(line) {
+			if k, v, ok := strings.Cut(f, "="); ok {
+				fields[k] = strings.Trim(v, `"`)
+			}
+		}
+		out = append(out, fields)
+	}
+	return out
+}
+
+// wantRequestLine checks that exactly one request line was logged, with the NFR6 fields.
+func (r *rig) wantRequestLine(t *testing.T, wantStatus string) {
+	t.Helper()
+	lines := r.requestLines(t)
+	if len(lines) != 1 {
+		t.Fatalf("log holds %d custom provider request lines, want exactly 1:\n%s", len(lines), r.logs.String())
+	}
+	got := lines[0]
+	latency, err := strconv.Atoi(got["latency_ms"])
+	if got["level"] != "INFO" || got["provider"] != synapse || got["host"] != "synapse.test" ||
+		got["operation"] != "list_models" || got["status"] != wantStatus || got["attempt"] != "1" || err != nil || latency < 0 {
+		t.Errorf("request line = %v, want INFO provider %s host synapse.test operation list_models status %s attempt 1 and a latency", got, synapse, wantStatus)
+	}
+	r.noSecretInLogs(t)
+}
+
+func TestRequestLog_OneLinePerListCall(t *testing.T) { // NFR6
+	tests := []struct {
+		name       string
+		listErr    error
+		block      bool
+		wantStatus string
+	}{
+		{name: "success", wantStatus: "2xx"},
+		{name: "404", listErr: &statusErr{404, "no list " + keyValue}, wantStatus: "404"},
+		{name: "500", listErr: &statusErr{500, "boom " + headValue}, wantStatus: "500"},
+		{name: "other error", listErr: errors.New("connection refused"), wantStatus: "error"},
+		{name: "timeout", block: true, wantStatus: "timeout"},
+	}
+	for _, tc := range tests {
+		setup := func(t *testing.T) *rig {
+			r := newRig(t)
+			r.create(t, input())
+			r.ad.list = listed("m1")
+			r.ad.listErr = tc.listErr
+			r.ad.block = tc.block
+			if tc.block {
+				r.ad.policy = llm.Policy{ListTimeout: 20 * time.Millisecond}
+			}
+			r.logs.Reset() // Create logs lines of its own
+			return r
+		}
+		t.Run("TestConnection "+tc.name, func(t *testing.T) {
+			r := setup(t)
+			if _, err := r.svc.TestConnection(t.Context(), ws, synapse, ""); err != nil {
+				t.Fatalf("TestConnection() error = %v", err)
+			}
+			r.wantRequestLine(t, tc.wantStatus)
+		})
+		t.Run("Models "+tc.name, func(t *testing.T) {
+			r := setup(t)
+			if _, err := r.svc.Models(t.Context(), ws, synapse); err != nil {
+				t.Fatalf("Models() error = %v", err)
+			}
+			r.wantRequestLine(t, tc.wantStatus)
+		})
+	}
+}
+
+func TestRequestLog_CanceledCall(t *testing.T) { // NFR6
+	r := newRig(t)
+	r.create(t, input())
+	r.ad.block = true
+	r.logs.Reset()
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, err := r.svc.Models(ctx, ws, synapse); err == nil {
+		t.Fatal("Models() with a canceled ctx succeeded, want an error")
+	}
+	r.wantRequestLine(t, "canceled")
+}
+
+func TestRequestLog_NoLineWithoutARequest(t *testing.T) { // an undefined provider and a build failure make no request
+	r := newRig(t)
+	r.create(t, input())
+	r.logs.Reset()
+	if _, err := r.svc.Models(t.Context(), ws, "custom:ghost"); err != nil {
+		t.Fatalf("Models() error = %v", err)
+	}
+	r.adapters.buildErr = errors.New("cannot build")
+	if _, err := r.svc.Models(t.Context(), ws, synapse); err != nil {
+		t.Fatalf("Models() error = %v", err)
+	}
+	if lines := r.requestLines(t); len(lines) != 0 {
+		t.Errorf("request lines without a request = %v, want none", lines)
 	}
 }
 

@@ -47,6 +47,7 @@ type CustomAdapter struct {
 	headers map[string]string
 	policy  llm.Policy
 	hc      *http.Client
+	gateway *wire.Gateway
 	// initErr is why the adapter cannot call: every call returns it without a request.
 	initErr error
 }
@@ -90,6 +91,7 @@ func NewCustom(opts CustomOptions) *CustomAdapter {
 		secrets = append(secrets, v)
 	}
 	a.hc = wire.CustomClient(opts.HTTPClient, secrets)
+	a.gateway = &wire.Gateway{Secrets: secrets, Keyed: opts.Key != ""}
 	return a
 }
 
@@ -120,7 +122,7 @@ func (a *CustomAdapter) Complete(ctx context.Context, _ string, at llm.Attempt) 
 	var resp chatResponse
 	err := wire.Do(ctx, a.hc, wire.Call{
 		Provider: a.name, Op: "chat completions", Method: http.MethodPost, URL: a.base + "/chat/completions",
-		Headers: a.headers, Body: req, ErrorMessage: true,
+		Headers: a.headers, Body: req, ErrorMessage: true, Gateway: a.gateway,
 	}, &resp)
 	if err != nil {
 		return llm.AttemptResult{}, err
@@ -148,7 +150,7 @@ func (a *CustomAdapter) ListModels(ctx context.Context, _ string) ([]llm.ModelIn
 	var list modelList
 	err := wire.Do(ctx, a.hc, wire.Call{
 		Provider: a.name, Op: "/models", Method: http.MethodGet, URL: a.base + "/models",
-		Headers: a.headers, ErrorMessage: true,
+		Headers: a.headers, ErrorMessage: true, Gateway: a.gateway,
 	}, &list)
 	if err != nil {
 		return nil, err

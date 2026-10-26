@@ -34,7 +34,21 @@ func (c *Client) Redact(s string) string {
 	for _, name := range []string{keynames.OpenAIKey, keynames.AnthropicKey, keynames.OpenRouterKey, keynames.GitHubToken} {
 		s = redactValue(s, c.keys.Get(name))
 	}
+	if c.extraRedactions != nil {
+		for _, secret := range longestFirst(c.extraRedactions()) {
+			if len(secret) >= minRedactLen {
+				s = redactValue(s, secret)
+			}
+		}
+	}
 	return s
+}
+
+// minRedactLen is the shortest extra secret Redact masks (NFR7 uses the same bound for the runner).
+const minRedactLen = 8
+
+func longestFirst(in []string) []string {
+	return slices.SortedFunc(slices.Values(in), func(a, b string) int { return len(b) - len(a) })
 }
 
 func redactValue(s, secret string) string {
@@ -48,7 +62,7 @@ func redactValue(s, secret string) string {
 // call's own secrets: a custom provider's key and extra-header values (NFR6).
 func (c *Client) scrub(s, key string, secrets []string) string {
 	// Longest first, so a secret that contains another one is not left half-redacted.
-	for _, secret := range slices.SortedFunc(slices.Values(secrets), func(a, b string) int { return len(b) - len(a) }) {
+	for _, secret := range longestFirst(secrets) {
 		s = redactValue(s, secret)
 	}
 	return c.Redact(redactValue(s, key))
@@ -361,7 +375,13 @@ func (c *Client) fail(parent, budget context.Context, label, key string, cc *Cus
 	if cc != nil {
 		secrets = cc.Secrets
 	}
-	msg := c.scrub(err.Error(), key, secrets)
+	// A custom gateway's text is untrusted: besides the exact secrets, a masked or partial copy of
+	// the key or of a header value must not survive either (NFR1).
+	text := err.Error()
+	if cc != nil {
+		text = custom.Scrub(text, secrets, logging.Redacted)
+	}
+	msg := c.scrub(text, key, secrets)
 	if hint := strictHint(cc, err); hint != "" {
 		msg += "\n" + hint
 	}
@@ -480,8 +500,16 @@ func (c *Client) attemptCost(req Request, cc *CustomCall, a attemptRecord) *floa
 	return nil
 }
 
-// validCost reports a non-nil, finite cost >= 0.
-func validCost(f *float64) bool { return f != nil && !math.IsNaN(*f) && !math.IsInf(*f, 0) && *f >= 0 }
+// maxAttemptCostUSD is the largest cost one attempt may report. A gateway's figure is untrusted
+// text: a larger one is unknown, so it cannot overflow numeric(12,6) of agent_runs once the
+// attempts and the agents of a run are summed (the ledger treats >= 1e12 and CI ingest >= 1e6 as
+// unknown, too).
+const maxAttemptCostUSD = 1e5
+
+// validCost reports a non-nil, finite cost within [0, maxAttemptCostUSD].
+func validCost(f *float64) bool {
+	return f != nil && !math.IsNaN(*f) && !math.IsInf(*f, 0) && *f >= 0 && *f <= maxAttemptCostUSD
+}
 
 // totalCost is the call's cost. OpenRouter, a custom provider (FR12 is per attempt) and any
 // provider that reports a cost per attempt, sums the attempts (the provider's figure, else the price book; one unknown makes the sum

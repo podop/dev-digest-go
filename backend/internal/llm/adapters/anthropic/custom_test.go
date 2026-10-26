@@ -314,8 +314,15 @@ func TestCustom_statusErrorsKeepTheirStatus(t *testing.T) {
 			if got := statusOf(err); got != status {
 				t.Fatalf("Complete() StatusCode = %d (%v), want %d", got, err, status)
 			}
-			if !strings.Contains(err.Error(), "Claude GW messages returned") || !strings.Contains(err.Error(), "tools are not supported") {
-				t.Errorf("error = %q, want the provider name, status and the gateway message", err)
+			if !strings.Contains(err.Error(), "Claude GW messages returned") {
+				t.Errorf("error = %q, want the provider name and status", err)
+			}
+			if status == 401 {
+				if !strings.HasSuffix(err.Error(), "returned 401: API key rejected by the provider") {
+					t.Errorf("error = %q, want the fixed 401 message", err)
+				}
+			} else if !strings.Contains(err.Error(), "tools are not supported") {
+				t.Errorf("error = %q, want the gateway message", err)
 			}
 		})
 	}
@@ -332,19 +339,20 @@ func TestCustom_secretsAreScrubbedFromErrors(t *testing.T) {
 		{"header value echoed", `{"error":{"message":"bad header ` + hdr + `"}}`},
 		{"masked key echoed", `{"error":{"message":"invalid x-api-key sk-ant-****0002"}}`},
 		{"secret straddles the cut", `{"error":{"message":"` + strings.Repeat("x", 290) + testKey + hdr + `"}}`},
+		{"partial key echoed with plain dots", `{"error":{"message":"invalid key ` + testKey[:8] + `...` + testKey[len(testKey)-4:] + `"}}`},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			g := newGateway(t, fail(401, tc.body))
+			g := newGateway(t, fail(400, tc.body))
 			ad := g.custom(func(o *anthropic.CustomOptions) { o.Headers = map[string]string{"X-Team": hdr} })
 			_, err := ad.Complete(t.Context(), "", attempt(custom.ModeStrict))
 			_, lerr := ad.ListModels(t.Context(), "")
 			for _, e := range []error{err, lerr} {
-				if statusOf(e) != 401 {
-					t.Fatalf("error = %v, want a 401 status error", e)
+				if statusOf(e) != 400 {
+					t.Fatalf("error = %v, want a 400 status error", e)
 				}
-				for _, secret := range []string{testKey, hdr, "sk-ant", "0002", "team-secret"} {
+				for _, secret := range []string{testKey, hdr, "sk-ant", "0002", "team-secret", testKey[:8], testKey[len(testKey)-4:]} {
 					if strings.Contains(e.Error(), secret) {
 						t.Errorf("error %q contains %q", e, secret)
 					}
@@ -353,6 +361,54 @@ func TestCustom_secretsAreScrubbedFromErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestCustom_authRejectionsGetAFixedMessage(t *testing.T) { // security r1 L1
+	t.Parallel()
+	const echoed = `{"error":{"message":"invalid x-api-key gwkey-AB...wxyz"}}`
+	for _, tc := range []struct {
+		name   string
+		status int
+		key    string
+		want   string
+	}{
+		{"401 with a key", 401, testKey, "Claude GW messages returned 401: API key rejected by the provider"},
+		{"403 with a key", 403, testKey, "Claude GW messages returned 403: API key rejected by the provider"},
+		{"403 without a key", 403, "", "Claude GW messages returned 403: The gateway rejected the request without a key (HTTP 403)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := newGateway(t, fail(tc.status, echoed))
+			ad := g.custom(func(o *anthropic.CustomOptions) { o.Key = tc.key })
+			_, err := ad.Complete(t.Context(), "", attempt(custom.ModeStrict))
+			if err == nil || err.Error() != tc.want || statusOf(err) != tc.status {
+				t.Errorf("Complete() error = %v (status %d), want %q with status %d", err, statusOf(err), tc.want, tc.status)
+			}
+		})
+	}
+}
+
+func TestCustom_transportErrorHasNoBaseURL(t *testing.T) { // security r1 INFO: *url.Error is unwrapped
+	t.Parallel()
+	cause := errors.New("refused by the address guard")
+	hc := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) { return nil, cause })}
+	ad := anthropic.NewCustom(anthropic.CustomOptions{ID: customID, Name: "Claude GW", BaseURL: "https://gateway.test/tenant-path/v1", Key: testKey, HTTPClient: hc})
+	for name, call := range map[string]func() error{
+		"complete": func() error { _, err := ad.Complete(t.Context(), "", attempt(custom.ModeStrict)); return err },
+		"models":   func() error { _, err := ad.ListModels(t.Context(), ""); return err },
+	} {
+		err := call()
+		if err == nil || !errors.Is(err, cause) {
+			t.Fatalf("%s error = %v, want it to wrap the cause", name, err)
+		}
+		if strings.Contains(err.Error(), "gateway.test") || strings.Contains(err.Error(), "tenant-path") {
+			t.Errorf("%s error %q holds the base URL", name, err)
+		}
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func TestCustom_redirectIsNotFollowed(t *testing.T) {
 	t.Parallel()

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -83,12 +84,25 @@ func completionColumns(c domain.RunCompletion) map[string]any {
 		"duration_ms":    c.DurationMS,
 		"tokens_in":      c.TokensIn,
 		"tokens_out":     c.TokensOut,
-		"cost_usd":       c.CostUSD,
+		"cost_usd":       costValue(c.CostUSD),
 		"findings_count": c.FindingsCount,
 		"grounding":      clean(c.Grounding),
 		"score":          c.Score,
 		"blockers":       c.Blockers,
 	}
+}
+
+// costLimitUSD is the first cost numeric(12,6) cannot hold: a value below it rounds, at six
+// decimals, to at most 999999.999999.
+const costLimitUSD = 999_999.9999995
+
+// costValue is the cost as a statement argument: NULL (unknown) when nil or not storable. A sum
+// of attempts that reported large figures must not fail the final write of the run (22003).
+func costValue(c *float64) any {
+	if c == nil || math.IsNaN(*c) || *c < 0 || *c >= costLimitUSD {
+		return nil
+	}
+	return *c
 }
 
 // errorValue is the error note as a statement argument: NULL when nil.

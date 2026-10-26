@@ -8,9 +8,7 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"regexp"
 	"strconv"
-	"strings"
 
 	"dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/logging"
@@ -35,8 +33,11 @@ func CustomClient(hc *http.Client, secrets []string) *http.Client {
 	return &c
 }
 
-// ScrubText replaces every secret, and anything that looks like a (masked) provider key, in s.
-func ScrubText(s string, secrets []string) string { return scrubAll(s, nonEmpty(secrets)) }
+// ScrubText replaces every secret, anything that looks like a (masked) provider key and every
+// fragment of a secret of 4 or more bytes in s (custom.Scrub).
+func ScrubText(s string, secrets []string) string {
+	return custom.Scrub(s, nonEmpty(secrets), logging.Redacted)
+}
 
 func nonEmpty(in []string) []string {
 	out := make([]string, 0, len(in))
@@ -48,26 +49,9 @@ func nonEmpty(in []string) []string {
 	return out
 }
 
-var (
-	// keyLikeRun matches provider key shapes (sk-…, sk-or-…, sk-ant-…), masked or not.
-	keyLikeRun = regexp.MustCompile(`(?i)\bsk-[\w*•…-]*`)
-	// maskedRun matches any word run holding a mask (two or more of * • …): providers echo a
-	// masked copy of a rejected key that an exact-match scrub misses.
-	maskedRun = regexp.MustCompile(`[\w-]*[*•…]{2,}[\w-]*`)
-)
-
+// scrubAll is the structure-preserving scrub of a raw body (no fragment pass).
 func scrubAll(s string, secrets []string) string {
-	for _, sec := range secrets {
-		s = strings.ReplaceAll(s, sec, logging.Redacted)
-		// The same secret inside a JSON string (a gateway echoing it in its error body).
-		if q, err := json.Marshal(sec); err == nil {
-			if esc := string(q[1 : len(q)-1]); esc != sec {
-				s = strings.ReplaceAll(s, esc, logging.Redacted)
-			}
-		}
-	}
-	s = keyLikeRun.ReplaceAllString(s, logging.Redacted)
-	return maskedRun.ReplaceAllString(s, logging.Redacted)
+	return custom.ScrubWhole(s, secrets, logging.Redacted)
 }
 
 type scrubTransport struct {
@@ -78,7 +62,7 @@ type scrubTransport struct {
 func (t *scrubTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	resp, err := t.base.RoundTrip(req)
 	if err != nil {
-		if msg := scrubAll(err.Error(), t.secrets); msg != err.Error() {
+		if msg := custom.Scrub(err.Error(), t.secrets, logging.Redacted); msg != err.Error() {
 			return nil, &scrubbedError{msg: msg, err: err}
 		}
 		return nil, err
