@@ -2,6 +2,9 @@ package domain_test
 
 import (
 	"errors"
+	"fmt"
+	"math/rand/v2"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -187,5 +190,62 @@ func TestFileNames(t *testing.T) {
 				t.Errorf("IsZipName(%q) = %v, want %v", tc.path, got, tc.isZip)
 			}
 		})
+	}
+}
+
+var oldCommentRE = regexp.MustCompile(`(?s)<!--.*?(?:-->|\z)`)
+
+// oldSanitizeMarkdown is SanitizeMarkdown before security review r2 (N1): the comment step was
+// the regexp `(?s)<!--.*?(?:-->|\z)`, which costs 450 ns per byte above 17 KB. It is the oracle of
+// the linear version.
+func oldSanitizeMarkdown(input string) (string, []string) {
+	var warnings []string
+	text := strings.ReplaceAll(input, "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	if n := len(oldCommentRE.FindAllStringIndex(text, -1)); n > 0 {
+		text = oldCommentRE.ReplaceAllString(text, "")
+		warnings = append(warnings, fmt.Sprintf("Removed %d HTML comment(s) (hidden text)", n))
+	}
+	remove := func(pred func(rune) bool, what string) {
+		n := 0
+		text = strings.Map(func(r rune) rune {
+			if pred(r) {
+				n++
+				return -1
+			}
+			return r
+		}, text)
+		if n > 0 {
+			warnings = append(warnings, fmt.Sprintf("Removed %d %s", n, what))
+		}
+	}
+	remove(func(r rune) bool { return (r >= 0x200B && r <= 0x200D) || r == 0x2060 || r == 0xFEFF }, "zero-width character(s)")
+	remove(func(r rune) bool {
+		return r == 0x061C || r == 0x200E || r == 0x200F || (r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069)
+	}, "bidi control character(s)")
+	return text, warnings
+}
+
+func TestSanitizeMarkdown_MatchesTheRegexpVersion(t *testing.T) {
+	pieces := []string{"<!--", "-->", "<!-", "--", "-", ">", "<!-->", "<!--->", "<", "!", "a", " ", "\n", "\r\n", "\r",
+		"\u200B", "\u202E", "\xff", "\U0001F600", "<!-- x -->", "--!>", "<!---->"}
+	rng := rand.New(rand.NewPCG(3, 4))
+	corpus := []string{"", "<!--", "<!-->", "<!--->", "<!---->", "a<!--b-->c<!--d", strings.Repeat("<!--", 300), strings.Repeat("<!--a-->", 300)}
+	for range 20_000 {
+		var sb strings.Builder
+		for range rng.IntN(24) {
+			sb.WriteString(pieces[rng.IntN(len(pieces))])
+		}
+		corpus = append(corpus, sb.String())
+	}
+	for _, in := range corpus {
+		wantText, wantWarnings := oldSanitizeMarkdown(in)
+		gotText, gotWarnings := domain.SanitizeMarkdown(in)
+		if gotText != wantText {
+			t.Fatalf("SanitizeMarkdown(%q) = %q, the regexp version gives %q", in, gotText, wantText)
+		}
+		if diff := cmp.Diff(wantWarnings, gotWarnings); diff != "" {
+			t.Fatalf("SanitizeMarkdown(%q) warnings differ from the regexp version (-regexp +linear):\n%s", in, diff)
+		}
 	}
 }

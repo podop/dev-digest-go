@@ -46,13 +46,14 @@ func (c *issues) text(path, s string, minLen, maxLen int) {
 // oneOf checks an enum field.
 // visibleText is text for a body or prompt that an install stores without hidden text: besides
 // the length rules on the raw value, something must stay once the hidden text is removed (L2).
-func (c *issues) visibleText(path, s string, minLen, maxLen int) {
+// cleaned and h are the result of stripHidden(s), computed once per request.
+func (c *issues) visibleText(path, s string, minLen, maxLen int, cleaned string, h hidden) {
 	before := len(c.list)
 	c.text(path, s, minLen, maxLen)
 	if len(c.list) != before {
 		return
 	}
-	if cleaned, h := stripHidden(s); h.any() && strings.TrimSpace(cleaned) == "" {
+	if h.any() && strings.TrimSpace(cleaned) == "" {
 		c.add("%s has no visible text after hidden text is removed (HTML comments, zero-width or bidi characters)", path)
 	}
 }
@@ -201,7 +202,10 @@ func firstByte(raw []byte) byte {
 // in order, at most MaxIssues; the first one is the message. Strings must not contain U+0000
 // (Postgres refuses it) and the JSON fields no unpaired surrogate escape. Conventions, context
 // files, settings and skill versions are never installed; only their counts are checked.
-func Validate(b Bundle) error {
+func Validate(b Bundle) error { return validate(b, sanitizeTexts(b)) }
+
+// validate is Validate with the cleaned texts of b already computed.
+func validate(b Bundle, texts cleanTexts) error {
 	var c issues
 
 	m := b.Manifest
@@ -249,7 +253,7 @@ func Validate(b Bundle) error {
 		}
 		skillNames[s.Name] = struct{}{}
 		c.text(p+".description", s.Description, 0, SkillDescriptionMax)
-		c.visibleText(p+".body", s.Body, 1, SkillBodyMax)
+		c.visibleText(p+".body", s.Body, 1, SkillBodyMax, texts.skillBodies[i], texts.bodyHidden[i])
 		c.oneOf(p+".type", s.Type, skillTypes)
 		c.oneOf(p+".source", s.Source, skillSources)
 		if len(s.EvidenceFiles) > MaxEvidenceFiles {
@@ -280,7 +284,7 @@ func Validate(b Bundle) error {
 		c.text(p+".description", a.Description, 0, -1)
 		c.oneOf(p+".provider", a.Provider, agentProviders)
 		c.text(p+".model", a.Model, 1, AgentModelMax)
-		c.visibleText(p+".system_prompt", a.SystemPrompt, 1, AgentPromptMax)
+		c.visibleText(p+".system_prompt", a.SystemPrompt, 1, AgentPromptMax, texts.agentPrompts[i], texts.promptHidden[i])
 		c.oneOf(p+".strategy", a.Strategy, agentStrategies)
 		c.oneOf(p+".ci_fail_on", a.CIFailOn, agentCIFailOns)
 		c.jsonField(p+".output_schema", a.OutputSchema, false)

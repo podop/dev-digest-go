@@ -9,9 +9,8 @@ import (
 
 // checked is an upload that passed every rule before anything is stored.
 type checked struct {
-	upload domain.Upload
-	plan   domain.Install
-	found  domain.Conflicts
+	prepared domain.Prepared
+	found    domain.Conflicts
 }
 
 // check runs the steps shared by Preview and Install: the file name, the parse, the validation
@@ -27,15 +26,16 @@ func (s *Service) check(ctx context.Context, workspaceID string, in ImportInput)
 	if err != nil {
 		return checked{}, storeError(err)
 	}
-	if err := domain.Validate(up.Bundle); err != nil {
+	prepared, err := domain.Prepare(up, in.FileName)
+	if err != nil {
 		return checked{}, storeError(err)
 	}
-	plan := domain.PlanInstall(up.Bundle, in.FileName)
+	plan := prepared.Plan
 	found, err := s.d.Names.Conflicts(ctx, workspaceID, plan.Name, plan.SkillNames())
 	if err != nil {
 		return checked{}, fmt.Errorf("check plugin names: %w", err)
 	}
-	return checked{upload: up, plan: plan, found: found}, nil
+	return checked{prepared: prepared, found: found}, nil
 }
 
 // Preview reports what installing the upload would do and which names are taken. It stores nothing.
@@ -44,7 +44,7 @@ func (s *Service) Preview(ctx context.Context, workspaceID string, in ImportInpu
 	if err != nil {
 		return domain.PreviewDoc{}, err
 	}
-	return domain.Preview(c.upload, c.found), nil
+	return c.prepared.Preview(c.found), nil
 }
 
 // Install runs the preview's checks, refuses with 409 plugin_conflict before writing when a name is
@@ -58,7 +58,7 @@ func (s *Service) Install(ctx context.Context, workspaceID string, in ImportInpu
 	if c.found.Any() {
 		return domain.Installed{}, conflictError(c.found, &domain.ConflictError{Conflicts: c.found})
 	}
-	installed, err := s.d.Installer.Install(ctx, workspaceID, c.plan)
+	installed, err := s.d.Installer.Install(ctx, workspaceID, c.prepared.Plan)
 	if err != nil {
 		return domain.Installed{}, storeError(fmt.Errorf("install plugin: %w", err))
 	}

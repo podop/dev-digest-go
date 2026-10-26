@@ -66,11 +66,38 @@ type Candidate struct {
 }
 
 var (
-	htmlCommentRE = regexp.MustCompile(`(?s)<!--.*?(?:-->|\z)`)
 	frontmatterRE = regexp.MustCompile(`(?s)\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\z)`)
 	frontLineRE   = regexp.MustCompile(`^([A-Za-z][\w-]*)[ \t]*:[ \t]*([^\n\r\x{2028}\x{2029}]*)$`)
 	paragraphRE   = regexp.MustCompile(`\n[\t\n\v\f\r \x{a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}]*\n`)
 )
+
+// stripHTMLComments removes every HTML comment and counts them: a comment runs from "<!--" to the
+// next "-->" after it, and an unclosed one runs to the end. It replaces the regexp
+// `(?s)<!--.*?(?:-->|\z)`, which costs about 450 ns per byte inside a comment above 17 KB of
+// input; this loop is linear. plugins/domain keeps a copy (stripComments); cmd/server's drift test
+// pins the two.
+func stripHTMLComments(s string) (string, int) {
+	i := strings.Index(s, "<!--")
+	if i < 0 {
+		return s, 0
+	}
+	var out strings.Builder
+	out.Grow(len(s))
+	n := 0
+	for i >= 0 {
+		out.WriteString(s[:i])
+		n++
+		rest := s[i+len("<!--"):]
+		end := strings.Index(rest, "-->")
+		if end < 0 {
+			return out.String(), n
+		}
+		s = rest[end+len("-->"):]
+		i = strings.Index(s, "<!--")
+	}
+	out.WriteString(s)
+	return out.String(), n
+}
 
 func isZeroWidth(r rune) bool {
 	return (r >= 0x200B && r <= 0x200D) || r == 0x2060 || r == 0xFEFF
@@ -101,11 +128,10 @@ func SanitizeMarkdown(input string) (string, []string) {
 	text := strings.ReplaceAll(input, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
 
-	if n := len(htmlCommentRE.FindAllStringIndex(text, -1)); n > 0 {
-		text = htmlCommentRE.ReplaceAllString(text, "")
+	text, n := stripHTMLComments(text)
+	if n > 0 {
 		warnings = append(warnings, fmt.Sprintf("Removed %d HTML comment(s) (hidden text)", n))
 	}
-	var n int
 	if text, n = removeRunes(text, isZeroWidth); n > 0 {
 		warnings = append(warnings, fmt.Sprintf("Removed %d zero-width character(s)", n))
 	}

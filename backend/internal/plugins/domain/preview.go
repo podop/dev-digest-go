@@ -50,6 +50,10 @@ type PreviewSkill struct {
 // parts plus the sections a plugin never installs (conventions, skill versions, context files,
 // settings) when the bundle holds them, each of which also gets a warning.
 func Preview(up Upload, found Conflicts) PreviewDoc {
+	return preview(up, found, sanitizeTexts(up.Bundle))
+}
+
+func preview(up Upload, found Conflicts, texts cleanTexts) PreviewDoc {
 	b := up.Bundle
 	name, _ := NormalizeName(b.Manifest.Name)
 	kind := b.Manifest.Kind
@@ -79,7 +83,7 @@ func Preview(up Upload, found Conflicts) PreviewDoc {
 		}
 	}
 	for i, s := range b.Skills {
-		doc.Skills[i] = PreviewSkill{Name: s.Name, Type: s.Type, Description: s.Description, Enabled: s.Enabled}
+		doc.Skills[i] = PreviewSkill{Name: s.Name, Type: s.Type, Description: texts.skillDescriptions[i], Enabled: s.Enabled}
 		if slices.Contains(found.Skills, s.Name) {
 			doc.Conflicts.Skills = append(doc.Conflicts.Skills, s.Name)
 		}
@@ -119,7 +123,7 @@ func Preview(up Upload, found Conflicts) PreviewDoc {
 	if withRepo > 0 {
 		doc.Warnings = append(doc.Warnings, fmt.Sprintf("%d learning(s) name a repository; they are installed without one", withRepo))
 	}
-	doc.Warnings = append(doc.Warnings, sanitizeTexts(b).warnings...)
+	doc.Warnings = append(doc.Warnings, texts.warnings...)
 	return doc
 }
 
@@ -200,7 +204,9 @@ type InstallLearning struct {
 // PlanInstall builds the install plan of a bundle that passed Validate. source is the upload's
 // file name ("" when none). The plugin name is the trimmed manifest name. Skill bodies and agent
 // system prompts are stored without hidden text (SanitizeHiddenText); Preview warns about it.
-func PlanInstall(b Bundle, source string) Install {
+func PlanInstall(b Bundle, source string) Install { return planInstall(b, source, sanitizeTexts(b)) }
+
+func planInstall(b Bundle, source string, texts cleanTexts) Install {
 	name, _ := NormalizeName(b.Manifest.Name)
 	in := Install{
 		Name: name, Version: b.Manifest.Version, Description: b.Manifest.Description, Source: source,
@@ -209,7 +215,6 @@ func PlanInstall(b Bundle, source string) Install {
 		EvalCases: make([]InstallCase, len(b.EvalCases)),
 		Learnings: make([]InstallLearning, len(b.Learnings)),
 	}
-	texts := sanitizeTexts(b)
 	for i, a := range b.Agents {
 		in.Agents[i] = InstallAgent{
 			Name: a.Name, Description: a.Description, Provider: a.Provider, Model: a.Model,
@@ -219,7 +224,7 @@ func PlanInstall(b Bundle, source string) Install {
 	}
 	for i, s := range b.Skills {
 		in.Skills[i] = InstallSkill{
-			Name: s.Name, Description: s.Description, Type: s.Type, Source: InstalledSkillSource,
+			Name: s.Name, Description: texts.skillDescriptions[i], Type: s.Type, Source: InstalledSkillSource,
 			SourceRef: SkillSourceRef(name), Body: texts.skillBodies[i], Enabled: s.Enabled,
 			EvidenceFiles: slices.Clone(s.EvidenceFiles), VersionNote: SkillVersionNote(name),
 		}
@@ -235,6 +240,29 @@ func PlanInstall(b Bundle, source string) Install {
 	}
 	return in
 }
+
+// Prepared is an upload that passed Validate, with its install plan, for one request: the hidden
+// text of the bundle is removed once and shared by the validation, the plan and the preview
+// (security review r2, N1).
+type Prepared struct {
+	Upload Upload
+	// Plan is what an install stores.
+	Plan  Install
+	texts cleanTexts
+}
+
+// Prepare validates the upload's bundle and plans its install (see PlanInstall for source). It
+// returns the error of Validate, nil or an *InvalidError.
+func Prepare(up Upload, source string) (Prepared, error) {
+	texts := sanitizeTexts(up.Bundle)
+	if err := validate(up.Bundle, texts); err != nil {
+		return Prepared{}, err
+	}
+	return Prepared{Upload: up, Plan: planInstall(up.Bundle, source, texts), texts: texts}, nil
+}
+
+// Preview describes the prepared upload like the function Preview does.
+func (p Prepared) Preview(found Conflicts) PreviewDoc { return preview(p.Upload, found, p.texts) }
 
 // SkillNames lists the plan's skill names in bundle order, for the conflict check.
 func (in Install) SkillNames() []string {

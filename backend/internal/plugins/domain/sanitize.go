@@ -2,7 +2,6 @@ package domain
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -10,10 +9,34 @@ import (
 // summed in one last warning.
 const MaxHiddenTextWarnings = MaxIssues
 
-// hiddenCommentRE copies skills/domain's htmlCommentRE: an unclosed comment runs to the end.
+// stripComments removes every HTML comment and counts them. It copies skills/domain's
+// stripHTMLComments: a comment runs from "<!--" to the next "-->" after it, and an unclosed one
+// runs to the end. It replaces the regexp `(?s)<!--.*?(?:-->|\z)`, which costs about 450 ns per
+// byte inside a comment above 17 KB of input (security review r2, N1); this loop is linear.
 // cmd/server's drift test (plugin_sanitize_drift_test.go) pins SanitizeHiddenText to
 // skills/domain.SanitizeMarkdown on a corpus of hostile inputs.
-var hiddenCommentRE = regexp.MustCompile(`(?s)<!--.*?(?:-->|\z)`)
+func stripComments(s string) (string, int) {
+	i := strings.Index(s, "<!--")
+	if i < 0 {
+		return s, 0
+	}
+	var out strings.Builder
+	out.Grow(len(s))
+	n := 0
+	for i >= 0 {
+		out.WriteString(s[:i])
+		n++
+		rest := s[i+len("<!--"):]
+		end := strings.Index(rest, "-->")
+		if end < 0 {
+			return out.String(), n
+		}
+		s = rest[end+len("-->"):]
+		i = strings.Index(s, "<!--")
+	}
+	out.WriteString(s)
+	return out.String(), n
+}
 
 func isHiddenZeroWidth(r rune) bool {
 	return (r >= 0x200B && r <= 0x200D) || r == 0x2060 || r == 0xFEFF
@@ -62,10 +85,7 @@ func stripHidden(input string) (string, hidden) {
 	var h hidden
 	text := strings.ReplaceAll(input, "\r\n", "\n")
 	text = strings.ReplaceAll(text, "\r", "\n")
-	if n := len(hiddenCommentRE.FindAllStringIndex(text, -1)); n > 0 {
-		text = hiddenCommentRE.ReplaceAllString(text, "")
-		h.comments = n
-	}
+	text, h.comments = stripComments(text)
 	text, h.zeroWidth = removeHiddenRunes(text, isHiddenZeroWidth)
 	text, h.bidi = removeHiddenRunes(text, isHiddenBidi)
 	return text, h
@@ -91,39 +111,54 @@ func SanitizeHiddenText(input string) (string, []string) {
 	return text, warnings
 }
 
-// sanitized are the texts an install stores, with hidden text removed, and one warning per item
-// that had some (at most MaxHiddenTextWarnings, then a summary). Both PlanInstall and Preview
-// derive from it, so the preview warns about exactly what the install removes.
-type sanitized struct {
-	skillBodies   []string
-	agentPrompts  []string
-	warnings      []string
-	affectedItems int
+// cleanTexts are the texts an install stores, with hidden text removed, and one warning per field
+// that had some (at most MaxHiddenTextWarnings, then a summary). Validate, PlanInstall and Preview
+// all derive from it, so the preview warns about exactly what the install removes. Cleaning is
+// linear but not free on a 14 MiB bundle, so a request computes it once (Prepare).
+type cleanTexts struct {
+	skillBodies       []string
+	skillDescriptions []string
+	agentPrompts      []string
+	// bodyHidden and promptHidden say what the cleanup removed, for the visible-text check.
+	bodyHidden     []hidden
+	promptHidden   []hidden
+	warnings       []string
+	affectedFields int
 }
 
-func sanitizeTexts(b Bundle) sanitized {
-	s := sanitized{skillBodies: make([]string, len(b.Skills)), agentPrompts: make([]string, len(b.Agents))}
+func sanitizeTexts(b Bundle) cleanTexts {
+	s := cleanTexts{
+		skillBodies: make([]string, len(b.Skills)), skillDescriptions: make([]string, len(b.Skills)),
+		agentPrompts: make([]string, len(b.Agents)),
+		bodyHidden:   make([]hidden, len(b.Skills)), promptHidden: make([]hidden, len(b.Agents)),
+	}
 	note := func(noun, name, field string, h hidden) {
 		if !h.any() {
 			return
 		}
-		s.affectedItems++
-		if s.affectedItems > MaxHiddenTextWarnings {
+		s.affectedFields++
+		if s.affectedFields > MaxHiddenTextWarnings {
 			return
 		}
 		s.warnings = append(s.warnings, fmt.Sprintf("%s %q: hidden text removed from the %s (%s)", noun, name, field, h.kinds()))
 	}
 	for i, sk := range b.Skills {
-		text, h := stripHidden(sk.Body)
-		s.skillBodies[i] = text
+		var h hidden
+		s.skillBodies[i], h = stripHidden(sk.Body)
+		s.bodyHidden[i] = h
 		note("skill", sk.Name, "body", h)
+		// The description reaches the review prompt ("Applies when") like the body (N2). One that
+		// is left empty stays empty, as a plugin skill may have no description.
+		s.skillDescriptions[i], h = stripHidden(sk.Description)
+		note("skill", sk.Name, "description", h)
 	}
 	for i, a := range b.Agents {
-		text, h := stripHidden(a.SystemPrompt)
-		s.agentPrompts[i] = text
+		var h hidden
+		s.agentPrompts[i], h = stripHidden(a.SystemPrompt)
+		s.promptHidden[i] = h
 		note("agent", a.Name, "system prompt", h)
 	}
-	if more := s.affectedItems - MaxHiddenTextWarnings; more > 0 {
+	if more := s.affectedFields - MaxHiddenTextWarnings; more > 0 {
 		s.warnings = append(s.warnings, fmt.Sprintf("%d more item(s) had hidden text removed", more))
 	}
 	return s
