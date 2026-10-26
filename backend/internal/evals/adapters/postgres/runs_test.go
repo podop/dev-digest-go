@@ -513,3 +513,57 @@ func TestFinishedRunsByAgent(t *testing.T) {
 		t.Errorf("FinishedRunsByAgent(no agents) = %v, %v, want none", got, err)
 	}
 }
+
+func TestFinishRun_SuiteCostBeyondTheColumnIsNull(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cost float64
+		want string // cost_usd::text
+	}{
+		{name: "1e6 is stored as NULL", cost: 1e6, want: ""},
+		{name: "the bound is stored as NULL", cost: 999_999.9999995, want: ""},
+		{name: "999999.999999 stays", cost: 999_999.999999, want: "999999.999999"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			run := e.newRun(t, e.ws, e.agent(t, e.ws, "a"))
+			ok, err := e.store.FinishRun(t.Context(), e.ws, run.ID, domain.RunFinish{
+				Status: domain.RunCompleted, FinishedAt: time.Now(), DurationMS: 1, Metrics: domain.Metrics{CostUSD: fp(tc.cost)},
+			})
+			if err != nil || !ok {
+				t.Fatalf("FinishRun(cost %v) = %v, %v; want true, nil", tc.cost, ok, err)
+			}
+			if st := e.scalar(t, `SELECT status FROM eval_suite_runs WHERE id = ?`, run.ID); st != string(domain.RunCompleted) {
+				t.Errorf("status after FinishRun(cost %v) = %s; want completed", tc.cost, st)
+			}
+			if got := e.scalar(t, `SELECT coalesce(cost_usd::text, '') FROM eval_suite_runs WHERE id = ?`, run.ID); got != tc.want {
+				t.Errorf("stored suite cost_usd for %v = %q; want %q", tc.cost, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestRecordResult_CaseCostBeyondTheColumnIsNull(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cost float64
+		want string
+	}{
+		{name: "the bound is stored as NULL", cost: 999_999.9999995, want: ""},
+		{name: "1e6 is stored as NULL", cost: 1e6, want: ""},
+		{name: "999999.999999 stays", cost: 999_999.999999, want: "999999.999999"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			agent := e.agent(t, e.ws, "a")
+			c := e.newCase(t, e.ws, domain.OwnerAgent, agent, "c")
+			run := e.newRun(t, e.ws, agent, c.ID)
+			if err := e.store.RecordResult(t.Context(), e.ws, domain.NewResult{RunID: run.ID, CaseID: c.ID, Status: domain.CasePassed, CostUSD: fp(tc.cost)}); err != nil {
+				t.Fatalf("RecordResult(cost %v): %v", tc.cost, err)
+			}
+			if got := e.scalar(t, `SELECT coalesce(cost_usd::text, '') FROM eval_runs WHERE case_id = ?`, c.ID); got != tc.want {
+				t.Errorf("stored case cost_usd for %v = %q; want %q", tc.cost, got, tc.want)
+			}
+		})
+	}
+}

@@ -4,11 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"gorm.io/gorm"
 
 	"dev-digest-go/backend/internal/evals/domain"
 )
+
+// costLimitUSD is the first cost numeric(12,6) cannot hold: a value below it rounds, at six
+// decimals, to at most 999999.999999. Same bound as costLimitUSD in reviews/adapters/postgres.
+const costLimitUSD = 999_999.9999995
+
+// costValue is the cost as stored: nil (NULL, unknown) when nil or not storable. A suite total (or
+// a case) built from large custom-gateway figures must not fail the write (SQLSTATE 22003) and
+// leave the run `running`. Mirrors costValue in reviews/adapters/postgres/runs.go.
+func costValue(c *float64) *float64 {
+	if c == nil || math.IsNaN(*c) || *c < 0 || *c >= costLimitUSD {
+		return nil
+	}
+	return c
+}
 
 // CreateRun inserts the run as running with cases_finished 0. A violation of the one-running-run-
 // per-owner partial unique index is domain.ErrRunActive; an owner deleted since the snapshot
@@ -48,7 +63,7 @@ func (s *Store) RecordResult(ctx context.Context, workspaceID string, r domain.N
 		RunID: r.RunID, CaseID: r.CaseID, Status: string(r.Status), Pass: r.Status == domain.CasePassed,
 		ActualOutput: findings, DroppedCount: r.DroppedCount,
 		HitCount: r.HitCount, ViolationCount: r.ViolationCount, UnlabeledCount: r.UnlabeledCount,
-		DurationMS: r.DurationMS, CostUSD: r.CostUSD, Error: cleanPtr(r.Error),
+		DurationMS: r.DurationMS, CostUSD: costValue(r.CostUSD), Error: cleanPtr(r.Error),
 	}
 	passed, errored := 0, 0
 	switch r.Status {
@@ -116,7 +131,7 @@ func (s *Store) FinishRun(ctx context.Context, workspaceID, runID string, f doma
 			"cases_passed":       f.CasesPassed,
 			"cases_errored":      f.CasesErrored,
 			"unlabeled_findings": m.UnlabeledFindings,
-			"cost_usd":           m.CostUSD,
+			"cost_usd":           costValue(m.CostUSD),
 		})
 	if res.Error != nil {
 		return false, fmt.Errorf("finish run: %w", res.Error)
