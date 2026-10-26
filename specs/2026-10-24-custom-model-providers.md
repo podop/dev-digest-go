@@ -1,5 +1,5 @@
 # Custom model providers (OpenAI- and Anthropic-compatible gateways)
-Spec: Custom model providers · Status: ready-for-planning · Date: 2026-10-24
+Spec: Custom model providers · Status: implemented (2026-10-26, e10495f..f86f362; D30–D37) · Date: 2026-10-24
 Areas: api, ui, ci
 Design sources: the user's request of 2026-10-24 (translated): "Support custom model routers like OpenRouter — in our
 company we use e.g. Synapse — I want to be able to connect any external model provider and use it." The user's answers
@@ -1089,6 +1089,29 @@ change ships with the matching backend change; every new or changed shape gets a
   entry; SCR6 one picker order everywhere (OpenRouter, OpenAI, Anthropic, custom by name); SCR7 estimated (unreported)
   tokens are never priced. Q13 and Q14 keep this spec's defaults. Custom-provider calls do not use HTTP(S)_PROXY (A3).
   The migration number is 0009.
+
+- D31 — AC16: a `text/plain` body on the custom-provider routes answers 422 `validation_error` ("Expected object,
+  received string"), like every other JSON route (Settings C D14); other non-JSON media types answer 415
+  (orchestrator under the user's pre-approval, 2026-10-26).
+- D32 — AC33/FR28: an edited workflow may read `DEVDIGEST_<S>_API_KEY` and only `DEVDIGEST_<S>_HEADER_1…n` for the
+  provider's own header count n (fail closed), not every index up to 5 (orchestrator, 2026-10-26).
+- D33 — AC5/AC9: the PR brief keeps its Phase 5 wire mapping: an undefined or keyless provider answers 422
+  `provider_not_configured`, any model failure 502 `generation_failed`; reviews and eval runs use the FR9 text and keep
+  the provider error (orchestrator, 2026-10-26).
+- D34 — FR4/EC11: the reserved extra-header names also include `Upgrade`, `Keep-Alive`, `Proxy-Connection`, `TE` and
+  `Trailer` (hop-by-hop; HTTP/2 refuses them and quoted their values in errors) — twelve names in total (security r1
+  L2, orchestrator, 2026-10-26).
+- D35 — FR12/EC9: a provider-reported cost above $100,000 per attempt counts as unknown (then the manual price, else
+  NULL), and a run or eval cost that a `numeric(12,6)` column cannot hold is stored NULL (security r1 L4, r2 L6;
+  orchestrator, 2026-10-26).
+- D36 — FR1: a manual model label must not contain control characters (422 at `models.<i>.label`) (security r1 L3,
+  orchestrator, 2026-10-26).
+- D37 — FR8/FR11: a 401/403 from a custom gateway answers a fixed message ("API key rejected by the provider" / "The
+  gateway rejected the request without a key (HTTP N)") instead of the scrubbed gateway text, because gateways echo
+  masked keys; other errors are scrubbed of whole secrets, their escaped forms and ≥ 4-byte fragments (security r1 L1,
+  orchestrator, 2026-10-26).
+- Follow-up (user, 2026-10-26): FR5 is kept — a PUT that changes `base_url` keeps the stored key and header values
+  (security r1 L5); not hardened.
 
 ## 17. Open questions
 Q1–Q10 were answered by the user on 2026-10-24 (D15–D24), Q11–Q12 on 2026-10-24 (D28, D29). Two non-blocking

@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-26 (see ▶ Resume here; Settings D done) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-26 evening (see ▶ Resume here; custom model providers done) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -19,12 +19,31 @@ frontend contract test 148/148.
 Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user's standing orders:
 - run features autonomously in multi-agent waves and lanes;
 - approve plans by default and escalate only CRITICAL items (spec contradictions that change behaviour, destructive or irreversible choices, security, an NFR failure that needs a spec change);
-- next: custom model providers / GitLab A–C (specs `specs/2026-10-24-*.md`, committed 4819a47, not yet planned; they extend Slice D's provider list, plan A14).
+- next: GitLab A → B ∥ C (specs `specs/2026-10-24-gitlab-*.md`, committed 4819a47, not yet planned).
 
 | Feature | State |
 |---|---|
 | PR Leaderboard, Settings A, B, Cost ledger, Settings C | done and committed (specs `implemented`, plans `done`) |
+| **Custom model providers** | **done** — plan `84c2f39`, `e10495f` (W1–W4), `67549cd` (W5), fix rounds `0f108b8`, `f86f362`; spec `implemented` (D30–D37), plan `done`; the stand runs it (rebuilt, migrations up to **0009**) |
 | **Settings D** (integrations / plugins) | **done** — `ebaceb5` (W1–W3), `00c0ecd` (W4 + D19/D21), `fd90f3d` (fix r1), `4a31756` (fix r2); spec `implemented` (D19–D22), plan `done`; the stand runs it (rebuilt, migrations up to **0008**) |
+
+**Custom model providers gate** (reports in `.sdd/review/2026-10-26-custom-model-providers/`, git-ignored):
+| Reviewer | r1 (`aa7c5be..67549cd`) | r2 (`67549cd..0f108b8`) |
+|---|---|---|
+| Architecture | **PASS**; M1 string-appended row locks, L1–L3 → fixed | **PASS**, 0 findings |
+| Security | **PASS** (0 HIGH/MEDIUM); L1 partial-key echo, L2 hop-by-hop headers, L3 NUL label, L4 cost overflow → fixed; L5 follow-up (user) | **PASS**; L1–L4 closed; new L6 eval cost overflow → fixed `f86f362` |
+| Plan verification | 162 / 0 / 8 pending W6 | **PASS** (175 rows; R3/R4 accepted as D35/D36) |
+- Gates green on every commit (155 backend packages with `-race -timeout 25m`; frontend 233 files / 1458 tests).
+- W6: S30 AC19 holds (only `required_secrets`/`required_variables` added to the two openrouter CI export goldens; 14 new goldens). S31 throwaway `devdigest-go-cp` (removed, stand untouched): AC20 custom-providers p95 41–80 ms (≤ 100), spend p95 5–8 ms (≤ 200); AC38 8/8 on a real stub gateway, no secret in files/zip/runner binary/logs.
+- Decisions D31–D37 (spec): text/plain 422; edited workflows read only the provider's own header secrets; PR brief keeps Phase 5 codes; 12 reserved header names; cost bound $100k/attempt + NULL for unstorable costs; label control chars 422; fixed 401/403 message.
+
+**Custom model providers follow-ups (not fixed):**
+- Security L5 (user: keep FR5): a PUT that changes `base_url` keeps the stored key/header values.
+- `git clone` over HTTPS ignores `DEVDIGEST_EXTRA_CA_FILE` (GIT_SSL_CAINFO not wired).
+- Feature Models row without its own choice shows "OpenRouter" next to the default model; `liveNote`/`noKeyNote` copy mentions OpenRouter only; ModelSelectField empty hint shows the raw custom id; `settingsBudget.defaultModel.providers.*` keys unused.
+- 415 for non-JSON bodies has code `internal_error` (existing httpx quirk); `DELETE` with JSON content type and an empty body → 400 `internal_error` (existing).
+- No on-the-wire test of the runner's FR36 retry counts; the runner loads the extra CA for every manifest.
+- Security INFO: ≤ 3-byte key fragments survive on non-401 errors; `Expect`/`Proxy-Authorization`/`HTTP2-Settings` allowed as extra headers; settings PUT checks custom ids without FOR SHARE (A8 best effort).
 
 **Settings D gate** (reports in `.sdd/review/2026-10-25-settings-d-integrations/`, git-ignored):
 | Reviewer | r1 (`a179d4e..00c0ecd`) | r2 | r3 |
@@ -47,11 +66,11 @@ Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user
 - `make backend-check` can hit the 10 m default package timeout for `cmd/server` under load (INSIGHTS).
 
 **Orchestration notes** (git-ignored): `.sdd/orchestration/`:
-- lane rules `lane-common-{b,c,d,ledger}.md`;
-- carry-over notes `{b,c,d,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
+- lane rules `lane-common-{b,c,d,cp,ledger}.md`;
+- carry-over notes `{b,c,d,cp,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
 Reports for each feature: `.sdd/review/<date>-<slug>/`.
 
-Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D.
+Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D · 0009 custom providers.
 
 ## After the migration — PR Leaderboard (in progress) and Settings (specs only) · 2026-10-23 night
 **PR Leaderboard** (new feature, not Node parity). Spec `specs/2026-10-23-pr-leaderboard.md` (+D18–D26), plan

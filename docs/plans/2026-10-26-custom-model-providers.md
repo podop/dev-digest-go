@@ -1,5 +1,5 @@
 # Development Plan: Custom model providers
-Plan: Custom model providers · Status: approved (user pre-approval 2026-10-26: SCR1–SCR7, A1–A13 accepted, spec D30; migration 0009; run autonomously) · Spec: specs/2026-10-24-custom-model-providers.md (reconciled at aa7c5be) · Base: feat/go-backend-phase-1@aa7c5be
+Plan: Custom model providers · Status: done (2026-10-26; e10495f W1–W4, 67549cd W5, fix rounds 0f108b8 + f86f362; gate arch r2, security r2, plan-verify r2 PASS; spec D31–D37) · Earlier: approved (user pre-approval 2026-10-26: SCR1–SCR7, A1–A13, spec D30) · Spec: specs/2026-10-24-custom-model-providers.md (reconciled at aa7c5be) · Base: feat/go-backend-phase-1@aa7c5be
 Packages: backend, frontend · Context pack: docs/plans/2026-10-26-custom-model-providers.context.md ([A], [C1]–[C7], [K], [F], [D])
 Execution: multi-agent, parallel lanes (user default)
 
