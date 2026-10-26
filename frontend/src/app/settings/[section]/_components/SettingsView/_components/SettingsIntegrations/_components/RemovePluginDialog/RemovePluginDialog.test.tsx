@@ -53,6 +53,8 @@ describe("RemovePluginDialog", () => {
     expect(within(dialog).getByText("3 skills")).toBeInTheDocument();
     expect(within(dialog).getByText("5 eval cases")).toBeInTheDocument();
     expect(within(dialog).getByText("1 learning")).toBeInTheDocument();
+    // EC7 / D21: runs and reviews of the plugin's agents are not deleted with it.
+    expect(within(dialog).getByText("Past runs and reviews of its agents stay in the history.")).toBeInTheDocument();
     // The agents and installations load after the first paint; the count settles on 3 of 4 (A11).
     expect(await within(dialog).findByText("3 GitHub Action installations of its agents")).toBeInTheDocument();
   });

@@ -1,0 +1,24 @@
+{
+  "created": {
+    "agents": 2,
+    "conventions": 0,
+    "eval_cases": 2,
+    "learnings": 2,
+    "skills": 3
+  },
+  "installed": {
+    "counts": {
+      "agents": 2,
+      "eval_cases": 2,
+      "learnings": 2,
+      "skills": 3
+    },
+    "description": "A pack of tools-pack",
+    "enabled": false,
+    "id": "00000000-0000-4000-8000-000000000001",
+    "installed_at": "2026-01-01T00:00:00.000Z",
+    "name": "tools-pack",
+    "source": "tools.zip",
+    "version": "1.2.0"
+  }
+}

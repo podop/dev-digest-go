@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm/clause"
+
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 	"dev-digest-go/backend/internal/reviews/domain"
 )
@@ -17,34 +19,43 @@ const findingInsertBatch = 500
 // kindReview is reviews.kind of a review a run produced.
 const kindReview = "review"
 
-// InsertReview inserts a review of kind "review".
+// insertReviewSQL inserts a review of kind "review". agent_id is read from agents in the same
+// statement, so a run whose agent was deleted meanwhile (DELETE /agents/:id, a plugin Remove)
+// stores its review with agent_id NULL instead of failing the reviews_agent_id foreign key
+// (spec D19). FOR KEY SHARE locks the agent row until the transaction ends: a delete that is
+// in flight makes the subquery wait and then see no row, and a delete that comes later waits for
+// this transaction and its ON DELETE SET NULL then clears the new review too. The pull request
+// and run foreign keys still reject a missing row (SQLSTATE 23503, mapped to not found).
+const insertReviewSQL = `INSERT INTO reviews (workspace_id, pr_id, agent_id, run_id, kind, verdict, summary, score, model)
+VALUES (?, ?, (SELECT id FROM agents WHERE id = ?::uuid FOR KEY SHARE), ?, ?, ?, ?, ?, ?)
+RETURNING id`
+
+// InsertReview inserts a review of kind "review"; a vanished agent leaves agent_id NULL.
 func (s *Store) InsertReview(ctx context.Context, r domain.NewReview) (string, error) {
-	verdict, summary, model := string(r.Verdict), clean(r.Summary), clean(r.Model)
-	score := r.Score
-	row := reviewRow{
-		WorkspaceID: r.WorkspaceID,
-		PRID:        r.PRID,
-		AgentID:     &r.AgentID,
-		RunID:       &r.RunID,
-		Kind:        kindReview,
-		Verdict:     &verdict,
-		Summary:     &summary,
-		Score:       &score,
-		Model:       &model,
-	}
-	if err := s.conn(ctx).Create(&row).Error; err != nil {
+	var id string
+	err := s.conn(ctx).Raw(insertReviewSQL,
+		r.WorkspaceID, r.PRID, r.AgentID, r.RunID, kindReview,
+		string(r.Verdict), clean(r.Summary), r.Score, clean(r.Model),
+	).Scan(&id).Error
+	if err != nil {
 		return "", notFoundOnForeignKey("insert review", err)
 	}
-	return row.ID, nil
+	return id, nil
 }
 
 // InsertFindings inserts the findings of a review in the given order, which is also the order a
 // read returns them in. kind defaults to "finding", out_of_scope is the engine's boolean (nil, a
 // review without a PR intent, is false), skill_id is the id of the run's skill with the cited
-// name; the model's own id and evidence are not stored.
+// name; the model's own id and evidence are not stored. A cited skill that was deleted while the
+// run ran (a plugin Remove) leaves skill_id NULL and keeps skill_name, as the foreign key's
+// ON DELETE SET NULL would (spec D19).
 func (s *Store) InsertFindings(ctx context.Context, reviewID string, findings []reviewer.Finding, skillIDs map[string]string) error {
 	if len(findings) == 0 {
 		return nil
+	}
+	skillIDs, err := s.existingSkills(ctx, findings, skillIDs)
+	if err != nil {
+		return err
 	}
 	rows := make([]findingRow, len(findings))
 	for i, f := range findings {
@@ -58,6 +69,43 @@ func (s *Store) InsertFindings(ctx context.Context, reviewID string, findings []
 		return notFoundOnForeignKey("insert findings", err)
 	}
 	return nil
+}
+
+// existingSkills keeps the entries of skillIDs that the findings cite and whose skill row still
+// exists. The rows are locked FOR KEY SHARE until the transaction ends: a delete in flight makes
+// the read wait and then miss the row, and a later delete waits for this transaction and sets the
+// new findings' skill_id to NULL itself.
+func (s *Store) existingSkills(ctx context.Context, findings []reviewer.Finding, skillIDs map[string]string) (map[string]string, error) {
+	cited := make(map[string]struct{})
+	for _, f := range findings {
+		if f.Skill != nil && skillIDs[*f.Skill] != "" {
+			cited[skillIDs[*f.Skill]] = struct{}{}
+		}
+	}
+	if len(cited) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, 0, len(cited))
+	for id := range cited {
+		ids = append(ids, id)
+	}
+	var found []string
+	err := s.conn(ctx).Table("skills").Where("id IN ?", ids).Order("id").
+		Clauses(clause.Locking{Strength: "KEY SHARE"}).Pluck("id", &found).Error
+	if err != nil {
+		return nil, fmt.Errorf("check finding skills: %w", err)
+	}
+	alive := make(map[string]struct{}, len(found))
+	for _, id := range found {
+		alive[id] = struct{}{}
+	}
+	kept := make(map[string]string, len(skillIDs))
+	for name, id := range skillIDs {
+		if _, ok := alive[id]; ok {
+			kept[name] = id
+		}
+	}
+	return kept, nil
 }
 
 func newFindingRow(reviewID string, f reviewer.Finding, skillIDs map[string]string) (findingRow, error) {

@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "removed": {
+    "agents": 2,
+    "ci_installations": 0,
+    "eval_cases": 2,
+    "learnings": 2,
+    "skills": 3
+  }
+}

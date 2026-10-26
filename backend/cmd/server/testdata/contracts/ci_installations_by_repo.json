@@ -1,0 +1,35 @@
+{
+  "repos": [
+    {
+      "installations": [
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000005",
+          "agent_name": "agent-a",
+          "id": "00000000-0000-4000-8000-000000000004",
+          "installed_at": "2026-01-01T00:00:00.000Z",
+          "slug": "slug"
+        }
+      ],
+      "last_run": {
+        "agent_id": "00000000-0000-4000-8000-000000000005",
+        "github_url": "https://github.com/acme/api/actions/runs/2",
+        "ran_at": "2026-01-01T00:00:00.000Z",
+        "status": "succeeded"
+      },
+      "repo": "acme/api"
+    },
+    {
+      "installations": [
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000007",
+          "agent_name": "agent-b",
+          "id": "00000000-0000-4000-8000-000000000006",
+          "installed_at": "2026-01-01T00:00:00.000Z",
+          "slug": "slug"
+        }
+      ],
+      "last_run": null,
+      "repo": "acme/web"
+    }
+  ]
+}

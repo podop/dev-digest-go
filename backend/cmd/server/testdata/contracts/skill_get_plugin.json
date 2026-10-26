@@ -1,0 +1,20 @@
+{
+  "body": "Use tabs.",
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "description": "style",
+  "enabled": true,
+  "evidence_files": null,
+  "id": "00000000-0000-4000-8000-000000000003",
+  "name": "gold-style-guide",
+  "plugin": {
+    "enabled": false,
+    "id": "00000000-0000-4000-8000-000000000001",
+    "name": "tools-pack"
+  },
+  "source": "imported_file",
+  "source_ref": "plugin:tools-pack",
+  "type": "rubric",
+  "updated_at": "2026-01-01T00:00:00.000Z",
+  "used_by": 1,
+  "version": 1
+}

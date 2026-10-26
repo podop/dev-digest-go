@@ -34,6 +34,7 @@
       "ci": "{count, plural, one {# GitHub Action installation} other {# GitHub Action installations}} of its agents",
       "ciUnknown": "GitHub Action installations of its agents"
     },
+    "historyNote": "Past runs and reviews of its agents stay in the history.",
     "confirmLabel": "Type {name} to confirm",
     "reasonMismatch": "The button stays disabled until the text matches the plugin name exactly.",
     "cancel": "Cancel",

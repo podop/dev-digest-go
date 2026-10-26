@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "plugin_disabled",
+    "message": "Agent \"planner\" belongs to the disabled plugin \"tools-pack\""
+  }
+}

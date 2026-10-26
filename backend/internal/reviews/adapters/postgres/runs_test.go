@@ -399,6 +399,104 @@ func TestInsertReview_RunDeletedMeanwhile(t *testing.T) {
 	}
 }
 
+// A run whose agent was deleted while it ran stores its review with agent_id NULL (spec D19); the
+// run record keeps agent_id NULL through the foreign key's ON DELETE SET NULL.
+func TestInsertReview_AgentDeletedMeanwhile(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		agent func(f fixture, agent string) string
+	}{
+		{"deleted before the insert", func(f fixture, agent string) string { return agent }},
+		{"never existed", func(f fixture, agent string) string { return missingID }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			agent := f.agent(t, f.ws, "Alpha", true)
+			run := f.run(t, agent, nil)
+			f.exec(t, `DELETE FROM agents WHERE id = ?`, agent)
+
+			id, err := f.store.InsertReview(t.Context(), domain.NewReview{
+				WorkspaceID: f.ws, PRID: f.pr, AgentID: tc.agent(f, agent), RunID: run,
+				Verdict: reviewer.VerdictApprove, Summary: "s", Score: 7, Model: "m",
+			})
+			if err != nil {
+				t.Fatalf("InsertReview(deleted agent) error = %v, want nil", err)
+			}
+			if got := f.str(t, `SELECT agent_id::text FROM reviews WHERE id = ?`, id); got != "<nil>" {
+				t.Errorf("reviews.agent_id = %s, want NULL", got)
+			}
+			if got := f.str(t, `SELECT run_id::text FROM reviews WHERE id = ?`, id); got != run {
+				t.Errorf("reviews.run_id = %s, want %s", got, run)
+			}
+			if got := f.str(t, `SELECT agent_id::text FROM agent_runs WHERE id = ?`, run); got != "<nil>" {
+				t.Errorf("agent_runs.agent_id = %s, want NULL", got)
+			}
+			if err := f.store.InsertFindings(t.Context(), id, []reviewer.Finding{{
+				ID: "m1", Severity: reviewer.SeverityCritical, Category: reviewer.CategorySecurity, Title: "t", File: "a.go",
+				StartLine: 1, EndLine: 1, Rationale: "r", Confidence: 1,
+			}}, nil); err != nil {
+				t.Errorf("InsertFindings(review without agent) error = %v", err)
+			}
+		})
+	}
+}
+
+// The agent row is locked by the insert: a delete that comes after it clears the new review's
+// agent_id through ON DELETE SET NULL, and the review survives.
+func TestInsertReview_AgentDeletedAfter(t *testing.T) {
+	f := newFixture(t)
+	agent := f.agent(t, f.ws, "Alpha", true)
+	run := f.run(t, agent, nil)
+	id, err := f.store.InsertReview(t.Context(), domain.NewReview{
+		WorkspaceID: f.ws, PRID: f.pr, AgentID: agent, RunID: run, Verdict: reviewer.VerdictApprove, Summary: "s", Score: 7, Model: "m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := f.str(t, `SELECT agent_id::text FROM reviews WHERE id = ?`, id); got != agent {
+		t.Fatalf("reviews.agent_id = %s, want %s", got, agent)
+	}
+	f.exec(t, `DELETE FROM agents WHERE id = ?`, agent)
+	if got := f.str(t, `SELECT agent_id::text FROM reviews WHERE id = ?`, id); got != "<nil>" {
+		t.Errorf("reviews.agent_id after the delete = %s, want NULL", got)
+	}
+}
+
+// A cited skill deleted while the run ran (a plugin Remove) leaves skill_id NULL and keeps the
+// cited name; a skill that still exists stays linked.
+func TestInsertFindings_SkillDeletedMeanwhile(t *testing.T) {
+	f := newFixture(t)
+	agent := f.agent(t, f.ws, "Alpha", true)
+	kept := f.skill(t, f.ws, "kept", true)
+	gone := f.skill(t, f.ws, "gone", true)
+	run := f.run(t, agent, nil)
+	review, err := f.store.InsertReview(t.Context(), domain.NewReview{
+		WorkspaceID: f.ws, PRID: f.pr, AgentID: agent, RunID: run, Verdict: reviewer.VerdictApprove, Summary: "s", Score: 7, Model: "m",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.exec(t, `DELETE FROM skills WHERE id = ?`, gone)
+	keptName, goneName := "kept", "gone"
+	finding := func(skill *string) reviewer.Finding {
+		return reviewer.Finding{
+			ID: "m", Severity: reviewer.SeveritySuggestion, Category: reviewer.CategoryStyle, Title: *skill, File: "a.go",
+			StartLine: 1, EndLine: 1, Rationale: "r", Confidence: 1, Skill: skill,
+		}
+	}
+	err = f.store.InsertFindings(t.Context(), review, []reviewer.Finding{finding(&keptName), finding(&goneName)},
+		map[string]string{keptName: kept, goneName: gone})
+	if err != nil {
+		t.Fatalf("InsertFindings(deleted skill) error = %v, want nil", err)
+	}
+	if got := f.str(t, `SELECT skill_id::text FROM findings WHERE review_id = ? AND skill_name = 'kept'`, review); got != kept {
+		t.Errorf("skill_id of the live skill = %s, want %s", got, kept)
+	}
+	if got := f.str(t, `SELECT coalesce(skill_id::text, 'null') FROM findings WHERE review_id = ? AND skill_name = 'gone'`, review); got != "null" {
+		t.Errorf("skill_id of the deleted skill = %s, want NULL", got)
+	}
+}
+
 func TestInsertFindings_Mapping(t *testing.T) {
 	f := newFixture(t)
 	agent := f.agent(t, f.ws, "Alpha", true)

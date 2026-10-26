@@ -27,6 +27,7 @@ import {
   CiExport,
   CiFile,
   CiInstallation,
+  CiRepoInstallations,
   CiRefreshResult,
   CiRun,
   CommunitySkill,
@@ -91,17 +92,27 @@ import {
   OnboardingTour,
   OnboardingTourNone,
   OnboardingTourReady,
+  PLUGIN_DISABLED_CODE,
   PerfSummary,
   PeriodInfo,
   PluginAgent,
   PluginBundle,
   PluginContextFile,
   PluginConvention,
+  PluginCounts,
   PluginEvalCase,
+  PluginImportPreview,
+  PluginImportResult,
+  PluginLastExport,
   PluginLearning,
+  PluginList,
   PluginManifest,
+  PluginPreviewCounts,
+  PluginRef,
+  PluginRemoveResult,
   PluginSkill,
   PluginSkillVersion,
+  InstalledPlugin,
   PrBrief,
   PrBriefResponse,
   PrDetail,
@@ -451,6 +462,41 @@ const workspaceExport = PluginBundle.extend({
 // ---- Settings slice C (specs/2026-10-23-settings-c-automatic-reviews.md): the status line. ----
 const automaticReviewsStatus = AutomaticReviewsStatus.strict();
 
+// ---- Settings slice D (specs/2026-10-23-settings-integrations.md): plugins and the CI repositories. ----
+const pluginCounts = PluginCounts.strict();
+const installedPlugin = InstalledPlugin.extend({ counts: pluginCounts }).strict();
+const pluginList = PluginList.extend({
+  plugins: z.array(installedPlugin),
+  last_export: PluginLastExport.extend({ counts: pluginCounts }).strict().nullable(),
+}).strict();
+const pluginPreview = PluginImportPreview.extend({
+  manifest: PluginManifest.extend({ counts: PluginManifest.shape.counts.strict() }).strict(),
+  counts: PluginPreviewCounts.strict(),
+  agents: z.array(PluginImportPreview.shape.agents.element.strict()),
+  skills: z.array(PluginImportPreview.shape.skills.element.strict()),
+  conflicts: PluginImportPreview.shape.conflicts.strict(),
+  ignored: z.array(PluginImportPreview.shape.ignored.element.strict()),
+}).strict();
+const pluginInstalled = PluginImportResult.extend({
+  installed: installedPlugin,
+  created: PluginImportResult.shape.created.strict(),
+}).strict();
+const pluginRemoved = PluginRemoveResult.extend({ removed: PluginRemoveResult.shape.removed.strict() }).strict();
+const pluginDisabledError = ApiErrorBody.extend({
+  error: ApiErrorBody.shape.error.extend({ code: z.literal(PLUGIN_DISABLED_CODE) }).strict(),
+}).strict();
+const pluginRef = PluginRef.strict();
+const ciRepoInstallations = CiRepoInstallations.extend({
+  repos: z.array(
+    CiRepoInstallations.shape.repos.element
+      .extend({
+        installations: z.array(CiRepoInstallations.shape.repos.element.shape.installations.element.strict()),
+        last_run: CiRepoInstallations.shape.repos.element.shape.last_run.unwrap().strict().nullable(),
+      })
+      .strict(),
+  ),
+}).strict();
+
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
   health: z.object({ status: z.literal("ok") }).strict(),
@@ -638,6 +684,18 @@ const contracts: Record<string, z.ZodTypeAny> = {
 
   // ---- Settings slice C ----
   automatic_reviews_status: automaticReviewsStatus,
+
+  // ---- Settings slice D ----
+  plugins_list: pluginList,
+  plugins_import_preview: pluginPreview,
+  plugins_import_installed: pluginInstalled,
+  plugins_patch: installedPlugin,
+  plugins_delete: pluginRemoved,
+  plugin_disabled: pluginDisabledError,
+  ci_installations_by_repo: ciRepoInstallations,
+  // An agent and a skill of a plugin carry its owner; the plugin object is strict here.
+  agent_get_plugin: Agent.extend({ plugin: pluginRef }).strict(),
+  skill_get_plugin: Skill.extend({ plugin: pluginRef }).strict(),
 };
 
 const read = (name: string): unknown =>
@@ -745,6 +803,43 @@ describe("Go backend golden responses", () => {
     expect(status.last_poll_at).not.toBeNull();
     expect(status.prs_tracked).toBeGreaterThan(0);
     expect(status.poll_interval_min).toBe(5);
+  });
+
+  it("the settings-slice-D goldens carry what the UI reads", () => {
+    // The install answer is the full row, disabled, with the counts the list shows afterwards.
+    const installed = pluginInstalled.parse(read("plugins_import_installed"));
+    expect(installed.installed.enabled).toBe(false);
+    expect(installed.created.conventions).toBe(0);
+    expect(installed.created).toEqual({ agents: 2, skills: 3, eval_cases: 2, conventions: 0, learnings: 2 });
+    const list = pluginList.parse(read("plugins_list"));
+    expect(list.plugins).toEqual([installed.installed]);
+    expect(list.last_export).not.toBeNull();
+    expect(installedPlugin.parse(read("plugins_patch"))).toEqual({ ...installed.installed, enabled: true });
+    expect(pluginRemoved.parse(read("plugins_delete")).removed).toEqual({
+      agents: 2,
+      skills: 3,
+      eval_cases: 2,
+      learnings: 2,
+      ci_installations: 0,
+    });
+
+    // The preview names the conflicting skill, lists the extra archive entry and keeps link order.
+    const preview = pluginPreview.parse(read("plugins_import_preview"));
+    expect(preview.conflicts).toEqual({ plugin: false, skills: ["style-guide"] });
+    expect(preview.ignored.map((i) => i.path_or_section)).toEqual(["README.md"]);
+    expect(preview.agents[0]?.skills).toEqual(["style-guide"]);
+
+    // The 409 names the plugin; the owner shows on the agent and skill answers.
+    expect(pluginDisabledError.parse(read("plugin_disabled")).error.message).toMatch(/disabled plugin "tools-pack"/);
+    expect(Agent.parse(read("agent_get_plugin")).plugin).toMatchObject({ name: "tools-pack", enabled: false });
+    expect(Skill.parse(read("skill_get_plugin")).plugin).toMatchObject({ name: "tools-pack", enabled: false });
+  });
+
+  it("the CI repositories golden lists repositories in byte order with the newest run", () => {
+    const { repos } = ciRepoInstallations.parse(read("ci_installations_by_repo"));
+    expect(repos.map((r) => r.repo)).toEqual(["acme/api", "acme/web"]);
+    expect(repos[0]?.last_run).toMatchObject({ status: "succeeded" });
+    expect(repos[1]?.last_run).toBeNull();
   });
 
   it("the index-state goldens cover a full, a degraded and a synthesised state", () => {

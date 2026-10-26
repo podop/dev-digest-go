@@ -106,6 +106,7 @@ export function RemovePluginDialog({ plugin, onClose }: { plugin: InstalledPlugi
               <li>{t("deleted.learnings", { count: plugin.counts.learnings })}</li>
               <li>{ciCount === null ? t("deleted.ciUnknown") : t("deleted.ci", { count: ciCount })}</li>
             </ul>
+            <p style={s.note}>{t("historyNote")}</p>
           </div>
           <div>
             <label htmlFor={inputId} style={s.label}>

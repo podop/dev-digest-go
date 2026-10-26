@@ -1,0 +1,57 @@
+{
+  "agents": [
+    {
+      "enabled": true,
+      "model": "gpt-x",
+      "name": "preview-pack-agent",
+      "provider": "openai",
+      "skills": [
+        "style-guide"
+      ]
+    }
+  ],
+  "conflicts": {
+    "plugin": false,
+    "skills": [
+      "style-guide"
+    ]
+  },
+  "counts": {
+    "agents": 1,
+    "conventions": 0,
+    "eval_cases": 0,
+    "learnings": 0,
+    "skills": 1
+  },
+  "ignored": [
+    {
+      "path_or_section": "README.md",
+      "reason": "not part of a plugin"
+    }
+  ],
+  "kind": "plugin",
+  "manifest": {
+    "counts": {
+      "agents": 1,
+      "conventions": 0,
+      "eval_cases": 0,
+      "learnings": 0,
+      "skills": 1
+    },
+    "description": "A pack of preview-pack",
+    "exported_at": "2026-01-01T00:00:00.000Z",
+    "format": "devdigest-plugin/v1",
+    "kind": "plugin",
+    "name": "preview-pack",
+    "version": "1.2.0"
+  },
+  "skills": [
+    {
+      "description": "about preview-pack-skill",
+      "enabled": true,
+      "name": "style-guide",
+      "type": "rubric"
+    }
+  ],
+  "warnings": []
+}

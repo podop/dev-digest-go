@@ -1,0 +1,21 @@
+{
+  "ci_fail_on": "warning",
+  "description": "plans work",
+  "enabled": true,
+  "id": "00000000-0000-4000-8000-000000000002",
+  "model": "claude-x",
+  "name": "planner",
+  "output_schema": {
+    "type": "object"
+  },
+  "plugin": {
+    "enabled": false,
+    "id": "00000000-0000-4000-8000-000000000001",
+    "name": "tools-pack"
+  },
+  "provider": "anthropic",
+  "repo_intel": false,
+  "strategy": "map-reduce",
+  "system_prompt": "You plan.",
+  "version": 2
+}
