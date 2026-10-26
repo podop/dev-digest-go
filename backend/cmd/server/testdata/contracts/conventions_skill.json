@@ -14,6 +14,7 @@
     "evidence_files": null,
     "id": "00000000-0000-4000-8000-000000000021",
     "name": "house-rules",
+    "plugin": null,
     "source": "extracted",
     "source_ref": "conventions:o/r",
     "type": "convention",

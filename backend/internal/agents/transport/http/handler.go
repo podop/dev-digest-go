@@ -61,7 +61,7 @@ func AddRoutes(e *echo.Echo, svc service, tenants resolver) {
 }
 
 // agentResponse is the wire shape of an agent (contract: Agent in knowledge.ts); every key is
-// always present, output_schema is null when unset.
+// always present, output_schema and plugin are null when unset.
 type agentResponse struct {
 	ID           string          `json:"id"`
 	Name         string          `json:"name"`
@@ -75,13 +75,25 @@ type agentResponse struct {
 	Strategy     string          `json:"strategy"`
 	CIFailOn     string          `json:"ci_fail_on"`
 	RepoIntel    bool            `json:"repo_intel"`
+	Plugin       *pluginRef      `json:"plugin"`
+}
+
+// pluginRef is PluginRef of the contract: the plugin that owns the agent.
+type pluginRef struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
 }
 
 func toAgentResponse(a domain.Agent) agentResponse {
+	var plugin *pluginRef
+	if a.Plugin != nil {
+		plugin = &pluginRef{ID: a.Plugin.ID, Name: a.Plugin.Name, Enabled: a.Plugin.Enabled}
+	}
 	return agentResponse{
 		ID: a.ID, Name: a.Name, Description: a.Description, Provider: a.Provider, Model: a.Model,
 		SystemPrompt: a.SystemPrompt, OutputSchema: a.OutputSchema, Enabled: a.Enabled, Version: a.Version,
-		Strategy: a.Strategy, CIFailOn: a.CIFailOn, RepoIntel: a.RepoIntel,
+		Strategy: a.Strategy, CIFailOn: a.CIFailOn, RepoIntel: a.RepoIntel, Plugin: plugin,
 	}
 }
 

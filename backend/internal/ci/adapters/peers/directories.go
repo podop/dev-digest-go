@@ -45,7 +45,8 @@ func NewAgents(agents AgentService, skills SkillService) *Agents {
 }
 
 // Get returns the agent with its linked and enabled skills in link order, the set a live review
-// of the agent carries. A link whose skill is gone is left out.
+// of the agent carries. A link whose skill is gone is left out, and so is a skill of a disabled
+// plugin. The agent's own plugin is passed on for the export gate.
 func (d *Agents) Get(ctx context.Context, workspaceID, agentID string) (domain.ExportAgent, bool, error) {
 	a, found, err := d.agent(ctx, workspaceID, agentID)
 	if err != nil || !found {
@@ -64,14 +65,18 @@ func (d *Agents) Get(ctx context.Context, workspaceID, agentID string) (domain.E
 		if err != nil {
 			return domain.ExportAgent{}, false, fmt.Errorf("get skill %s: %w", l.SkillID, err)
 		}
-		if s.Enabled {
+		if s.Enabled && (s.Plugin == nil || s.Plugin.Enabled) {
 			skills = append(skills, domain.ExportSkill{Name: s.Name, Body: s.Body})
 		}
 	}
-	return domain.ExportAgent{
+	out := domain.ExportAgent{
 		ID: a.ID, Name: a.Name, Provider: a.Provider, Model: a.Model, SystemPrompt: a.SystemPrompt,
 		Strategy: a.Strategy, CIFailOn: a.CIFailOn, Version: a.Version, Skills: skills,
-	}, true, nil
+	}
+	if a.Plugin != nil {
+		out.Plugin = &domain.PluginRef{Name: a.Plugin.Name, Enabled: a.Plugin.Enabled}
+	}
+	return out, true, nil
 }
 
 // Exists reports whether the workspace has the agent.

@@ -5,10 +5,12 @@ import (
 	"fmt"
 
 	"dev-digest-go/backend/internal/evals/domain"
+	"dev-digest-go/backend/internal/platform/apperr"
 )
 
-// RunAll implements Runs (spec 7.5.3): every agent of the workspace, disabled ones included, in
-// the order of the agents list. An agent without cases or with a running run is a skip; any other
+// RunAll implements Runs (spec 7.5.3): every agent of the workspace, disabled ones included but
+// not those of a disabled plugin (they are omitted, not reported), in the order of the agents
+// list. An agent without cases or with a running run is a skip; any other
 // failure (an agent deleted meanwhile is a 404) aborts the call, and the runs already launched
 // stay launched.
 func (s *RunService) RunAll(ctx context.Context, workspaceID string) (domain.RunAllResult, error) {
@@ -24,6 +26,10 @@ func (s *RunService) RunAll(ctx context.Context, workspaceID string) (domain.Run
 	res := domain.RunAllResult{Started: []domain.Run{}, Skipped: []domain.Skip{}}
 	for _, id := range ids {
 		nr, skip, err := s.planAgentStart(ctx, workspaceID, id)
+		// A plugin disabled after the list was read: omitted like the ones the list left out.
+		if ae, ok := apperr.As(err); ok && ae.Code == codePluginDisabled {
+			continue
+		}
 		if err != nil {
 			return domain.RunAllResult{}, err
 		}

@@ -49,27 +49,36 @@ func (r agentRow) toDomain() domain.ReviewAgent {
 	}
 }
 
-// FindAgent returns an agent of the workspace, enabled or not. An id that is not a UUID is
-// ErrNotFound without a query.
+// FindAgent returns an agent of the workspace, enabled or not, with the plugin that owns it
+// (nil: none). An id that is not a UUID is ErrNotFound without a query.
 func (s *Store) FindAgent(ctx context.Context, workspaceID, agentID string) (domain.ReviewAgent, error) {
 	if !isUUID(agentID) {
 		return domain.ReviewAgent{}, fmt.Errorf("agent %q: %w", agentID, domain.ErrNotFound)
 	}
 	var row agentRow
-	err := s.conn(ctx).Where("workspace_id = ? AND id = ?", workspaceID, agentID).Take(&row).Error
+	err := s.conn(ctx).Table("agents").
+		Select("agents.*, p.id AS plugin_ref_id, p.name AS plugin_name, p.enabled AS plugin_enabled").
+		Joins("LEFT JOIN installed_plugins p ON p.id = agents.plugin_id").
+		Where("agents.workspace_id = ? AND agents.id = ?", workspaceID, agentID).Take(&row).Error
 	if isNoRows(err) {
 		return domain.ReviewAgent{}, fmt.Errorf("agent %s: %w", agentID, domain.ErrNotFound)
 	}
 	if err != nil {
 		return domain.ReviewAgent{}, fmt.Errorf("select agent: %w", err)
 	}
-	return row.toDomain(), nil
+	a := row.toDomain()
+	if row.PluginRefID != nil && row.PluginName != nil && row.PluginEnabled != nil {
+		a.Plugin = &domain.PluginRef{ID: *row.PluginRefID, Name: *row.PluginName, Enabled: *row.PluginEnabled}
+	}
+	return a, nil
 }
 
-// EnabledAgents returns the workspace's enabled agents by name (byte order), then id.
+// EnabledAgents returns the workspace's enabled agents by name (byte order), then id. An agent of
+// a disabled plugin is left out like a disabled agent.
 func (s *Store) EnabledAgents(ctx context.Context, workspaceID string) ([]domain.ReviewAgent, error) {
 	var rows []agentRow
-	err := s.conn(ctx).Where("workspace_id = ? AND enabled", workspaceID).
+	err := s.conn(ctx).Where("workspace_id = ? AND enabled AND (plugin_id IS NULL OR EXISTS "+
+		"(SELECT 1 FROM installed_plugins p WHERE p.id = agents.plugin_id AND p.enabled))", workspaceID).
 		Order(`name COLLATE "C", id`).Find(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select enabled agents: %w", err)
@@ -81,13 +90,15 @@ func (s *Store) EnabledAgents(ctx context.Context, workspaceID string) ([]domain
 	return out, nil
 }
 
-// EnabledSkills returns the agent's linked skills that are enabled, in link order.
+// EnabledSkills returns the agent's linked skills that are enabled, in link order. A skill of a
+// disabled plugin is left out like a disabled skill.
 func (s *Store) EnabledSkills(ctx context.Context, agentID string) ([]domain.ReviewSkill, error) {
 	var rows []skillRow
 	err := s.conn(ctx).Table("agent_skills").
 		Select("skills.id, skills.name, skills.description, skills.body, skills.version").
 		Joins("JOIN skills ON skills.id = agent_skills.skill_id").
-		Where("agent_skills.agent_id = ? AND skills.enabled", agentID).
+		Where("agent_skills.agent_id = ? AND skills.enabled AND (skills.plugin_id IS NULL OR EXISTS "+
+			"(SELECT 1 FROM installed_plugins p WHERE p.id = skills.plugin_id AND p.enabled))", agentID).
 		Order(`agent_skills."order", skills.id`).
 		Scan(&rows).Error
 	if err != nil {

@@ -69,6 +69,16 @@ type Skill struct {
 	UpdatedAt time.Time
 	// UsedBy is the number of agents linking the skill.
 	UsedBy int
+	// Plugin is the installed plugin that owns the skill; nil for a skill the user made. Only the
+	// store's reads fill it; no write changes the owner.
+	Plugin *PluginRef
+}
+
+// PluginRef names the installed plugin that owns a skill.
+type PluginRef struct {
+	ID      string
+	Name    string
+	Enabled bool
 }
 
 // Version is the immutable snapshot of a skill's model-facing text.

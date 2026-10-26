@@ -16,6 +16,9 @@ const (
 	codeNoEvalCases       = "no_eval_cases"
 	codeRunActive         = "eval_run_active"
 	codeHostAgentNotFound = "host_agent_not_found"
+	// codePluginDisabled is the 409 of a start that needs an agent or skill of a disabled plugin
+	// (plugins/app.CodePluginDisabled; duplicated like the budget operations below).
+	codePluginDisabled = "plugin_disabled"
 
 	msgRunNotFound = "Eval run not found"
 )
@@ -75,6 +78,16 @@ func NewRunService(d RunDeps) *RunService {
 	return s
 }
 
+// refuseDisabledPlugin is the 409 of a start that needs an item of a disabled plugin; kind is
+// "Agent" or "Skill". Nil when the item has no plugin or its plugin is enabled.
+func refuseDisabledPlugin(kind, name string, plugin *domain.PluginRef) error {
+	if plugin == nil || plugin.Enabled {
+		return nil
+	}
+	return apperr.Conflict(fmt.Sprintf("%s %q belongs to the disabled plugin %q", kind, name, plugin.Name)).
+		WithCode(codePluginDisabled)
+}
+
 // startOutcome is how an agent start ended other than by a failure: a started run, or the reason
 // it was skipped (run-all reports skips, a single start turns them into errors).
 type startOutcome struct {
@@ -122,6 +135,9 @@ func (s *RunService) planAgentStart(ctx context.Context, workspaceID, agentID st
 	}
 	if err != nil {
 		return domain.NewRun{}, "", fmt.Errorf("read agent: %w", err)
+	}
+	if err := refuseDisabledPlugin("Agent", agent.Name, agent.Plugin); err != nil {
+		return domain.NewRun{}, "", err
 	}
 	caseIDs, err := s.cases.CaseIDs(ctx, workspaceID, domain.OwnerAgent, agentID)
 	if err != nil {
@@ -186,12 +202,18 @@ func (s *RunService) StartSkill(ctx context.Context, workspaceID, skillID, hostA
 	if err != nil {
 		return domain.Run{}, fmt.Errorf("read skill: %w", err)
 	}
+	if err := refuseDisabledPlugin("Skill", skill.Name, skill.Plugin); err != nil {
+		return domain.Run{}, err
+	}
 	host, err := s.snapshots.Agent(ctx, workspaceID, hostAgentID)
 	if errors.Is(err, domain.ErrNotFound) {
 		return domain.Run{}, apperr.Validation("The host agent was not found in this workspace").WithCode(codeHostAgentNotFound)
 	}
 	if err != nil {
 		return domain.Run{}, fmt.Errorf("read host agent: %w", err)
+	}
+	if err := refuseDisabledPlugin("Agent", host.Name, host.Plugin); err != nil {
+		return domain.Run{}, err
 	}
 	caseIDs, err := s.cases.CaseIDs(ctx, workspaceID, domain.OwnerSkill, skillID)
 	if err != nil {
@@ -204,6 +226,7 @@ func (s *RunService) StartSkill(ctx context.Context, workspaceID, skillID, hostA
 		return domain.Run{}, err
 	}
 	cfg := host.Config
+	skill.Plugin = nil // the gate's reading, not part of the frozen configuration
 	cfg.Skills = []domain.SkillSnapshot{skill}
 	version := skill.Version
 	run, active, err := s.begin(ctx, domain.NewRun{

@@ -121,6 +121,14 @@ export const SkillName = z
   .max(SKILL_NAME_MAX)
   .regex(SKILL_NAME_RE, 'Use a kebab-case slug: lowercase letters, digits and single dashes');
 
+/** The plugin that owns an agent or skill (Settings slice D, FR14); null/absent = user-created. */
+export const PluginRef = z.object({
+  id: z.string(),
+  name: z.string(),
+  enabled: z.boolean(),
+});
+export type PluginRef = z.infer<typeof PluginRef>;
+
 export const Skill = z.object({
   id: z.string(),
   name: z.string(),
@@ -138,6 +146,8 @@ export const Skill = z.object({
   updated_at: z.string().nullish(),
   /** Number of agents linking this skill. */
   used_by: z.number().int().nullish(),
+  /** Owner plugin (specs/2026-10-23-settings-integrations.md §7) — nullish: additive. */
+  plugin: PluginRef.nullish(),
 });
 export type Skill = z.infer<typeof Skill>;
 
@@ -430,6 +440,8 @@ export const Agent = z.object({
   // Inject repo-intel context (repo skeleton + callers + rank note) into this
   // agent's review prompt. Default on; gated again by the global flag.
   repo_intel: z.boolean().default(true),
+  /** Owner plugin (specs/2026-10-23-settings-integrations.md §7) — nullish: additive. */
+  plugin: PluginRef.nullish(),
 });
 export type Agent = z.infer<typeof Agent>;
 

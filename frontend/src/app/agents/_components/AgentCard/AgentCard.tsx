@@ -11,6 +11,7 @@ import { Icon, Badge, IconBtn, Toggle } from "@devdigest/ui";
 import type { Agent, AgentPeriodMetrics } from "@devdigest/shared";
 import { acceptRateColor, formatPercent } from "@/components/agent-metrics";
 import { CardStats } from "@/components/card-stats";
+import { PluginBadge } from "@/components/plugin-badge";
 import { formatUsd } from "@/lib/format-usage";
 import { useAgentSkillLinks } from "@/lib/hooks";
 import { DeleteAgentModal } from "../DeleteAgentModal";
@@ -65,6 +66,11 @@ export function AgentCard({
             </Badge>
           )}
         </div>
+        {ag.plugin && (
+          <div style={s.pluginRow}>
+            <PluginBadge plugin={ag.plugin} />
+          </div>
+        )}
         {metrics && (
           <CardStats
             title={t("card.statsTitle")}

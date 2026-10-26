@@ -1,0 +1,48 @@
+{
+  "card": {
+    "title": "Export workspace as plugin",
+    "body": "Bundle your agents, skills and, optionally, eval cases and learnings into a .zip that another workspace can import.",
+    "button": "Export workspace as plugin",
+    "busy": "Exporting…",
+    "emptyHint": "Create an agent or a skill first: there is nothing to export yet.",
+    "lastExport": {
+      "label": "Last export:",
+      "counts": "· {skills, plural, one {# skill} other {# skills}} · {agents, plural, one {# agent} other {# agents}}"
+    }
+  },
+  "dialog": {
+    "title": "Export workspace as plugin",
+    "intro": "Choose what goes into the plugin file. Saved keys, tokens and run history are never exported.",
+    "name": {
+      "label": "Plugin name",
+      "placeholder": "devdigest-workspace-name",
+      "hint": "Optional. Lowercase letters, digits and single dashes, 1–64 characters. Left empty, the name is devdigest- followed by the workspace name.",
+      "invalid": "Use lowercase letters, digits and single dashes (for example team-reviews), at most 64 characters."
+    },
+    "agents": {
+      "heading": "Agents",
+      "empty": "No agents in this workspace."
+    },
+    "skills": {
+      "heading": "Skills",
+      "empty": "No skills in this workspace.",
+      "note": "Skills linked to a selected agent are always included."
+    },
+    "selection": {
+      "selectAll": "Select all",
+      "clearAll": "Clear",
+      "none": "Select at least one agent or skill."
+    },
+    "options": {
+      "evalCases": "Include eval cases",
+      "learnings": "Include learnings"
+    },
+    "loading": "Loading agents and skills…",
+    "loadFailed": "Agents and skills could not be loaded, so nothing can be exported yet.",
+    "failed": "Export failed — try again",
+    "exported": "Exported {fileName}",
+    "cancel": "Cancel",
+    "export": "Export",
+    "exporting": "Exporting…"
+  }
+}

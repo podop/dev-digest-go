@@ -44,6 +44,18 @@ describe("A2 Agent Editor (smoke)", () => {
     expect(screen.queryByText("Configuration")).not.toBeInTheDocument();
   });
 
+  it("labels a plugin's agent above the tabs, marks a disabled plugin, and shows nothing for an unowned agent", () => {
+    const { rerender } = renderWithProviders(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
+    expect(screen.queryByText(/From plugin/)).toBeNull();
+
+    rerender(<AgentEditor agent={{ ...AGENT, plugin: { id: "p1", name: "acme", enabled: true } }} tab="config" onTab={() => {}} />);
+    expect(screen.getByText("From plugin acme")).toBeInTheDocument();
+    expect(screen.queryByText("plugin disabled")).toBeNull();
+
+    rerender(<AgentEditor agent={{ ...AGENT, plugin: { id: "p1", name: "acme", enabled: false } }} tab="config" onTab={() => {}} />);
+    expect(screen.getByText("plugin disabled")).toBeInTheDocument();
+  });
+
   it("drops unsaved edits when switching to another agent", async () => {
     const { rerender, user } = renderWithProviders(<AgentEditor agent={AGENT} tab="config" onTab={() => {}} />);
     const name = screen.getByDisplayValue("Security Reviewer");

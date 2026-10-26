@@ -70,14 +70,17 @@ func (s *Store) Candidates(ctx context.Context, workspaceID string, enabledAt ti
 }
 
 // EnabledAgents implements app.Store. Ids are compared as text so a malformed id matches nothing
-// instead of failing the whole statement.
+// instead of failing the whole statement. An agent owned by a disabled plugin is left out (SCR1): auto
+// reviews skip it silently, without the 409 a named start would answer.
 func (s *Store) EnabledAgents(ctx context.Context, workspaceID string, ids []string) ([]string, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	var rows []idRow
 	err := s.conn(ctx).Table("agents").Select("id").
-		Where("workspace_id = ? AND enabled AND id::text IN ?", workspaceID, ids).
+		Where("workspace_id = ? AND enabled AND id::text IN ? AND "+
+			"(plugin_id IS NULL OR EXISTS (SELECT 1 FROM installed_plugins p WHERE p.id = agents.plugin_id AND p.enabled))",
+			workspaceID, ids).
 		Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select enabled agents: %w", err)

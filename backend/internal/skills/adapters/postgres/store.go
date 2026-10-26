@@ -35,21 +35,37 @@ type skillRow struct {
 	UpdatedAt   time.Time `gorm:"column:updated_at"`
 	// UsedBy is only filled by the reads that select usedByColumn; it is never written.
 	UsedBy int `gorm:"column:used_by;->"`
+	// The owner plugin is only filled by the reads that select pluginColumns; it is never written
+	// (plugin_id itself is not mapped, so no insert or update can touch it).
+	PluginID      *string `gorm:"column:plugin_owner_id;->"`
+	PluginName    *string `gorm:"column:plugin_owner_name;->"`
+	PluginEnabled *bool   `gorm:"column:plugin_owner_enabled;->"`
 }
 
 func (skillRow) TableName() string { return "skills" }
 
 func (r skillRow) toDomain() domain.Skill {
-	return domain.Skill{
+	sk := domain.Skill{
 		ID: r.ID, WorkspaceID: r.WorkspaceID, Name: r.Name, Description: r.Description,
 		Type: domain.SkillType(r.Type), Source: domain.Source(r.Source), SourceRef: r.SourceRef,
 		Body: r.Body, Enabled: r.Enabled, Version: r.Version,
 		CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, UsedBy: r.UsedBy,
 	}
+	if r.PluginID != nil && r.PluginName != nil && r.PluginEnabled != nil {
+		sk.Plugin = &domain.PluginRef{ID: *r.PluginID, Name: *r.PluginName, Enabled: *r.PluginEnabled}
+	}
+	return sk
 }
 
 // usedByColumn counts the agents linking the skill row it is selected with.
 const usedByColumn = "(SELECT count(*) FROM agent_skills a WHERE a.skill_id = skills.id) AS used_by"
+
+// pluginColumns reads the owner plugin of the skill row it is selected with. Correlated
+// subqueries (not a join) keep the statement valid under FOR UPDATE; all three are NULL for a
+// skill no plugin owns.
+const pluginColumns = "(SELECT p.id FROM installed_plugins p WHERE p.id = skills.plugin_id) AS plugin_owner_id, " +
+	"(SELECT p.name FROM installed_plugins p WHERE p.id = skills.plugin_id) AS plugin_owner_name, " +
+	"(SELECT p.enabled FROM installed_plugins p WHERE p.id = skills.plugin_id) AS plugin_owner_enabled"
 
 // versionRow maps the skill_versions table.
 type versionRow struct {
@@ -120,9 +136,9 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &coded) && coded.SQLState() == uniqueViolation
 }
 
-// withUsage selects skills rows together with their used_by.
+// withUsage selects skills rows together with their used_by and owner plugin.
 func (s *Store) withUsage(ctx context.Context) *gorm.DB {
-	return s.conn(ctx).Table("skills").Select("skills.*, " + usedByColumn)
+	return s.conn(ctx).Table("skills").Select("skills.*, " + usedByColumn + ", " + pluginColumns)
 }
 
 // List returns the workspace's skills by name in byte order.
@@ -154,16 +170,19 @@ func (s *Store) Get(ctx context.Context, workspaceID, id string) (domain.Skill, 
 
 // Lock selects the skill FOR UPDATE; the lock lasts until the surrounding transaction ends.
 func (s *Store) Lock(ctx context.Context, workspaceID, id string) (domain.Skill, error) {
-	var row skillRow
-	err := s.conn(ctx).Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate}).
-		Where("workspace_id = ? AND id = ?", workspaceID, id).Take(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return domain.Skill{}, domain.ErrNotFound
-	}
+	var rows []skillRow
+	// FOR UPDATE OF skills: the owner plugin comes from a subquery in the select list, so the
+	// lock stays on the skill row only.
+	err := s.conn(ctx).Table("skills").Select("skills.*, "+pluginColumns).
+		Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Table: clause.Table{Name: "skills"}}).
+		Where("skills.workspace_id = ? AND skills.id = ?", workspaceID, id).Limit(1).Scan(&rows).Error
 	if err != nil {
 		return domain.Skill{}, fmt.Errorf("lock skill: %w", err)
 	}
-	return row.toDomain(), nil
+	if len(rows) == 0 {
+		return domain.Skill{}, domain.ErrNotFound
+	}
+	return rows[0].toDomain(), nil
 }
 
 // Insert stores the skill as version 1.

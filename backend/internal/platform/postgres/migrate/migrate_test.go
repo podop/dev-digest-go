@@ -1043,6 +1043,178 @@ func TestMigration0007_PRHeadRepo(t *testing.T) {
 	}
 }
 
+// TestMigration0008_PluginOwnership: Up adds the plugin description, flips the default of enabled to
+// false (existing rows keep their value), adds UNIQUE (workspace_id, name) and the nullable plugin_id
+// owner (FK without cascade, partial index) to agents, skills and memory (C2); Down drops all of it,
+// restores the default and is lossy for ownership and descriptions (D15/CR1); Up again restores
+// version 8 (AC24, NFR6).
+func TestMigration0008_PluginOwnership(t *testing.T) {
+	upTo7Names := []string{"0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes", "0005_cost_ledger", "0006_auto_review_records", "0007_pr_head_repo"}
+	upTo8Names := append(append([]string{}, upTo7Names...), "0008_plugin_ownership")
+
+	const ws1, ws2 = "00000000-0000-0000-0000-0000000000a1", "00000000-0000-0000-0000-0000000000a2"
+	const plugin1, plugin2 = "00000000-0000-0000-0000-0000000000e1", "00000000-0000-0000-0000-0000000000e2"
+
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+	if _, err := newMigrator(t, db, embeddedFS(t, upTo7Names...)).Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-7 error = %v", err)
+	}
+	exec := func(q string) error {
+		_, err := db.ExecContext(t.Context(), q)
+		return err
+	}
+	// Version 7 data: two workspaces, a plugin row written with the old default (enabled), a user
+	// agent, skill and learning.
+	if err := exec(`
+INSERT INTO workspaces (id, name) VALUES ('` + ws1 + `', 'w1'), ('` + ws2 + `', 'w2');
+INSERT INTO installed_plugins (id, workspace_id, name) VALUES ('` + plugin1 + `', '` + ws1 + `', 'p1');
+INSERT INTO agents (workspace_id, name, provider, model, system_prompt) VALUES ('` + ws1 + `', 'a1', 'openai', 'm', 's');
+INSERT INTO skills (workspace_id, name, description, type, source, body) VALUES ('` + ws1 + `', 's1', 'd', 'custom', 'manual', 'b');
+INSERT INTO memory (workspace_id, scope, kind, content) VALUES ('` + ws1 + `', 'global', 'learning', 'c');`); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	before := catalog(t, db)
+
+	upTo8 := embeddedFS(t, upTo8Names...)
+	all, err := migrate.Load(upTo8)
+	if err != nil {
+		t.Fatalf("Load(versions 1-8) error = %v", err)
+	}
+	if len(all) != 8 || all[7].Version != 8 || all[7].Name != "plugin_ownership" {
+		t.Fatalf("Load(versions 1-8) = %d migrations, last %+v, want 8 ending in version 8 plugin_ownership", len(all), all[len(all)-1])
+	}
+	m := newMigrator(t, db, upTo8)
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 8 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+
+	wantRemoved := []string{"column installed_plugins.enabled #7 boolean NOT NULL default=true generated= identity="}
+	if diff := cmp.Diff(wantRemoved, onlyIn(before, afterUp)); diff != "" {
+		t.Errorf("objects removed by 0008 mismatch (-want +got):\n%s", diff)
+	}
+	wantAdded := []string{
+		"column agents.plugin_id #@AGENTS@ uuid default=<none> generated= identity=",
+		"column installed_plugins.description #8 text default=<none> generated= identity=",
+		"column installed_plugins.enabled #7 boolean NOT NULL default=false generated= identity=",
+		"column memory.plugin_id #@MEMORY@ uuid default=<none> generated= identity=",
+		"column skills.plugin_id #@SKILLS@ uuid default=<none> generated= identity=",
+		"constraint agents agents_plugin_id_installed_plugins_id_fk f FOREIGN KEY (plugin_id) REFERENCES installed_plugins(id)",
+		"constraint installed_plugins installed_plugins_workspace_id_name_key u UNIQUE (workspace_id, name)",
+		"constraint memory memory_plugin_id_installed_plugins_id_fk f FOREIGN KEY (plugin_id) REFERENCES installed_plugins(id)",
+		"constraint skills skills_plugin_id_installed_plugins_id_fk f FOREIGN KEY (plugin_id) REFERENCES installed_plugins(id)",
+		"index agents agents_plugin_idx CREATE INDEX agents_plugin_idx ON public.agents USING btree (plugin_id) WHERE (plugin_id IS NOT NULL)",
+		"index installed_plugins installed_plugins_workspace_id_name_key CREATE UNIQUE INDEX installed_plugins_workspace_id_name_key ON public.installed_plugins USING btree (workspace_id, name)",
+		"index memory memory_plugin_idx CREATE INDEX memory_plugin_idx ON public.memory USING btree (plugin_id) WHERE (plugin_id IS NOT NULL)",
+		"index skills skills_plugin_idx CREATE INDEX skills_plugin_idx ON public.skills USING btree (plugin_id) WHERE (plugin_id IS NOT NULL)",
+	}
+	// The owner column is the last column of its table, so its position is the table's column count.
+	for _, table := range []string{"AGENTS", "MEMORY", "SKILLS"} {
+		n := queryStrings(t, db, `SELECT count(*)::text FROM information_schema.columns WHERE table_schema = 'public' AND table_name = '`+strings.ToLower(table)+`'`)
+		for j, line := range wantAdded {
+			wantAdded[j] = strings.ReplaceAll(line, "#@"+table+"@", "#"+n[0])
+		}
+	}
+	if diff := cmp.Diff(wantAdded, onlyIn(afterUp, before)); diff != "" {
+		t.Errorf("objects added by 0008 mismatch (-want +got):\n%s", diff)
+	}
+
+	// Existing rows: the plugin keeps enabled = true, has no description; the user's rows have no owner.
+	if got := queryStrings(t, db, `SELECT enabled::text || ' ' || coalesce(description, '<null>') FROM installed_plugins`); !cmp.Equal(got, []string{"true <null>"}) {
+		t.Errorf("existing plugin after Up = %v, want enabled and without description", got)
+	}
+	if got := queryStrings(t, db, `SELECT (SELECT count(*) FROM agents WHERE plugin_id IS NULL)::text || ' ' || (SELECT count(*) FROM skills WHERE plugin_id IS NULL)::text || ' ' || (SELECT count(*) FROM memory WHERE plugin_id IS NULL)::text`); !cmp.Equal(got, []string{"1 1 1"}) {
+		t.Errorf("user-owned rows after Up = %v, want one agent, skill and learning without owner", got)
+	}
+	// A new plugin starts disabled.
+	if err := exec(`INSERT INTO installed_plugins (id, workspace_id, name) VALUES ('` + plugin2 + `', '` + ws1 + `', 'p2')`); err != nil {
+		t.Fatalf("insert a plugin: %v", err)
+	}
+	if got := queryStrings(t, db, `SELECT enabled::text FROM installed_plugins WHERE id = '`+plugin2+`'`); !cmp.Equal(got, []string{"false"}) {
+		t.Errorf("enabled of a new plugin = %v, want false", got)
+	}
+	// One plugin per name in a workspace; the same name in another workspace is fine.
+	if err := exec(`INSERT INTO installed_plugins (workspace_id, name) VALUES ('` + ws1 + `', 'p2')`); err == nil || !strings.Contains(err.Error(), "installed_plugins_workspace_id_name_key") {
+		t.Errorf("second plugin named p2 in a workspace error = %v, want a violation of installed_plugins_workspace_id_name_key", err)
+	}
+	if err := exec(`INSERT INTO installed_plugins (workspace_id, name) VALUES ('` + ws2 + `', 'p2')`); err != nil {
+		t.Errorf("plugin of the same name in another workspace: %v", err)
+	}
+	// Owned rows: an unknown plugin is refused; a plugin that still owns rows cannot be deleted
+	// (no cascade); after its children are gone it can.
+	for table, q := range map[string]string{
+		"agents": `INSERT INTO agents (workspace_id, name, provider, model, system_prompt, plugin_id) VALUES ('` + ws1 + `', 'a2', 'openai', 'm', 's', '%s')`,
+		"skills": `INSERT INTO skills (workspace_id, name, description, type, source, body, plugin_id) VALUES ('` + ws1 + `', 's2', 'd', 'custom', 'manual', 'b', '%s')`,
+		"memory": `INSERT INTO memory (workspace_id, scope, kind, content, plugin_id) VALUES ('` + ws1 + `', 'global', 'learning', 'c2', '%s')`,
+	} {
+		if err := exec(strings.Replace(q, "%s", "00000000-0000-0000-0000-0000000000ff", 1)); err == nil {
+			t.Errorf("%s row owned by an unknown plugin accepted, want the foreign key to reject it", table)
+		}
+		if err := exec(strings.Replace(q, "%s", plugin2, 1)); err != nil {
+			t.Errorf("%s row owned by a plugin: %v", table, err)
+		}
+	}
+	if err := exec(`DELETE FROM installed_plugins WHERE id = '` + plugin2 + `'`); err == nil {
+		t.Errorf("deleting a plugin that owns an agent, a skill and a learning succeeded, want the foreign key to refuse it")
+	}
+	if err := exec(`DELETE FROM agents WHERE plugin_id = '` + plugin2 + `'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec(`DELETE FROM skills WHERE plugin_id = '` + plugin2 + `'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec(`DELETE FROM memory WHERE plugin_id = '` + plugin2 + `'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := exec(`DELETE FROM installed_plugins WHERE id = '` + plugin2 + `'`); err != nil {
+		t.Errorf("deleting a plugin whose children are gone: %v", err)
+	}
+	// Deleting a workspace still removes its plugins (the 0001 cascade) once the owned rows go with it.
+	if err := exec(`DELETE FROM workspaces WHERE id = '` + ws2 + `'`); err != nil {
+		t.Errorf("deleting a workspace with a plugin: %v", err)
+	}
+
+	// Down is lossy: owned rows stay as ordinary rows, descriptions go, the plugin keeps its state.
+	if err := exec(`UPDATE installed_plugins SET description = 'x', enabled = false WHERE id = '` + plugin1 + `';
+	  INSERT INTO agents (workspace_id, name, provider, model, system_prompt, plugin_id) VALUES ('` + ws1 + `', 'owned', 'openai', 'm', 's', '` + plugin1 + `')`); err != nil {
+		t.Fatalf("prepare Down: %v", err)
+	}
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 8 {
+		t.Fatalf("Down() = %d, %v, %v, want 8, true, nil", v, ok, err)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0008 differs from version 7 (-v7 +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, `SELECT name || ' ' || enabled::text FROM installed_plugins`); !cmp.Equal(got, []string{"p1 false"}) {
+		t.Errorf("plugins after Down = %v, want p1 kept with its enabled value", got)
+	}
+	if got := queryStrings(t, db, `SELECT name FROM agents ORDER BY name`); !cmp.Equal(got, []string{"a1", "owned"}) {
+		t.Errorf("agents after Down = %v, want both kept", got)
+	}
+	if err := exec(`INSERT INTO installed_plugins (workspace_id, name) VALUES ('` + ws1 + `', 'p3')`); err != nil {
+		t.Fatal(err)
+	}
+	if got := queryStrings(t, db, `SELECT enabled::text FROM installed_plugins WHERE name = 'p3'`); !cmp.Equal(got, []string{"true"}) {
+		t.Errorf("enabled of a plugin inserted after Down = %v, want the old default true", got)
+	}
+	if err := exec(`DELETE FROM installed_plugins WHERE name = 'p3'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Up again: the same schema; ownership is gone, so every row is user-owned.
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, `SELECT count(*)::text FROM agents WHERE plugin_id IS NOT NULL`); !cmp.Equal(got, []string{"0"}) {
+		t.Errorf("owned agents after Down->Up = %v, want none", got)
+	}
+}
+
 // onlyIn returns the entries of a that are not in b (both sorted).
 func onlyIn(a, b []string) []string {
 	have := make(map[string]bool, len(b))

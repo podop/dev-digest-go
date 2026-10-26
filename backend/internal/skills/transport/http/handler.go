@@ -88,7 +88,7 @@ func AddRoutes(e *echo.Echo, skills skillService, imports importer, merge merger
 // ---- wire shapes --------------------------------------------------------------------------------
 
 // skillResponse is the wire shape of a skill (contract: Skill in knowledge.ts). Every key is
-// always present; evidence_files is always null.
+// always present; evidence_files and plugin (the owner, FR14) are null when there is none.
 type skillResponse struct {
 	ID            string     `json:"id"`
 	Name          string     `json:"name"`
@@ -103,14 +103,27 @@ type skillResponse struct {
 	CreatedAt     httpx.Time `json:"created_at"`
 	UpdatedAt     httpx.Time `json:"updated_at"`
 	UsedBy        int        `json:"used_by"`
+	// Plugin is the owner plugin; null for a skill the user made.
+	Plugin *pluginRefResponse `json:"plugin"`
+}
+
+// pluginRefResponse is the wire shape of PluginRef (knowledge.ts).
+type pluginRefResponse struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
 }
 
 func toSkillResponse(s domain.Skill) skillResponse {
-	return skillResponse{
+	out := skillResponse{
 		ID: s.ID, Name: s.Name, Description: s.Description, Type: string(s.Type), Source: string(s.Source),
 		SourceRef: s.SourceRef, Body: s.Body, Enabled: s.Enabled, Version: s.Version,
 		CreatedAt: httpx.NewTime(s.CreatedAt), UpdatedAt: httpx.NewTime(s.UpdatedAt), UsedBy: s.UsedBy,
 	}
+	if s.Plugin != nil {
+		out.Plugin = &pluginRefResponse{ID: s.Plugin.ID, Name: s.Plugin.Name, Enabled: s.Plugin.Enabled}
+	}
+	return out
 }
 
 type versionResponse struct {

@@ -13,6 +13,7 @@ import { EvalCasesSection } from "@/components/eval-cases";
 import { MetricTiles } from "@/components/eval-metrics";
 import { followedRunId, RunsTable, runningRun } from "@/components/eval-run-history";
 import { useAgents, useEvalRun, useSkillAgents, useSkillEvalCases, useSkillEvalRuns, useStartSkillEvalRun } from "@/lib/hooks";
+import { isPluginDisabled } from "@/lib/plugins";
 import { HostAgentPicker } from "./_components/HostAgentPicker";
 import { effectiveHostAgentId, latestFinishedPair, runAllBlocker } from "./helpers";
 import { s } from "./styles";
@@ -29,7 +30,8 @@ export function EvalsTab({ skill }: { skill: Skill }) {
   const followed = useEvalRun(followedRunId(runs.data, start.data?.id));
   const [picked, setPicked] = React.useState<string | null>(null);
 
-  const agentList = agents.data ?? [];
+  // Agents of a disabled plugin cannot host a run (FR18): not offered, never the default or a kept pick.
+  const agentList = React.useMemo(() => (agents.data ?? []).filter((a) => !isPluginDisabled(a)), [agents.data]);
   const hostId = effectiveHostAgentId(agentList, usedBy.data, picked);
   const running = runningRun(followed.data, runs.data);
   const { latest, previous } = latestFinishedPair(runs.data);

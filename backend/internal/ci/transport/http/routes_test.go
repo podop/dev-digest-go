@@ -3,6 +3,7 @@ package cihttp_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -47,12 +48,15 @@ type fakeCI struct {
 	export  domain.Export
 	insts   []domain.Installation
 	runs    []domain.Run
+	groups  []domain.RepoGroup
 	refresh domain.RefreshResult
 }
 
 var (
 	_ app.Exporter = (*fakeCI)(nil)
 	_ app.Ingest   = (*fakeCI)(nil)
+
+	_ app.RepoInstallations = (*fakeCI)(nil)
 )
 
 func (f *fakeCI) note(s string) {
@@ -85,6 +89,12 @@ func (f *fakeCI) ListRuns(_ context.Context, ws string, flt app.RunFilter) ([]do
 	return f.runs, f.err
 }
 
+func (f *fakeCI) ListByRepo(_ context.Context, ws string) ([]domain.RepoGroup, error) {
+	f.note("ListByRepo")
+	f.refreshWs = ws
+	return f.groups, f.err
+}
+
 func (f *fakeCI) Refresh(_ context.Context, ws, id string) (domain.RefreshResult, error) {
 	f.note("Refresh")
 	f.refreshWs, f.refreshFor = ws, id
@@ -105,6 +115,7 @@ func newServer(t *testing.T, f *fakeCI) *httptest.Server {
 		AllowedHosts: []string{"127.0.0.1"},
 	})
 	cihttp.AddRoutes(e, f, f, fakeTenants{})
+	cihttp.AddInstallationsRoute(e, f, fakeTenants{})
 	srv := httptest.NewServer(e)
 	t.Cleanup(srv.Close)
 	return srv
@@ -710,5 +721,98 @@ func TestAddRoutes_RegistersFourRoutes(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Errorf("routes %v are not registered; have %v", want, got)
+	}
+}
+
+func TestRepoInstallations_Shape(t *testing.T) {
+	t.Parallel()
+	installed := time.Date(2026, 10, 19, 8, 0, 0, 0, time.UTC)
+	ranAt := time.Date(2026, 10, 20, 9, 30, 0, 0, time.UTC)
+	f := &fakeCI{groups: []domain.RepoGroup{
+		{
+			Repo: "acme/api",
+			Installations: []domain.RepoInstallation{
+				{ID: instID, AgentID: agentID, AgentName: "alpha", Repo: "acme/api", Slug: ptr("alpha"), InstalledAt: installed},
+				{ID: "i2", AgentID: "a2", AgentName: "beta", Repo: "acme/api", InstalledAt: installed},
+			},
+			LastRun: &domain.Run{ID: "r1", Status: ptr("succeeded"), RanAt: &ranAt, GithubURL: ptr("https://github.com/acme/api/actions/runs/1"), AgentID: ptr(agentID)},
+		},
+		{
+			Repo:          "acme/web",
+			Installations: []domain.RepoInstallation{{ID: "i3", AgentID: agentID, AgentName: "alpha", Repo: "acme/web", InstalledAt: installed}},
+		},
+		{
+			Repo:          "acme/bare",
+			Installations: []domain.RepoInstallation{{ID: "i4", AgentID: agentID, AgentName: "alpha", Repo: "acme/bare", InstalledAt: installed}},
+			LastRun:       &domain.Run{ID: "r2"},
+		},
+	}}
+	srv := newServer(t, f)
+	r := send(t, srv, http.MethodGet, "/ci/installations", "", "")
+	if r.Status != http.StatusOK {
+		t.Fatalf("status = %d (%s), want 200", r.Status, r.Body)
+	}
+	want := map[string]any{"repos": []any{
+		map[string]any{
+			"repo": "acme/api",
+			"installations": []any{
+				map[string]any{"id": instID, "agent_id": agentID, "agent_name": "alpha", "slug": "alpha", "installed_at": "2026-10-19T08:00:00.000Z"},
+				map[string]any{"id": "i2", "agent_id": "a2", "agent_name": "beta", "slug": nil, "installed_at": "2026-10-19T08:00:00.000Z"},
+			},
+			"last_run": map[string]any{
+				"status": "succeeded", "ran_at": "2026-10-20T09:30:00.000Z",
+				"github_url": "https://github.com/acme/api/actions/runs/1", "agent_id": agentID,
+			},
+		},
+		map[string]any{
+			"repo": "acme/web",
+			"installations": []any{
+				map[string]any{"id": "i3", "agent_id": agentID, "agent_name": "alpha", "slug": nil, "installed_at": "2026-10-19T08:00:00.000Z"},
+			},
+			"last_run": nil,
+		},
+		map[string]any{
+			"repo": "acme/bare",
+			"installations": []any{
+				map[string]any{"id": "i4", "agent_id": agentID, "agent_name": "alpha", "slug": nil, "installed_at": "2026-10-19T08:00:00.000Z"},
+			},
+			"last_run": map[string]any{"status": nil, "ran_at": nil, "github_url": nil, "agent_id": nil},
+		},
+	}}
+	if diff := cmp.Diff(want, decode(t, r)); diff != "" {
+		t.Errorf("body mismatch (-want +got):\n%s", diff)
+	}
+	if f.refreshWs != workspaceID {
+		t.Errorf("workspace = %q, want %q", f.refreshWs, workspaceID)
+	}
+}
+
+func TestRepoInstallations_EmptyIsAnEmptyList(t *testing.T) {
+	t.Parallel()
+	r := send(t, newServer(t, &fakeCI{}), http.MethodGet, "/ci/installations", "", "")
+	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != `{"repos":[]}` {
+		t.Errorf("empty answer = %d %s, want 200 {\"repos\":[]}", r.Status, r.Body)
+	}
+}
+
+func TestRepoInstallations_DatabaseErrorIs500(t *testing.T) {
+	t.Parallel()
+	f := &fakeCI{err: errors.New("db down")}
+	assertError(t, send(t, newServer(t, f), http.MethodGet, "/ci/installations", "", ""), 500, "internal_error", "Internal error")
+}
+
+func TestAddInstallationsRoute_DoesNotShadowTheAgentRoute(t *testing.T) {
+	t.Parallel()
+	e := echo.New()
+	cihttp.AddRoutes(e, &fakeCI{}, &fakeCI{}, fakeTenants{})
+	cihttp.AddInstallationsRoute(e, &fakeCI{}, fakeTenants{})
+	have := map[string]bool{}
+	for _, r := range e.Router().Routes() {
+		have[r.Method+" "+r.Path] = true
+	}
+	for _, w := range []string{"GET /ci/installations", "GET /agents/:id/ci-installations"} {
+		if !have[w] {
+			t.Errorf("route %q is not registered; have %v", w, have)
+		}
 	}
 }

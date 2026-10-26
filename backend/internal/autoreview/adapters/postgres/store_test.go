@@ -342,14 +342,24 @@ func TestEnabledAgents(t *testing.T) {
 	on2 := f.agent(t, f.ws, "two", true)
 	off := f.agent(t, f.ws, "off", false)
 	foreign := f.agent(t, f.other, "foreign", true)
+	livePlugin := f.insert(t, `INSERT INTO installed_plugins (workspace_id, name, enabled) VALUES (?, 'live', true) RETURNING id`, f.ws)
+	deadPlugin := f.insert(t, `INSERT INTO installed_plugins (workspace_id, name, enabled) VALUES (?, 'dead', false) RETURNING id`, f.ws)
+	ofLive := f.agent(t, f.ws, "of-live-plugin", true)
+	ofDead := f.agent(t, f.ws, "of-dead-plugin", true)
+	offOfLive := f.agent(t, f.ws, "off-of-live-plugin", false)
+	f.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, livePlugin, ofLive)
+	f.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, deadPlugin, ofDead)
+	f.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, livePlugin, offOfLive)
 	ctx := t.Context()
 
-	got, err := f.store.EnabledAgents(ctx, f.ws, []string{on1, off, foreign, on2, "not-a-uuid", "00000000-0000-0000-0000-000000000000"})
+	// on1/on2 are unowned (kept), ofLive belongs to an enabled plugin (kept), ofDead to a disabled
+	// one (dropped), offOfLive is disabled itself (dropped).
+	got, err := f.store.EnabledAgents(ctx, f.ws, []string{on1, off, foreign, on2, ofLive, ofDead, offOfLive, "not-a-uuid", "00000000-0000-0000-0000-000000000000"})
 	if err != nil {
 		t.Fatalf("EnabledAgents() error = %v", err)
 	}
 	slices.Sort(got)
-	want := []string{on1, on2}
+	want := []string{on1, on2, ofLive}
 	slices.Sort(want)
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("EnabledAgents() mismatch (-want +got):\n%s", diff)

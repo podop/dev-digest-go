@@ -1,5 +1,5 @@
 /* SettingsView — the sub-nav in FR1 order with the current section active, the panel of each
-   section (panels of slices A, B and C, "coming later" for the rest) and the no-hard-coded-copy check
+   section (panels of slices A to D) and the no-hard-coded-copy check
    (AC1, AC22). AppShell is a passthrough; the section panels have their own tests and are
    replaced by markers here. */
 import type React from "react";
@@ -25,6 +25,9 @@ vi.mock("./_components/SettingsWorkspace", () => ({ SettingsWorkspace: () => <di
 vi.mock("./_components/SettingsAutoReviews", () => ({
   SettingsAutoReviews: () => <div data-testid="panel-automatic-reviews" />,
 }));
+vi.mock("./_components/SettingsIntegrations", () => ({
+  SettingsIntegrations: () => <div data-testid="panel-integrations" />,
+}));
 vi.mock("./_components/SettingsModels", () => ({ SettingsModels: () => <div data-testid="panel-models" /> }));
 vi.mock("./_components/SettingsAbout", () => ({ SettingsAbout: () => <div data-testid="panel-about" /> }));
 
@@ -42,11 +45,12 @@ const LABELS: Record<SettingsSectionKey, string> = {
   models: "Feature Models",
   about: "About",
 };
-const PANEL_TESTID: Partial<Record<SettingsSectionKey, string>> = {
+const PANEL_TESTID: Record<SettingsSectionKey, string> = {
   "api-keys": "panel-api-keys",
   github: "panel-github",
   workspace: "panel-workspace",
   "automatic-reviews": "panel-automatic-reviews",
+  integrations: "panel-integrations",
   models: "panel-models",
   about: "panel-about",
 };
@@ -69,7 +73,7 @@ describe("SettingsView", () => {
     expect(links.map((a) => a.getAttribute("href"))).toEqual(SETTINGS_SECTION_KEYS.map((k) => `/settings/${k}`));
   });
 
-  it.each(SETTINGS_SECTION_KEYS)("%s: marks its item active and shows its panel or the empty state", (key) => {
+  it.each(SETTINGS_SECTION_KEYS)("%s: marks its item active and shows its panel", (key) => {
     renderWithProviders(<SettingsView section={key} />);
 
     const current = within(screen.getByRole("navigation")).getAllByRole("link", { current: "page" });
@@ -79,17 +83,9 @@ describe("SettingsView", () => {
       LABELS[key],
     ]);
 
-    const testid = PANEL_TESTID[key];
-    if (testid) {
-      expect(screen.getByTestId(testid)).toBeInTheDocument();
-      expect(screen.queryByText("This section is coming in a later release.")).not.toBeInTheDocument();
-      expect(screen.queryByText(/A6 finalizes/)).not.toBeInTheDocument();
-    } else {
-      // Sub-nav item, breadcrumb and the empty-state title all carry the label.
-      expect(screen.getAllByText(LABELS[key])).toHaveLength(3);
-      expect(screen.getByText("This section is coming in a later release.")).toBeInTheDocument();
-      expect(document.querySelector("[data-testid^='panel-']")).toBeNull();
-    }
+    // Every section has a panel since slice D: the "coming later" branch is no longer reachable.
+    expect(screen.getByTestId(PANEL_TESTID[key])).toBeInTheDocument();
+    expect(screen.queryByText("This section is coming in a later release.")).not.toBeInTheDocument();
   });
 
   it.each(SETTINGS_SECTION_KEYS)("%s: renders no hard-coded copy", (key) => {

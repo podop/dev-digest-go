@@ -17,7 +17,9 @@ import (
 )
 
 // agentRow maps the agents table. created_at keeps its database default and is only used for
-// ordering. output_schema is jsonb passed as text; NULL is a nil pointer.
+// ordering. output_schema is jsonb passed as text; NULL is a nil pointer. The Plugin* fields are
+// read-only (gorm "->"): agentColumns fills them from installed_plugins and no write touches
+// agents.plugin_id, so create leaves it NULL and an update keeps the owner.
 type agentRow struct {
 	ID           string  `gorm:"column:id;primaryKey;default:gen_random_uuid()"`
 	WorkspaceID  string  `gorm:"column:workspace_id"`
@@ -33,7 +35,19 @@ type agentRow struct {
 	Strategy     string  `gorm:"column:strategy"`
 	CIFailOn     string  `gorm:"column:ci_fail_on"`
 	RepoIntel    bool    `gorm:"column:repo_intel"`
+
+	PluginID      *string `gorm:"column:plugin_ref_id;->"`
+	PluginName    *string `gorm:"column:plugin_ref_name;->"`
+	PluginEnabled *bool   `gorm:"column:plugin_ref_enabled;->"`
 }
+
+// agentColumns selects the agent with its owner through correlated subqueries. A join would
+// not do: GetForUpdate appends FOR UPDATE, which Postgres refuses on the nullable side of an
+// outer join; scalar subqueries leave the lock on the agent row alone.
+const agentColumns = `agents.*,
+	(SELECT p.id::text FROM installed_plugins p WHERE p.id = agents.plugin_id) AS plugin_ref_id,
+	(SELECT p.name FROM installed_plugins p WHERE p.id = agents.plugin_id) AS plugin_ref_name,
+	(SELECT p.enabled FROM installed_plugins p WHERE p.id = agents.plugin_id) AS plugin_ref_enabled`
 
 func (agentRow) TableName() string { return "agents" }
 
@@ -45,6 +59,9 @@ func (r agentRow) toDomain() domain.Agent {
 	}
 	if r.OutputSchema != nil {
 		a.OutputSchema = domain.NormalizeSchema(json.RawMessage(*r.OutputSchema))
+	}
+	if r.PluginID != nil && r.PluginName != nil && r.PluginEnabled != nil {
+		a.Plugin = &domain.PluginRef{ID: *r.PluginID, Name: *r.PluginName, Enabled: *r.PluginEnabled}
 	}
 	return a
 }
@@ -143,7 +160,7 @@ func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 // List returns the workspace's agents by creation time, name in byte order, then id.
 func (s *Store) List(ctx context.Context, workspaceID string) ([]domain.Agent, error) {
 	var rows []agentRow
-	if err := pg.Conn(ctx, s.db).Where("workspace_id = ?", workspaceID).
+	if err := pg.Conn(ctx, s.db).Select(agentColumns).Where("agents.workspace_id = ?", workspaceID).
 		Order(`created_at, name COLLATE "C", id`).Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("select agents: %w", err)
 	}
@@ -166,7 +183,7 @@ func (s *Store) GetForUpdate(ctx context.Context, workspaceID, id string) (domai
 
 func (s *Store) take(db *gorm.DB, workspaceID, id string) (domain.Agent, error) {
 	var row agentRow
-	err := db.Where("workspace_id = ? AND id = ?", workspaceID, id).Take(&row).Error
+	err := db.Select(agentColumns).Where("agents.workspace_id = ? AND agents.id = ?", workspaceID, id).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.Agent{}, domain.ErrNotFound
 	}

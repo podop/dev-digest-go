@@ -81,6 +81,7 @@ import (
 	"dev-digest-go/backend/internal/platform/retry"
 	"dev-digest-go/backend/internal/platform/runbus"
 	"dev-digest-go/backend/internal/platform/secrets"
+	pluginshttp "dev-digest-go/backend/internal/plugins/transport/http"
 	pcclone "dev-digest-go/backend/internal/projectcontext/adapters/clonedocs"
 	pcpg "dev-digest-go/backend/internal/projectcontext/adapters/postgres"
 	pcapp "dev-digest-go/backend/internal/projectcontext/app"
@@ -585,6 +586,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		CORSOrigins:  cfg.CORSOrigins,
 		AllowedHosts: cfg.AllowedHosts,
 		BodyLimits:   limits,
+		RawBodies:    pluginshttp.RawBodies(),
 		RateLimit: httpx.RateLimit{
 			Enabled: cfg.RateLimitEnabled,
 			Buckets: slices.Concat(settingshttp.RateLimitBuckets(),
@@ -593,7 +595,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 					{Method: http.MethodPost, Path: intenthttp.RefreshPath, Limit: 10},
 				},
 				// The two eval run starts share one counter per workspace; run-all counts per IP.
-				evalshttp.RateLimitBuckets()),
+				evalshttp.RateLimitBuckets(),
+				pluginshttp.RateLimitBuckets()),
 			// A live run stream is long-lived and reconnects on its own: it never counts.
 			Exempt: []httpx.Route{{Method: http.MethodGet, Path: "/runs/:id/events"}},
 		},
@@ -618,8 +621,10 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	performancehttp.AddRoutes(e, perfapp.NewService(perfpg.NewStore(db), now), resolver)
 	evalshttp.AddRoutes(e, evalCases, evalRuns, resolver)
 	cihttp.AddRoutes(e, ciExport, ciIngest, resolver)
+	cihttp.AddInstallationsRoute(e, ciapp.NewInstallationsService(ciStore), resolver)
 	leaderboardhttp.AddRoutes(e, lbapp.NewService(lbpg.NewStore(db), now), resolver)
 	spendhttp.AddRoutes(e, spendSvc, resolver)
+	pluginshttp.AddRoutes(e, newPluginsService(db, settingsSvc, now, log, orDev(o.build.version)), resolver)
 	// Automatic reviews (Settings C): the trigger runs after each background-poll cycle (the poller's
 	// Observer below); the service is built even with PR_POLL_ENABLED=false so the status line can say
 	// poll_disabled. Starts go through the reviews start with source "auto"; the cap is checked once per

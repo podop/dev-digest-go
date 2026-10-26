@@ -8,6 +8,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
+import { PluginBadge } from "@/components/plugin-badge";
 import { DEFAULT_STATS_PRESET, type StatsPeriod } from "@/lib/stats-period";
 import { ConfigTab } from "./_components/ConfigTab";
 import { CiTab } from "./_components/CiTab";
@@ -32,6 +33,11 @@ export function AgentEditor({ agent, tab, onTab, period = DEFAULT_PERIOD }: Agen
   const tabs = TABS.map((tb) => ({ key: tb.key, label: t(tb.labelKey), icon: tb.icon }));
   return (
     <div style={s.wrap}>
+      {agent.plugin && (
+        <div style={s.pluginBar}>
+          <PluginBadge plugin={agent.plugin} />
+        </div>
+      )}
       <div style={s.tabsBar}>
         <Tabs tabs={tabs} value={tab} onChange={onTab} pad="0 24px" />
       </div>

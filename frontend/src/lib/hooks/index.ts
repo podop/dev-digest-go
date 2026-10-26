@@ -20,3 +20,4 @@ export * from "./multi-agent";
 export * from "./performance";
 export * from "./leaderboard";
 export * from "./workspace";
+export * from "./plugins";

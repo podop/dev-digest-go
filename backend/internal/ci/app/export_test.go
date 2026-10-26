@@ -537,3 +537,53 @@ func TestExportListInstallationsUnknownAgent(t *testing.T) {
 	_, err := rig.svc.ListInstallations(t.Context(), "ws-1", "nope")
 	wantError(t, err, apperr.KindNotFound, "agent_not_found", "Agent not found")
 }
+
+func TestExportRefusesAnAgentOfADisabledPlugin(t *testing.T) {
+	agent := defaultAgent()
+	agent.Plugin = &domain.PluginRef{Name: `Sec "Pack"`, Enabled: false}
+	rig := newExportRig(t, rigOpts{agent: agent, runner: true, configured: true})
+
+	for _, action := range []domain.ExportAction{domain.ActionOpenPR, domain.ActionFiles} {
+		req := request("acme/widgets")
+		req.Action = action
+		_, err := rig.svc.Export(t.Context(), "ws-1", "agent-1", req)
+		wantError(t, err, apperr.KindConflict, "plugin_disabled",
+			`Agent "Security Reviewer" belongs to the disabled plugin "Sec \"Pack\""`)
+	}
+	if got := rig.rec.snapshot(t); len(got) != 0 {
+		t.Errorf("calls after the plugin_disabled refusal = %v, want none (no store read, no GitHub call)", got)
+	}
+	if rig.store.saved != nil {
+		t.Errorf("installation saved = %+v, want nothing written", rig.store.saved)
+	}
+}
+
+func TestExportPluginGateComesRightAfterTheAgentLookup(t *testing.T) {
+	// Before the target, provider, trigger and repository checks.
+	agent := defaultAgent()
+	agent.Provider = "anthropic"
+	agent.Plugin = &domain.PluginRef{Name: "Pack", Enabled: false}
+	rig := newExportRig(t, rigOpts{agent: agent, runner: true, configured: true})
+	req := request("nowhere/none")
+	req.Target = "gitlab"
+	_, err := rig.svc.Export(t.Context(), "ws-1", "agent-1", req)
+	wantError(t, err, apperr.KindConflict, "plugin_disabled", "")
+
+	// After the 404: an unknown agent answers agent_not_found, not plugin_disabled.
+	missing := newExportRig(t, rigOpts{noAgent: true, agent: agent, runner: true, configured: true})
+	_, err = missing.svc.Export(t.Context(), "ws-1", "agent-1", request("acme/widgets"))
+	wantError(t, err, apperr.KindNotFound, "agent_not_found", "Agent not found")
+}
+
+func TestExportOfAnEnabledPluginAgentOpensThePR(t *testing.T) {
+	agent := defaultAgent()
+	agent.Plugin = &domain.PluginRef{Name: "Pack", Enabled: true}
+	rig := newExportRig(t, rigOpts{agent: agent, runner: true, configured: true})
+	got, err := rig.svc.Export(t.Context(), "ws-1", "agent-1", request("acme/widgets"))
+	if err != nil {
+		t.Fatalf("Export() error = %v, want none for an enabled plugin", err)
+	}
+	if got.PRURL == nil || *got.PRURL == "" {
+		t.Errorf("Export().PRURL = %v, want the opened pull request", got.PRURL)
+	}
+}

@@ -1,0 +1,46 @@
+{
+  "title": "Import plugin",
+  "body": "Add a plugin from a .zip or a bundle .json file. You review what it contains before anything is installed, and it arrives disabled.",
+  "zone": {
+    "label": "Plugin file drop zone",
+    "prompt": "Drop a .zip or .json plugin file here",
+    "or": "or",
+    "browse": "Browse files…",
+    "fileInputAria": "Plugin file",
+    "checking": "Checking…"
+  },
+  "problem": {
+    "wrongType": "Choose a .zip or .json plugin file",
+    "tooLarge": "This file is larger than {max} MB. Choose a smaller plugin file.",
+    "failed": "Import failed — try again",
+    "issuesHeading": "What is wrong with the file"
+  },
+  "preview": {
+    "title": "Review plugin",
+    "version": "Version {version}",
+    "kindWorkspace": "Workspace export",
+    "kindPlugin": "Plugin",
+    "counts": "{agents, plural, one {# agent} other {# agents}} · {skills, plural, one {# skill} other {# skills}} · {evalCases, plural, one {# eval case} other {# eval cases}} · {learnings, plural, one {# learning} other {# learnings}}",
+    "conventionsNotInstalled": "{count, plural, one {# convention is} other {# conventions are}} in the file but never installed.",
+    "agentsHeading": "Agents",
+    "agentSkills": "Skills: {skills}",
+    "agentNoSkills": "No skills linked",
+    "skillsHeading": "Skills",
+    "ignoredHeading": "Ignored parts",
+    "ignoredItem": "{part} — {reason}",
+    "warningsHeading": "Warnings",
+    "conflictsHeading": "Resolve before installing",
+    "conflictPlugin": "A plugin named {name} is already installed.",
+    "conflictSkills": "These skill names already exist: {skills}",
+    "conflictHelp": "Remove the existing item or change the name in the file, then choose the file again.",
+    "install": "Install",
+    "installing": "Installing…",
+    "cancel": "Cancel"
+  },
+  "installed": {
+    "title": "Plugin installed",
+    "created": "{agents, plural, one {# agent} other {# agents}} · {skills, plural, one {# skill} other {# skills}} · {evalCases, plural, one {# eval case} other {# eval cases}} · {learnings, plural, one {# learning} other {# learnings}} added.",
+    "enableHint": "Enable to let its agents and skills run",
+    "another": "Import another"
+  }
+}

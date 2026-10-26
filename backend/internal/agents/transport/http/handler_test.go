@@ -187,7 +187,7 @@ func TestCreate_DefaultsAndTwin(t *testing.T) {
 	want := map[string]any{
 		"id": got["id"], "name": "A", "description": "", "provider": "openai", "model": "gpt-4.1",
 		"system_prompt": "p", "output_schema": nil, "enabled": true, "version": float64(1),
-		"strategy": "single-pass", "ci_fail_on": "critical", "repo_intel": true,
+		"strategy": "single-pass", "ci_fail_on": "critical", "repo_intel": true, "plugin": nil,
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("POST /agents body mismatch (-want +got):\n%s", diff)
@@ -210,6 +210,57 @@ func TestCreate_DefaultsAndTwin(t *testing.T) {
 	}
 	if ts, _ := versions[0]["created_at"].(string); !strings.HasSuffix(ts, "Z") || len(ts) != len("2026-10-22T10:00:00.000Z") {
 		t.Errorf("created_at = %q, want ISO-8601 UTC with milliseconds", ts)
+	}
+}
+
+// owned makes the agent belong to a new installed plugin of the default workspace.
+func (v *env) owned(t *testing.T, agentID, plugin string, enabled bool) string {
+	t.Helper()
+	var pluginID string
+	err := v.db.Raw(`INSERT INTO installed_plugins (workspace_id, name, enabled) VALUES (?, ?, ?) RETURNING id`,
+		v.ws, plugin, enabled).Scan(&pluginID).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v.db.Exec(`UPDATE agents SET plugin_id = ? WHERE id = ?`, pluginID, agentID).Error; err != nil {
+		t.Fatal(err)
+	}
+	return pluginID
+}
+
+func TestPluginOwner_InEveryAgentDTO(t *testing.T) {
+	v := newEnv(t)
+	plain := v.createAgent(t, minimal)
+	mine := v.createAgent(t, `{"name":"mine","provider":"openai","model":"m","system_prompt":"p"}`)
+	pluginID := v.owned(t, mine["id"].(string), "acme", false)
+	wantPlugin := map[string]any{"id": pluginID, "name": "acme", "enabled": false}
+
+	if got, ok := plain["plugin"]; !ok || got != nil {
+		t.Errorf("POST /agents plugin = %v (present %v), want an explicit null", got, ok)
+	}
+	path := "/agents/" + mine["id"].(string)
+	if diff := cmp.Diff(wantPlugin, decode[map[string]any](t, v.do(t, http.MethodGet, path, ""))["plugin"]); diff != "" {
+		t.Errorf("GET %s plugin mismatch (-want +got):\n%s", path, diff)
+	}
+	list := decode[[]map[string]any](t, v.do(t, http.MethodGet, "/agents", ""))
+	byName := map[string]any{}
+	for _, a := range list {
+		plugin, ok := a["plugin"]
+		if !ok {
+			t.Errorf("GET /agents agent %v has no plugin key, want it always present", a["name"])
+		}
+		byName[a["name"].(string)] = plugin
+	}
+	if diff := cmp.Diff(map[string]any{"A": nil, "mine": wantPlugin}, byName); diff != "" {
+		t.Errorf("GET /agents plugin by agent mismatch (-want +got):\n%s", diff)
+	}
+
+	r := v.do(t, http.MethodPut, path, `{"name":"renamed"}`)
+	if r.status != http.StatusOK {
+		t.Fatalf("PUT %s = %d (%s), want 200", path, r.status, r.body)
+	}
+	if diff := cmp.Diff(wantPlugin, decode[map[string]any](t, r)["plugin"]); diff != "" {
+		t.Errorf("PUT %s plugin mismatch (-want +got):\n%s", path, diff)
 	}
 }
 

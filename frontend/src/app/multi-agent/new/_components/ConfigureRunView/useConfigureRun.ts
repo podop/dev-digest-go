@@ -3,6 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useAgents, usePulls, useRunEstimates, useRunReview } from "@/lib/hooks";
+import { isPluginDisabled } from "@/lib/plugins";
 import { useActiveRepo } from "@/lib/repo-context";
 import { MIN_AGENTS } from "./constants";
 import { defaultSelectedIds, estimatesByAgent, footerTotals } from "./helpers";
@@ -27,7 +28,9 @@ export function useConfigureRun({ prId, agentIds }: Options) {
   const [pickedAgents, setPickedAgents] = React.useState<string[] | null>(null);
 
   const pullList = React.useMemo(() => pulls.data ?? [], [pulls.data]);
-  const agents = React.useMemo(() => agentsQuery.data ?? [], [agentsQuery.data]);
+  // Agents of a disabled plugin are neither offered nor selectable (FR18); `selectedIds` only
+  // ever holds ids from this list, so a `?agents=` preselection of such an agent is dropped.
+  const agents = React.useMemo(() => (agentsQuery.data ?? []).filter((a) => !isPluginDisabled(a)), [agentsQuery.data]);
   const estimates = React.useMemo(() => estimatesByAgent(estimateQuery.data), [estimateQuery.data]);
 
   const knownPrId = prId && pullList.some((p) => p.id === prId) ? prId : null;

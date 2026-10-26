@@ -615,3 +615,117 @@ func waitFor(t *testing.T, db *gorm.DB, query string, n int) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestListRepoInstallations(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	// Repository X has two agents with runs, Y one agent without runs; names sort in byte order.
+	web := f.install(t, f.agentA, "acme/web", "alpha-web", 3)
+	apiBeta := f.install(t, f.agentB, "acme/api", "beta", 1)
+	apiAlpha := f.install(t, f.agentA, "acme/api", "alpha", 1)
+	upper := f.install(t, f.agentA, "Acme/zzz", "alpha-z", 1)
+	// Not gha, and not of this workspace: never listed.
+	f.scan(t, `INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'acme/api', 'cli') RETURNING id`, f.agentA)
+	foreign := f.install(t, f.agentO, "acme/api", "outsider", 1)
+	for id, d := range map[string]time.Duration{apiBeta: 0, apiAlpha: time.Hour} {
+		if err := f.db.Exec(`UPDATE ci_installations SET installed_at = ? WHERE id = ?`, t0.Add(d), id).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	record := func(r domain.NewRun) {
+		t.Helper()
+		if rec, err := f.store.RecordRun(ctx, r); err != nil || !rec.Stored {
+			t.Fatalf("RecordRun(%d) = %+v, %v", r.GithubRunID, rec, err)
+		}
+	}
+	record(newRun(f, apiAlpha, f.agentA, 1, 1, t0.Add(time.Hour)))
+	record(newRun(f, apiBeta, f.agentB, 2, 1, t0.Add(3*time.Hour))) // the newest of acme/api
+	record(newRun(f, apiBeta, f.agentB, 3, 1, t0.Add(2*time.Hour)))
+	record(newRun(f, web, f.agentA, 4, 1, t0))
+	// A run of another workspace on one of our installations is not ours.
+	other := newRun(f, apiAlpha, f.agentO, 5, 1, t0.Add(10*time.Hour))
+	other.WorkspaceID = f.other
+	record(other)
+	// A run of the foreign installation never shows up.
+	foreignRun := newRun(f, foreign, f.agentO, 6, 1, t0.Add(20*time.Hour))
+	foreignRun.WorkspaceID = f.other
+	record(foreignRun)
+
+	got, err := f.store.ListRepoInstallations(ctx, f.ws)
+	if err != nil {
+		t.Fatalf("ListRepoInstallations() = _, %v", err)
+	}
+	type item struct{ repo, id string }
+	var order []item
+	for _, i := range got {
+		order = append(order, item{i.Repo, i.ID})
+	}
+	// repo in byte order ("Acme" < "acme"), then agent name, installed_at, id.
+	want := []item{{"Acme/zzz", upper}, {"acme/api", apiAlpha}, {"acme/api", apiBeta}, {"acme/web", web}}
+	if diff := cmp.Diff(want, order, cmp.AllowUnexported(item{})); diff != "" {
+		t.Fatalf("ListRepoInstallations() order mismatch (-want +got):\n%s", diff)
+	}
+	byID := map[string]domain.RepoInstallation{}
+	for _, i := range got {
+		byID[i.ID] = i
+	}
+	if a := byID[apiAlpha]; a.AgentName != "alpha" || a.AgentID != f.agentA || a.Slug == nil || *a.Slug != "alpha" || !a.InstalledAt.Equal(t0.Add(time.Hour)) {
+		t.Errorf("alpha installation = %+v, want agent alpha, slug alpha, installed_at t0+1h", a)
+	}
+	if a := byID[apiAlpha]; a.NewestRun == nil || !a.NewestRun.RanAt.Equal(t0.Add(time.Hour)) {
+		t.Errorf("alpha newest run = %+v, want t0+1h (the other workspace's run is not ours)", a.NewestRun)
+	}
+	if b := byID[apiBeta]; b.NewestRun == nil || !b.NewestRun.RanAt.Equal(t0.Add(3*time.Hour)) || *b.NewestRun.AgentID != f.agentB {
+		t.Errorf("beta newest run = %+v, want the t0+3h run of agent beta", b.NewestRun)
+	}
+	if u := byID[upper]; u.NewestRun != nil {
+		t.Errorf("installation without runs has newest run %+v, want nil", u.NewestRun)
+	}
+
+	// The domain turns it into the contract: acme/api's last run is the newest of its two
+	// installations, a repository without runs has none.
+	groups := domain.GroupByRepo(got)
+	if len(groups) != 3 || groups[1].Repo != "acme/api" || len(groups[1].Installations) != 2 {
+		t.Fatalf("GroupByRepo() = %+v, want 3 repos, acme/api with 2 installations", groups)
+	}
+	if l := groups[1].LastRun; l == nil || *l.GithubURL != "https://github.com/acme/api/actions/runs/2" {
+		t.Errorf("acme/api last run = %+v, want run 2", l)
+	}
+	if groups[0].LastRun != nil {
+		t.Errorf("Acme/zzz last run = %+v, want nil", groups[0].LastRun)
+	}
+}
+
+func TestListRepoInstallations_Empty(t *testing.T) {
+	f := newFixture(t)
+	got, err := f.store.ListRepoInstallations(t.Context(), f.ws)
+	if err != nil || len(got) != 0 {
+		t.Errorf("ListRepoInstallations(no installations) = %v, %v, want none", got, err)
+	}
+}
+
+// A run without ran_at (hand-inserted rows may have none) is not the newest run: the dated one is.
+func TestListRepoInstallations_UndatedRunComesLast(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	inst := f.install(t, f.agentA, "acme/api", "alpha", 1)
+	for _, r := range []domain.NewRun{
+		newRun(f, inst, f.agentA, 1, 1, t0),
+		newRun(f, inst, f.agentA, 2, 1, t0.Add(time.Hour)),
+	} {
+		if rec, err := f.store.RecordRun(ctx, r); err != nil || !rec.Stored {
+			t.Fatalf("RecordRun(%d) = %+v, %v", r.GithubRunID, rec, err)
+		}
+	}
+	if err := f.db.Exec(`UPDATE ci_runs SET ran_at = NULL WHERE github_run_id = 2`).Error; err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.store.ListRepoInstallations(ctx, f.ws)
+	if err != nil || len(got) != 1 {
+		t.Fatalf("ListRepoInstallations() = %v, %v, want one installation", got, err)
+	}
+	if r := got[0].NewestRun; r == nil || r.RanAt == nil || *r.GithubURL != "https://github.com/acme/api/actions/runs/1" {
+		t.Errorf("newest run = %+v, want the dated run 1", r)
+	}
+}

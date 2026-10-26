@@ -1,0 +1,58 @@
+{
+  "card": {
+    "title": "GitHub Action",
+    "subtitle": "Run your agents on pull requests from a workflow in the repository.",
+    "repoCount": "{count, plural, one {# repo} other {# repos}}",
+    "install": "Install in a repo",
+    "loading": "Loading installations",
+    "empty": "Not installed in any repository yet",
+    "loadError": "Could not load the GitHub Action installations",
+    "retry": "Retry",
+    "noRuns": "no runs yet",
+    "lastRun": "{status} {time}",
+    "manage": "Manage",
+    "manageRepo": "Manage {repo}",
+    "status": {
+      "succeeded": "succeeded",
+      "noFindings": "no findings",
+      "failed": "failed",
+      "running": "running",
+      "unknown": "unknown status"
+    }
+  },
+  "dialog": {
+    "title": "Install in a repo",
+    "subtitle": "Opens a pull request that adds the workflow for each selected agent.",
+    "repoLabel": "Repository",
+    "repoPlaceholder": "Choose a repository",
+    "reposLoading": "Loading repositories",
+    "reposError": "Could not load the repositories",
+    "noRepos": "No repository is connected yet.",
+    "addRepo": "Add repository",
+    "agentsLegend": "Agents",
+    "agentsLoading": "Loading agents",
+    "agentsError": "Could not load the agents",
+    "noAgents": "No agent can be installed.",
+    "retry": "Retry",
+    "reason": {
+      "provider_not_supported": "Only OpenRouter agents can run in GitHub Actions.",
+      "plugin_disabled": "The plugin of this agent is disabled."
+    },
+    "progress": {
+      "queued": "Waiting",
+      "running": "Installing…",
+      "done": "Pull request opened",
+      "doneNoLink": "Installed",
+      "viewPr": "View pull request",
+      "failed": "Failed: {message}",
+      "failedUnknown": "Failed: the request did not complete"
+    },
+    "actions": {
+      "install": "Install",
+      "installing": "Installing…",
+      "retryFailed": "Retry failed",
+      "cancel": "Cancel",
+      "done": "Done"
+    }
+  }
+}

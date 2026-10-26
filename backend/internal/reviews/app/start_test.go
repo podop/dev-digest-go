@@ -237,3 +237,119 @@ func TestStartAuto_Refusals(t *testing.T) {
 		})
 	}
 }
+
+// pluginAgent registers an agent owned by the plugin "Acme Pack"; its enabled flag is the plugin's.
+func (h *harness) pluginAgent(id, name string, pluginEnabled bool) {
+	a := h.withAgent(id, name, true)
+	a.Plugin = &domain.PluginRef{ID: "plugin-1", Name: "Acme Pack", Enabled: pluginEnabled}
+	h.store.agents[id] = a
+}
+
+func wantPluginDisabled(t *testing.T, err error, message string) {
+	t.Helper()
+	var ae *apperr.Error
+	if !errors.As(err, &ae) || ae.Kind != apperr.KindConflict || ae.Code != "plugin_disabled" || ae.Message != message {
+		t.Fatalf("error = %v, want 409 plugin_disabled %q", err, message)
+	}
+}
+
+func TestStart_AgentOfDisabledPluginIs409AndStartsNothing(t *testing.T) {
+	const msg = `Agent "Lint" belongs to the disabled plugin "Acme Pack"`
+	tests := []struct {
+		name string
+		req  app.StartRequest
+	}{
+		{"agentId", app.StartRequest{AgentID: "p"}},
+		{"agentIds", app.StartRequest{AgentIDs: []string{"p"}}},
+		{"mixed agentIds (EC9)", app.StartRequest{AgentIDs: []string{"a", "p", "b"}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.withPull()
+			h.withAgent("a", "Alpha", true)
+			h.withAgent("b", "Beta", true)
+			h.pluginAgent("p", "Lint", false)
+			b := &fakeBudget{}
+			h.withBudget(b)
+			_, err := h.svc.Start(t.Context(), ws, "pr", tc.req)
+			wantPluginDisabled(t, err, msg)
+			if len(h.j.all()) != 0 || len(h.exec.batches) != 0 || len(b.calls) != 0 {
+				t.Errorf("Start() made calls %v, %d batches, %d admits, want none", h.j.all(), len(h.exec.batches), len(b.calls))
+			}
+		})
+	}
+}
+
+func TestStart_AgentOfEnabledPluginRuns(t *testing.T) {
+	h := newHarness(t)
+	h.withPull()
+	h.pluginAgent("p", "Lint", true)
+	got, err := h.svc.Start(t.Context(), ws, "pr", app.StartRequest{AgentID: "p"})
+	if err != nil || len(got.Runs) != 1 || len(h.exec.batches) != 1 {
+		t.Errorf("Start() = %+v, %v with %d batches, want one started run", got, err, len(h.exec.batches))
+	}
+}
+
+func TestStart_AllModeTrustsTheListRead(t *testing.T) {
+	h := newHarness(t)
+	h.withPull()
+	h.withAgent("a", "Alpha", true)
+	got, err := h.svc.Start(t.Context(), ws, "pr", app.StartRequest{All: true})
+	if err != nil || len(got.Runs) != 1 {
+		t.Errorf("Start(all) = %+v, %v, want the one listed agent", got, err)
+	}
+}
+
+// SCR6: unknown agent 404 first, then plugin 409, then the pull request 404, then the 402.
+func TestStart_PluginDisabledOrdering(t *testing.T) {
+	t.Run("unknown agent wins over the plugin 409", func(t *testing.T) {
+		h := newHarness(t)
+		h.withPull()
+		h.pluginAgent("p", "Lint", false)
+		_, err := h.svc.Start(t.Context(), ws, "pr", app.StartRequest{AgentIDs: []string{"p", "ghost"}})
+		if ae, ok := apperr.As(err); !ok || ae.Kind != apperr.KindNotFound {
+			t.Errorf("Start(disabled plugin, unknown agent) error = %v, want 404", err)
+		}
+	})
+	t.Run("invalid request wins", func(t *testing.T) {
+		h := newHarness(t)
+		h.pluginAgent("p", "Lint", false)
+		_, err := h.svc.Start(t.Context(), ws, "pr", app.StartRequest{})
+		if ae, ok := apperr.As(err); !ok || ae.Kind != apperr.KindInvalidInput {
+			t.Errorf("Start(invalid) error = %v, want 422", err)
+		}
+	})
+	t.Run("wins over the pull request 404", func(t *testing.T) {
+		h := newHarness(t)
+		h.pluginAgent("p", "Lint", false)
+		_, err := h.svc.Start(t.Context(), ws, "no-such-pr", app.StartRequest{AgentID: "p"})
+		wantPluginDisabled(t, err, `Agent "Lint" belongs to the disabled plugin "Acme Pack"`)
+	})
+	t.Run("wins over the spend cap", func(t *testing.T) {
+		h := newHarness(t)
+		h.withPull()
+		h.pluginAgent("p", "Lint", false)
+		b := &fakeBudget{err: capReached}
+		h.withBudget(b)
+		_, err := h.svc.Start(t.Context(), ws, "pr", app.StartRequest{AgentID: "p"})
+		wantPluginDisabled(t, err, `Agent "Lint" belongs to the disabled plugin "Acme Pack"`)
+		if len(b.calls) != 0 {
+			t.Errorf("Admit calls = %v, want none", b.calls)
+		}
+	})
+}
+
+func TestStartAuto_AgentOfDisabledPluginIs409AndStartsNothing(t *testing.T) {
+	h := newHarness(t)
+	h.withPull()
+	h.withAgent("a", "Alpha", true)
+	h.pluginAgent("p", "Lint", false)
+	b := &fakeBudget{}
+	h.withBudget(b)
+	_, err := h.svc.StartAuto(t.Context(), ws, "pr", []string{"a", "p"})
+	wantPluginDisabled(t, err, `Agent "Lint" belongs to the disabled plugin "Acme Pack"`)
+	if len(h.j.all()) != 0 || len(h.exec.batches) != 0 || len(b.calls) != 0 {
+		t.Errorf("StartAuto() made calls %v, %d batches, %d admits, want none", h.j.all(), len(h.exec.batches), len(b.calls))
+	}
+}

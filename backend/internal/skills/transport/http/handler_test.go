@@ -48,6 +48,9 @@ func (f *fakeServices) rec(call string) { f.calls = append(f.calls, call) }
 
 func (f *fakeServices) List(context.Context, string) ([]domain.Skill, error) {
 	f.rec("List")
+	if f.skill.ID != "" {
+		return []domain.Skill{f.skill}, f.err
+	}
 	return nil, f.err
 }
 
@@ -483,9 +486,66 @@ func TestSkillResponseShape(t *testing.T) {
 		"id": "id", "name": "x", "description": "d", "type": "rubric", "source": "imported_url", "source_ref": ref,
 		"body": "b", "enabled": false, "version": float64(2), "evidence_files": nil,
 		"created_at": "0001-01-01T00:00:00.000Z", "updated_at": "0001-01-01T00:00:00.000Z", "used_by": float64(3),
+		"plugin": nil,
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("GET /skills/:id body mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestSkillResponseCarriesTheOwnerPlugin(t *testing.T) {
+	owner := &domain.PluginRef{ID: "p1", Name: "pack", Enabled: false}
+	f := &fakeServices{skill: domain.Skill{ID: "id", Name: "x", Plugin: owner}}
+	e := newEcho(f)
+	wantPlugin := map[string]any{"id": "p1", "name": "pack", "enabled": false}
+
+	checks := []struct{ name, method, path, body string }{
+		{"get", http.MethodGet, "/skills/" + someUUID, ""},
+		{"update", http.MethodPut, "/skills/" + someUUID, `{"enabled":true}`},
+		{"restore", http.MethodPost, "/skills/" + someUUID + "/versions/1/restore", ""},
+	}
+	for _, tc := range checks {
+		t.Run(tc.name, func(t *testing.T) {
+			r := do(t, e, tc.method, tc.path, tc.body)
+			var got map[string]any
+			if err := json.Unmarshal([]byte(r.body), &got); err != nil || r.status != 200 {
+				t.Fatalf("%s %s = %d %s (%v)", tc.method, tc.path, r.status, r.body, err)
+			}
+			if diff := cmp.Diff(wantPlugin, got["plugin"]); diff != "" {
+				t.Errorf("%s %s plugin mismatch (-want +got):\n%s", tc.method, tc.path, diff)
+			}
+		})
+	}
+
+	r := do(t, e, http.MethodGet, "/skills", "")
+	var list []map[string]any
+	if err := json.Unmarshal([]byte(r.body), &list); err != nil || len(list) != 1 {
+		t.Fatalf("GET /skills = %d %s (%v), want one skill", r.status, r.body, err)
+	}
+	if diff := cmp.Diff(wantPlugin, list[0]["plugin"]); diff != "" {
+		t.Errorf("GET /skills plugin mismatch (-want +got):\n%s", diff)
+	}
+
+	r = do(t, e, http.MethodPost, "/skills", `{"name":"x","type":"custom","body":"b"}`)
+	var created map[string]any
+	if err := json.Unmarshal([]byte(r.body), &created); err != nil || r.status != 201 {
+		t.Fatalf("POST /skills = %d %s (%v)", r.status, r.body, err)
+	}
+	if diff := cmp.Diff(wantPlugin, created["plugin"]); diff != "" {
+		t.Errorf("POST /skills plugin mismatch (-want +got):\n%s", diff)
+	}
+
+	f.merged = app.MergeResult{Skill: domain.Skill{ID: "s", Name: "house"}}
+	r = do(t, e, http.MethodPost, "/repos/"+someUUID+"/conventions/skill",
+		`{"convention_ids":["`+someUUID+`"],"name":"house","body":"b"}`)
+	var merged struct {
+		Skill map[string]any `json:"skill"`
+	}
+	if err := json.Unmarshal([]byte(r.body), &merged); err != nil || r.status != 201 {
+		t.Fatalf("POST conventions/skill = %d %s (%v)", r.status, r.body, err)
+	}
+	if v, ok := merged.Skill["plugin"]; !ok || v != nil {
+		t.Errorf("merge answer skill.plugin = %v (present %v), want present and null", v, ok)
 	}
 }
 

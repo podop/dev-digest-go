@@ -39,6 +39,11 @@ func (s *Service) start(ctx context.Context, workspaceID, prID string, req Start
 	if err != nil {
 		return StartResult{}, err
 	}
+	// After every agent 404 and before the pull request 404/422 and the spend cap: one agent of a
+	// disabled plugin refuses the whole request, nothing starts.
+	if err := requireEnabledPlugins(plan, agents); err != nil {
+		return StartResult{}, err
+	}
 	pull, err := s.store.FindPull(ctx, workspaceID, prID)
 	if err != nil {
 		return StartResult{}, notFound(err, "Pull request not found", "find pull request "+prID)
@@ -99,6 +104,25 @@ func (s *Service) start(ctx context.Context, workspaceID, prID string, req Start
 
 	s.executor.Start(ctx, domain.Batch{WorkspaceID: workspaceID, Pull: pull, Repo: repo, Jobs: jobs, Source: source})
 	return res, nil
+}
+
+// CodePluginDisabled is the code of the 409 for a run that names an agent of a disabled plugin.
+const CodePluginDisabled = "plugin_disabled"
+
+// requireEnabledPlugins is the plugin half of the gate for named agents (the own-enabled flag of a
+// named agent is not checked: a disabled agent can still be run on purpose). The all mode needs no
+// check: its list read leaves such agents out. The first offender in request order is named.
+func requireEnabledPlugins(plan domain.TargetPlan, agents []domain.ReviewAgent) error {
+	if plan.Mode == domain.TargetAll {
+		return nil
+	}
+	for _, a := range agents {
+		if a.Plugin != nil && !a.Plugin.Enabled {
+			return apperr.Conflict(fmt.Sprintf("Agent %q belongs to the disabled plugin %q", a.Name, a.Plugin.Name)).
+				WithCode(CodePluginDisabled)
+		}
+	}
+	return nil
 }
 
 // resolveTargets returns the agents of the plan in run order: enabled agents for all (as the

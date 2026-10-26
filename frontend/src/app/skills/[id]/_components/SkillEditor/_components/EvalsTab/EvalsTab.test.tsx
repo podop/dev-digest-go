@@ -92,6 +92,30 @@ describe("skill EvalsTab", () => {
     await waitFor(() => expect(within(screen.getByRole("group", { name: "Recall" })).getByText("50%")).toBeInTheDocument());
   });
 
+  it("does not offer an agent of a disabled plugin as host (not even as the default) and never submits it; unowned and enabled-plugin agents stay", async () => {
+    const OFF_AGENT = { ...AGENT, id: "agOff", name: "Aardvark Disabled", plugin: { id: "p2", name: "beta", enabled: false } };
+    const ON_AGENT = { ...AGENT, id: "agOn", name: "Zebra Enabled", plugin: { id: "p1", name: "acme", enabled: true } };
+    // the skill is used by the disabled-plugin agent, and that agent sorts first by name
+    const api = stubBase({
+      "GET /agents": [OFF_AGENT, AGENT_A, ON_AGENT],
+      "GET /skills/sk1/agents": [{ id: "agOff", name: "Aardvark Disabled", enabled: true }],
+      "POST /skills/sk1/eval-runs": () => jsonResponse(skillRun({ id: "r8", status: "running", finished_at: null }), 202),
+    });
+    const { user } = renderWithProviders(<EvalsTab skill={SKILL} />);
+
+    const picker = await screen.findByRole("combobox", { name: "Run with" });
+    await waitFor(() => expect(picker).toHaveTextContent("Alpha Reviewer"));
+    await user.click(picker);
+    expect(screen.getByRole("option", { name: "Alpha Reviewer" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Zebra Enabled" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Aardvark Disabled" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("option", { name: "Zebra Enabled" }));
+
+    await user.click(screen.getByRole("button", { name: "Run all evals" }));
+    await waitFor(() => expect(api.requests("POST", "/skills/sk1/eval-runs")).toHaveLength(1));
+    expect(api.requests("POST", "/skills/sk1/eval-runs")[0]?.body).toEqual({ agent_id: "agOn" });
+  });
+
   it("disables Run all evals with a reason: no cases, then no agents", async () => {
     stubBase({ "GET /skills/sk1/eval-cases": { cases: [] }, "GET /skills/sk1/eval-runs": { runs: [] } });
     renderWithProviders(<EvalsTab skill={SKILL} />);

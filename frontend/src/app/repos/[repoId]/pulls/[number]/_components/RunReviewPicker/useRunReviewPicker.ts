@@ -3,6 +3,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useAgents, useRunEstimates, useRunReview } from "@/lib/hooks";
+import { isPluginDisabled } from "@/lib/plugins";
 import { defaultSelectedIds, estimatesByAgent } from "./helpers";
 
 interface Options {
@@ -22,7 +23,9 @@ export function useRunReviewPicker({ prId, onRunStart, onRunsStarted, onRunSettl
   const { data: estimateList } = useRunEstimates({ enabled: open });
   const run = useRunReview();
 
-  const agents = React.useMemo(() => agentsData ?? [], [agentsData]);
+  // Agents of a disabled plugin are neither offered nor selectable (FR18); `selectedIds` only
+  // ever holds ids from this list, so a stale pick of such an agent is never submitted.
+  const agents = React.useMemo(() => (agentsData ?? []).filter((a) => !isPluginDisabled(a)), [agentsData]);
   const estimates = React.useMemo(() => estimatesByAgent(estimateList), [estimateList]);
   const selected = React.useMemo(() => new Set(picked ?? defaultSelectedIds(agents)), [picked, agents]);
   const selectedIds = agents.filter((a) => selected.has(a.id)).map((a) => a.id);

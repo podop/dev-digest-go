@@ -18,6 +18,19 @@ describe("AgentCard", () => {
     expect(await screen.findByText("1 skill")).toBeInTheDocument();
   });
 
+  it("labels a plugin's agent, marks a disabled plugin, and shows nothing for an unowned agent", () => {
+    mockFetch({ "GET /agents/ag1/skills": [] });
+    const { rerender } = renderWithProviders(<AgentCard ag={AGENT} />);
+    expect(screen.queryByText(/From plugin/)).toBeNull();
+
+    rerender(<AgentCard ag={{ ...AGENT, plugin: { id: "p1", name: "acme", enabled: true } }} />);
+    expect(screen.getByText("From plugin acme")).toBeInTheDocument();
+    expect(screen.queryByText("plugin disabled")).toBeNull();
+
+    rerender(<AgentCard ag={{ ...AGENT, plugin: { id: "p1", name: "acme", enabled: false } }} />);
+    expect(screen.getByText("plugin disabled")).toBeInTheDocument();
+  });
+
   it("Delete opens the confirm modal instead of window.confirm, and deletes on confirm", async () => {
     const confirm = vi.spyOn(window, "confirm");
     const api = mockFetch({ "GET /agents/ag1/skills": [], "DELETE /agents/ag1": { ok: true } });

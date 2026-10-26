@@ -8,6 +8,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Icon } from "@devdigest/ui";
 import type { Skill, SkillStatsSummary } from "@devdigest/shared";
+import { PluginBadge } from "@/components/plugin-badge";
 import { SKILL_TYPE_STYLE, SkillTypeBadge } from "@/components/skill-type-badge";
 import { DeleteSkillModal } from "../DeleteSkillModal";
 import { SkillCardStats } from "../SkillCardStats";
@@ -65,6 +66,7 @@ export function SkillCard({
               {t(`source.${skill.source}`)}
             </Badge>
           </span>
+          <PluginBadge plugin={skill.plugin} />
         </div>
         <SkillCardStats skill={skill} stats={stats} />
       </div>

@@ -30,7 +30,11 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
         // Only declare a JSON body when one is actually sent — otherwise a
         // body-less POST/PUT (e.g. tour generate, refresh, reindex) trips
         // Fastify's "Body cannot be empty when content-type is application/json".
-        ...(init?.body != null ? { "content-type": "application/json" } : {}),
+        // A caller-set content type (`api.upload`) wins; headers are case-insensitive, so
+        // look it up that way instead of risking two entries merged into one value.
+        ...(init?.body != null && !new Headers(init.headers).has("content-type")
+          ? { "content-type": "application/json" }
+          : {}),
         ...(init?.headers ?? {}),
       },
     });
@@ -76,14 +80,20 @@ export interface Download {
   fileName: string | null;
 }
 
-async function download(path: string): Promise<Download> {
-  const res = await request(path);
+async function download(path: string, init?: RequestInit): Promise<Download> {
+  const res = await request(path, init);
   return { blob: await res.blob(), fileName: fileNameFromDisposition(res.headers.get("content-disposition")) };
 }
 
+/** A raw (non-JSON) request body: a file, its bytes or text. */
+export type UploadBody = Blob | ArrayBuffer | string;
+
 export const api = {
-  /** GET a file: the body as a Blob plus the server's file name. */
+  /** Fetch a file (GET unless `init` says otherwise): the body as a Blob plus the server's file name. */
   download,
+  /** POST a raw body under an explicit content type (e.g. a `.zip` as `application/zip`). */
+  upload: <T>(path: string, body: UploadBody, contentType: string) =>
+    apiFetch<T>(path, { method: "POST", body, headers: { "content-type": contentType } }),
   get: <T>(path: string) => apiFetch<T>(path),
   post: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
@@ -91,5 +101,6 @@ export const api = {
     apiFetch<T>(path, { method: "PUT", body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: unknown) =>
     apiFetch<T>(path, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
-  del: <T>(path: string) => apiFetch<T>(path, { method: "DELETE" }),
+  del: <T>(path: string, body?: unknown) =>
+    apiFetch<T>(path, { method: "DELETE", body: body === undefined ? undefined : JSON.stringify(body) }),
 };

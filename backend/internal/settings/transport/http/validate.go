@@ -42,7 +42,7 @@ var (
 	densities     = []string{"regular", "compact"}
 
 	// knownKeys are validated in this order; every other key is accepted as is.
-	knownKeys = []string{"polling_interval_min", "theme", "density", "sync_to_folder", "automatic_reviews", "feature_models", "default_model", "monthly_spend_cap_usd", "retention_days", "workspace_name"}
+	knownKeys = []string{"polling_interval_min", "theme", "density", "sync_to_folder", "automatic_reviews", "feature_models", "default_model", "monthly_spend_cap_usd", "retention_days", "workspace_name", "plugin_last_export"}
 )
 
 // parseSettingsUpdate validates a PUT /settings body (section 7.2) and returns the entries to
@@ -92,6 +92,10 @@ func parseSettingsUpdate(body []byte) (app.Bag, []httpx.Issue) {
 			// The name is written by PUT /workspace only (FR1: trim, 1-80 runes, no control
 			// characters), so PUT /settings cannot bypass those rules.
 			is = []httpx.Issue{issue(codeCustom, "workspace_name is set with PUT /workspace", key)}
+		case "plugin_last_export":
+			// Written only by the plugin export, through a cmd adapter (spec P7); a client cannot
+			// forge the instant the Plugins panel shows.
+			is = []httpx.Issue{issue(codeCustom, "plugin_last_export is set by the plugin export", key)}
 		}
 		issues = append(issues, is...)
 		if is == nil {

@@ -15,6 +15,8 @@
  *  - contracts/workspace  Settings › Workspace: WorkspaceInfo, WorkspaceStats, rename + reset bodies
  *  - constants/workspace  zod-free name rule, retention options, reset error codes
  *                         (re-exported by contracts/workspace; retention default by contracts/platform)
+ *  - constants/plugins    zod-free plugin upload/export limits, media types, error codes, upload-kind helpers
+ *                         (re-exported by contracts/productionize)
  *  - adapters             adapter interfaces + ModelInfo
  *  - constants/feature-models  zod-free FEATURE_MODELS registry (re-exported by
  *                         contracts/platform; import the subpath from bundles

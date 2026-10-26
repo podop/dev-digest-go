@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -124,6 +125,76 @@ func (s *Store) lastRuns(ctx context.Context, workspaceID string, installationID
 		Find(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select last ci runs: %w", err)
+	}
+	for _, r := range rows {
+		if r.InstallationID != nil {
+			out[*r.InstallationID] = r.toDomain()
+		}
+	}
+	return out, nil
+}
+
+var _ app.RepoStore = (*Store)(nil)
+
+// repoInstallationRow is a gha installation with its agent's name.
+type repoInstallationRow struct {
+	ID          string    `gorm:"column:id"`
+	AgentID     string    `gorm:"column:agent_id"`
+	AgentName   string    `gorm:"column:agent_name"`
+	Repo        string    `gorm:"column:repo"`
+	Slug        *string   `gorm:"column:slug"`
+	InstalledAt time.Time `gorm:"column:installed_at"`
+}
+
+// ListRepoInstallations implements app.RepoStore: two queries, the installations of the workspace's
+// agents and the newest run of each. The order (repository, agent name in byte order, installed_at,
+// id) is the order the domain keeps.
+func (s *Store) ListRepoInstallations(ctx context.Context, workspaceID string) ([]domain.RepoInstallation, error) {
+	var rows []repoInstallationRow
+	err := s.installations(ctx, workspaceID).
+		Select("ci_installations.id, ci_installations.agent_id, agents.name AS agent_name, ci_installations.repo, ci_installations.slug, ci_installations.installed_at").
+		Order(`ci_installations.repo COLLATE "C"`).Order(`agents.name COLLATE "C"`).
+		Order("ci_installations.installed_at").Order("ci_installations.id").
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("select ci installations by repo: %w", err)
+	}
+	ids := make([]string, len(rows))
+	for i, r := range rows {
+		ids[i] = r.ID
+	}
+	newest, err := s.newestRuns(ctx, workspaceID, ids)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]domain.RepoInstallation, len(rows))
+	for i, r := range rows {
+		out[i] = domain.RepoInstallation{
+			ID: r.ID, AgentID: r.AgentID, AgentName: r.AgentName, Repo: r.Repo, Slug: r.Slug,
+			InstalledAt: r.InstalledAt.UTC(),
+		}
+		if run, ok := newest[r.ID]; ok {
+			out[i].NewestRun = &run
+		}
+	}
+	return out, nil
+}
+
+// newestRuns is lastRuns with runs without a ran_at last: the repository listing wants the newest
+// dated run.
+func (s *Store) newestRuns(ctx context.Context, workspaceID string, installationIDs []string) (map[string]domain.Run, error) {
+	out := make(map[string]domain.Run, len(installationIDs))
+	if len(installationIDs) == 0 {
+		return out, nil
+	}
+	var rows []runRow
+	err := s.workspaceRuns(ctx, workspaceID).
+		Select("DISTINCT ON (ci_runs.ci_installation_id) "+runColumns).
+		Where("ci_runs.ci_installation_id IN ?", installationIDs).
+		Order("ci_runs.ci_installation_id").Order("ci_runs.ran_at DESC NULLS LAST").Order("ci_runs.id").
+		Find(&rows).Error
+	if err != nil {
+		return nil, fmt.Errorf("select newest ci runs: %w", err)
 	}
 	for _, r := range rows {
 		if r.InstallationID != nil {

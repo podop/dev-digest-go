@@ -275,6 +275,11 @@ type agentRow struct {
 	Strategy     string `gorm:"column:strategy"`
 	CIFailOn     string `gorm:"column:ci_fail_on"`
 	RepoIntel    bool   `gorm:"column:repo_intel"`
+	// The owning plugin, filled only by the FindAgent join (all NULL: none); a plain
+	// SELECT * leaves them nil.
+	PluginRefID   *string `gorm:"column:plugin_ref_id"`
+	PluginName    *string `gorm:"column:plugin_name"`
+	PluginEnabled *bool   `gorm:"column:plugin_enabled"`
 }
 
 func (agentRow) TableName() string { return "agents" }

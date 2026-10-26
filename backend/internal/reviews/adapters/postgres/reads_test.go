@@ -334,3 +334,83 @@ func TestReviewsForPull_DeletedAgentKeepsReview(t *testing.T) {
 }
 
 func timep(v time.Time) *time.Time { return &v }
+
+// plugin inserts an installed plugin of the workspace.
+func (f fixture) plugin(t *testing.T, ws, name string, enabled bool) string {
+	t.Helper()
+	return f.insert(t, `INSERT INTO installed_plugins (workspace_id, name, enabled) VALUES (?, ?, ?) RETURNING id`, ws, name, enabled)
+}
+
+func TestFindAgent_CarriesThePluginRef(t *testing.T) {
+	f := newFixture(t)
+	on, off := f.plugin(t, f.ws, "On Pack", true), f.plugin(t, f.ws, "Off Pack", false)
+	mine := f.agent(t, f.ws, "Mine", true)
+	fromOn, fromOff := f.agent(t, f.ws, "FromOn", true), f.agent(t, f.ws, "FromOff", false)
+	f.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, on, fromOn)
+	f.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, off, fromOff)
+
+	tests := []struct {
+		name string
+		id   string
+		want *domain.PluginRef
+	}{
+		{"user agent", mine, nil},
+		{"enabled plugin", fromOn, &domain.PluginRef{ID: on, Name: "On Pack", Enabled: true}},
+		{"disabled plugin (named read still returns it)", fromOff, &domain.PluginRef{ID: off, Name: "Off Pack", Enabled: false}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := f.store.FindAgent(t.Context(), f.ws, tc.id)
+			if err != nil {
+				t.Fatalf("FindAgent(%s) error = %v", tc.name, err)
+			}
+			if diff := cmp.Diff(tc.want, got.Plugin); diff != "" {
+				t.Errorf("FindAgent(%s).Plugin mismatch (-want +got):\n%s", tc.name, diff)
+			}
+		})
+	}
+}
+
+func TestEnabledAgents_SkipsAgentsOfADisabledPlugin(t *testing.T) {
+	f := newFixture(t)
+	on, off := f.plugin(t, f.ws, "On Pack", true), f.plugin(t, f.ws, "Off Pack", false)
+	f.agent(t, f.ws, "mine", true)
+	fromOn, fromOff, ownOff := f.agent(t, f.ws, "from-on", true), f.agent(t, f.ws, "from-off", true), f.agent(t, f.ws, "own-off", false)
+	f.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, on, fromOn)
+	f.exec(t, `UPDATE agents SET plugin_id = ? WHERE id IN (?, ?)`, off, fromOff, ownOff)
+
+	got, err := f.store.EnabledAgents(t.Context(), f.ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, a := range got {
+		names = append(names, a.Name)
+	}
+	if diff := cmp.Diff([]string{"from-on", "mine"}, names); diff != "" {
+		t.Errorf("EnabledAgents() names mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestEnabledSkills_SkipsSkillsOfADisabledPlugin(t *testing.T) {
+	f := newFixture(t)
+	on, off := f.plugin(t, f.ws, "On Pack", true), f.plugin(t, f.ws, "Off Pack", false)
+	agent := f.agent(t, f.ws, "Alpha", true)
+	mine, fromOn, fromOff := f.skill(t, f.ws, "mine", true), f.skill(t, f.ws, "from-on", true), f.skill(t, f.ws, "from-off", true)
+	f.exec(t, `UPDATE skills SET plugin_id = ? WHERE id = ?`, on, fromOn)
+	f.exec(t, `UPDATE skills SET plugin_id = ? WHERE id = ?`, off, fromOff)
+	f.exec(t, `INSERT INTO agent_skills (agent_id, skill_id, "order") VALUES (?, ?, 0), (?, ?, 1), (?, ?, 2)`,
+		agent, mine, agent, fromOff, agent, fromOn)
+
+	got, err := f.store.EnabledSkills(t.Context(), agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, s := range got {
+		ids = append(ids, s.ID)
+	}
+	if diff := cmp.Diff([]string{mine, fromOn}, ids); diff != "" {
+		t.Errorf("EnabledSkills() ids mismatch (-want +got):\n%s", diff)
+	}
+}

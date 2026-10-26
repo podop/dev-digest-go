@@ -110,6 +110,14 @@ type ExportAgent struct {
 	// Version is the agent's current version, the deployed manifest version.
 	Version int
 	Skills  []ExportSkill
+	// Plugin is the installed plugin that owns the agent; nil for a user-created agent.
+	Plugin *PluginRef
+}
+
+// PluginRef names the plugin that owns an exported agent and whether it is enabled.
+type PluginRef struct {
+	Name    string
+	Enabled bool
 }
 
 // ExportSkill is a skill linked to an exported agent.

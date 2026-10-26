@@ -287,10 +287,19 @@ type FindingSource struct {
 	HeadSHA      string
 }
 
-// SkillSnapshot is a skill frozen into a run's configuration.
+// PluginRef is the installed plugin an agent or skill belongs to, as the start gate reads it.
+type PluginRef struct {
+	Name    string
+	Enabled bool
+}
+
+// SkillSnapshot is a skill frozen into a run's configuration. Plugin is read by the start gate
+// (nil = not owned by a plugin) and is not part of the frozen configuration: it is neither stored
+// with a run nor restored from one.
 type SkillSnapshot struct {
 	ID, Name, Description, Body string
 	Version                     int
+	Plugin                      *PluginRef
 }
 
 // Config is the frozen configuration of a run (the jsonb column config). Strategy is the agent's
@@ -302,12 +311,14 @@ type Config struct {
 }
 
 // AgentSnapshot is an agent as a run freezes it: Config.Skills are its enabled linked skills in
-// link order.
+// link order, without the skills of a disabled plugin. Plugin is the agent's own plugin, nil when
+// it has none (not frozen with the run).
 type AgentSnapshot struct {
 	AgentID string
 	Version int
 	Name    string
 	Config  Config
+	Plugin  *PluginRef
 }
 
 // ResultFinding is a kept finding of a case result with its label.

@@ -47,3 +47,11 @@ type Ingest interface {
 	// failure; GitHub failures are reported per installation, not as errors.
 	Refresh(ctx context.Context, workspaceID, agentID string) (domain.RefreshResult, error)
 }
+
+// RepoInstallations is the per-repository installation listing as transport sees it;
+// *InstallationsService implements it.
+type RepoInstallations interface {
+	// ListByRepo returns the workspace's gha installations grouped by repository (byte order of the
+	// name), each group with the newest run of any of its installations; nil when there are none.
+	ListByRepo(ctx context.Context, workspaceID string) ([]domain.RepoGroup, error)
+}

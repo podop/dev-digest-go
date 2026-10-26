@@ -139,6 +139,21 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   (bounded to 3 s) so a started review is never left half-recorded. `GET /settings/automatic-reviews-status`
   (`autoreview/transport/http`) derives the state on read; the service is built even with
   `PR_POLL_ENABLED=false` (state `poll_disabled`).
+- Plugins (`plugins` context, Settings D, migration 0008): the six `/plugins` routes (list, export, import
+  with `?dry_run=true` as preview, enable/disable, remove) and `GET /ci/installations`. Ports in `cmd/`:
+  `cmd/server/plugins.go` adapts settings to `LastExports` (the Settings row `plugin_last_export`, written
+  through the settings use case because `PUT /settings` refuses the key; it is in `GET /settings` and not in
+  the workspace export) and reuses `workspaceNames` for the default export name. Install and remove are
+  each one transaction in `plugins/adapters/postgres`, which writes other contexts' tables (agents, skills,
+  eval cases, memory), like B's reset: a new table that references agents or skills must be added to its
+  remove steps. Ownership is `plugin_id` on agents, skills and memory (FK NO ACTION, so remove deletes the
+  children first). Runnable = own enabled AND (no plugin OR plugin enabled): list reads (review `all:true`,
+  auto-review agents, every skill list incl. the brief) filter it in SQL; named reads (review by id, eval
+  start and run-all, CI export) answer 409 `plugin_disabled` naming the plugin (run-all skips such agents).
+  `httpx.Options.RawBodies` (`"METHOD /path"` → media type → max bytes, 415 `unsupported_media_type`, 413
+  `payload_too_large`, read with `httpx.ReadRawBody`) is the only way around JSON-only bodies, and the only
+  route that uses it is `POST /plugins/import` (zip ≤ 5 MiB, json ≤ 20 MiB); the Origin and Host guards
+  still apply to it.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

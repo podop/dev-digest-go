@@ -232,6 +232,33 @@ func TestRunAll(t *testing.T) {
 	}
 }
 
+func TestRunAll_PluginDisabledAgentRaceIsOmitted(t *testing.T) {
+	env := newRunEnv(t)
+	gone := agentSnap("a-2", 1)
+	gone.Plugin = &domain.PluginRef{Name: "pack", Enabled: false}
+	env.snapshots.agents["a-2"] = gone
+	env.snapshots.agents["a-3"] = agentSnap("a-3", 1)
+	env.snapshots.order = []string{"a-1", "a-2", "a-3"}
+	for _, id := range []string{"a-1", "a-2", "a-3"} {
+		env.addCases(domain.OwnerAgent, id, "c-"+id)
+	}
+	// a-2's plugin was disabled after the list was read: it is omitted, the others still start.
+	res, err := env.svc.RunAll(t.Context(), ws)
+	if err != nil {
+		t.Fatalf("RunAll() error = %v", err)
+	}
+	var started []string
+	for _, r := range res.Started {
+		started = append(started, r.AgentID)
+	}
+	if diff := cmp.Diff([]string{"a-1", "a-3"}, started); diff != "" {
+		t.Errorf("RunAll() started mismatch (-want +got):\n%s", diff)
+	}
+	if len(res.Skipped) != 0 {
+		t.Errorf("RunAll() skipped = %v, want none (omitted, not reported)", res.Skipped)
+	}
+}
+
 func TestRunAll_NoAgents(t *testing.T) {
 	env := newRunEnv(t)
 	env.snapshots.order = nil
@@ -509,4 +536,91 @@ func TestFailInterrupted(t *testing.T) {
 	if _, err := env.svc.FailInterrupted(t.Context()); !errors.Is(err, errBoom) {
 		t.Errorf("FailInterrupted() error = %v, want it to wrap the store error", err)
 	}
+}
+
+func TestStartAgent_DisabledPlugin(t *testing.T) {
+	env := newRunEnv(t)
+	env.addCases(domain.OwnerAgent, "a-1", "c1")
+	a := agentSnap("a-1", 3)
+	a.Plugin = &domain.PluginRef{Name: "Review Pack", Enabled: false}
+	env.snapshots.agents["a-1"] = a
+	_, err := env.svc.StartAgent(t.Context(), ws, "a-1")
+	wantApp(t, err, apperr.KindConflict, "plugin_disabled", `Agent "Agent a-1" belongs to the disabled plugin "Review Pack"`)
+	if len(env.runs.created) != 0 || len(env.launcher.runs) != 0 {
+		t.Errorf("created/launched = %d/%d, want 0/0", len(env.runs.created), len(env.launcher.runs))
+	}
+
+	t.Run("comes before the no-cases 422", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.snapshots.agents["a-1"] = a
+		_, err := env.svc.StartAgent(t.Context(), ws, "a-1")
+		wantApp(t, err, apperr.KindConflict, "plugin_disabled", `Agent "Agent a-1" belongs to the disabled plugin "Review Pack"`)
+	})
+	t.Run("an unknown agent is still the 404", func(t *testing.T) {
+		_, err := env.svc.StartAgent(t.Context(), ws, "nope")
+		wantApp(t, err, apperr.KindNotFound, "not_found", "Agent not found")
+	})
+	t.Run("an enabled plugin starts", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.addCases(domain.OwnerAgent, "a-1", "c1")
+		on := agentSnap("a-1", 3)
+		on.Plugin = &domain.PluginRef{Name: "Review Pack", Enabled: true}
+		env.snapshots.agents["a-1"] = on
+		if _, err := env.svc.StartAgent(t.Context(), ws, "a-1"); err != nil {
+			t.Errorf("StartAgent() error = %v, want a started run", err)
+		}
+	})
+}
+
+func TestStartSkill_DisabledPlugin(t *testing.T) {
+	disabled := &domain.PluginRef{Name: "Review Pack", Enabled: false}
+	t.Run("the skill's plugin", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.addCases(domain.OwnerSkill, "s-1", "c1")
+		env.snapshots.skills["s-1"] = domain.SkillSnapshot{ID: "s-1", Name: "skill one", Version: 5, Plugin: disabled}
+		_, err := env.svc.StartSkill(t.Context(), ws, "s-1", "a-1")
+		wantApp(t, err, apperr.KindConflict, "plugin_disabled", `Skill "skill one" belongs to the disabled plugin "Review Pack"`)
+		if len(env.runs.created) != 0 || len(env.launcher.runs) != 0 {
+			t.Errorf("created/launched = %d/%d, want 0/0", len(env.runs.created), len(env.launcher.runs))
+		}
+	})
+	t.Run("the host agent's plugin", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.addCases(domain.OwnerSkill, "s-1", "c1")
+		host := agentSnap("a-1", 3)
+		host.Plugin = disabled
+		env.snapshots.agents["a-1"] = host
+		_, err := env.svc.StartSkill(t.Context(), ws, "s-1", "a-1")
+		wantApp(t, err, apperr.KindConflict, "plugin_disabled", `Agent "Agent a-1" belongs to the disabled plugin "Review Pack"`)
+		if len(env.runs.created) != 0 || len(env.launcher.runs) != 0 {
+			t.Errorf("created/launched = %d/%d, want 0/0", len(env.runs.created), len(env.launcher.runs))
+		}
+	})
+	t.Run("comes before the no-cases 422", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.snapshots.skills["s-1"] = domain.SkillSnapshot{ID: "s-1", Name: "skill one", Plugin: disabled}
+		_, err := env.svc.StartSkill(t.Context(), ws, "s-1", "a-1")
+		wantApp(t, err, apperr.KindConflict, "plugin_disabled", `Skill "skill one" belongs to the disabled plugin "Review Pack"`)
+	})
+	t.Run("an unknown skill is still the 404", func(t *testing.T) {
+		env := newRunEnv(t)
+		_, err := env.svc.StartSkill(t.Context(), ws, "nope", "a-1")
+		wantApp(t, err, apperr.KindNotFound, "not_found", "Skill not found")
+	})
+	t.Run("enabled plugins start and the frozen skill carries no plugin", func(t *testing.T) {
+		env := newRunEnv(t)
+		env.addCases(domain.OwnerSkill, "s-1", "c1")
+		on := &domain.PluginRef{Name: "Review Pack", Enabled: true}
+		env.snapshots.skills["s-1"] = domain.SkillSnapshot{ID: "s-1", Name: "skill one", Version: 5, Plugin: on}
+		host := agentSnap("a-1", 3)
+		host.Plugin = on
+		env.snapshots.agents["a-1"] = host
+		run, err := env.svc.StartSkill(t.Context(), ws, "s-1", "a-1")
+		if err != nil {
+			t.Fatalf("StartSkill() error = %v, want a started run", err)
+		}
+		if len(run.Config.Skills) != 1 || run.Config.Skills[0].Plugin != nil {
+			t.Errorf("run skills = %+v, want one skill without a plugin reading", run.Config.Skills)
+		}
+	})
 }

@@ -505,3 +505,90 @@ func TestAgentIDs_OrderOfGetAgents(t *testing.T) {
 		t.Errorf("AgentIDs() = %v, %v; want %v", got, err, want)
 	}
 }
+
+// plugin inserts an installed plugin of the workspace and returns its id.
+func (e *env) plugin(t *testing.T, ws, name string, enabled bool) string {
+	t.Helper()
+	return e.scalar(t, `INSERT INTO installed_plugins (workspace_id, name, enabled) VALUES (?, ?, ?) RETURNING id`, ws, name, enabled)
+}
+
+func TestSnapshots_PluginOwnership(t *testing.T) {
+	e := newEnv(t)
+	on, off := e.plugin(t, e.ws, "pack-on", true), e.plugin(t, e.ws, "pack-off", false)
+	own, fromOn, fromOff := e.agent(t, e.ws, "own"), e.agent(t, e.ws, "from-on"), e.agent(t, e.ws, "from-off")
+	e.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, on, fromOn)
+	e.exec(t, `UPDATE agents SET plugin_id = ? WHERE id = ?`, off, fromOff)
+	plain, skOn, skOff := e.skill(t, e.ws, "plain", true), e.skill(t, e.ws, "sk-on", true), e.skill(t, e.ws, "sk-off", true)
+	e.exec(t, `UPDATE skills SET plugin_id = ? WHERE id = ?`, on, skOn)
+	e.exec(t, `UPDATE skills SET plugin_id = ? WHERE id = ?`, off, skOff)
+	e.link(t, own, plain, 0)
+	e.link(t, own, skOff, 1)
+	e.link(t, own, skOn, 2)
+
+	t.Run("agent without a plugin", func(t *testing.T) {
+		snap, err := e.store.Agent(t.Context(), e.ws, own)
+		if err != nil || snap.Plugin != nil {
+			t.Fatalf("Agent(own) = plugin %v, %v; want no plugin", snap.Plugin, err)
+		}
+		var names []string
+		for _, s := range snap.Config.Skills {
+			names = append(names, s.Name)
+		}
+		// The skill of the disabled plugin is left out like a disabled skill; the enabled one stays.
+		if diff := cmp.Diff([]string{"plain", "sk-on"}, names); diff != "" {
+			t.Errorf("Agent(own) skills mismatch (-want +got):\n%s", diff)
+		}
+		for _, s := range snap.Config.Skills {
+			if s.Plugin != nil {
+				t.Errorf("Agent(own) skill %q Plugin = %v, want nil (not part of the frozen config)", s.Name, s.Plugin)
+			}
+		}
+	})
+	t.Run("agent of a plugin", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, id string
+			want     domain.PluginRef
+		}{
+			{"enabled plugin", fromOn, domain.PluginRef{Name: "pack-on", Enabled: true}},
+			{"disabled plugin", fromOff, domain.PluginRef{Name: "pack-off", Enabled: false}},
+		} {
+			snap, err := e.store.Agent(t.Context(), e.ws, tc.id)
+			if err != nil || snap.Plugin == nil {
+				t.Fatalf("Agent(%s) = %+v, %v; want its plugin (the read does not filter a disabled one)", tc.name, snap, err)
+			}
+			if diff := cmp.Diff(tc.want, *snap.Plugin); diff != "" {
+				t.Errorf("Agent(%s).Plugin mismatch (-want +got):\n%s", tc.name, diff)
+			}
+		}
+	})
+	t.Run("skill", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, id string
+			want     *domain.PluginRef
+		}{
+			{"plain", plain, nil},
+			{"enabled plugin", skOn, &domain.PluginRef{Name: "pack-on", Enabled: true}},
+			{"disabled plugin", skOff, &domain.PluginRef{Name: "pack-off", Enabled: false}},
+		} {
+			got, err := e.store.Skill(t.Context(), e.ws, tc.id)
+			if err != nil {
+				t.Fatalf("Skill(%s) error = %v", tc.name, err)
+			}
+			if diff := cmp.Diff(tc.want, got.Plugin); diff != "" {
+				t.Errorf("Skill(%s).Plugin mismatch (-want +got):\n%s", tc.name, diff)
+			}
+		}
+	})
+	t.Run("run-all list", func(t *testing.T) {
+		ownOff := e.agent(t, e.ws, "own-disabled")
+		e.exec(t, `UPDATE agents SET enabled = false WHERE id = ?`, ownOff)
+		got, err := e.store.AgentIDs(t.Context(), e.ws)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// The agent of the disabled plugin is omitted; an agent disabled itself stays listed.
+		if diff := cmp.Diff([]string{own, fromOn, ownOff}, got); diff != "" {
+			t.Errorf("AgentIDs() mismatch (-want +got):\n%s", diff)
+		}
+	})
+}

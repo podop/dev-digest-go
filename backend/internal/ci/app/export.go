@@ -23,6 +23,9 @@ const (
 	codeWorkflowInsecure    = "workflow_insecure"
 	codeRunnerMissing       = "runner_bundle_missing"
 	codeManifestInvalid     = "manifest_invalid"
+	// CodePluginDisabled is the code of the 409 for an agent of a disabled plugin (the same wire
+	// code the plugins, reviews and evals contexts use; duplicated, not imported).
+	CodePluginDisabled = "plugin_disabled"
 
 	msgRunnerMissing = "The runner binary is missing: rebuild the backend image (docker compose build backend)"
 	msgNoToken       = "GITHUB_TOKEN is not configured"
@@ -67,6 +70,12 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 	}
 	if !ok {
 		return domain.Export{}, apperr.NotFound("Agent not found").WithCode(codeAgentNotFound)
+	}
+	// An agent of a disabled plugin is not exportable (its own enabled flag is not checked: a
+	// disabled agent can still be exported on purpose). Nothing is read or written before this.
+	if p := agent.Plugin; p != nil && !p.Enabled {
+		return domain.Export{}, apperr.Conflict(fmt.Sprintf("Agent %q belongs to the disabled plugin %q", agent.Name, p.Name)).
+			WithCode(CodePluginDisabled)
 	}
 	if req.Target != domain.TargetGHA {
 		return domain.Export{}, apperr.Validation("Only GitHub Actions can be exported").WithCode(codeUnsupportedTarget)

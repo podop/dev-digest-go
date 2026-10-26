@@ -126,6 +126,104 @@ func TestStore_CreateDefaultsAndVersionOne(t *testing.T) {
 	}
 }
 
+// owned makes the agent belong to a new installed plugin of the workspace and returns its id.
+func (f fixture) owned(t *testing.T, agentID, plugin string, enabled bool) string {
+	t.Helper()
+	id := f.insert(t, `INSERT INTO installed_plugins (workspace_id, name, enabled) VALUES (?, ?, ?) RETURNING id`,
+		f.ws, plugin, enabled)
+	if err := f.db.Exec(`UPDATE agents SET plugin_id = ? WHERE id = ?`, id, agentID).Error; err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func TestStore_PluginOwner(t *testing.T) {
+	f := newFixture(t)
+	plain := f.create(t, "plain")
+	on := f.create(t, "on")
+	off := f.create(t, "off")
+	onID := f.owned(t, on.ID, "acme", true)
+	offID := f.owned(t, off.ID, "globex", false)
+	wantOn := &domain.PluginRef{ID: onID, Name: "acme", Enabled: true}
+	wantOff := &domain.PluginRef{ID: offID, Name: "globex", Enabled: false}
+
+	got, err := f.svc.Get(t.Context(), f.ws, plain.ID)
+	if err != nil || got.Plugin != nil {
+		t.Errorf("Get(unowned) = %+v, %v, want Plugin nil", got.Plugin, err)
+	}
+	for _, tc := range []struct {
+		name string
+		id   string
+		want *domain.PluginRef
+	}{{"enabled plugin", on.ID, wantOn}, {"disabled plugin", off.ID, wantOff}} {
+		got, err := f.svc.Get(t.Context(), f.ws, tc.id)
+		if err != nil {
+			t.Fatalf("Get(%s) error = %v", tc.name, err)
+		}
+		if diff := cmp.Diff(tc.want, got.Plugin); diff != "" {
+			t.Errorf("Get(%s).Plugin mismatch (-want +got):\n%s", tc.name, diff)
+		}
+	}
+
+	list, err := f.svc.List(t.Context(), f.ws)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gotList := map[string]*domain.PluginRef{}
+	for _, a := range list {
+		gotList[a.Name] = a.Plugin
+	}
+	if diff := cmp.Diff(map[string]*domain.PluginRef{"plain": nil, "on": wantOn, "off": wantOff}, gotList); diff != "" {
+		t.Errorf("List() plugin by agent mismatch (-want +got):\n%s", diff)
+	}
+
+	// The read under the update lock carries the owner too, and a plugin toggled meanwhile shows.
+	if err := f.db.Exec(`UPDATE installed_plugins SET enabled = true WHERE id = ?`, offID).Error; err != nil {
+		t.Fatal(err)
+	}
+	err = f.tx.InTx(t.Context(), func(ctx context.Context) error {
+		locked, err := f.store.GetForUpdate(ctx, f.ws, off.ID)
+		if err != nil {
+			return err
+		}
+		if diff := cmp.Diff(&domain.PluginRef{ID: offID, Name: "globex", Enabled: true}, locked.Plugin); diff != "" {
+			t.Errorf("GetForUpdate().Plugin mismatch (-want +got):\n%s", diff)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("GetForUpdate in a transaction: %v", err)
+	}
+}
+
+func TestStore_WritesKeepThePluginOwner(t *testing.T) {
+	f := newFixture(t)
+	a := f.create(t, "A")
+	if n := f.count(t, `SELECT count(*) FROM agents WHERE id = ? AND plugin_id IS NULL`, a.ID); n != 1 {
+		t.Errorf("created agent with plugin_id NULL: %d, want 1", n)
+	}
+	pluginID := f.owned(t, a.ID, "acme", true)
+
+	updated, err := f.svc.Update(t.Context(), f.ws, a.ID, domain.Patch{Name: ptr("Renamed"), Enabled: ptr(false)})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	want := &domain.PluginRef{ID: pluginID, Name: "acme", Enabled: true}
+	if diff := cmp.Diff(want, updated.Plugin); diff != "" {
+		t.Errorf("Update().Plugin mismatch (-want +got):\n%s", diff)
+	}
+	if n := f.count(t, `SELECT count(*) FROM agents WHERE id = ? AND plugin_id = ? AND name = 'Renamed'`, a.ID, pluginID); n != 1 {
+		t.Errorf("agents still owned by the plugin after Update: %d, want 1", n)
+	}
+	got, err := f.svc.Get(t.Context(), f.ws, a.ID)
+	if err != nil || got.Name != "Renamed" {
+		t.Fatalf("Get() = %+v, %v, want the renamed agent", got, err)
+	}
+	if diff := cmp.Diff(want, got.Plugin); diff != "" {
+		t.Errorf("Get().Plugin after Update mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestStore_ListOrder(t *testing.T) {
 	f := newFixture(t)
 	// One transaction: every row gets the same created_at, so name (byte order) decides.

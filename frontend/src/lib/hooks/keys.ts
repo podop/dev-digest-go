@@ -172,6 +172,8 @@ export const ciKeys = {
   installationsAll: () => [...ciKeys.all, "installations"] as const,
   /** GET /agents/:id/ci-installations. */
   installations: (agentId: Id) => [...ciKeys.installationsAll(), agentId] as const,
+  /** GET /ci/installations — installations grouped by repository (Settings › Integrations). */
+  repoInstallations: () => [...ciKeys.all, "repo-installations"] as const,
   /** POST /agents/:id/export-ci { action: "files" } — the wizard's Preview. */
   exportFiles: (agentId: Id, repo: Id, triggers: readonly string[], postAs: Id) =>
     [...ciKeys.all, "export-files", agentId, repo, [...triggers].sort().join(","), postAs] as const,
@@ -202,4 +204,13 @@ export const workspaceKeys = {
   info: () => [...workspaceKeys.all, "info"] as const,
   /** GET /workspace/stats — the six counts. */
   stats: () => [...workspaceKeys.all, "stats"] as const,
+};
+
+/** Installed plugins (specs/2026-10-23-settings-integrations.md §7). Enabling, disabling, installing or
+ *  removing one also changes the agent and skill lists (the plugin badge), so those mutations
+ *  invalidate `agentKeys.all` and `skillKeys.all` too. */
+export const pluginKeys = {
+  all: ["plugins"] as const,
+  /** GET /plugins — rows and the last export. */
+  list: () => [...pluginKeys.all, "list"] as const,
 };

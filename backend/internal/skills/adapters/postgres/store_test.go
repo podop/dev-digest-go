@@ -94,6 +94,14 @@ func (f fixture) skillIn(t *testing.T, ws, name string) domain.Skill {
 	return sk
 }
 
+// ownedBy installs a plugin and makes it the owner of the skill, as the plugin install does.
+func (f fixture) ownedBy(t *testing.T, skillID, plugin string, enabled bool) string {
+	t.Helper()
+	id := f.insert(t, `INSERT INTO installed_plugins (workspace_id, name, enabled) VALUES (?, ?, ?) RETURNING id`, f.ws, plugin, enabled)
+	f.exec(t, `UPDATE skills SET plugin_id = ? WHERE id = ?`, id, skillID)
+	return id
+}
+
 func TestStore_Insert(t *testing.T) {
 	f := newFixture(t)
 	ref := "https://h/x.md"
@@ -374,5 +382,96 @@ func TestStore_TransactionRollsBackInsert(t *testing.T) {
 	}
 	if got, _ := f.store.List(t.Context(), f.ws); len(got) != 0 {
 		t.Errorf("List after rollback = %d skills, want 0", len(got))
+	}
+}
+
+func TestStore_ReadsCarryTheOwnerPlugin(t *testing.T) {
+	f := newFixture(t)
+	free := f.skill(t, "a-free")
+	on := f.skill(t, "b-on")
+	off := f.skill(t, "c-off")
+	onID := f.ownedBy(t, on.ID, "pack-on", true)
+	offID := f.ownedBy(t, off.ID, "pack-off", false)
+	wantPlugin := map[string]*domain.PluginRef{
+		free.ID: nil,
+		on.ID:   {ID: onID, Name: "pack-on", Enabled: true},
+		off.ID:  {ID: offID, Name: "pack-off", Enabled: false},
+	}
+
+	list, err := f.store.List(t.Context(), f.ws)
+	if err != nil {
+		t.Fatalf("List error = %v", err)
+	}
+	if len(list) != len(wantPlugin) {
+		t.Fatalf("List returned %d skills, want %d", len(list), len(wantPlugin))
+	}
+	for _, sk := range list {
+		if diff := cmp.Diff(wantPlugin[sk.ID], sk.Plugin); diff != "" {
+			t.Errorf("List(%s).Plugin mismatch (-want +got):\n%s", sk.Name, diff)
+		}
+	}
+	for id, want := range wantPlugin {
+		got, err := f.store.Get(t.Context(), f.ws, id)
+		if err != nil {
+			t.Fatalf("Get(%s) error = %v", id, err)
+		}
+		if diff := cmp.Diff(want, got.Plugin); diff != "" {
+			t.Errorf("Get(%s).Plugin mismatch (-want +got):\n%s", got.Name, diff)
+		}
+	}
+
+	// The same read under FOR UPDATE.
+	tx := pg.NewTx(f.db)
+	for id, want := range wantPlugin {
+		err := tx.InTx(t.Context(), func(ctx context.Context) error {
+			got, err := f.store.Lock(ctx, f.ws, id)
+			if err != nil {
+				return err
+			}
+			if diff := cmp.Diff(want, got.Plugin); diff != "" {
+				t.Errorf("Lock(%s).Plugin mismatch (-want +got):\n%s", got.Name, diff)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("Lock(%s) transaction error = %v", id, err)
+		}
+	}
+
+	// A plugin that is switched off shows up on the next read.
+	f.exec(t, `UPDATE installed_plugins SET enabled = false WHERE id = ?`, onID)
+	got, err := f.store.Get(t.Context(), f.ws, on.ID)
+	if err != nil {
+		t.Fatalf("Get after disable error = %v", err)
+	}
+	if got.Plugin == nil || got.Plugin.Enabled {
+		t.Errorf("Get after the plugin was disabled: Plugin = %+v, want enabled=false", got.Plugin)
+	}
+}
+
+func TestStore_WritesLeaveTheOwnerAlone(t *testing.T) {
+	f := newFixture(t)
+	sk := f.skill(t, "x")
+	pluginID := f.ownedBy(t, sk.ID, "pack", true)
+	want := &domain.PluginRef{ID: pluginID, Name: "pack", Enabled: true}
+
+	body, next := "new body", 2
+	got, err := f.store.Update(t.Context(), f.ws, sk.ID, domain.Write{Body: &body, Version: &next})
+	if err != nil {
+		t.Fatalf("Update error = %v", err)
+	}
+	if diff := cmp.Diff(want, got.Plugin); diff != "" {
+		t.Errorf("Update result Plugin mismatch (-want +got):\n%s", diff)
+	}
+	if n := f.count(t, `SELECT count(*) FROM skills WHERE id = ? AND plugin_id = ?`, sk.ID, pluginID); n != 1 {
+		t.Errorf("skill %s owner after Update: %d rows still owned by %s, want 1", sk.ID, n, pluginID)
+	}
+
+	created := f.skill(t, "fresh")
+	if created.Plugin != nil {
+		t.Errorf("Insert result Plugin = %+v, want nil", created.Plugin)
+	}
+	if n := f.count(t, `SELECT count(*) FROM skills WHERE id = ? AND plugin_id IS NULL`, created.ID); n != 1 {
+		t.Errorf("inserted skill %s has an owner, want plugin_id NULL", created.ID)
 	}
 }

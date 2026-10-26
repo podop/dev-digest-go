@@ -6,6 +6,7 @@
   "model": "deepseek/deepseek-v4-flash",
   "name": "General Reviewer",
   "output_schema": null,
+  "plugin": null,
   "provider": "openrouter",
   "repo_intel": true,
   "strategy": "single-pass",

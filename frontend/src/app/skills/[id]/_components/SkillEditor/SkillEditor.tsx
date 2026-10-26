@@ -7,6 +7,7 @@
 import { useTranslations } from "next-intl";
 import { Tabs } from "@devdigest/ui";
 import type { Skill } from "@devdigest/shared";
+import { PluginBadge } from "@/components/plugin-badge";
 import { SKILL_TAB_ICONS, SKILL_TABS, type SkillTab } from "@/app/skills/constants";
 import { ConfigTab } from "./_components/ConfigTab";
 import { ContextTab } from "./_components/ContextTab";
@@ -33,6 +34,11 @@ export function SkillEditor({
 
   return (
     <div style={s.wrap}>
+      {skill.plugin && (
+        <div style={s.pluginBar}>
+          <PluginBadge plugin={skill.plugin} />
+        </div>
+      )}
       <Tabs tabs={tabs} value={tab} onChange={(k) => onTab(k as SkillTab)} pad="0 28px" />
       <div style={s.body}>
         {tab === "config" && <ConfigTab skill={skill} draft={draft} />}

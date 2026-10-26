@@ -97,6 +97,16 @@ type ReviewAgent struct {
 	// RepoIntel is the agent's repo-intel toggle.
 	RepoIntel bool
 	Version   int
+	// Plugin is the plugin that owns the agent; nil = created by the user. Only the named read
+	// (FindAgent) fills it; the list reads already leave out the agents of a disabled plugin.
+	Plugin *PluginRef
+}
+
+// PluginRef is the plugin an agent belongs to.
+type PluginRef struct {
+	ID      string
+	Name    string
+	Enabled bool
 }
 
 // ReviewPull is the pull request under review.

@@ -6,6 +6,7 @@
   "model": "gpt-5.4-mini",
   "name": "Contract Reviewer",
   "output_schema": null,
+  "plugin": null,
   "provider": "openai",
   "repo_intel": true,
   "strategy": "single-pass",

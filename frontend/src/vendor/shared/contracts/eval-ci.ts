@@ -231,6 +231,40 @@ export const CiInstallation = z.object({
 });
 export type CiInstallation = z.infer<typeof CiInstallation>;
 
+/** One installation row of `GET /ci/installations` (target_type `gha`). */
+export const CiRepoInstallation = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  agent_name: z.string(),
+  slug: z.string().nullable(),
+  installed_at: z.string(),
+});
+export type CiRepoInstallation = z.infer<typeof CiRepoInstallation>;
+
+/** The newest CI run of any installation of a repository. */
+export const CiRepoLastRun = z.object({
+  status: CiRunStatus.nullable(),
+  ran_at: z.string().nullable(),
+  github_url: z.string().nullable(),
+  agent_id: z.string().nullable(),
+});
+export type CiRepoLastRun = z.infer<typeof CiRepoLastRun>;
+
+/** One repository of `GET /ci/installations`; `last_run` null = no run recorded yet. */
+export const CiRepoEntry = z.object({
+  /** `owner/name`. */
+  repo: z.string(),
+  installations: z.array(CiRepoInstallation),
+  last_run: CiRepoLastRun.nullable(),
+});
+export type CiRepoEntry = z.infer<typeof CiRepoEntry>;
+
+/** `GET /ci/installations` (Settings slice D): installations per repository, repositories in byte order of the name. */
+export const CiRepoInstallations = z.object({
+  repos: z.array(CiRepoEntry),
+});
+export type CiRepoInstallations = z.infer<typeof CiRepoInstallations>;
+
 /** Response of `POST /agents/:id/export-ci`. */
 export const CiExport = z.object({
   /** null for action "files" (preview / zip: nothing is persisted). */

@@ -4,7 +4,14 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CiExport, CiExportInputBody, CiInstallation, CiRefreshResult, CiRun } from "@devdigest/shared";
+import type {
+  CiExport,
+  CiExportInputBody,
+  CiInstallation,
+  CiRefreshResult,
+  CiRepoInstallations,
+  CiRun,
+} from "@devdigest/shared";
 import { api } from "../api";
 import { ciKeys } from "./keys";
 
@@ -46,6 +53,15 @@ export function useCiInstallations(agentId: string | null | undefined) {
     queryFn: () => api.get<{ installations: CiInstallation[] }>(`/agents/${agentId}/ci-installations`),
     enabled: !!agentId,
     select: (data) => data.installations,
+  });
+}
+
+/** GET /ci/installations — the workspace's GitHub Action installations per repository, repos in name order. */
+export function useWorkspaceCiInstallations() {
+  return useQuery({
+    queryKey: ciKeys.repoInstallations(),
+    queryFn: () => api.get<CiRepoInstallations>("/ci/installations"),
+    select: (data) => data.repos,
   });
 }
 
@@ -99,6 +115,29 @@ export function useRefreshCi() {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ciKeys.runsAll() });
       qc.invalidateQueries({ queryKey: ciKeys.installationsAll() });
+    },
+  });
+}
+
+/** What the install dialog sends per agent. */
+export interface InstallCiInput {
+  agentId: string;
+  /** "owner/name". */
+  repo: string;
+}
+
+/** POST /agents/:id/export-ci { action: "open_pr" } for the agent in the variables, so one hook
+ *  serves the dialog's one-at-a-time loop. The dialog shows every error per agent, so no global
+ *  toast. Both installation lists refetch after each success (the card behind the dialog). */
+export function useInstallCi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, repo }: InstallCiInput) =>
+      api.post<CiExport>(`/agents/${agentId}/export-ci`, { repo, target: "gha", action: "open_pr" }),
+    meta: { quietErrorCodes: ["*"] },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ciKeys.installationsAll() });
+      qc.invalidateQueries({ queryKey: ciKeys.repoInstallations() });
     },
   });
 }

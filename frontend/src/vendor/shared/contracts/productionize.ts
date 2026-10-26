@@ -6,8 +6,18 @@ import {
   ConventionStatus,
   MemoryKind,
   MemoryScope,
+  Provider,
   ReviewStrategy,
+  SkillType,
 } from './knowledge.js';
+import {
+  PLUGIN_EXPORT_AGENT_IDS_MAX,
+  PLUGIN_EXPORT_DESCRIPTION_MAX,
+  PLUGIN_EXPORT_NAME_MAX,
+  PLUGIN_EXPORT_NAME_MIN,
+  PLUGIN_EXPORT_NAME_RE,
+  PLUGIN_EXPORT_SKILL_IDS_MAX,
+} from '../constants/plugins.js';
 import { AgentPeriodMetrics, CostSegment, PeriodInfo, StatPoint } from './observability.js';
 
 /**
@@ -25,6 +35,9 @@ import { AgentPeriodMetrics, CostSegment, PeriodInfo, StatPoint } from './observ
 // ---------------------------------------------------------------------------
 // Plugin export / import  (.devdigest-plugin/ bundle)
 // ---------------------------------------------------------------------------
+
+// Limits, media types and error codes live in the zod-free constants/plugins.ts.
+export * from '../constants/plugins.js';
 
 /** One immutable version of an exported skill (workspace export; absent in older bundles). */
 export const PluginSkillVersion = z.object({
@@ -148,45 +161,153 @@ export const PluginBundle = z.object({
 });
 export type PluginBundle = z.infer<typeof PluginBundle>;
 
-/** Request body for POST /plugins/export. */
-export const PluginExportRequest = z.object({
-  name: z.string().min(1).optional(),
-  description: z.string().optional(),
-  /** Limit export to a subset of agent ids (default: all). */
-  agent_ids: z.array(z.string()).optional(),
-});
+/** Request body for POST /plugins/export (Settings slice D, spec §7). Every key optional; no unknown key. */
+export const PluginExportRequest = z
+  .object({
+    /** Kebab-case, 1–64; absent = `devdigest-` + the kebab-cased workspace name. */
+    name: z
+      .string()
+      .min(PLUGIN_EXPORT_NAME_MIN)
+      .max(PLUGIN_EXPORT_NAME_MAX)
+      .regex(PLUGIN_EXPORT_NAME_RE)
+      .optional(),
+    description: z.string().max(PLUGIN_EXPORT_DESCRIPTION_MAX).optional(),
+    /** Absent (and no skill_ids) = every agent and skill; these agents plus their linked skills otherwise. */
+    agent_ids: z.array(z.string().uuid()).min(1).max(PLUGIN_EXPORT_AGENT_IDS_MAX).optional(),
+    skill_ids: z.array(z.string().uuid()).min(1).max(PLUGIN_EXPORT_SKILL_IDS_MAX).optional(),
+    /** Server default true. */
+    include_eval_cases: z.boolean().optional(),
+    /** Server default false. */
+    include_learnings: z.boolean().optional(),
+  })
+  .strict();
 export type PluginExportRequest = z.infer<typeof PluginExportRequest>;
 
-/** Request body for POST /plugins/import. */
-export const PluginImportRequest = z.object({
-  bundle: PluginBundle,
-  /** 'merge' keeps existing items; 'replace' is reserved (merge is the default). */
-  mode: z.enum(['merge', 'replace']).default('merge').optional(),
+/** Counts of what a plugin owns / an export holds. */
+export const PluginCounts = z.object({
+  agents: z.number().int(),
+  skills: z.number().int(),
+  eval_cases: z.number().int(),
+  learnings: z.number().int(),
 });
-export type PluginImportRequest = z.infer<typeof PluginImportRequest>;
+export type PluginCounts = z.infer<typeof PluginCounts>;
 
-/** A row in `installed_plugins` (GET /plugins). */
+/** A row of `installed_plugins` as GET /plugins, PATCH /plugins/:id and an install answer return it. */
 export const InstalledPlugin = z.object({
   id: z.string(),
   name: z.string(),
   version: z.string().nullable(),
+  /** The uploaded file's name (`filename` query of the import). */
   source: z.string().nullable(),
   installed_at: z.string(),
   enabled: z.boolean(),
+  description: z.string().nullable(),
+  counts: PluginCounts,
 });
 export type InstalledPlugin = z.infer<typeof InstalledPlugin>;
+/** The name C4 uses for a list row. */
+export type PluginRow = InstalledPlugin;
 
-/** Result of an import: what was created + the installed_plugins row. */
+/** The last export, kept as one workspace setting value (`plugin_last_export`). */
+export const PluginLastExport = z.object({
+  file_name: z.string(),
+  exported_at: z.string(),
+  counts: PluginCounts,
+});
+export type PluginLastExport = z.infer<typeof PluginLastExport>;
+
+/** GET /plugins. */
+export const PluginList = z.object({
+  plugins: z.array(InstalledPlugin),
+  last_export: PluginLastExport.nullable(),
+});
+export type PluginList = z.infer<typeof PluginList>;
+
+/** What a dry run reports: the same counts as the manifest plus `conventions` (installed: 0). */
+export const PluginPreviewCounts = z.object({
+  agents: z.number().int(),
+  skills: z.number().int(),
+  eval_cases: z.number().int(),
+  conventions: z.number().int(),
+  learnings: z.number().int(),
+});
+export type PluginPreviewCounts = z.infer<typeof PluginPreviewCounts>;
+
+/** POST /plugins/import?dry_run=true → 200; nothing is stored. */
+export const PluginImportPreview = z.object({
+  manifest: PluginManifest,
+  kind: z.enum(['plugin', 'workspace']),
+  counts: PluginPreviewCounts,
+  agents: z.array(
+    z.object({
+      name: z.string(),
+      provider: Provider,
+      model: z.string(),
+      enabled: z.boolean(),
+      /** Skill names in link order. */
+      skills: z.array(z.string()),
+    }),
+  ),
+  skills: z.array(
+    z.object({
+      name: z.string(),
+      type: SkillType,
+      description: z.string(),
+      enabled: z.boolean(),
+    }),
+  ),
+  conflicts: z.object({
+    /** A plugin of this name is already installed. */
+    plugin: z.boolean(),
+    /** Bundle skill names that equal an existing skill of the workspace. */
+    skills: z.array(z.string()),
+  }),
+  ignored: z.array(z.object({ path_or_section: z.string(), reason: z.string() })),
+  warnings: z.array(z.string()),
+});
+export type PluginImportPreview = z.infer<typeof PluginImportPreview>;
+
+/** `details` of a 409 `plugin_conflict`. */
+export const PluginConflictDetails = z.object({
+  plugin: z.boolean(),
+  skills: z.array(z.string()),
+});
+export type PluginConflictDetails = z.infer<typeof PluginConflictDetails>;
+
+/** `details` of a 422 `invalid_plugin`: up to 20 broken rules (items assumed to be messages). */
+export const PluginInvalidDetails = z.object({
+  issues: z.array(z.string()),
+});
+export type PluginInvalidDetails = z.infer<typeof PluginInvalidDetails>;
+
+/** Result of an install (POST /plugins/import, 201): what was created + the installed_plugins row. */
 export const PluginImportResult = z.object({
   installed: InstalledPlugin,
   created: z.object({
     agents: z.number().int(),
     skills: z.number().int(),
     eval_cases: z.number().int(),
+    /** Always 0: a bundle's conventions are never installed. */
     conventions: z.number().int(),
+    learnings: z.number().int(),
   }),
 });
 export type PluginImportResult = z.infer<typeof PluginImportResult>;
+
+/** Body of PATCH /plugins/:id. */
+export const PluginEnabledRequest = z.object({ enabled: z.boolean() }).strict();
+export type PluginEnabledRequest = z.infer<typeof PluginEnabledRequest>;
+
+/** Body of DELETE /plugins/:id: `confirm` must equal the plugin's name (422 `confirmation_mismatch`). */
+export const PluginRemoveRequest = z.object({ confirm: z.string() }).strict();
+export type PluginRemoveRequest = z.infer<typeof PluginRemoveRequest>;
+
+/** Answer of DELETE /plugins/:id: what the removal deleted. */
+export const PluginRemoveResult = z.object({
+  ok: z.literal(true),
+  removed: PluginCounts.extend({ ci_installations: z.number().int() }),
+});
+export type PluginRemoveResult = z.infer<typeof PluginRemoveResult>;
 
 // ---------------------------------------------------------------------------
 // Agent Performance  (GET /agents/performance)

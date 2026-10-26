@@ -34,7 +34,16 @@ func Strategies() []string { return []string{"single-pass", "map-reduce", "auto"
 // CIFailOns lists the CI gate policies.
 func CIFailOns() []string { return []string{"never", "critical", "warning", "any"} }
 
-// Agent is a reviewer configuration. OutputSchema is raw JSON; nil means JSON null.
+// PluginRef is the plugin that owns an agent (Settings slice D). The agents context reads it
+// from installed_plugins but never writes it: an owned agent keeps its owner when edited.
+type PluginRef struct {
+	ID      string
+	Name    string
+	Enabled bool
+}
+
+// Agent is a reviewer configuration. OutputSchema is raw JSON; nil means JSON null. Plugin is
+// the owner, nil for a user-created agent.
 type Agent struct {
 	ID           string
 	Name         string
@@ -48,6 +57,7 @@ type Agent struct {
 	Strategy     string
 	CIFailOn     string
 	RepoIntel    bool
+	Plugin       *PluginRef
 }
 
 // CreateInput is a validated POST /agents body; nil pointers are absent optional fields.

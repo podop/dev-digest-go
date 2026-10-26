@@ -148,3 +148,43 @@ func TestRepos_FindByFullName(t *testing.T) {
 		t.Errorf("FindByFullName error = %v, want %v", err, boom)
 	}
 }
+
+func TestAgents_Get_PluginGating(t *testing.T) {
+	off := &skillsdomain.PluginRef{ID: "p1", Name: "Pack", Enabled: false}
+	on := &skillsdomain.PluginRef{ID: "p2", Name: "Live", Enabled: true}
+	agents := fakeAgentService{
+		agents: map[string]agentsdomain.Agent{
+			"owned": {ID: "owned", Name: "Owned", Plugin: &agentsdomain.PluginRef{ID: "p1", Name: "Pack", Enabled: false}},
+			"plain": {ID: "plain", Name: "Plain"},
+		},
+		links: map[string][]agentsdomain.SkillLink{
+			"plain": {{SkillID: "s-off", Order: 0}, {SkillID: "s-on", Order: 1}, {SkillID: "s-own", Order: 2}},
+		},
+	}
+	skills := fakeSkillService{skills: map[string]skillsdomain.Skill{
+		"s-off": {ID: "s-off", Name: "Of disabled plugin", Enabled: true, Plugin: off},
+		"s-on":  {ID: "s-on", Name: "Of enabled plugin", Enabled: true, Plugin: on},
+		"s-own": {ID: "s-own", Name: "Own", Enabled: true},
+	}}
+	d := peers.NewAgents(agents, skills)
+
+	owned, ok, err := d.Get(t.Context(), "w", "owned")
+	if err != nil || !ok {
+		t.Fatalf("Get(owned) = ok %v, err %v", ok, err)
+	}
+	if diff := cmp.Diff(&domain.PluginRef{Name: "Pack", Enabled: false}, owned.Plugin); diff != "" {
+		t.Errorf("Get(owned).Plugin mismatch (-want +got):\n%s", diff)
+	}
+
+	plain, _, err := d.Get(t.Context(), "w", "plain")
+	if err != nil {
+		t.Fatalf("Get(plain) error = %v", err)
+	}
+	if plain.Plugin != nil {
+		t.Errorf("Get(plain).Plugin = %+v, want nil", plain.Plugin)
+	}
+	want := []domain.ExportSkill{{Name: "Of enabled plugin"}, {Name: "Own"}}
+	if diff := cmp.Diff(want, plain.Skills); diff != "" {
+		t.Errorf("Get(plain).Skills mismatch (-want +got):\n%s", diff)
+	}
+}

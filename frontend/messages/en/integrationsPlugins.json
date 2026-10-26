@@ -1,0 +1,44 @@
+{
+  "title": "Installed plugins",
+  "loading": "Loading plugins…",
+  "empty": "No plugins installed",
+  "emptyHint": "Import a plugin file to add its agents, skills and eval cases.",
+  "loadError": "Could not load the installed plugins",
+  "row": {
+    "status": {
+      "enabled": "Enabled",
+      "disabled": "Disabled"
+    },
+    "counts": {
+      "agents": "{count, plural, one {# agent} other {# agents}}",
+      "skills": "{count, plural, one {# skill} other {# skills}}",
+      "evalCases": "{count, plural, one {# eval case} other {# eval cases}}",
+      "learnings": "{count, plural, one {# learning} other {# learnings}}"
+    },
+    "enable": "Enable",
+    "disable": "Disable",
+    "enableLabel": "Enable plugin {name}",
+    "disableLabel": "Disable plugin {name}",
+    "remove": "Remove",
+    "removeLabel": "Remove plugin {name}"
+  },
+  "dialog": {
+    "title": "Remove plugin {name}?",
+    "intro": "This permanently deletes the plugin and everything it installed. It cannot be undone.",
+    "deletedHeading": "Deleted",
+    "deleted": {
+      "agents": "{count, plural, one {# agent} other {# agents}}",
+      "skills": "{count, plural, one {# skill} other {# skills}}",
+      "evalCases": "{count, plural, one {# eval case} other {# eval cases}}",
+      "learnings": "{count, plural, one {# learning} other {# learnings}}",
+      "ci": "{count, plural, one {# GitHub Action installation} other {# GitHub Action installations}} of its agents",
+      "ciUnknown": "GitHub Action installations of its agents"
+    },
+    "confirmLabel": "Type {name} to confirm",
+    "reasonMismatch": "The button stays disabled until the text matches the plugin name exactly.",
+    "cancel": "Cancel",
+    "confirm": "Remove plugin",
+    "removing": "Removing…",
+    "done": "Removed plugin {name}"
+  }
+}

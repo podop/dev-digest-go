@@ -28,6 +28,19 @@ describe("SkillCard", () => {
     expect(screen.getByText("— accept")).toBeInTheDocument();
   });
 
+  it("labels a plugin's skill, marks a disabled plugin, and shows nothing for an unowned skill", async () => {
+    mockFetch({ "GET /skills": [makeSkill()] });
+    const first = renderWithProviders(<FromList />);
+    expect(await screen.findByText("pr-quality-rubric")).toBeInTheDocument();
+    expect(screen.queryByText(/From plugin/)).toBeNull();
+    first.unmount();
+
+    mockFetch({ "GET /skills": [makeSkill({ plugin: { id: "p1", name: "acme", enabled: false } })] });
+    renderWithProviders(<FromList />);
+    expect(await screen.findByText("From plugin acme")).toBeInTheDocument();
+    expect(screen.getByText("plugin disabled")).toBeInTheDocument();
+  });
+
   it("Delete opens the confirm modal (does not open the editor) and deletes on confirm", async () => {
     const api = mockFetch({
       "GET /skills": [makeSkill()],

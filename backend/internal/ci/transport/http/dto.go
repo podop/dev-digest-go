@@ -355,6 +355,32 @@ type installationDTO struct {
 	LastRun         *runDTO    `json:"last_run"`
 }
 
+// repoInstallationsDTO is the contract CiRepoInstallations (eval-ci.ts).
+type repoInstallationsDTO struct {
+	Repos []repoEntryDTO `json:"repos"`
+}
+
+type repoEntryDTO struct {
+	Repo          string                `json:"repo"`
+	Installations []repoInstallationDTO `json:"installations"`
+	LastRun       *repoLastRunDTO       `json:"last_run"`
+}
+
+type repoInstallationDTO struct {
+	ID          string     `json:"id"`
+	AgentID     string     `json:"agent_id"`
+	AgentName   string     `json:"agent_name"`
+	Slug        *string    `json:"slug"`
+	InstalledAt httpx.Time `json:"installed_at"`
+}
+
+type repoLastRunDTO struct {
+	Status    *string     `json:"status"`
+	RanAt     *httpx.Time `json:"ran_at"`
+	GithubURL *string     `json:"github_url"`
+	AgentID   *string     `json:"agent_id"`
+}
+
 type runListDTO struct {
 	Runs []runDTO `json:"runs"`
 }
@@ -435,6 +461,29 @@ func toInstallation(in domain.Installation) installationDTO {
 		dto.LastRun = &r
 	}
 	return dto
+}
+
+func toRepoInstallations(groups []domain.RepoGroup) repoInstallationsDTO {
+	out := repoInstallationsDTO{Repos: make([]repoEntryDTO, len(groups))}
+	for i, g := range groups {
+		entry := repoEntryDTO{Repo: g.Repo, Installations: make([]repoInstallationDTO, len(g.Installations))}
+		for j, in := range g.Installations {
+			entry.Installations[j] = repoInstallationDTO{
+				ID: in.ID, AgentID: in.AgentID, AgentName: in.AgentName, Slug: in.Slug,
+				InstalledAt: httpx.NewTime(in.InstalledAt),
+			}
+		}
+		if g.LastRun != nil {
+			last := repoLastRunDTO{Status: g.LastRun.Status, GithubURL: g.LastRun.GithubURL, AgentID: g.LastRun.AgentID}
+			if g.LastRun.RanAt != nil {
+				t := httpx.NewTime(*g.LastRun.RanAt)
+				last.RanAt = &t
+			}
+			entry.LastRun = &last
+		}
+		out.Repos[i] = entry
+	}
+	return out
 }
 
 func toRuns(list []domain.Run) runListDTO {

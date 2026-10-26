@@ -11,6 +11,7 @@ import { SettingsAbout } from "./_components/SettingsAbout";
 import { SettingsApiKeys } from "./_components/SettingsApiKeys";
 import { SettingsAutoReviews } from "./_components/SettingsAutoReviews";
 import { SettingsGithub } from "./_components/SettingsGithub";
+import { SettingsIntegrations } from "./_components/SettingsIntegrations";
 import { SettingsModels } from "./_components/SettingsModels";
 import { SettingsWorkspace } from "./_components/SettingsWorkspace";
 import { DEFAULT_SECTION, SETTINGS_SECTION_KEYS, sectionHref, type SettingsSectionKey } from "./constants";
@@ -22,6 +23,7 @@ const PANELS: Partial<Record<SettingsSectionKey, React.ComponentType>> = {
   github: SettingsGithub,
   workspace: SettingsWorkspace,
   "automatic-reviews": SettingsAutoReviews,
+  integrations: SettingsIntegrations,
   models: SettingsModels,
   about: SettingsAbout,
 };

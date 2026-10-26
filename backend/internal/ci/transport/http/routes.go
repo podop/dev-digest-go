@@ -25,6 +25,7 @@ type identities interface {
 type handler struct {
 	exporter app.Exporter
 	ingest   app.Ingest
+	repos    app.RepoInstallations
 	ids      identities
 }
 
@@ -40,6 +41,16 @@ func AddRoutes(e *echo.Echo, exporter app.Exporter, ingest app.Ingest, ids ident
 	e.GET("/agents/:id/ci-installations", h.installations)
 	e.GET("/ci/runs", h.runs)
 	e.POST("/ci/refresh", h.refresh)
+}
+
+// AddInstallationsRoute registers the per-repository listing:
+//
+//	GET /ci/installations   CiRepoInstallations {repos}; no query parameters
+//
+// It is separate from AddRoutes so that the four routes keep their wiring; it must be called once.
+func AddInstallationsRoute(e *echo.Echo, repos app.RepoInstallations, ids identities) {
+	h := &handler{repos: repos, ids: ids}
+	e.GET("/ci/installations", h.repoInstallations)
 }
 
 func (h *handler) export(c *echo.Context) error {
@@ -84,6 +95,18 @@ func (h *handler) installations(c *echo.Context) error {
 		return err
 	}
 	return c.JSON(http.StatusOK, toInstallations(list))
+}
+
+func (h *handler) repoInstallations(c *echo.Context) error {
+	ws, err := h.workspace(c)
+	if err != nil {
+		return err
+	}
+	groups, err := h.repos.ListByRepo(c.Request().Context(), ws)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, toRepoInstallations(groups))
 }
 
 func (h *handler) runs(c *echo.Context) error {
