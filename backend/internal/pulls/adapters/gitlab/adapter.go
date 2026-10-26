@@ -119,15 +119,17 @@ func (a *Adapter) Project(ctx context.Context, repo domain.Repo) (domain.GitLabP
 }
 
 // ListPage returns page `page` (1-based) of `perPage` (1..100) merge requests of any state, most
-// recently updated first; merge requests without a head sha are dropped (FR22).
-func (a *Adapter) ListPage(ctx context.Context, repo domain.Repo, page, perPage int) ([]domain.Listed, error) {
+// recently updated first; merge requests without a head sha are dropped (FR22). more is true when
+// the raw page held perPage merge requests, counted before that drop: a full page may be followed
+// by another even when the dropped ones leave it short.
+func (a *Adapter) ListPage(ctx context.Context, repo domain.Repo, page, perPage int) ([]domain.Listed, bool, error) {
 	t, err := a.resolve(ctx, repo)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	mrs, err := a.api.MergeRequestsPage(ctx, t.conn, repo.ProjectID, page, perPage)
 	if err != nil {
-		return nil, mapErr(err)
+		return nil, false, mapErr(err)
 	}
 	out := make([]domain.Listed, 0, len(mrs))
 	for _, mr := range mrs {
@@ -136,7 +138,7 @@ func (a *Adapter) ListPage(ctx context.Context, repo domain.Repo, page, perPage 
 		}
 		out = append(out, listed(mr))
 	}
-	return out, nil
+	return out, len(mrs) >= perPage, nil
 }
 
 // Get fetches a merge request with its files and commits. The commits keep the client's order,

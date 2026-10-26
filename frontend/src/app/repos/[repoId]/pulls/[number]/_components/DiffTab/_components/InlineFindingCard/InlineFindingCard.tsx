@@ -16,20 +16,20 @@ export function InlineFindingCard({
   f,
   prId,
   canPublish,
-  repoFullName,
   headSha,
 }: {
   f: FindingRecord;
   prId: string;
   /** Open PR and the card sits on a diff line — GitHub can anchor a comment there. */
   canPublish?: boolean;
-  repoFullName?: string | null;
   headSha?: string | null;
 }) {
   const action = useFindingAction(prId);
   const { data: comments } = usePrComments(prId);
   const publish = useCreatePrComment(prId);
-  const gitlab = isGitLab(useLinkRepo(repoFullName));
+  const repo = useLinkRepo();
+  // No posting on a GitLab PR, nor while the repository (and so its host) is still unknown (FR45).
+  const postable = repo != null && !isGitLab(repo);
   // The mutation result bridges the gap until the refetched comment list has it.
   const publishedUrl = findPublishedComment(comments, f.id)?.html_url ?? publish.data?.html_url ?? null;
   return (
@@ -37,17 +37,16 @@ export function InlineFindingCard({
       f={f}
       defaultExpanded
       pending={action.isPending}
-      repoFullName={repoFullName}
       headSha={headSha}
       onAction={(act) => action.mutate({ findingId: f.id, action: act })}
       publish={
-        gitlab
-          ? undefined
-          : {
+        postable
+          ? {
               url: publishedUrl,
               pending: publish.isPending,
               onPost: canPublish ? () => publish.mutate(findingCommentInput(f)) : undefined,
             }
+          : undefined
       }
     />
   );

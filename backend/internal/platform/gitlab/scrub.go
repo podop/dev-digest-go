@@ -20,9 +20,11 @@ const minFragment = 8
 // credential from the same pair).
 const gitUser = "oauth2"
 
-// tokenShape matches GitLab token shapes (glpat-…, glptt-…, glrt-…, gldt-…, glcbt-…, glagent-…)
-// so a token of another connection echoed by a proxy is masked too.
-var tokenShape = regexp.MustCompile(`(?i)\b(?:glpat|glptt|glrt|gldt|glcbt|glagent|glft|glimt|glsoat|glffct|gloas)-[\w-]{8,}`)
+// TokenShape matches the GitLab token prefixes of spec FR31 (glpat, glptt, glrt, glrtr, gldt, glcbt,
+// glagent, glft, glimt, glsoat, glffct, gloas) followed by their random part; the routable form
+// (glpat-<random>.01.<crc>) has dots, so the class allows them. A token of another connection, or
+// one a proxy echoes, is masked too. gitlabconn/app masks its messages with the same expression.
+var TokenShape = regexp.MustCompile(`(?i)\bgl(?:pat|oas|dt|rt|rtr|cbt|ptt|ft|imt|agent|soat|ffct)-[\w.-]{8,}`)
 
 // scrub drops token, and anything that reveals part of it, from s: the whole token in its plain,
 // JSON-escaped, quoted and URL-escaped forms, the base64 HTTP Basic credential git sends to the
@@ -36,7 +38,7 @@ func scrub(s, token string) string {
 			s = strings.ReplaceAll(s, form, mask)
 		}
 	}
-	s = tokenShape.ReplaceAllString(s, mask)
+	s = TokenShape.ReplaceAllString(s, mask)
 	if len(token) >= minFragment {
 		parts := strings.Split(s, mask)
 		for i, p := range parts {

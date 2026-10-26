@@ -30,14 +30,14 @@ var systemBundlePaths = []string{
 
 // WriteCABundle writes dest as the system CA bundle followed by the PEM certificates in extra,
 // for git's http.sslCAInfo (git replaces its trust store with that file, so the system roots
-// must be inside it). The system bundle is the file named by SSL_CERT_FILE when set and usable,
-// else the first usable file of the usual distribution paths. No system bundle is
+// must be inside it). The system bundle is the file sslCertFile (the caller's SSL_CERT_FILE) when
+// set and usable, else the first usable file of the usual distribution paths. No system bundle is
 // ErrNoSystemBundle; extra without a PEM certificate is an error. dest is replaced atomically
 // (temporary file in its directory, then rename) and holds public certificates only.
-func WriteCABundle(extra []byte, dest string) error {
+func WriteCABundle(extra []byte, dest, sslCertFile string) error {
 	candidates := systemBundlePaths
-	if p := os.Getenv("SSL_CERT_FILE"); p != "" {
-		candidates = append([]string{p}, candidates...)
+	if sslCertFile != "" {
+		candidates = append([]string{sslCertFile}, candidates...)
 	}
 	return writeCABundle(extra, dest, candidates)
 }

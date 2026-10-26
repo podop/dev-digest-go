@@ -4,6 +4,7 @@
 package codehost
 
 import (
+	"errors"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -67,4 +68,63 @@ func CloneKey(prov, host string, id int64, owner, name string) (first, second st
 // full path, e.g. WebURL("https://gitlab.com", "acme/web") = "https://gitlab.com/acme/web".
 func WebURL(base, full string) string {
 	return strings.TrimRight(base, "/") + "/" + strings.TrimLeft(full, "/")
+}
+
+// MaxProjectSegments is the most segments a GitLab project path may have (groups, subgroups,
+// project).
+const MaxProjectSegments = 21
+
+// ErrInvalidProjectPath means a GitLab project path is not a plain project path, or contradicts
+// the path and namespace it came with. The error holds no path text.
+var ErrInvalidProjectPath = errors.New("not a plain gitlab project path")
+
+// ProjectRef checks a project's own answer and returns its owner (the namespace path) and name.
+// full is path_with_namespace, path the last segment (the answer's "path") and namespace the
+// namespace's full path ("" when the answer has none). It refuses a path that is not a plain GitLab
+// path (2 to MaxProjectSegments segments of letters, digits, "_", "." and "-"; no empty, "." , "..",
+// ".git" or "-"-leading segment; no ".git" suffix; no "@", "%", whitespace or non-ASCII text) and
+// one that contradicts its own parts: the path ends up in a clone URL, in the database and in
+// links, and a server is only as trustworthy as its connection. Both adding a repository and
+// following a rename apply it.
+func ProjectRef(full, path, namespace string) (owner, name string, err error) {
+	if len(full) > maxProjectPathLen {
+		return "", "", ErrInvalidProjectPath
+	}
+	segs := strings.Split(full, "/")
+	if len(segs) < 2 || len(segs) > MaxProjectSegments {
+		return "", "", ErrInvalidProjectPath
+	}
+	for _, seg := range segs {
+		if !safeSegment(seg) {
+			return "", "", ErrInvalidProjectPath
+		}
+	}
+	if strings.HasSuffix(full, ".git") {
+		return "", "", ErrInvalidProjectPath
+	}
+	i := strings.LastIndex(full, "/")
+	owner, name = full[:i], full[i+1:]
+	if path != name || (namespace != "" && namespace != owner) {
+		return "", "", ErrInvalidProjectPath
+	}
+	return owner, name, nil
+}
+
+const maxProjectPathLen = 2048
+
+// safeSegment reports whether s is one plain path segment: ASCII letters, digits, "_", "." and
+// "-", not "." or "..", not ".git", not starting with "-".
+func safeSegment(s string) bool {
+	if s == "" || s == "." || s == ".." || strings.HasPrefix(s, "-") || strings.EqualFold(s, ".git") {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '_', c == '.', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }

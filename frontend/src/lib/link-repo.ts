@@ -7,11 +7,9 @@ import { useActiveRepo } from "@/lib/repo-context";
 import type { CodeHostRepo } from "@/lib/code-host";
 
 /**
- * The active repository for link building; before the repository list has loaded, a GitHub repository named
- * `fallbackFullName` (what the screens rendered before GitLab existed); null without either.
+ * The active repository for link building. Null until the repository list has loaded (and without a
+ * RepoProvider): the host is unknown then, so no link is built rather than a guessed github.com one (FR41).
  */
-export function useLinkRepo(fallbackFullName?: string | null): CodeHostRepo | null {
-  const { activeRepo } = useActiveRepo();
-  if (activeRepo) return activeRepo;
-  return fallbackFullName ? { provider: "github", full_name: fallbackFullName } : null;
+export function useLinkRepo(): CodeHostRepo | null {
+  return useActiveRepo().activeRepo;
 }

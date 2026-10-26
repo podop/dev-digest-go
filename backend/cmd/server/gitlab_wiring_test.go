@@ -291,10 +291,17 @@ func testCA(t *testing.T, path string) []byte {
 	return pemBytes
 }
 
+// mapEnv is a fake process environment; noEnv has no variable set.
+type mapEnv map[string]string
+
+func (m mapEnv) get(k string) string { return m[k] }
+
+func noEnv(string) string { return "" }
+
 func TestPrepareGitCA(t *testing.T) {
 	t.Run("no extra CA writes nothing", func(t *testing.T) {
 		dir := t.TempDir()
-		got, err := prepareGitCA(config.Config{DataDir: dir})
+		got, err := prepareGitCA(config.Config{DataDir: dir}, noEnv)
 		if err != nil || got != "" {
 			t.Errorf("prepareGitCA() = %q, %v, want no path", got, err)
 		}
@@ -309,10 +316,10 @@ func TestPrepareGitCA(t *testing.T) {
 		dir := t.TempDir()
 		// A system bundle of our own, so the test does not depend on the host's.
 		system := testCA(t, filepath.Join(dir, "system.pem"))
-		t.Setenv("SSL_CERT_FILE", filepath.Join(dir, "system.pem"))
+		env := mapEnv{"SSL_CERT_FILE": filepath.Join(dir, "system.pem")}
 		extra := testCA(t, filepath.Join(dir, "extra.pem"))
 		data := filepath.Join(dir, "data")
-		got, err := prepareGitCA(config.Config{DataDir: data, ExtraCAFile: filepath.Join(dir, "extra.pem")})
+		got, err := prepareGitCA(config.Config{DataDir: data, ExtraCAFile: filepath.Join(dir, "extra.pem")}, env.get)
 		if err != nil {
 			t.Fatalf("prepareGitCA() error = %v", err)
 		}
@@ -344,7 +351,7 @@ func TestPrepareGitCA(t *testing.T) {
 	t.Run("a missing extra file stops the start", func(t *testing.T) {
 		dir := t.TempDir()
 		missing := filepath.Join(dir, "nope.pem")
-		_, err := prepareGitCA(config.Config{DataDir: dir, ExtraCAFile: missing})
+		_, err := prepareGitCA(config.Config{DataDir: dir, ExtraCAFile: missing}, noEnv)
 		if err == nil {
 			t.Fatal("prepareGitCA() = nil error, want one")
 		}
@@ -358,9 +365,9 @@ func TestPrepareGitCA(t *testing.T) {
 		if err := os.WriteFile(bad, []byte("not a certificate"), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv("SSL_CERT_FILE", filepath.Join(dir, "system.pem"))
+		env := mapEnv{"SSL_CERT_FILE": filepath.Join(dir, "system.pem")}
 		testCA(t, filepath.Join(dir, "system.pem"))
-		if _, err := prepareGitCA(config.Config{DataDir: dir, ExtraCAFile: bad}); err == nil {
+		if _, err := prepareGitCA(config.Config{DataDir: dir, ExtraCAFile: bad}, env.get); err == nil {
 			t.Error("prepareGitCA() = nil error, want one")
 		}
 	})

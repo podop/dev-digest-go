@@ -239,7 +239,7 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 
 	// git does not read the extra CA from the process: it gets a bundle of the system roots plus the
 	// extra CA. A host without a system bundle cannot make one, and does not start (SCR5).
-	gitCA, err := prepareGitCA(cfg)
+	gitCA, err := prepareGitCA(cfg, o.getenv)
 	if err != nil {
 		log.ErrorContext(ctx, "startup failed", "step", "git_ca_bundle", "variable", "DEVDIGEST_EXTRA_CA_FILE",
 			"path", cfg.ExtraCAFile, "error", err)
@@ -436,7 +436,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	glClient := gitlab.New(gitlab.Options{HTTP: newGitLabHTTP(rootCAs), Log: log})
 	gcSvc := newGitLabConnections(db, sec, glClient, now, log)
 	glConns := reposConnections{conns: gcSvc}
-	pullsStore := pullspg.NewStore(db, pullspg.WithLogger(log))
+	pullsStore := pullspg.NewStore(db)
 	// Repo-intel's resync fetches a GitLab clone from its connection (the clone key holds no path).
 	intelGitPort := intelGit{Client: git, conns: gcSvc, paths: pullsStore, caFile: gitCAFile(gitCA)}
 

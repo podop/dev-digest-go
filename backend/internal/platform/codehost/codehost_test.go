@@ -1,6 +1,8 @@
 package codehost_test
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"dev-digest-go/backend/internal/platform/codehost"
@@ -98,5 +100,60 @@ func TestCloneKey_GitLabDirIsInjective(t *testing.T) {
 			t.Errorf("CloneKey dir %q is shared by host keys %q and %q", dir, prev, h)
 		}
 		seen[dir] = h
+	}
+}
+
+func TestProjectRef(t *testing.T) {
+	tests := []struct {
+		name                  string
+		full, path, namespace string
+		wantOwner, wantName   string
+		wantErr               bool
+	}{
+		{name: "two segments", full: "acme/payments", path: "payments", namespace: "acme", wantOwner: "acme", wantName: "payments"},
+		{name: "nested groups", full: "acme/platform/payments", path: "payments", namespace: "acme/platform", wantOwner: "acme/platform", wantName: "payments"},
+		{name: "no namespace in the answer", full: "acme/payments", path: "payments", wantOwner: "acme", wantName: "payments"},
+		{name: "dots, dashes and underscores", full: "a_b/c.d-e", path: "c.d-e", namespace: "a_b", wantOwner: "a_b", wantName: "c.d-e"},
+		{name: "dot segments", full: "x/../../../evil", path: "evil", wantErr: true},
+		{name: "userinfo-looking host", full: "@evil.example/x", path: "x", wantErr: true},
+		{name: "only dots", full: "../..", path: "..", wantErr: true},
+		{name: "bidi override", full: "Owner/Name‮exe", path: "Name‮exe", wantErr: true},
+		{name: "percent escape", full: "a/b%2F..%2Fc", path: "b%2F..%2Fc", wantErr: true},
+		{name: "namespace contradicts", full: "acme/payments", path: "payments", namespace: "contradicts", wantErr: true},
+		{name: "path contradicts", full: "acme/payments", path: "zzz", namespace: "acme", wantErr: true},
+		{name: "single segment", full: "payments", path: "payments", wantErr: true},
+		{name: "empty", wantErr: true},
+		{name: "empty segment", full: "acme//payments", path: "payments", wantErr: true},
+		{name: "trailing slash", full: "acme/payments/", path: "", wantErr: true},
+		{name: ".git suffix", full: "acme/payments.git", path: "payments.git", wantErr: true},
+		{name: ".git segment", full: "acme/.git", path: ".git", wantErr: true},
+		{name: "leading dash", full: "acme/-payments", path: "-payments", wantErr: true},
+		{name: "whitespace", full: "acme/pay ments", path: "pay ments", wantErr: true},
+		{name: "query", full: "acme/pay?x", path: "pay?x", wantErr: true},
+		{name: "22 segments", full: "a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v", path: "v", wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			owner, name, err := codehost.ProjectRef(tc.full, tc.path, tc.namespace)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("ProjectRef(%q, %q, %q) error = %v, want error %v", tc.full, tc.path, tc.namespace, err, tc.wantErr)
+			}
+			if tc.wantErr {
+				if !errors.Is(err, codehost.ErrInvalidProjectPath) {
+					t.Errorf("ProjectRef() error = %v, want ErrInvalidProjectPath", err)
+				}
+				return
+			}
+			if owner != tc.wantOwner || name != tc.wantName {
+				t.Errorf("ProjectRef(%q, %q, %q) = %q, %q, want %q, %q", tc.full, tc.path, tc.namespace, owner, name, tc.wantOwner, tc.wantName)
+			}
+		})
+	}
+}
+
+func TestProjectRef_21SegmentsAreTheLimit(t *testing.T) {
+	full := strings.TrimSuffix(strings.Repeat("g/", codehost.MaxProjectSegments-1), "/") + "/p"
+	if _, _, err := codehost.ProjectRef(full, "p", ""); err != nil {
+		t.Errorf("ProjectRef(%d segments) error = %v, want none", codehost.MaxProjectSegments, err)
 	}
 }

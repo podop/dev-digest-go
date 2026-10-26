@@ -44,7 +44,7 @@ func newGitLabRig(g *fakeGitLab) (*app.Service, *fakeSecrets, *bytes.Buffer) {
 	return app.NewService(deps), secrets, logs
 }
 
-func TestTestGitLabConnection_delegatesSetsProviderAndLogsWithoutTheKey(t *testing.T) { // FR9, FR10
+func TestTestGitLabConnection_delegatesAndSetsProviderWithoutAnExtraLogLine(t *testing.T) { // FR9, FR10
 	login, access := "ann", "full"
 	g := &fakeGitLab{result: app.ConnTestResult{OK: true, Message: "Connected as @ann", Login: &login, TokenAccess: &access,
 		Warnings: []app.TestWarning{{Code: "token_expiring", Message: "Token expires on 2026-11-01 (in 6 days)"}}}}
@@ -65,9 +65,10 @@ func TestTestGitLabConnection_delegatesSetsProviderAndLogsWithoutTheKey(t *testi
 	if len(secrets.values) != 0 {
 		t.Errorf("settings secrets written %v, want none: the GitLab token belongs to the connection", secrets.values)
 	}
-	line := logs.String()
-	if !strings.Contains(line, "provider=gitlab") || !strings.Contains(line, "ok=true") || strings.Contains(line, "glpat-secret") || strings.Contains(line, "c-1") {
-		t.Errorf("log = %q, want provider and ok, no key and no connection id", line)
+	// AC8: the GitLab port logs the test's one line (provider, host, ok, latency_ms); the settings
+	// service adds none, so a test never leaves two lines.
+	if logs.Len() != 0 {
+		t.Errorf("settings log = %q, want no line: the GitLab port logs the test", logs.String())
 	}
 }
 

@@ -7,24 +7,21 @@ import (
 	"unicode/utf8"
 
 	"dev-digest-go/backend/internal/llm/custom"
+	"dev-digest-go/backend/internal/platform/gitlab"
 	"dev-digest-go/backend/internal/platform/logging"
 )
 
 // maxMessage bounds a message shown to the user, in bytes.
 const maxMessage = 300
 
-// tokenShape matches the GitLab token prefixes of spec FR31 followed by their random part, so a
-// token of another connection, or an unsaved one, is masked too.
-var tokenShape = regexp.MustCompile(`(?i)\bgl(?:pat|oas|dt|rt|rtr|cbt|ptt|ft|imt|agent|soat|ffct)-[\w.-]{8,}`)
-
 // scrub removes every secret from text shown to the user (spec NFR1): each whole secret (also in
-// its JSON-escaped and quoted forms), then token-shaped runs, then cuts the text to maxMessage
+// its JSON-escaped and quoted forms), then token-shaped runs (gitlab.TokenShape), then cuts the text to maxMessage
 // bytes (redact first, cut second: a cut can leave half a secret). The messages of a test are
 // assembled here from fixed text and stored fields, never from GitLab's answer, so the fragment
 // pass of custom.Scrub, which also masks ordinary words, is not needed.
 func scrub(msg string, secrets ...string) string {
 	msg = custom.ScrubWhole(msg, secrets, logging.Redacted)
-	msg = tokenShape.ReplaceAllString(msg, logging.Redacted)
+	msg = gitlab.TokenShape.ReplaceAllString(msg, logging.Redacted)
 	return truncate(msg, maxMessage)
 }
 

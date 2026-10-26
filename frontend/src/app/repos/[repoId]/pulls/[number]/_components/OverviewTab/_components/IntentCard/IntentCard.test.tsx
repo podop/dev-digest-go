@@ -34,7 +34,7 @@ afterEach(cleanup);
 describe("IntentCard", () => {
   it("shows the intent as a quote with in-scope and out-of-scope columns", async () => {
     mockFetch({ "GET /pulls/pr-1/intent": INTENT });
-    renderWithProviders(<IntentCard prId="pr-1" repoFullName="acme/api" headSha="abc" />);
+    renderWithProviders(<IntentCard prId="pr-1" headSha="abc" />);
 
     const card = await screen.findByRole("region", { name: "PR intent" });
     expect(within(card).getByText("“Add rate limiting to public API endpoints.”")).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe("IntentCard", () => {
 
   it("omits an empty scope column", async () => {
     mockFetch({ "GET /pulls/pr-1/intent": { ...INTENT, intent: { ...INTENT.intent!, in_scope: [] } } });
-    renderWithProviders(<IntentCard prId="pr-1" repoFullName="acme/api" headSha="abc" />);
+    renderWithProviders(<IntentCard prId="pr-1" headSha="abc" />);
 
     const card = await screen.findByRole("region", { name: "PR intent" });
     expect(within(card).queryByText("In scope")).toBeNull();
@@ -56,14 +56,14 @@ describe("IntentCard", () => {
 
   it("offers a Derive-now call to action before the first derivation", async () => {
     mockFetch({ "GET /pulls/pr-1/intent": { intent: null, stale: false } satisfies PrIntentResponse });
-    renderWithProviders(<IntentCard prId="pr-1" repoFullName="acme/api" headSha="abc" />);
+    renderWithProviders(<IntentCard prId="pr-1" headSha="abc" />);
     expect(await screen.findByRole("button", { name: /derive/i })).toBeInTheDocument();
   });
 
   it("renders its children slot under the scope columns, also before the first derivation", async () => {
     mockFetch({ "GET /pulls/pr-1/intent": INTENT });
     const first = renderWithProviders(
-      <IntentCard prId="pr-1" repoFullName="acme/api" headSha="abc">
+      <IntentCard prId="pr-1" headSha="abc">
         <p>Slot content</p>
       </IntentCard>,
     );
@@ -74,7 +74,7 @@ describe("IntentCard", () => {
 
     mockFetch({ "GET /pulls/pr-1/intent": { intent: null, stale: false } satisfies PrIntentResponse });
     renderWithProviders(
-      <IntentCard prId="pr-1" repoFullName="acme/api" headSha="abc">
+      <IntentCard prId="pr-1" headSha="abc">
         <p>Slot content</p>
       </IntentCard>,
     );
@@ -85,7 +85,7 @@ describe("IntentCard", () => {
   it("still renders its children slot when loading the intent fails", async () => {
     mockFetch({ "GET /pulls/pr-1/intent": jsonResponse({ error: { code: "internal", message: "boom" } }, 500) });
     renderWithProviders(
-      <IntentCard prId="pr-1" repoFullName="acme/api" headSha="abc">
+      <IntentCard prId="pr-1" headSha="abc">
         <p>Slot content</p>
       </IntentCard>,
     );

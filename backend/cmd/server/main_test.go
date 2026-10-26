@@ -172,7 +172,17 @@ func startStack(t testing.TB, sp spec) *stack {
 	}
 	env := sp.env
 	opts := []option{
-		withGetenv(func(k string) string { return env[k] }),
+		withGetenv(func(k string) string {
+			if v, ok := env[k]; ok {
+				return v
+			}
+			// The GitLab tests point SSL_CERT_FILE at their stub's CA (t.Setenv): the git CA bundle
+			// reads it through getenv (gitcli.WriteCABundle takes it as an argument).
+			if k == "SSL_CERT_FILE" {
+				return os.Getenv(k)
+			}
+			return ""
+		}),
 		withLogOutput(s.logs),
 		func(o *options) {
 			o.githubBaseURL = s.gh.URL()

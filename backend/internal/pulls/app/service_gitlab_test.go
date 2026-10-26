@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -53,10 +54,10 @@ func (g *fakeGitLab) Project(_ context.Context, _ domain.Repo) (domain.GitLabPro
 	return g.project, g.projectErr
 }
 
-func (g *fakeGitLab) ListPage(_ context.Context, _ domain.Repo, page, perPage int) ([]domain.Listed, error) {
+func (g *fakeGitLab) ListPage(_ context.Context, _ domain.Repo, page, perPage int) ([]domain.Listed, bool, error) {
 	g.record("ListPage")
 	g.listPages = append(g.listPages, [2]int{page, perPage})
-	return g.listed, g.listErr
+	return g.listed, len(g.listed) >= perPage, g.listErr
 }
 
 func (g *fakeGitLab) Get(ctx context.Context, repo domain.Repo, _ int) (domain.Fetched, error) {
@@ -122,19 +123,19 @@ func TestListForRepo_gitlabSyncsProjectThenOnePage(t *testing.T) {
 func TestListForRepo_gitlabRenamedProjectUpdatesPath(t *testing.T) {
 	moved := domain.GitLabProject{ID: 42, FullName: "acme/platform/api", Owner: "acme/platform", Name: "api"}
 	tests := []struct {
-		name    string
-		blocked bool
-		err     error
+		name   string
+		heldBy string
+		err    error
 	}{
 		{name: "updated"},
-		{name: "collision keeps the path", blocked: true},
+		{name: "collision keeps the path", heldBy: "other-repo"},
 		{name: "store failure keeps the path", err: errors.New("db down")},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			gl := &fakeGitLab{project: moved, listed: []domain.Listed{{Number: 1, HeadSHA: "h", Status: "open"}}}
 			st, svc := glStoreAndService(gl, &fakeGitHub{})
-			st.pathBlocked, st.pathErr = tc.blocked, tc.err
+			st.pathHeldBy, st.pathErr = tc.heldBy, tc.err
 
 			if _, err := svc.ListForRepo(t.Context(), wsID, glRepoID); err != nil {
 				t.Fatalf("ListForRepo() error = %v", err)
@@ -149,21 +150,75 @@ func TestListForRepo_gitlabRenamedProjectUpdatesPath(t *testing.T) {
 	}
 }
 
-// FR47: the store logs a path collision once, with both repository ids; the service adds no line.
-func TestListForRepo_gitlabPathCollisionLogsNoSecondWarn(t *testing.T) {
+// FR47: a path collision is logged once, by the service, with both repository ids and no path.
+func TestListForRepo_gitlabPathCollisionLogsOneWarnWithBothIDs(t *testing.T) {
 	moved := domain.GitLabProject{ID: 42, FullName: "acme/platform/api", Owner: "acme/platform", Name: "api"}
 	gl := &fakeGitLab{project: moved, listed: []domain.Listed{{Number: 1, HeadSHA: "h", Status: "open"}}}
 	st := newStore()
 	st.repos[glRepoID] = glRepo
-	st.pathBlocked = true
+	st.pathHeldBy = "holder-id"
 	logs := &logSink{}
 	svc := app.NewService(st, &fakeGitHub{}, slog.New(logs), func() time.Time { return now }, app.WithGitLab(gl))
 
 	if _, err := svc.ListForRepo(t.Context(), wsID, glRepoID); err != nil {
 		t.Fatalf("ListForRepo() error = %v", err)
 	}
-	if got := logs.warns(); len(got) != 0 {
-		t.Errorf("WARN lines = %q, want none from the service for a path collision", got)
+	got := logs.warnAttrs()
+	if len(got) != 1 {
+		t.Fatalf("WARN lines = %v, want exactly 1", got)
+	}
+	if got[0]["repo_id"] != glRepoID || got[0]["other_repo_id"] != "holder-id" {
+		t.Errorf("WARN = %v, want repo_id %s and other_repo_id holder-id", got[0], glRepoID)
+	}
+	for k, v := range got[0] {
+		if strings.Contains(v, "platform") {
+			t.Errorf("WARN attribute %s = %q names the path", k, v)
+		}
+	}
+}
+
+// Security L1: a fetched path that is not a plain project path, or contradicts its own parts, is not
+// stored. The stored path stays, one WARN names the ids only, and the list sync goes on.
+func TestListForRepo_gitlabRefusesAnImplausibleFetchedPath(t *testing.T) {
+	tests := []struct {
+		name string
+		p    domain.GitLabProject
+	}{
+		{"dot segments", domain.GitLabProject{ID: 42, FullName: "x/../../../evil", Owner: "x/../../..", Name: "evil"}},
+		{"userinfo-like", domain.GitLabProject{ID: 42, FullName: "@evil.example/x", Owner: "@evil.example", Name: "x"}},
+		{"only dots", domain.GitLabProject{ID: 42, FullName: "../..", Owner: "..", Name: ".."}},
+		{"bidi override", domain.GitLabProject{ID: 42, FullName: "Owner/Name\u202eexe", Owner: "Owner", Name: "Name\u202eexe"}},
+		{"namespace contradicts the path", domain.GitLabProject{ID: 42, FullName: "acme/api", Owner: "contradicts", Name: "api"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gl := &fakeGitLab{project: tc.p, listed: []domain.Listed{{Number: 1, HeadSHA: "h", Status: "open"}}}
+			st := newStore()
+			st.repos[glRepoID] = glRepo
+			logs := &logSink{}
+			svc := app.NewService(st, &fakeGitHub{}, slog.New(logs), func() time.Time { return now }, app.WithGitLab(gl))
+
+			if _, err := svc.ListForRepo(t.Context(), wsID, glRepoID); err != nil {
+				t.Fatalf("ListForRepo() error = %v", err)
+			}
+			if len(st.pathUpdates) != 0 {
+				t.Errorf("UpdateRepoPath calls = %v, want none", st.pathUpdates)
+			}
+			if len(st.upserted) != 1 {
+				t.Errorf("upserted = %d, want the sync to go on by project id", len(st.upserted))
+			}
+			got := logs.warnAttrs()
+			if len(got) != 1 || got[0]["repo_id"] != glRepoID || got[0]["project_id"] != "42" {
+				t.Fatalf("WARN lines = %v, want one with repo_id %s and project_id 42", got, glRepoID)
+			}
+			for k, v := range got[0] {
+				for _, text := range []string{"evil", "Owner", "contradicts", "acme", "\u202e", ".."} {
+					if strings.Contains(v, text) {
+						t.Errorf("WARN attribute %s = %q carries path text %q", k, v, text)
+					}
+				}
+			}
+		})
 	}
 }
 

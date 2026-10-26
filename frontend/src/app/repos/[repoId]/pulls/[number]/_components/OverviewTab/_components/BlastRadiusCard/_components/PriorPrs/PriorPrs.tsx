@@ -21,7 +21,6 @@ import { s } from "./styles";
 
 export interface PriorPrsProps {
   prId: string;
-  repoFullName: string | null;
 }
 
 function formatWhen(iso: string): string {
@@ -29,10 +28,10 @@ function formatWhen(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
 }
 
-export function PriorPrs({ prId, repoFullName }: PriorPrsProps) {
+export function PriorPrs({ prId }: PriorPrsProps) {
   const t = useTranslations("blast");
   const { data } = usePrHistory(prId);
-  const repo = useLinkRepo(repoFullName);
+  const repo = useLinkRepo();
   const [open, setOpen] = React.useState(false);
   const listId = React.useId();
 

@@ -175,12 +175,11 @@ func TestWriteCABundle_ReplacesAtomicallyAndLeavesNoTemporaryFile(t *testing.T) 
 	}
 }
 
-func TestWriteCABundle_UsesSSLCertFileThenFallsBack(t *testing.T) {
+func TestWriteCABundle_UsesTheGivenSSLCertFileFirst(t *testing.T) {
 	dir := t.TempDir()
 	sys := writeTemp(t, dir, "env.pem", testCA(t, "from-env"))
 	dest := filepath.Join(dir, "b.pem")
-	t.Setenv("SSL_CERT_FILE", sys)
-	if err := WriteCABundle(testCA(t, "extra"), dest); err != nil {
+	if err := WriteCABundle(testCA(t, "extra"), dest, sys); err != nil {
 		t.Fatalf("WriteCABundle() error: %v", err)
 	}
 	got, _ := os.ReadFile(dest)

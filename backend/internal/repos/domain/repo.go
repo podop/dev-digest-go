@@ -84,7 +84,7 @@ var githubURLPattern = regexp.MustCompile(
 // connection's path prefix (FR12); ParseURL, which does not know the prefix, only bounds the
 // whole path by maxURLSegments and WithoutPrefix applies the exact limit.
 const (
-	MaxProjectSegments = 21
+	MaxProjectSegments = codehost.MaxProjectSegments
 	maxURLSegments     = 40
 	maxURLLength       = 2048
 )

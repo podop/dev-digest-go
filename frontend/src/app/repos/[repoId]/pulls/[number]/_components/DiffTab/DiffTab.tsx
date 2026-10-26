@@ -32,9 +32,11 @@ interface DiffTabProps {
 export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder, focus }: DiffTabProps) {
   const t = useTranslations("prReview");
   const tp = useTranslations("prPosting");
-  // Posting comments is GitHub-only until GitLab slice B (FR45): no composer and no "Post to PR" on a GitLab PR.
-  const gitlab = isGitLab(useLinkRepo());
-  const postable = !!canComment && !gitlab;
+  // Posting comments is GitHub-only until GitLab slice B (FR45): no composer and no "Post to PR" on a GitLab PR,
+  // nor while the repository (and so its host) is still unknown.
+  const repo = useLinkRepo();
+  const gitlab = isGitLab(repo);
+  const postable = !!canComment && repo != null && !gitlab;
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   const { data: smartDiff } = useSmartDiff(prId);

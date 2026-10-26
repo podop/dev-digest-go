@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
@@ -127,31 +126,11 @@ func (agentRunRow) TableName() string { return "agent_runs" }
 
 // Store reads and writes pull requests in Postgres.
 type Store struct {
-	db  *gorm.DB
-	log *slog.Logger
-}
-
-// Option configures a Store.
-type Option func(*Store)
-
-// WithLogger sets the logger of the store's WARN lines (a skipped repository path update); the
-// default discards them.
-func WithLogger(log *slog.Logger) Option {
-	return func(s *Store) {
-		if log != nil {
-			s.log = log
-		}
-	}
+	db *gorm.DB
 }
 
 // NewStore builds a Store on a GORM handle.
-func NewStore(db *gorm.DB, opts ...Option) *Store {
-	s := &Store{db: db, log: slog.New(slog.DiscardHandler)}
-	for _, o := range opts {
-		o(s)
-	}
-	return s
-}
+func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
 
 // conn is the handle every statement uses: the open transaction when ctx came from InTx.
 func (s *Store) conn(ctx context.Context) *gorm.DB { return postgres.Conn(ctx, s.db) }
@@ -173,14 +152,15 @@ func (s *Store) FindRepo(ctx context.Context, workspaceID, repoID string) (domai
 const uniqueViolation = "23505"
 
 // UpdateRepoPath sets full_name, owner, name and web_url of a GitLab repository of the workspace
-// to the project's current path (spec FR47). It returns false and changes nothing when another
-// repository of the same workspace and host already stores the new full_name
-// (repos_ws_host_fullname_uq); an unknown repository, a GitHub one, or one of another project is
-// domain.ErrRepoNotFound. The statement runs in a savepoint, so a lost race on the unique index
-// does not abort the caller's transaction.
-func (s *Store) UpdateRepoPath(ctx context.Context, workspaceID, repoID string, p domain.GitLabProject) (bool, error) {
+// to the project's current path (spec FR47). When another repository of the same workspace and
+// host already stores the new full_name (repos_ws_host_fullname_uq) nothing changes and that
+// repository's id is returned; "" means the path was stored. An unknown repository, a GitHub one,
+// or one of another project is domain.ErrRepoNotFound. The statement runs in a savepoint, so a
+// lost race on the unique index does not abort the caller's transaction. The store logs nothing:
+// the use case reports the collision.
+func (s *Store) UpdateRepoPath(ctx context.Context, workspaceID, repoID string, p domain.GitLabProject) (string, error) {
 	if p.ID <= 0 || p.FullName == "" || p.Owner == "" || p.Name == "" || p.WebURL == "" {
-		return false, fmt.Errorf("update repo path: incomplete project %+v", p)
+		return "", fmt.Errorf("update repo path: incomplete project %+v", p)
 	}
 	var updated bool
 	err := s.conn(ctx).Transaction(func(tx *gorm.DB) error {
@@ -201,39 +181,31 @@ func (s *Store) UpdateRepoPath(ctx context.Context, workspaceID, repoID string, 
 		return nil
 	})
 	if err != nil && !isUniqueViolation(err) {
-		return false, fmt.Errorf("update repo path: %w", err)
+		return "", fmt.Errorf("update repo path: %w", err)
 	}
 	if updated {
-		return true, nil
+		return "", nil
 	}
-	// Nothing changed: the new path is taken, or the repository is not this workspace's GitLab project.
-	var row repoRow
-	err = s.conn(ctx).
-		Where("workspace_id = ? AND id = ? AND provider = ? AND project_id = ?", workspaceID, repoID, domain.ProviderGitLab, p.ID).
-		Take(&row).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return false, domain.ErrRepoNotFound
-	}
+	// Nothing changed: the new path is taken, or the repository is not this workspace's GitLab
+	// project. One query tells both: the repository, with the id of the one that holds the path.
+	var found []struct{ HeldBy *string }
+	err = s.conn(ctx).Raw(`SELECT (
+			SELECT o.id FROM repos o
+			WHERE o.workspace_id = r.workspace_id AND o.host = r.host AND o.full_name = ? AND o.id <> r.id
+			LIMIT 1) AS held_by
+		FROM repos r
+		WHERE r.workspace_id = ? AND r.id = ? AND r.provider = ? AND r.project_id = ?`,
+		p.FullName, workspaceID, repoID, domain.ProviderGitLab, p.ID).Scan(&found).Error
 	if err != nil {
-		return false, fmt.Errorf("update repo path: %w", err)
+		return "", fmt.Errorf("update repo path: %w", err)
 	}
-	s.warnPathTaken(ctx, row, p.FullName)
-	return false, nil
-}
-
-// warnPathTaken logs the skipped path update with the ids of both repositories (FR47). It names no
-// path and no URL.
-func (s *Store) warnPathTaken(ctx context.Context, row repoRow, fullName string) {
-	var holder []string
-	err := s.conn(ctx).Model(&repoRow{}).
-		Where("workspace_id = ? AND host = ? AND full_name = ? AND id <> ?", row.WorkspaceID, row.Host, fullName, row.ID).
-		Limit(1).Pluck("id", &holder).Error
-	if err != nil || len(holder) == 0 {
-		s.log.WarnContext(ctx, "gitlab project path update skipped: the new path is taken in the workspace", "repo_id", row.ID)
-		return
+	if len(found) == 0 {
+		return "", domain.ErrRepoNotFound
 	}
-	s.log.WarnContext(ctx, "gitlab project path update skipped: the new path is taken in the workspace",
-		"repo_id", row.ID, "other_repo_id", holder[0])
+	if found[0].HeldBy == nil {
+		return "", nil // the holder went away in between: the next sync stores the path
+	}
+	return *found[0].HeldBy, nil
 }
 
 // isUniqueViolation reports whether err carries SQLSTATE 23505, without importing the driver.

@@ -22,7 +22,6 @@ interface ReviewRunAccordionProps {
   review: ReviewRecord;
   prId: string;
   defaultOpen?: boolean;
-  repoFullName?: string | null;
   headSha?: string | null;
   /** When this matches review.run_id, the accordion opens and scrolls into view
    *  (driven from the Timeline: clicking an agent name navigates here). */
@@ -38,7 +37,6 @@ export function ReviewRunAccordion({
   review,
   prId,
   defaultOpen = false,
-  repoFullName,
   headSha,
   targetRunId = null,
   targetNonce = 0,
@@ -133,7 +131,6 @@ export function ReviewRunAccordion({
             findings={findings}
             prId={prId}
             agentId={review.agent_id}
-            repoFullName={repoFullName}
             headSha={headSha}
             active={active}
             onActivate={onActivate}

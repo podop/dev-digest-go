@@ -48,7 +48,7 @@ export function PrDetailView({ repoId, number }: PrDetailViewProps) {
 
   // The PR's repository (null until the repos list has loaded): host, `!n` / `#n` and the web link.
   const repo = repos.find((r) => r.id === repoId) ?? null;
-  // The real "owner/repo" (null until the repo is loaded) — for host deep-links.
+  // The real "owner/repo" (null until the repo is loaded) — for the breadcrumb.
   const repoFullName = activeRepo?.full_name ?? null;
   const ref = prRef(repo, number);
   const pullsHref = `/repos/${repoId}/pulls`;
@@ -106,7 +106,6 @@ export function PrDetailView({ repoId, number }: PrDetailViewProps) {
               number={number}
               changedPaths={pr.files.map((f) => f.path)}
               prBody={pr.body}
-              repoFullName={repoFullName}
               headSha={pr.head_sha}
             />
           )}
@@ -114,7 +113,6 @@ export function PrDetailView({ repoId, number }: PrDetailViewProps) {
             <FindingsTab
               prId={prId}
               commits={pr.commits}
-              repoFullName={repoFullName}
               headSha={pr.head_sha}
               onOpenTrace={openTrace}
               findingHref={(f) => prDiffHref(repoId, number, f)}

@@ -313,13 +313,13 @@ func (s *Service) TestCustomConnection(ctx context.Context, workspaceID string, 
 // TestGitLabConnection tests the GitLab connection connectionID through the GitLab port (FR9): the
 // key (when given) is saved by the port. An unknown or empty id is a 404 gitlab_connection_not_found
 // error and nothing is saved; the check's own failures come back as ok=false data with the key
-// value scrubbed. Each test logs one INFO line with provider, ok and latency; neither the key nor
-// the connection id reaches a log line.
+// value scrubbed. The port logs the test's one INFO line (provider, host, ok, latency_ms), so this
+// method adds none: a GitLab test leaves exactly one line (AC8); neither the key nor the connection
+// id reaches a log line.
 func (s *Service) TestGitLabConnection(ctx context.Context, connectionID, key string) (ConnTestResult, error) {
 	if s.d.GitLab == nil || connectionID == "" {
 		return ConnTestResult{}, gitLabNotFound()
 	}
-	start := s.d.Clock()
 	res, err := s.d.GitLab.TestConnection(ctx, connectionID, key)
 	if err != nil {
 		return ConnTestResult{}, err
@@ -333,10 +333,6 @@ func (s *Service) TestGitLabConnection(ctx context.Context, connectionID, key st
 		}
 		res.Warnings = warnings
 	}
-	s.d.Logger.InfoContext(ctx, "settings test connection",
-		slog.String("provider", string(GitLab)),
-		slog.Bool("ok", res.OK),
-		slog.Int64("latency_ms", s.d.Clock().Sub(start).Milliseconds()))
 	return res, nil
 }
 

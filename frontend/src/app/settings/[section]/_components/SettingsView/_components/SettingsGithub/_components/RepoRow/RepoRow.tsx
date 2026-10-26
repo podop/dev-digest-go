@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
 import { useRepoIntelStatus } from "@/lib/hooks";
 import type { Repo } from "@/lib/types";
-import { indexedAge, isNotIndexed } from "../../helpers";
+import { indexedAge, isNotIndexed } from "../../../RepoIndex";
 import { s } from "./styles";
 
 /** One repository: full name, default branch and its index state (A4). */

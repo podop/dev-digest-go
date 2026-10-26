@@ -312,14 +312,14 @@ func (p *Poller) pollRepo(ctx context.Context, workspaceID string, repo domain.R
 		}
 	}
 	for page := 1; page <= p.opts.MaxPages; page++ {
-		listed, err := p.listPage(ctx, repo, page)
+		listed, more, err := p.listPage(ctx, repo, page)
 		if err != nil {
 			return fmt.Errorf("read page %d: %w", page, err)
 		}
 		if err := p.store.UpsertListed(ctx, workspaceID, repo.ID, listed); err != nil {
 			return fmt.Errorf("store page %d: %w", page, err)
 		}
-		if len(listed) < p.opts.PageSize || reachedCutoff(listed, cutoff) {
+		if !more || reachedCutoff(listed, cutoff) {
 			break
 		}
 	}
@@ -330,33 +330,26 @@ func (p *Poller) pollRepo(ctx context.Context, workspaceID string, repo domain.R
 	return nil
 }
 
-func (p *Poller) listPage(ctx context.Context, repo domain.Repo, page int) ([]domain.Listed, error) {
+// listPage reads one page and reports whether another may follow. GitLab's adapter drops merge
+// requests without a head sha, so it says itself whether the raw page was full; a GitHub page is
+// full when it holds PageSize pull requests.
+func (p *Poller) listPage(ctx context.Context, repo domain.Repo, page int) (listed []domain.Listed, more bool, err error) {
 	if repo.IsGitLab() {
 		return p.gitlab.ListPage(ctx, repo, page, p.opts.PageSize)
 	}
-	return p.pages.ListPullRequestsPage(ctx, repo.Owner, repo.Name, page, p.opts.PageSize)
+	listed, err = p.pages.ListPullRequestsPage(ctx, repo.Owner, repo.Name, page, p.opts.PageSize)
+	return listed, len(listed) >= p.opts.PageSize, err
 }
 
-// syncProject reads the GitLab project and stores its current path when it changed (FR47). A failed
-// read is a failed sync. A path another repository of the workspace already has, or a failed
-// store, keeps the stored path: the sync goes on by project id and the next one tries again.
+// syncProject reads the GitLab project and follows a rename (FR47, followProjectPath). A failed
+// read is a failed sync. A refused or colliding path, or a failed store, keeps the stored path: the
+// sync goes on by project id and the next one tries again.
 func (p *Poller) syncProject(ctx context.Context, workspaceID string, repo domain.Repo) error {
 	proj, err := p.gitlab.Project(ctx, repo)
 	if err != nil {
 		return fmt.Errorf("read project: %w", err)
 	}
-	if proj.FullName == repo.Owner+"/"+repo.Name {
-		return nil
-	}
-	// A collision answers (false, nil) and the store has already logged it once with both ids.
-	if _, err := p.store.UpdateRepoPath(ctx, workspaceID, repo.ID, proj); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		p.log.WarnContext(ctx, "background poll: the project path was not stored",
-			"workspace_id", workspaceID, "repo_id", repo.ID, "err", err)
-	}
-	return nil
+	return followProjectPath(ctx, p.log, p.store, workspaceID, repo, proj)
 }
 
 // backfillStats fills the diff stats of up to PollStatsPerRepo stored PRs of the repo that have
@@ -509,8 +502,8 @@ func (noGitLab) Project(context.Context, domain.Repo) (domain.GitLabProject, err
 	return domain.GitLabProject{}, ErrNotConnected
 }
 
-func (noGitLab) ListPage(context.Context, domain.Repo, int, int) ([]domain.Listed, error) {
-	return nil, ErrNotConnected
+func (noGitLab) ListPage(context.Context, domain.Repo, int, int) ([]domain.Listed, bool, error) {
+	return nil, false, ErrNotConnected
 }
 
 func (noGitLab) Get(context.Context, domain.Repo, int) (domain.Fetched, error) {

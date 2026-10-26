@@ -615,3 +615,33 @@ func TestGitLabRepos_AC40_RenamedProjectFollowsTheId(t *testing.T) { // AC40
 		assertRefreshFetchesNewURL()
 	})
 }
+
+// goldenHost is the host name the GitLab goldens show instead of the stub's 127.0.0.1:<port>.
+const goldenHost = "gitlab.example.com"
+
+// grGolden checks resp against testdata/contracts/<name>.json after the stub's host key and clone
+// directory name are replaced by goldenHost, so the answer does not hold the stub's port.
+func grGolden(g *goldens, stub *grGitLab, name string, resp response, status int) {
+	g.t.Helper()
+	resp.Body = []byte(strings.NewReplacer(stub.host, goldenHost, stub.hostDir(), goldenHost).Replace(string(resp.Body)))
+	g.check(name, resp, status)
+}
+
+// TestContracts_GitLabRepos records the answers the UI contract test validates for a connected
+// GitLab repository (S37 gap): a nested path, a non-null connection_id and the GitLab web_url, and
+// a connection that has a bound repository (repo_count 1, disconnected_repos 1 on delete).
+func TestContracts_GitLabRepos(t *testing.T) {
+	g := grNewGitLab(t, "")
+	g.addProject(42, "acme/platform/payments", "develop")
+	s := grBoot(t, g, grOpts{})
+	gold := sbGoldens(t, s.stack)
+	connID := grConnect(t, s, g.base, "glpat-grContractTokenToken01")
+	s.leakCheck("glpat-grContractTokenToken01")
+
+	add := grAdd(s, g.base+"/acme/platform/payments")
+	grGolden(gold, g, "gitlab_repo_create", add, http.StatusCreated)
+	s.waitJobs("clone", 1)
+	grGolden(gold, g, "gitlab_repos_list", s.get("/repos"), http.StatusOK)
+	grGolden(gold, g, "gitlab_conn_list_bound", s.get("/settings/gitlab-connections"), http.StatusOK)
+	grGolden(gold, g, "gitlab_conn_deleted_bound", s.del("/settings/gitlab-connections/"+connID), http.StatusOK)
+}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 	"unicode"
@@ -181,14 +180,14 @@ func userFailure(err error, baseURL string) string {
 		return msgBadBaseURL
 	case errors.As(err, &se):
 		switch {
-		case se.Status == http.StatusUnauthorized:
+		case se.IsUnauthorized():
 			return msgRejected
-		case se.Status == http.StatusForbidden:
+		case se.IsForbidden():
 			return msgCannotRead
-		case se.Status == http.StatusNotFound || se.Status == http.StatusMethodNotAllowed:
+		case se.IsNotFound() || se.IsMethodNotAllowed():
 			// A server that is not GitLab (or a wrong path prefix) has no /user.
 			return "No GitLab API found at " + baseURL
-		case se.Status >= 300 && se.Status < 400:
+		case se.IsRedirect():
 			return msgRedirect
 		}
 	}
@@ -196,9 +195,10 @@ func userFailure(err error, baseURL string) string {
 	return "GitLab is not reachable at " + baseURL
 }
 
-// logTest writes the one line a test leaves: the connection id and host, never a token or a path.
+// logTest writes the one line a test leaves (AC8): provider, connection id, host, ok and latency,
+// never a token or a path. The settings service adds no line of its own for GitLab.
 func (s *Service) logTest(ctx context.Context, c domain.Connection, ok bool, latencyMS int) {
-	s.log.InfoContext(ctx, "gitlab connection test", "connection_id", c.ID, "host", c.Host,
+	s.log.InfoContext(ctx, "gitlab connection test", "provider", "gitlab", "connection_id", c.ID, "host", c.Host,
 		"ok", ok, "latency_ms", latencyMS)
 }
 

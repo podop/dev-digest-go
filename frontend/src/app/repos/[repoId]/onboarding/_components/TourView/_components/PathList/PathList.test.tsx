@@ -3,7 +3,7 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderWithProviders, screen, cleanup, within } from "@/test/render";
 import { mockFetch } from "@/test/fetch-mock";
-import { GITLAB_REPO } from "@/test/code-host-repo";
+import { GITHUB_REPO, GITLAB_REPO } from "@/test/code-host-repo";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/onboarding" }));
 
@@ -22,25 +22,40 @@ const ITEMS = [
 
 describe("PathList", () => {
   it("Open opens the file on GitHub at the indexed commit in a new tab", async () => {
+    mockFetch({ "GET /repos": [GITHUB_REPO] });
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const { user } = renderWithProviders(
-      <PathList items={ITEMS} variant="critical" repoFullName="acme/payments-api" indexedSha="abc123" />,
+      <RepoProvider>
+        <PathList items={ITEMS} variant="critical" indexedSha="abc123" />
+      </RepoProvider>,
     );
 
-    await user.click(screen.getByRole("button", { name: "Open src/lib/redis.ts on GitHub" }));
+    await user.click(await screen.findByRole("button", { name: "Open src/lib/redis.ts on GitHub" }));
 
     expect(open).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith(
-      "https://github.com/acme/payments-api/blob/abc123/src/lib/redis.ts",
+      "https://github.com/acme/api/blob/abc123/src/lib/redis.ts",
       "_blank",
       "noopener",
     );
   });
 
+  it("offers no Open button before the repository list has loaded (FR41: no guessed github.com target)", () => {
+    mockFetch({ "GET /repos": () => new Promise<never>(() => {}) });
+    renderWithProviders(
+      <RepoProvider>
+        <PathList items={ITEMS} variant="critical" indexedSha="abc123" />
+      </RepoProvider>,
+    );
+
+    expect(screen.getByText("src/server.ts")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
   it("truncates a very long path with the full path as tooltip", () => {
     const long = `${"deep/".repeat(39)}file.ts`;
     renderWithProviders(
-      <PathList items={[{ path: long, reason: "r" }]} variant="critical" repoFullName="a/b" indexedSha="s" />,
+      <PathList items={[{ path: long, reason: "r" }]} variant="critical" indexedSha="s" />,
     );
 
     const el = screen.getByTitle(long);
@@ -49,7 +64,7 @@ describe("PathList", () => {
   });
 
   it("reading path is a numbered list with no Open button", () => {
-    renderWithProviders(<PathList items={ITEMS} variant="reading" repoFullName="a/b" indexedSha="s" />);
+    renderWithProviders(<PathList items={ITEMS} variant="reading" indexedSha="s" />);
 
     const list = screen.getByRole("list", { name: "Guided reading path" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
@@ -59,7 +74,7 @@ describe("PathList", () => {
   });
 
   it("shows the empty state", () => {
-    renderWithProviders(<PathList items={[]} variant="critical" repoFullName="a/b" indexedSha="s" />);
+    renderWithProviders(<PathList items={[]} variant="critical" indexedSha="s" />);
     expect(screen.getByText("Not enough information")).toBeInTheDocument();
   });
 });
@@ -70,7 +85,7 @@ describe("PathList — GitLab repository (FR41, FR42; AC32)", () => {
     const open = vi.spyOn(window, "open").mockReturnValue(null);
     const { user } = renderWithProviders(
       <RepoProvider>
-        <PathList items={[{ path: "src/a b.ts", reason: "r" }]} variant="critical" repoFullName="" indexedSha="abc123" />
+        <PathList items={[{ path: "src/a b.ts", reason: "r" }]} variant="critical" indexedSha="abc123" />
       </RepoProvider>,
     );
 

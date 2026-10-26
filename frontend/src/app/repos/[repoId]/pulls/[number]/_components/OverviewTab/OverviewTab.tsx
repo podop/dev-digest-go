@@ -20,11 +20,10 @@ interface OverviewTabProps {
   /** Paths of the PR's changed files. */
   changedPaths: readonly string[];
   prBody: string | null | undefined;
-  repoFullName: string | null;
   headSha: string | null;
 }
 
-export function OverviewTab({ prId, repoId, number, changedPaths, prBody, repoFullName, headSha }: OverviewTabProps) {
+export function OverviewTab({ prId, repoId, number, changedPaths, prBody, headSha }: OverviewTabProps) {
   const t = useTranslations("prReview");
   // A review run that ends while Overview is open refreshes the brief banner's verdict and score.
   useLiveRunRefresh(prId);
@@ -42,10 +41,10 @@ export function OverviewTab({ prId, repoId, number, changedPaths, prBody, repoFu
         onGenerate={() => generate.mutate()}
       />
       <div style={s.cards}>
-        <IntentCard prId={prId} repoFullName={repoFullName} headSha={headSha}>
+        <IntentCard prId={prId} headSha={headSha}>
           <RiskAreas prId={prId} {...diffLinks} />
         </IntentCard>
-        <BlastRadiusCard prId={prId} repoId={repoId} repoFullName={repoFullName} headSha={headSha} />
+        <BlastRadiusCard prId={prId} repoId={repoId} headSha={headSha} />
       </div>
       <ReviewFocusCard prId={prId} {...diffLinks} />
       {prBody && (

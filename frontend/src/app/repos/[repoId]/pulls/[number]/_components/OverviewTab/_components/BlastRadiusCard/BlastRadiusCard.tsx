@@ -20,16 +20,15 @@ import { s } from "./styles";
 export interface BlastRadiusCardProps {
   prId: string;
   repoId: string;
-  repoFullName: string | null;
   headSha: string | null;
 }
 
-export function BlastRadiusCard({ prId, repoId, repoFullName, headSha }: BlastRadiusCardProps) {
+export function BlastRadiusCard({ prId, repoId, headSha }: BlastRadiusCardProps) {
   const t = useTranslations("blast");
   const tc = useTranslations("common");
   const { data, isLoading, isError, error, refetch } = useBlastRadius(prId);
   const resync = useResyncBlast(repoId, prId);
-  const repo = useLinkRepo(repoFullName);
+  const repo = useLinkRepo();
   const [view, setView] = React.useState<(typeof VIEWS)[number]>("tree");
 
   if (isLoading) return <Skeleton height={140} />;
@@ -103,7 +102,7 @@ export function BlastRadiusCard({ prId, repoId, repoFullName, headSha }: BlastRa
         )
       )}
 
-      <PriorPrs prId={prId} repoFullName={repoFullName} />
+      <PriorPrs prId={prId} />
     </section>
   );
 }

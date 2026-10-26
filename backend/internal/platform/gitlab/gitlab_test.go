@@ -976,3 +976,25 @@ func TestContextCancelled(t *testing.T) {
 		t.Errorf("%d requests, want 0", s.count())
 	}
 }
+
+func TestStatusError_Predicates(t *testing.T) {
+	tests := []struct {
+		status int
+		want   string // the one predicate that holds
+	}{
+		{404, "NotFound"}, {405, "MethodNotAllowed"}, {401, "Unauthorized"}, {403, "Forbidden"},
+		{429, "RateLimited"}, {302, "Redirect"}, {500, ""}, {400, ""},
+	}
+	for _, tc := range tests {
+		se := &gitlab.StatusError{Status: tc.status}
+		got := map[string]bool{
+			"NotFound": se.IsNotFound(), "MethodNotAllowed": se.IsMethodNotAllowed(), "Unauthorized": se.IsUnauthorized(),
+			"Forbidden": se.IsForbidden(), "RateLimited": se.IsRateLimited(), "Redirect": se.IsRedirect(),
+		}
+		for name, ok := range got {
+			if ok != (name == tc.want) {
+				t.Errorf("StatusError{%d}.Is%s() = %v, want %v", tc.status, name, ok, name == tc.want)
+			}
+		}
+	}
+}

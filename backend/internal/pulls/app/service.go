@@ -386,8 +386,8 @@ func (disconnectedGitLab) Project(context.Context, domain.Repo) (domain.GitLabPr
 	return domain.GitLabProject{}, ErrNotConnected
 }
 
-func (disconnectedGitLab) ListPage(context.Context, domain.Repo, int, int) ([]domain.Listed, error) {
-	return nil, ErrNotConnected
+func (disconnectedGitLab) ListPage(context.Context, domain.Repo, int, int) ([]domain.Listed, bool, error) {
+	return nil, false, ErrNotConnected
 }
 
 func (disconnectedGitLab) Get(context.Context, domain.Repo, int) (domain.Fetched, error) {
@@ -430,24 +430,19 @@ func (s *Service) syncListGitLab(ctx context.Context, workspaceID string, repo d
 		return nil, fmt.Errorf("project of repo %s: %w", repo.ID, err)
 	}
 	s.updateRepoPath(ctx, workspaceID, repo, project)
-	listed, err := gl.ListPage(ctx, repo, 1, GitLabPageSize)
+	// A manual sync reads the first page only (FR21): `more` has no use here.
+	listed, _, err := gl.ListPage(ctx, repo, 1, GitLabPageSize)
 	if err != nil {
 		return nil, fmt.Errorf("merge requests of repo %s: %w", repo.ID, err)
 	}
 	return listed, nil
 }
 
-// updateRepoPath stores the project's current path when it differs from the stored one (FR47). A
-// collision (another repository holds the new full_name; the store logs the one WARN) or a store
-// failure keeps the stored path; the sync goes on by project id and the next fetch tries again.
+// updateRepoPath follows a rename (FR47, followProjectPath): a refused or colliding path, or a
+// store failure, keeps the stored path and logs one WARN; the sync goes on by project id and the
+// next fetch tries again. An ended ctx fails the list request that follows.
 func (s *Service) updateRepoPath(ctx context.Context, workspaceID string, repo domain.Repo, p domain.GitLabProject) {
-	if p.FullName == "" || (p.Owner == repo.Owner && p.Name == repo.Name) {
-		return
-	}
-	// A collision answers (false, nil) and the store has already logged it once with both ids.
-	if _, err := s.store.UpdateRepoPath(ctx, workspaceID, repo.ID, p); err != nil {
-		s.log.WarnContext(ctx, "gitlab project path not stored; keeping the stored path", "repo_id", repo.ID, "err", err)
-	}
+	_ = followProjectPath(ctx, s.log, s.store, workspaceID, repo, p)
 }
 
 // gitLabPollError maps a failed GitLab list sync of a manual poll (spec §7): a host without a

@@ -3,6 +3,8 @@ package domain
 import (
 	"strings"
 	"time"
+
+	"dev-digest-go/backend/internal/platform/codehost"
 )
 
 // GitLabStatsBatch is how many merge requests one diff-stats query asks for (spec FR26).
@@ -177,4 +179,15 @@ type GitLabProject struct {
 	Name          string // project path
 	DefaultBranch string
 	WebURL        string
+}
+
+// CheckPath reports whether the project's path may be stored: a plain GitLab project path whose
+// parts agree (codehost.ProjectRef, the rule that admits a repository when it is added) with a
+// non-empty namespace. The error holds no path text, so a caller can log it.
+func (p GitLabProject) CheckPath() error {
+	if p.Owner == "" {
+		return codehost.ErrInvalidProjectPath
+	}
+	_, _, err := codehost.ProjectRef(p.FullName, p.Name, p.Owner)
+	return err
 }

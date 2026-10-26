@@ -908,23 +908,21 @@ func TestGitLabConn_AC8_FailedTestsAreDataAndLeakNothing(t *testing.T) { // AC8,
 				t.Errorf("stub requests after a failed /user = %v, want only /user", reqs)
 			}
 
-			lines := gcLogLines(t, s, "settings test connection")
-			if len(lines) != beforeSettings+1 {
-				t.Fatalf("settings test connection lines = %d, want %d", len(lines), beforeSettings+1)
-			}
-			line := lines[len(lines)-1]
-			if line["level"] != "INFO" || line["provider"] != "gitlab" || line["ok"] != false {
-				t.Errorf("test log line = %v, want INFO provider gitlab ok false", line)
-			}
-			if _, ok := line["latency_ms"].(float64); !ok {
-				t.Errorf("test log line has no latency_ms: %v", line)
+			// AC8: exactly one INFO line per test, with provider, host, ok and latency_ms; the
+			// settings service adds none of its own for GitLab.
+			if lines := gcLogLines(t, s, "settings test connection"); len(lines) != beforeSettings {
+				t.Errorf("settings test connection lines = %d, want %d (none for GitLab)", len(lines), beforeSettings)
 			}
 			conn := gcLogLines(t, s, "gitlab connection test")
 			if len(conn) != beforeConn+1 {
 				t.Fatalf("gitlab connection test lines = %d, want %d", len(conn), beforeConn+1)
 			}
-			if l := conn[len(conn)-1]; l["level"] != "INFO" || l["host"] != stub.hostKey() || l["ok"] != false {
-				t.Errorf("connection test log line = %v, want INFO with the host key and ok false", l)
+			l := conn[len(conn)-1]
+			if l["level"] != "INFO" || l["provider"] != "gitlab" || l["host"] != stub.hostKey() || l["ok"] != false {
+				t.Errorf("connection test log line = %v, want INFO provider gitlab, the host key and ok false", l)
+			}
+			if _, ok := l["latency_ms"].(float64); !ok {
+				t.Errorf("connection test log line has no latency_ms: %v", l)
 			}
 		})
 	}

@@ -5,7 +5,7 @@ import { Button, Icon } from "@devdigest/ui";
 import { isNotConnected } from "@/lib/code-host";
 import { useRepoIntelStatus } from "@/lib/hooks";
 import type { Repo } from "@/lib/types";
-import { indexedAge, isNotIndexed } from "../../../SettingsGithub/helpers";
+import { indexedAge, isNotIndexed } from "../../../RepoIndex";
 import { s } from "./styles";
 
 /** One GitLab repository (FR37): full name, host, default branch, index state and, when no connection serves its host, "Not connected". */

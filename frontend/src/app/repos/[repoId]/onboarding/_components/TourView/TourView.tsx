@@ -127,7 +127,7 @@ export function TourView({ repoId }: { repoId: string }) {
           )}
 
           {showCards ? (
-            <TourSections tour={generating ? null : (ready?.tour ?? null)} repoFullName={repo?.full_name ?? ""} />
+            <TourSections tour={generating ? null : (ready?.tour ?? null)} />
           ) : (
             !tourQuery.isError && <EmptyTour indexNotReady={indexNotReady} onGenerate={onGenerate} />
           )}

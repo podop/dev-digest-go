@@ -17,18 +17,17 @@ import { s } from "./styles";
 
 export interface IntentCardProps {
   prId: string;
-  repoFullName: string | null;
   headSha: string | null;
   /** Slot rendered under the scope columns (also under the "not derived yet" and the load-error states). */
   children?: ReactNode;
 }
 
-export function IntentCard({ prId, repoFullName, headSha, children }: IntentCardProps) {
+export function IntentCard({ prId, headSha, children }: IntentCardProps) {
   const t = useTranslations("prReview");
   const tc = useTranslations("common");
   const { data, isLoading, isError, error, refetch } = usePrIntent(prId);
   const refresh = useRefreshIntent(prId);
-  const repo = useLinkRepo(repoFullName);
+  const repo = useLinkRepo();
 
   if (isLoading) return <Skeleton height={140} />;
 

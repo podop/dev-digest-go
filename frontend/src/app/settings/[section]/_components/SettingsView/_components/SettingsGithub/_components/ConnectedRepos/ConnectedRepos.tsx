@@ -7,7 +7,7 @@ import { AddRepoForm } from "@/components/add-repo-form";
 import { isGitLab } from "@/lib/code-host";
 import { useRepos } from "@/lib/hooks";
 import type { Repo } from "@/lib/types";
-import { RemoveRepoDialog } from "../RemoveRepoDialog";
+import { RemoveRepoDialog } from "../../../RemoveRepoDialog";
 import { RepoRow } from "../RepoRow";
 import { s } from "./styles";
 

@@ -19,7 +19,6 @@ export function FindingsPanel({
   findings,
   prId,
   agentId,
-  repoFullName,
   headSha,
   active = true,
   onActivate,
@@ -28,7 +27,6 @@ export function FindingsPanel({
   prId: string;
   /** Agent of this review (null for seed reviews) — owner of the eval cases made from its findings. */
   agentId?: string | null;
-  repoFullName?: string | null;
   headSha?: string | null;
   /** Only the active panel handles j/k/a/d — several panels can be open at once. */
   active?: boolean;
@@ -105,7 +103,6 @@ export function FindingsPanel({
               focused={active && i === focused}
               defaultExpanded={i === 0}
               pending={action.isPending}
-              repoFullName={repoFullName}
               headSha={headSha}
               onAction={(act) => mutate({ findingId: f.id, action: act })}
               extraActions={<EvalCaseButton finding={f} agentId={agentId} prId={prId} />}

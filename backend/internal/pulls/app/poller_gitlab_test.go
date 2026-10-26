@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -58,7 +59,10 @@ type pollGitLab struct {
 	flight  *flightCount
 	project func(repo domain.Repo) (domain.GitLabProject, error)
 	page    func(repo domain.Repo, page int) ([]domain.Listed, error)
-	stats   func(repo domain.Repo, numbers []int) (map[int]domain.DiffStats, error)
+	// raw is the number of merge requests the page held before the adapter dropped those without a
+	// head sha; nil = as many as page returned.
+	raw   func(repo domain.Repo, page int) int
+	stats func(repo domain.Repo, numbers []int) (map[int]domain.DiffStats, error)
 }
 
 func (g *pollGitLab) record(ctx context.Context, op string, repo domain.Repo) error {
@@ -87,15 +91,19 @@ func (g *pollGitLab) Project(ctx context.Context, repo domain.Repo) (domain.GitL
 	return domain.GitLabProject{ID: repo.ProjectID, FullName: repo.Owner + "/" + repo.Name}, nil
 }
 
-func (g *pollGitLab) ListPage(ctx context.Context, repo domain.Repo, page, _ int) ([]domain.Listed, error) {
+func (g *pollGitLab) ListPage(ctx context.Context, repo domain.Repo, page, perPage int) ([]domain.Listed, bool, error) {
 	defer g.flight.enter()()
 	if err := g.record(ctx, "page", repo); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if g.page != nil {
-		return g.page(repo, page)
+	if g.page == nil {
+		return nil, false, nil
 	}
-	return nil, nil
+	listed, err := g.page(repo, page)
+	if g.raw != nil {
+		return listed, g.raw(repo, page) >= perPage, err
+	}
+	return listed, len(listed) >= perPage, err
 }
 
 func (g *pollGitLab) Stats(ctx context.Context, repo domain.Repo, numbers []int) (map[int]domain.DiffStats, error) {
@@ -536,15 +544,16 @@ func TestPoller_theProjectIsReadFirstAndItsNewPathStored(t *testing.T) {
 	})
 }
 
-// TestPoller_aPathAnotherRepoHasKeepsTheStoredPathAndTheSyncGoesOn covers the FR47 collision.
+// TestPoller_aPathAnotherRepoHasKeepsTheStoredPathAndTheSyncGoesOn covers the FR47 collision: the
+// store answers the id of the repository that holds the path, and the poller logs the one WARN.
 func TestPoller_aPathAnotherRepoHasKeepsTheStoredPathAndTheSyncGoesOn(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		base := time.Now()
 		r := newRig(glTarget("ws", "a", hostGitLab))
 		r.intervals.setAll(time.Minute, "ws")
-		r.store.pathUpdated = false
+		r.store.pathHeldBy = "holder-id"
 		r.gl.project = func(domain.Repo) (domain.GitLabProject, error) {
-			return domain.GitLabProject{ID: 7, FullName: "taken/path"}, nil
+			return domain.GitLabProject{ID: 7, FullName: "taken/path", Owner: "taken", Name: "path"}, nil
 		}
 		stop := r.start(t)
 		advance(time.Second)
@@ -556,11 +565,112 @@ func TestPoller_aPathAnotherRepoHasKeepsTheStoredPathAndTheSyncGoesOn(t *testing
 		if got := r.store.markedTimes("a", base); len(got) != 1 {
 			t.Errorf("repo marked polled %d times, want 1", len(got))
 		}
-		// FR47: the collision is logged once, by the store, with both repository ids; the poller adds no line.
-		if got := r.logs.warns(); len(got) != 0 {
-			t.Errorf("WARN lines = %q, want none from the poller for the kept path", got)
+		// FR47: exactly one WARN, with both repository ids and no path.
+		got := r.logs.warnAttrs()
+		if len(got) != 1 {
+			t.Fatalf("WARN lines = %v, want exactly 1", got)
+		}
+		if got[0]["repo_id"] != "a" || got[0]["other_repo_id"] != "holder-id" {
+			t.Errorf("WARN = %v, want repo_id a and other_repo_id holder-id", got[0])
+		}
+		for k, v := range got[0] {
+			if strings.Contains(v, "taken/path") || v == "path" {
+				t.Errorf("WARN attribute %s = %q names the path", k, v)
+			}
 		}
 	})
+}
+
+// TestPoller_aFetchedPathThatIsNotAPlainProjectPathIsNotStored covers security L1: the rename-follow
+// path applies the rule of the add path. The stored path stays, one WARN names the repo and project
+// ids only, and the sync goes on by project id.
+func TestPoller_aFetchedPathThatIsNotAPlainProjectPathIsNotStored(t *testing.T) {
+	tests := []struct {
+		name string
+		p    domain.GitLabProject
+	}{
+		{"dot segments", domain.GitLabProject{ID: 7, FullName: "x/../../../evil", Owner: "x/../../..", Name: "evil"}},
+		{"userinfo-like", domain.GitLabProject{ID: 7, FullName: "@evil.example/x", Owner: "@evil.example", Name: "x"}},
+		{"only dots", domain.GitLabProject{ID: 7, FullName: "../..", Owner: "..", Name: ".."}},
+		{"bidi override", domain.GitLabProject{ID: 7, FullName: "Owner/Name\u202eexe", Owner: "Owner", Name: "Name\u202eexe"}},
+		{"namespace contradicts the path", domain.GitLabProject{ID: 7, FullName: "acme/api", Owner: "contradicts", Name: "api"}},
+		{"path contradicts the name", domain.GitLabProject{ID: 7, FullName: "acme/api", Owner: "acme", Name: "zzz"}},
+		{"no namespace", domain.GitLabProject{ID: 7, FullName: "acme/api", Name: "api"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				base := time.Now()
+				r := newRig(glTarget("ws", "a", hostGitLab))
+				r.intervals.setAll(time.Minute, "ws")
+				r.gl.project = func(domain.Repo) (domain.GitLabProject, error) { return tc.p, nil }
+				stop := r.start(t)
+				advance(time.Second)
+				stop()
+
+				if len(r.store.pathUpdates) != 0 {
+					t.Errorf("stored path updates = %v, want none", r.store.pathUpdates)
+				}
+				if got := r.gl.times("page", "a", base); len(got) != 1 {
+					t.Errorf("page requests = %v, want the sync to go on by project id", got)
+				}
+				got := r.logs.warnAttrs()
+				if len(got) != 1 {
+					t.Fatalf("WARN lines = %v, want exactly 1", got)
+				}
+				if got[0]["repo_id"] != "a" || got[0]["project_id"] != "7" {
+					t.Errorf("WARN = %v, want repo_id a and project_id 7", got[0])
+				}
+				for k, v := range got[0] {
+					for _, text := range []string{"evil", "Owner", "contradicts", "acme", "zzz", "\u202e", ".."} {
+						if strings.Contains(v, text) {
+							t.Errorf("WARN attribute %s = %q carries path text %q", k, v, text)
+						}
+					}
+				}
+			})
+		})
+	}
+}
+
+// TestPoller_aFullPageThatLostMergeRequestsWithoutAShaStillPagesOn covers FR21 with FR22: the stop
+// condition is the raw page size, not the number of merge requests kept.
+func TestPoller_aFullPageThatLostMergeRequestsWithoutAShaStillPagesOn(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       int // merge requests on every page before the adapter's drop
+		wantPages int
+	}{
+		{name: "full raw page, one dropped", raw: 2, wantPages: 3},
+		{name: "short raw page", raw: 1, wantPages: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				r := newRig(glTarget("ws", "a", hostGitLab))
+				r.opts = app.PollerOptions{PageSize: 2}
+				r.gl.page = func(_ domain.Repo, page int) ([]domain.Listed, error) {
+					if page == 3 {
+						return nil, nil // the end
+					}
+					return recent(1), nil // one of two kept
+				}
+				r.gl.raw = func(_ domain.Repo, page int) int {
+					if page == 3 {
+						return 0
+					}
+					return tc.raw
+				}
+				stop := r.start(t)
+				advance(time.Second)
+				stop()
+
+				if got := r.gl.count("page", "a"); got != tc.wantPages {
+					t.Errorf("page requests = %d, want %d", got, tc.wantPages)
+				}
+			})
+		})
+	}
 }
 
 // TestPoller_aFailedProjectFetchIsAFailedSync covers FR47: no page is read, the repo is not marked.

@@ -1,9 +1,14 @@
 /* BlastRadiusCard — stats, grouped callers + links, empty and degraded states,
    Resync POST, through the real TanStack hooks with a stubbed fetch. */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import type { BlastRadius } from "@devdigest/shared";
 import { renderWithProviders, screen, cleanup, within, waitFor } from "@/test/render";
 import { mockFetch, jsonResponse } from "@/test/fetch-mock";
+import { GITHUB_REPO } from "@/test/code-host-repo";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/pulls/12" }));
+
+import { RepoProvider } from "@/lib/repo-context";
 import { BlastRadiusCard } from "./BlastRadiusCard";
 
 const BLAST: BlastRadius = {
@@ -34,14 +39,18 @@ const BLAST: BlastRadius = {
 };
 
 function renderCard(headSha: string | null = "abc123") {
-  return renderWithProviders(<BlastRadiusCard prId="pr-1" repoId="r1" repoFullName="acme/api" headSha={headSha} />);
+  return renderWithProviders(
+    <RepoProvider>
+      <BlastRadiusCard prId="pr-1" repoId="r1" headSha={headSha} />
+    </RepoProvider>,
+  );
 }
 
 afterEach(cleanup);
 
 describe("BlastRadiusCard", () => {
   it("shows distinct stats, the grouped callers as GitHub links and the endpoint / cron chips", async () => {
-    mockFetch({ "GET /pulls/pr-1/blast": BLAST });
+    mockFetch({ "GET /repos": [GITHUB_REPO], "GET /pulls/pr-1/blast": BLAST });
     renderCard();
 
     const card = await screen.findByRole("region", { name: "Blast radius" });
@@ -49,7 +58,7 @@ describe("BlastRadiusCard", () => {
     expect(stats).toEqual(["3symbols", "2callers", "2endpoints", "1cron"]);
 
     expect(within(card).getByRole("button", { name: /rateLimit\(\)/ })).toHaveAttribute("aria-expanded", "true");
-    expect(within(card).getByRole("link", { name: "src/router.ts:23" })).toHaveAttribute(
+    expect(await within(card).findByRole("link", { name: "src/router.ts:23" })).toHaveAttribute(
       "href",
       "https://github.com/acme/api/blob/abc123/src/router.ts#L23",
     );
@@ -119,14 +128,17 @@ describe("BlastRadiusCard", () => {
   });
 
   it("a degraded result with callers shows the reason badge together with the caller tree", async () => {
-    mockFetch({ "GET /pulls/pr-1/blast": { ...BLAST, degraded: true, reason: "index_partial" } satisfies BlastRadius });
+    mockFetch({
+      "GET /repos": [GITHUB_REPO],
+      "GET /pulls/pr-1/blast": { ...BLAST, degraded: true, reason: "index_partial" } satisfies BlastRadius,
+    });
     renderCard();
 
     const card = await screen.findByRole("region", { name: "Blast radius" });
     const notice = within(card).getByRole("status");
     expect(within(notice).getByText("Degraded")).toBeInTheDocument();
     expect(within(notice).getByText(/index of this repo is partial/)).toBeInTheDocument();
-    expect(within(card).getByRole("link", { name: "src/router.ts:23" })).toBeInTheDocument();
+    expect(await within(card).findByRole("link", { name: "src/router.ts:23" })).toBeInTheDocument();
   });
 
   it("an API error shows the error state, and Retry reloads the card", async () => {

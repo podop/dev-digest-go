@@ -1,17 +1,13 @@
 package postgres_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"log/slog"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 
 	"dev-digest-go/backend/internal/platform/postgres"
-	pgstore "dev-digest-go/backend/internal/pulls/adapters/postgres"
 	"dev-digest-go/backend/internal/pulls/domain"
 )
 
@@ -101,9 +97,9 @@ func TestUpdateRepoPath(t *testing.T) {
 
 	t.Run("renamed project gets the new path and web URL", func(t *testing.T) {
 		id := gitlabRepo(t, f, f.wsID, "gitlab.com", 100, "old/web", "old", "web")
-		ok, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(100, "new/team/web2", "new/team", "web2", "gitlab.com"))
-		if err != nil || !ok {
-			t.Fatalf("UpdateRepoPath() = %v, %v, want true, nil", ok, err)
+		skipped, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(100, "new/team/web2", "new/team", "web2", "gitlab.com"))
+		if err != nil || skipped != "" {
+			t.Fatalf("UpdateRepoPath() = %q, %v, want it applied", skipped, err)
 		}
 		want := repoState{FullName: "new/team/web2", Owner: "new/team", Name: "web2", WebURL: "https://gitlab.com/new/team/web2"}
 		if diff := cmp.Diff(want, stateOf(t, f, id)); diff != "" {
@@ -113,34 +109,22 @@ func TestUpdateRepoPath(t *testing.T) {
 
 	t.Run("same path again is an update", func(t *testing.T) {
 		id := gitlabRepo(t, f, f.wsID, "gitlab.com", 101, "same/web", "same", "web")
-		ok, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(101, "same/web", "same", "web", "gitlab.com"))
-		if err != nil || !ok {
-			t.Errorf("UpdateRepoPath(unchanged path) = %v, %v, want true, nil", ok, err)
+		skipped, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(101, "same/web", "same", "web", "gitlab.com"))
+		if err != nil || skipped != "" {
+			t.Errorf("UpdateRepoPath(unchanged path) = %q, %v, want it applied", skipped, err)
 		}
 	})
 
 	t.Run("collision with another repository of the workspace and host changes nothing", func(t *testing.T) {
-		var logs bytes.Buffer
-		f.store = pgstore.NewStore(f.db, pgstore.WithLogger(slog.New(slog.NewTextHandler(&logs, nil))))
 		keep := gitlabRepo(t, f, f.wsID, "gitlab.com", 110, "taken/web", "taken", "web")
 		id := gitlabRepo(t, f, f.wsID, "gitlab.com", 111, "mine/web", "mine", "web")
 		before := stateOf(t, f, id)
-		ok, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(111, "taken/web", "taken", "web", "gitlab.com"))
-		if err != nil || ok {
-			t.Fatalf("UpdateRepoPath(collision) = %v, %v, want false, nil", ok, err)
+		skipped, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(111, "taken/web", "taken", "web", "gitlab.com"))
+		if err != nil || skipped != keep {
+			t.Fatalf("UpdateRepoPath(collision) = %q, %v, want skipped for %s, nil", skipped, err, keep)
 		}
 		if diff := cmp.Diff(before, stateOf(t, f, id)); diff != "" {
 			t.Errorf("colliding repo changed (-before +after):\n%s", diff)
-		}
-		line := logs.String()
-		if n := strings.Count(line, "level=WARN"); n != 1 {
-			t.Errorf("WARN lines = %d in %q, want exactly 1", n, line)
-		}
-		if !strings.Contains(line, "level=WARN") || !strings.Contains(line, "repo_id="+id) || !strings.Contains(line, "other_repo_id="+keep) {
-			t.Errorf("WARN line = %q, want a WARN naming repo_id=%s and other_repo_id=%s", line, id, keep)
-		}
-		if strings.Contains(line, "taken/web") || strings.Contains(line, "mine/web") {
-			t.Errorf("WARN line = %q, must not name paths", line)
 		}
 		if got := stateOf(t, f, keep).FullName; got != "taken/web" {
 			t.Errorf("other repo full_name = %q, want taken/web", got)
@@ -151,19 +135,19 @@ func TestUpdateRepoPath(t *testing.T) {
 		gitlabRepo(t, f, f.wsID, "other.example", 120, "shared/web", "shared", "web")
 		gitlabRepo(t, f, otherWS, "gitlab.com", 121, "shared/web", "shared", "web")
 		id := gitlabRepo(t, f, f.wsID, "gitlab.com", 122, "mine2/web", "mine2", "web")
-		ok, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(122, "shared/web", "shared", "web", "gitlab.com"))
-		if err != nil || !ok {
-			t.Errorf("UpdateRepoPath() = %v, %v, want true, nil", ok, err)
+		skipped, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(122, "shared/web", "shared", "web", "gitlab.com"))
+		if err != nil || skipped != "" {
+			t.Errorf("UpdateRepoPath() = %q, %v, want it applied", skipped, err)
 		}
 	})
 
 	t.Run("collision inside a transaction leaves it usable", func(t *testing.T) {
-		gitlabRepo(t, f, f.wsID, "gitlab.com", 130, "tx/taken", "tx", "taken")
+		holder := gitlabRepo(t, f, f.wsID, "gitlab.com", 130, "tx/taken", "tx", "taken")
 		id := gitlabRepo(t, f, f.wsID, "gitlab.com", 131, "tx/mine", "tx", "mine")
 		err := postgres.NewTx(f.db).InTx(ctx, func(ctx context.Context) error {
-			ok, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(131, "tx/taken", "tx", "taken", "gitlab.com"))
-			if err != nil || ok {
-				t.Errorf("UpdateRepoPath(collision in tx) = %v, %v, want false, nil", ok, err)
+			skipped, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(131, "tx/taken", "tx", "taken", "gitlab.com"))
+			if err != nil || skipped != holder {
+				t.Errorf("UpdateRepoPath(collision in tx) = %q, %v, want skipped for %s, nil", skipped, err, holder)
 			}
 			_, err = f.store.FindRepo(ctx, f.wsID, id)
 			return err
@@ -177,8 +161,8 @@ func TestUpdateRepoPath(t *testing.T) {
 		id := gitlabRepo(t, f, f.wsID, "gitlab.com", 140, "rb/web", "rb", "web")
 		boom := errors.New("rollback")
 		err := postgres.NewTx(f.db).InTx(ctx, func(ctx context.Context) error {
-			if ok, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(140, "rb/web9", "rb", "web9", "gitlab.com")); err != nil || !ok {
-				t.Errorf("UpdateRepoPath() = %v, %v, want true, nil", ok, err)
+			if skipped, err := f.store.UpdateRepoPath(ctx, f.wsID, id, project(140, "rb/web9", "rb", "web9", "gitlab.com")); err != nil || skipped != "" {
+				t.Errorf("UpdateRepoPath() = %q, %v, want it applied", skipped, err)
 			}
 			return boom
 		})
@@ -203,9 +187,9 @@ func TestUpdateRepoPath(t *testing.T) {
 			{"GitHub repository", f.wsID, f.repoID, project(150, "nf/x", "nf", "x", "gitlab.com")},
 		}
 		for _, tc := range tests {
-			ok, err := f.store.UpdateRepoPath(ctx, tc.ws, tc.repo, tc.p)
-			if ok || !errors.Is(err, domain.ErrRepoNotFound) {
-				t.Errorf("UpdateRepoPath(%s) = %v, %v, want false, ErrRepoNotFound", tc.name, ok, err)
+			skipped, err := f.store.UpdateRepoPath(ctx, tc.ws, tc.repo, tc.p)
+			if skipped != "" || !errors.Is(err, domain.ErrRepoNotFound) {
+				t.Errorf("UpdateRepoPath(%s) = %q, %v, want \"\", ErrRepoNotFound", tc.name, skipped, err)
 			}
 		}
 		if got := stateOf(t, f, id).FullName; got != "nf/web" {
@@ -217,8 +201,8 @@ func TestUpdateRepoPath(t *testing.T) {
 		id := gitlabRepo(t, f, f.wsID, "gitlab.com", 160, "inc/web", "inc", "web")
 		p := project(160, "inc/x", "inc", "x", "gitlab.com")
 		p.WebURL = ""
-		if ok, err := f.store.UpdateRepoPath(ctx, f.wsID, id, p); ok || err == nil {
-			t.Errorf("UpdateRepoPath(no web URL) = %v, %v, want false and an error", ok, err)
+		if skipped, err := f.store.UpdateRepoPath(ctx, f.wsID, id, p); skipped != "" || err == nil {
+			t.Errorf("UpdateRepoPath(no web URL) = %q, %v, want \"\" and an error", skipped, err)
 		}
 	})
 }

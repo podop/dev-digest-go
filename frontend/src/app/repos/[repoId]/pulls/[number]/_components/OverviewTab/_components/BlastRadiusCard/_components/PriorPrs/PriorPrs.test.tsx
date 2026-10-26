@@ -3,7 +3,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import type { PrHistory } from "@devdigest/shared";
 import { renderWithProviders, screen, cleanup, within, waitFor, act } from "@/test/render";
 import { mockFetch, jsonResponse } from "@/test/fetch-mock";
-import { GITLAB_REPO } from "@/test/code-host-repo";
+import { GITHUB_REPO, GITLAB_REPO } from "@/test/code-host-repo";
 
 vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/pulls/12" }));
 
@@ -29,8 +29,12 @@ afterEach(cleanup);
 
 describe("PriorPrs", () => {
   it("shows a count badge, then lists each PR with its link, author, date and overlapping files", async () => {
-    mockFetch({ "GET /pulls/pr-1/history": HISTORY });
-    const { user } = renderWithProviders(<PriorPrs prId="pr-1" repoFullName="acme/api" />);
+    mockFetch({ "GET /repos": [GITHUB_REPO], "GET /pulls/pr-1/history": HISTORY });
+    const { user } = renderWithProviders(
+      <RepoProvider>
+        <PriorPrs prId="pr-1" />
+      </RepoProvider>,
+    );
 
     const toggle = await screen.findByRole("button", { name: /Prior PRs touching these files/ });
     expect(within(toggle).getByText("2")).toBeInTheDocument();
@@ -39,7 +43,7 @@ describe("PriorPrs", () => {
 
     await user.click(toggle);
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    const link = screen.getByRole("link", { name: "Newer limiter" });
+    const link = await screen.findByRole("link", { name: "Newer limiter" });
     expect(link).toHaveAttribute("href", "https://github.com/acme/api/pull/410");
     expect(link).toHaveAttribute("target", "_blank");
     expect(link).toHaveAttribute("rel", expect.stringContaining("noopener"));
@@ -59,7 +63,7 @@ describe("PriorPrs", () => {
         ],
       },
     });
-    const { user } = renderWithProviders(<PriorPrs prId="pr-1" repoFullName="acme/api" />);
+    const { user } = renderWithProviders(<PriorPrs prId="pr-1" />);
     await user.click(await screen.findByRole("button", { name: /Prior PRs touching these files/ }));
 
     expect(screen.getByText("Split out <b>the</b> router.")).toBeInTheDocument();
@@ -74,7 +78,7 @@ describe("PriorPrs", () => {
         history: [{ pr_number: 1, title: "Big refactor", merged_at: "2026-02-01T12:00:00Z", author: "ann", files_overlap: files, notes: "" }],
       },
     });
-    const { user } = renderWithProviders(<PriorPrs prId="pr-1" repoFullName="acme/api" />);
+    const { user } = renderWithProviders(<PriorPrs prId="pr-1" />);
     await user.click(await screen.findByRole("button", { name: /Prior PRs touching these files/ }));
 
     const names = files.slice(0, FILES_SHOWN).map((f) => f.split("/").pop());
@@ -86,7 +90,7 @@ describe("PriorPrs", () => {
 
   it("renders nothing for an empty history", async () => {
     const api = mockFetch({ "GET /pulls/pr-1/history": { history: [] } });
-    renderWithProviders(<PriorPrs prId="pr-1" repoFullName="acme/api" />);
+    renderWithProviders(<PriorPrs prId="pr-1" />);
     await waitFor(() => expect(api.requests("GET", "/pulls/pr-1/history")).toHaveLength(1));
     await act(async () => {});
     expect(screen.queryByRole("button")).toBeNull();
@@ -95,7 +99,7 @@ describe("PriorPrs", () => {
 
   it("renders nothing when the request fails", async () => {
     const api = mockFetch({ "GET /pulls/pr-1/history": jsonResponse({ error: { code: "boom", message: "x" } }, 500) });
-    renderWithProviders(<PriorPrs prId="pr-1" repoFullName="acme/api" />);
+    renderWithProviders(<PriorPrs prId="pr-1" />);
     await waitFor(() => expect(api.requests("GET", "/pulls/pr-1/history")).toHaveLength(1));
     await act(async () => {});
     expect(screen.queryByRole("button")).toBeNull();
@@ -108,7 +112,7 @@ describe("PriorPrs — GitLab repository (FR41, FR43)", () => {
     mockFetch({ "GET /repos": [GITLAB_REPO], "GET /pulls/pr-1/history": HISTORY });
     const { user } = renderWithProviders(
       <RepoProvider>
-        <PriorPrs prId="pr-1" repoFullName={null} />
+        <PriorPrs prId="pr-1" />
       </RepoProvider>,
     );
 
@@ -119,5 +123,32 @@ describe("PriorPrs — GitLab repository (FR41, FR43)", () => {
     );
     expect(screen.getByText("!410")).toBeInTheDocument();
     expect(screen.queryByText("#410")).toBeNull();
+  });
+
+  it("shows no github.com link for a GitLab merge request before the repository list has loaded (FR41)", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mockFetch({
+      "GET /repos": async () => {
+        await gate;
+        return [GITLAB_REPO];
+      },
+      "GET /pulls/pr-1/history": HISTORY,
+    });
+    const { user } = renderWithProviders(
+      <RepoProvider>
+        <PriorPrs prId="pr-1" />
+      </RepoProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /Prior PRs touching these files/ }));
+    expect(screen.getByText("Newer limiter")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+
+    release();
+    const link = await screen.findByRole("link", { name: "Newer limiter" });
+    expect(link).toHaveAttribute("href", "https://git.corp.example/gitlab/acme/platform/payments/-/merge_requests/410");
   });
 });

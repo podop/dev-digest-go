@@ -39,7 +39,7 @@ type fakeStore struct {
 	mirrorErr error
 
 	pathUpdates []domain.GitLabProject // UpdateRepoPath calls, in order
-	pathBlocked bool                   // UpdateRepoPath reports a full_name collision
+	pathHeldBy  string                 // UpdateRepoPath reports a full_name collision with this repo id
 	pathErr     error
 }
 
@@ -62,11 +62,11 @@ func (s *fakeStore) FindRepo(_ context.Context, ws, id string) (domain.Repo, err
 	return r, nil
 }
 
-func (s *fakeStore) UpdateRepoPath(_ context.Context, _, _ string, p domain.GitLabProject) (bool, error) {
+func (s *fakeStore) UpdateRepoPath(_ context.Context, _, _ string, p domain.GitLabProject) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pathUpdates = append(s.pathUpdates, p)
-	return !s.pathBlocked, s.pathErr
+	return s.pathHeldBy, s.pathErr
 }
 
 func (s *fakeStore) MarkPolled(_ context.Context, _, _ string, at time.Time) error {

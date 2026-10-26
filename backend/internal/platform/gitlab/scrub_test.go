@@ -23,6 +23,8 @@ func TestScrub(t *testing.T) {
 		{"fragment", "token ending in " + tok[10:] + " is wrong"},
 		{"prefix fragment", "starts with " + tok[:14]},
 		{"other token shape", "got glpat-ZZZZZZZZZZZZZZZZZZZZ and gldt-0123456789abcdef"},
+		{"runner registration token", "got glrtr-ABCDEFGHIJKLMNOPQRSTUV end"},
+		{"routable token", "got glpat-ZZZZZZZZZZZZZZZZZZZZ.01.1a2b3c4d5 end"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -32,8 +34,11 @@ func TestScrub(t *testing.T) {
 					t.Errorf("scrub(%q) = %q, still holds %q", tc.in, got, tok[i:i+minFragment])
 				}
 			}
-			if strings.Contains(got, "glpat-Z") || strings.Contains(got, "gldt-0") {
-				t.Errorf("scrub(%q) = %q, still holds a token-shaped run", tc.in, got)
+			// Token-shaped runs and routable suffixes must go with the rest.
+			for _, left := range []string{"glpat-Z", "gldt-0", "glrtr-", "ABCDEFGH", ".01.", "1a2b3c4d5"} {
+				if strings.Contains(got, left) {
+					t.Errorf("scrub(%q) = %q, still holds %q", tc.in, got, left)
+				}
 			}
 		})
 	}

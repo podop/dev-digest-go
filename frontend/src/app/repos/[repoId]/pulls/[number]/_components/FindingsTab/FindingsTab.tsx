@@ -17,15 +17,14 @@ import { s } from "./styles";
 interface FindingsTabProps {
   prId: string;
   commits: PrCommit[];
-  /** owner/repo + head sha — used to deep-link a finding's file:line to GitHub. */
-  repoFullName?: string | null;
+  /** Head sha — used to deep-link a finding's file:line to the code host. */
   headSha?: string | null;
   onOpenTrace: (runId: string) => void;
   /** In-app link for a finding's file:line (the timeline popover → Files changed). */
   findingHref?: (f: FindingRecord) => string;
 }
 
-export function FindingsTab({ prId, commits, repoFullName, headSha, onOpenTrace, findingHref }: FindingsTabProps) {
+export function FindingsTab({ prId, commits, headSha, onOpenTrace, findingHref }: FindingsTabProps) {
   const t = useTranslations("prReview");
   // Live runs are SERVER-SOURCED (agent_runs status='running'): they survive
   // navigation and reload; the run/cancel mutations and SSE refresh them.
@@ -97,7 +96,6 @@ export function FindingsTab({ prId, commits, repoFullName, headSha, onOpenTrace,
               review={review}
               prId={prId}
               defaultOpen={i === 0}
-              repoFullName={repoFullName}
               headSha={headSha}
               targetRunId={target?.runId ?? null}
               targetNonce={target?.n ?? 0}

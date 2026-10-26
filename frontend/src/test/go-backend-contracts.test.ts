@@ -64,6 +64,12 @@ import {
   EvalRunSummary,
   EvalSparkPoint,
   FindingRecord,
+  GitLabConnTestResult,
+  GitLabConnection,
+  GITLAB_CONNECTION_LIMITS,
+  GITLAB_TEST_WARNING_CODES,
+  GitLabConnectionDeleted,
+  GitLabTestWarning,
   Intent,
   IntentSource,
   IntentTrace,
@@ -454,6 +460,58 @@ const customProviderTest = ConnTestResult.extend({
   model_reachable: z.boolean().nullable(),
 }).strict();
 
+// ---- GitLab connections (specs/2026-10-24-gitlab-a-connection-sync.md §7, NFR7): the settings routes and
+// the repos DTO. Every key is checked; the token is write-only, so no golden may carry one. ----
+const gitlabConnection = GitLabConnection.extend({ id: uuid }).strict();
+const gitlabConnectionDeleted = GitLabConnectionDeleted.extend({ deleted: uuid }).strict();
+// The GitLab test answers with every key present (null when not known); unknown keys are a drift.
+const gitlabConnTest = GitLabConnTestResult.extend({ warnings: z.array(GitLabTestWarning.strict()) }).strict();
+const gitlabConnError = (code: string) =>
+  ApiErrorBody.extend({ error: ApiErrorBody.shape.error.extend({ code: z.literal(code), details: z.undefined() }).strict() }).strict();
+// 422 validation_error: details are the httpx issues (params.issue holds the Zod-style issue).
+const gitlabConnInvalid = ApiErrorBody.extend({
+  error: ApiErrorBody.shape.error
+    .extend({
+      code: z.literal("validation_error"),
+      details: z.array(
+        z
+          .object({
+            keyword: z.string(),
+            instancePath: z.string().startsWith("/"),
+            schemaPath: z.string(),
+            message: z.string(),
+            params: z
+              .object({ issue: z.object({ code: z.string(), path: z.array(z.union([z.string(), z.number()])), message: z.string() }).strict() })
+              .strict(),
+          })
+          .strict(),
+      ),
+    })
+    .strict(),
+}).strict();
+// The repos DTO of a GitHub repository: the optional GitLab-era keys are always sent (provider github,
+// host github.com, web_url https://github.com/<full_name>, connection_id null).
+const githubRepo = Repo.extend({
+  provider: z.literal("github"),
+  host: z.literal("github.com"),
+  web_url: z.string().startsWith("https://github.com/"),
+  connection_id: z.null(),
+}).strict();
+// A connected GitLab repository: nested path, the GitLab web_url (<base_url>/<full_name>, here the host
+// key is gitlab.example.com) and the id of the connection bound to its host key.
+const gitlabRepo = Repo.extend({
+  provider: z.literal("gitlab"),
+  host: z.string().min(1),
+  web_url: z.string().startsWith("https://"),
+  connection_id: uuid,
+}).strict();
+// A connection with a bound repository: repo_count and disconnected_repos count it.
+const gitlabConnectionBound = GitLabConnection.extend({ id: uuid, repo_count: z.number().int().positive() }).strict();
+const gitlabConnectionDeletedBound = GitLabConnectionDeleted.extend({
+  deleted: uuid,
+  disconnected_repos: z.number().int().positive(),
+}).strict();
+
 // ---- Settings slice B (specs/2026-10-23-settings-b-workspace.md): rename, stats, export, reset. ----
 const workspaceInfo = WorkspaceInfo.extend({
   workspaceId: uuid,
@@ -539,8 +597,8 @@ const contracts: Record<string, z.ZodTypeAny> = {
     login: z.string().min(1),
     scopes: z.array(z.string()).nullable(),
   }).strict(),
-  repos_create: Repo.strict(),
-  repos_list: z.array(Repo.strict()),
+  repos_create: githubRepo,
+  repos_list: z.array(githubRepo),
   workspace: z
     .object({
       workspaceId: uuid,
@@ -729,6 +787,25 @@ const contracts: Record<string, z.ZodTypeAny> = {
   // An agent and a skill of a plugin carry its owner; the plugin object is strict here.
   agent_get_plugin: Agent.extend({ plugin: pluginRef }).strict(),
   skill_get_plugin: Skill.extend({ plugin: pluginRef }).strict(),
+
+  // ---- GitLab connections ----
+  gitlab_conn_create: gitlabConnection,
+  gitlab_conn_create_no_token: gitlabConnection,
+  gitlab_conn_update: gitlabConnection,
+  gitlab_conn_list: z.array(gitlabConnection),
+  gitlab_conn_deleted: gitlabConnectionDeleted,
+  gitlab_conn_exists: gitlabConnError("gitlab_connection_exists"),
+  gitlab_conn_not_found: gitlabConnError("gitlab_connection_not_found"),
+  gitlab_conn_invalid: gitlabConnInvalid,
+  gitlab_conn_test_ok: gitlabConnTest,
+  gitlab_conn_test_warnings: gitlabConnTest,
+  gitlab_conn_test_unknown: gitlabConnTest,
+  gitlab_conn_test_rejected: gitlabConnTest,
+  gitlab_conn_test_no_scope: gitlabConnTest,
+  gitlab_conn_list_bound: z.array(gitlabConnectionBound).length(1),
+  gitlab_conn_deleted_bound: gitlabConnectionDeletedBound,
+  gitlab_repo_create: gitlabRepo,
+  gitlab_repos_list: z.array(gitlabRepo).length(1),
 
   // ---- Custom model providers ----
   custom_providers_create: customProvider,
@@ -1345,5 +1422,148 @@ describe("Go backend golden responses", () => {
       expect(board.period.previous_from).not.toBeNull();
       expect(board.previous_summary).toBeNull();
     });
+  });
+});
+
+describe("GitLab connection goldens (GitLab A, NFR7)", () => {
+  type GitLabRepoGolden = {
+    id: string;
+    owner: string;
+    name: string;
+    full_name: string;
+    host: string;
+    web_url: string;
+    connection_id: string;
+    clone_path: string | null;
+  };
+  type Test = {
+    ok: boolean;
+    latency_ms: number | null;
+    login: string | null;
+    scopes: string[] | null;
+    token_access: string | null;
+    expires_at: string | null;
+    instance_version: string | null;
+    warnings: { code: string }[];
+  };
+  const testNames = [
+    "gitlab_conn_test_ok",
+    "gitlab_conn_test_warnings",
+    "gitlab_conn_test_unknown",
+    "gitlab_conn_test_rejected",
+    "gitlab_conn_test_no_scope",
+  ];
+
+  it("no connection golden has a token key or a token-shaped value: the token is write-only", () => {
+    const names = readdirSync(goldenDir)
+      .filter((f) => f.startsWith("gitlab_conn_") && f.endsWith(".json"))
+      .map((f) => f.slice(0, -".json".length));
+    expect(names).toHaveLength(15);
+    for (const name of names) {
+      expect(JSON.stringify(read(name)), name).not.toMatch(/"token":|glpat-|oauth2/);
+    }
+  });
+
+  it("connections are normalised: https base_url without /api/v4, host key of that URL, name within the limit", () => {
+    const rows = [
+      ...(read("gitlab_conn_list") as { base_url: string; host: string; name: string }[]),
+      read("gitlab_conn_create") as { base_url: string; host: string; name: string },
+      read("gitlab_conn_create_no_token") as { base_url: string; host: string; name: string },
+      read("gitlab_conn_update") as { base_url: string; host: string; name: string },
+    ];
+    for (const row of rows) {
+      const url = new URL(row.base_url);
+      expect(url.protocol).toBe("https:");
+      expect(row.base_url.endsWith("/")).toBe(false);
+      expect(row.base_url).not.toContain("/api/v4");
+      expect(url.host).toBe(row.host);
+      expect(row.name.length).toBeLessThanOrEqual(GITLAB_CONNECTION_LIMITS.nameMax);
+    }
+  });
+
+  it("create without a name falls back to the host key; create without a token reports token_configured false", () => {
+    const withToken = read("gitlab_conn_create") as { name: string; host: string; token_configured: boolean };
+    expect(withToken.name).toBe(withToken.host);
+    expect(withToken.token_configured).toBe(true);
+    expect((read("gitlab_conn_create_no_token") as { token_configured: boolean }).token_configured).toBe(false);
+  });
+
+  it("the delete answer names the deleted id of the created connection", () => {
+    expect((read("gitlab_conn_deleted") as { deleted: string }).deleted).toBe((read("gitlab_conn_create") as { id: string }).id);
+  });
+
+  it("a successful test has a latency and a login; a failed one has every detail key null and no warnings", () => {
+    for (const name of testNames) {
+      const t = read(name) as Test;
+      if (t.ok) {
+        expect(t.latency_ms, name).not.toBeNull();
+        expect(t.login, name).toBeTruthy();
+      } else {
+        expect(
+          [t.latency_ms, t.login, t.scopes, t.token_access, t.expires_at, t.instance_version],
+          name,
+        ).toEqual([null, null, null, null, null, null]);
+        expect(t.warnings, name).toEqual([]);
+      }
+    }
+  });
+
+  it("token_access follows the scopes: api = full, read_api only = read_only, unknown scopes = null", () => {
+    const access = (t: Test): string | null =>
+      t.scopes === null ? null : t.scopes.includes("api") ? "full" : t.scopes.includes("read_api") ? "read_only" : null;
+    for (const name of ["gitlab_conn_test_ok", "gitlab_conn_test_warnings", "gitlab_conn_test_unknown"]) {
+      const t = read(name) as Test;
+      expect(t.token_access, name).toBe(access(t));
+    }
+  });
+
+  it("warnings come in the FR11 order, without repeats, and the unknown golden lists both unknowns", () => {
+    for (const name of testNames) {
+      const codes = (read(name) as Test).warnings.map((w) => GITLAB_TEST_WARNING_CODES.indexOf(w.code as never));
+      expect(codes.every((i) => i >= 0), name).toBe(true);
+      expect(codes, name).toEqual([...codes].sort((a, b) => a - b));
+      expect(new Set(codes).size, name).toBe(codes.length);
+    }
+    expect((read("gitlab_conn_test_unknown") as Test).warnings.map((w) => w.code)).toEqual(["scopes_unknown", "version_unknown"]);
+    expect((read("gitlab_conn_test_warnings") as Test).warnings.map((w) => w.code)).toEqual([
+      "read_only_token",
+      "no_repository_scope",
+      "token_expiring",
+      "version_unsupported",
+    ]);
+  });
+
+  it("the validation golden names the fields by JSON pointer: /base_url and /token", () => {
+    const body = read("gitlab_conn_invalid") as { error: { details: { instancePath: string }[] } };
+    expect(body.error.details.map((d) => d.instancePath)).toEqual(["/base_url", "/token"]);
+  });
+
+  it("a bound connection counts its repository; deleting it disconnects that many and names its id", () => {
+    const [conn] = read("gitlab_conn_list_bound") as [{ id: string; repo_count: number; host: string }];
+    const deleted = read("gitlab_conn_deleted_bound") as { deleted: string; disconnected_repos: number };
+    expect(deleted.deleted).toBe(conn.id);
+    expect(deleted.disconnected_repos).toBe(conn.repo_count);
+  });
+
+  it("the GitLab repo goldens: nested path, GitLab web_url, bound to the listed connection", () => {
+    const created = read("gitlab_repo_create") as GitLabRepoGolden;
+    const [listed] = read("gitlab_repos_list") as [GitLabRepoGolden];
+    const [conn] = read("gitlab_conn_list_bound") as [{ id: string; host: string; base_url: string }];
+    for (const r of [created, listed]) {
+      expect(r.full_name.split("/").length, r.full_name).toBeGreaterThan(2);
+      expect(r.owner, r.full_name).toBe(r.full_name.slice(0, r.full_name.lastIndexOf("/")));
+      expect(r.name).toBe(r.full_name.slice(r.full_name.lastIndexOf("/") + 1));
+      expect(r.host).toBe(conn.host);
+      expect(r.web_url).toBe(`${conn.base_url}/${r.full_name}`);
+      expect(r.connection_id).toBe(conn.id);
+    }
+    expect(listed.id).toBe(created.id);
+    expect(created.clone_path).toBeNull();
+    expect(listed.clone_path).toContain(`/@gitlab/${conn.host}/`);
+  });
+
+  it("the repos goldens are GitHub repos: web_url is https://github.com/<full_name>", () => {
+    const repos = [read("repos_create") as { full_name: string; web_url: string }, ...(read("repos_list") as { full_name: string; web_url: string }[])];
+    for (const r of repos) expect(r.web_url).toBe(`https://github.com/${r.full_name}`);
   });
 });

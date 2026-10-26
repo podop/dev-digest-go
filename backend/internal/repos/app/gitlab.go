@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"net/url"
 
 	"dev-digest-go/backend/internal/platform/apperr"
@@ -248,21 +247,14 @@ func pathPrefix(baseURL string) string {
 }
 
 // canonicalRef takes owner and name from the project's own answer and refuses an answer whose
-// path is not a plain GitLab path or contradicts itself: the path ends up in a clone URL and in
-// the database, and the server is only as trustworthy as its connection.
+// path is not a plain GitLab path or contradicts itself (codehost.ProjectRef): the path ends up in
+// a clone URL and in the database, and the server is only as trustworthy as its connection.
 func canonicalRef(p gitlab.Project) (domain.Ref, error) {
-	parsed, err := domain.ParseURL("https://gitlab.invalid/" + p.PathWithNamespace)
+	owner, name, err := codehost.ProjectRef(p.PathWithNamespace, p.Path, p.NamespaceFullPath)
 	if err != nil {
 		return domain.Ref{}, fmt.Errorf("project path %q: %w", p.PathWithNamespace, err)
 	}
-	parsed, err = parsed.WithoutPrefix("")
-	if err != nil || parsed.Path != p.PathWithNamespace {
-		return domain.Ref{}, fmt.Errorf("project path %q is not a plain project path", p.PathWithNamespace)
-	}
-	if p.Path != parsed.Name || (p.NamespaceFullPath != "" && p.NamespaceFullPath != parsed.Owner) {
-		return domain.Ref{}, fmt.Errorf("project path %q contradicts its namespace", p.PathWithNamespace)
-	}
-	return parsed.Ref(), nil
+	return domain.Ref{Owner: owner, Name: name}, nil
 }
 
 // mapProjectError turns a failed project read into the client-facing error (FR14). A context
@@ -277,14 +269,14 @@ func mapProjectError(ctx context.Context, err error, conn GitLabConn, path strin
 	}
 	var se *gitlab.StatusError
 	if errors.As(err, &se) {
-		switch se.Status {
-		case http.StatusNotFound:
+		switch {
+		case se.IsNotFound():
 			return apperr.Validation(fmt.Sprintf("Project %s was not found on %s, or the token cannot see it", path, conn.Host)).
 				WithCode(CodeProjectNotFound).WithCause(err)
-		case http.StatusUnauthorized, http.StatusForbidden:
+		case se.IsUnauthorized(), se.IsForbidden():
 			return apperr.Validation(fmt.Sprintf("GitLab rejected the token of connection %s", conn.Name)).
 				WithCode(CodePermissionDenied).WithCause(err)
-		case http.StatusTooManyRequests:
+		case se.IsRateLimited():
 			return apperr.ExternalService("GitLab rate limit reached, try again later").
 				WithCode(CodeRateLimited).WithCause(err)
 		}

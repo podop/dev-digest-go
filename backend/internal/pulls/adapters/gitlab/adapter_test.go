@@ -158,7 +158,7 @@ func TestResolve_failuresSendNothing(t *testing.T) {
 			ctx := t.Context()
 			calls := map[string]error{}
 			_, calls["Project"] = a.Project(ctx, tc.repo)
-			_, calls["ListPage"] = a.ListPage(ctx, tc.repo, 1, 50)
+			_, _, calls["ListPage"] = a.ListPage(ctx, tc.repo, 1, 50)
 			_, calls["Get"] = a.Get(ctx, tc.repo, 1)
 			_, calls["Issue"] = a.Issue(ctx, tc.repo, 1)
 			_, calls["Stats"] = a.Stats(ctx, tc.repo, []int{1})
@@ -199,9 +199,12 @@ func TestListPage(t *testing.T) {
 			},
 		})
 	})
-	got, err := srv.adapterFor(token).ListPage(t.Context(), repo, 2, 50)
+	got, more, err := srv.adapterFor(token).ListPage(t.Context(), repo, 2, 50)
 	if err != nil {
 		t.Fatalf("ListPage() error = %v", err)
+	}
+	if more {
+		t.Errorf("ListPage() more = true for 4 merge requests on a page of 50, want false")
 	}
 	want := []domain.Listed{
 		{Number: 7, Title: "Add x", Author: "ann", Branch: "feat", Base: "main", HeadSHA: "aaa", Status: domain.StatusOpen,
@@ -218,6 +221,41 @@ func TestListPage(t *testing.T) {
 	wantReq := "GET " + prefix + "/api/v4/projects/42/merge_requests?order_by=updated_at&page=2&per_page=50&sort=desc&state=all"
 	if reqs := srv.requests(); len(reqs) != 1 || reqs[0] != wantReq {
 		t.Errorf("ListPage() requests = %v, want [%s]", reqs, wantReq)
+	}
+}
+
+// A full page that loses merge requests without a head sha still says more=true, so the poller
+// goes on to the next page (FR21, FR22); a short raw page says false.
+func TestListPage_MoreCountsTheRawPage(t *testing.T) {
+	srv := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, []map[string]any{
+			{"iid": 9, "title": "Ok", "state": "opened", "source_branch": "a", "target_branch": "main", "sha": "aaa",
+				"source_project_id": 42, "target_project_id": 42, "created_at": "2026-10-20T10:00:00Z", "updated_at": "2026-10-21T10:00:00Z"},
+			{"iid": 8, "title": "No sha", "state": "opened", "source_branch": "b", "target_branch": "main", "sha": "",
+				"created_at": "2026-10-20T10:00:00Z", "updated_at": "2026-10-20T10:00:00Z"},
+		})
+	})
+	tests := []struct {
+		name     string
+		perPage  int
+		wantMore bool
+	}{
+		{name: "full raw page with a dropped merge request", perPage: 2, wantMore: true},
+		{name: "short raw page", perPage: 3, wantMore: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, more, err := srv.adapterFor(token).ListPage(t.Context(), repo, 1, tc.perPage)
+			if err != nil {
+				t.Fatalf("ListPage() error = %v", err)
+			}
+			if len(got) != 1 || got[0].Number != 9 {
+				t.Errorf("ListPage() = %+v, want only !9 (the one without a sha is dropped)", got)
+			}
+			if more != tc.wantMore {
+				t.Errorf("ListPage(perPage=%d) more = %v, want %v", tc.perPage, more, tc.wantMore)
+			}
+		})
 	}
 }
 

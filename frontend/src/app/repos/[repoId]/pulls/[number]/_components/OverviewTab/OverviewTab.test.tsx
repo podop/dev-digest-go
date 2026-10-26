@@ -49,7 +49,7 @@ const renderOverview = () =>
       number="7"
       changedPaths={["src/a.ts"]}
       prBody="Body text"
-      repoFullName="acme/api"
+     
       headSha="abc"
     />,
   );

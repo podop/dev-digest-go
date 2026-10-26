@@ -49,8 +49,12 @@ const gitCABundleName = "git-ca-bundle.pem"
 // bundle, so the bundle holds the system roots too; a host without a system bundle cannot make
 // one, and that stops the start (SCR5) instead of silently leaving git without the extra CA.
 // Errors name the variable and the path, never the certificate content.
-func prepareGitCA(cfg config.Config) (string, error) {
-	return prepareGitCAWith(cfg, gitcli.WriteCABundle)
+//
+// getenv is the process environment: SSL_CERT_FILE names the system bundle to use first.
+func prepareGitCA(cfg config.Config, getenv func(string) string) (string, error) {
+	return prepareGitCAWith(cfg, func(extra []byte, dest string) error {
+		return gitcli.WriteCABundle(extra, dest, getenv("SSL_CERT_FILE"))
+	})
 }
 
 // prepareGitCAWith is prepareGitCA over the bundle writer (a test seam: the host's own system

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"dev-digest-go/backend/internal/pulls/domain"
@@ -63,7 +64,9 @@ type GitLab interface {
 	Project(ctx context.Context, repo domain.Repo) (domain.GitLabProject, error)
 	// ListPage reads one page (1-based) of the project's merge requests, newest update first,
 	// already mapped (domain.MapMergeRequests); merge requests without a head sha are dropped.
-	ListPage(ctx context.Context, repo domain.Repo, page, perPage int) ([]domain.Listed, error)
+	// more is true when the answer held a full page of perPage merge requests before that drop, so
+	// a next page may exist: a caller that pages must stop on !more, never on len(listed).
+	ListPage(ctx context.Context, repo domain.Repo, page, perPage int) (listed []domain.Listed, more bool, err error)
 	// Get reads one merge request with its files (up to 3,000) and commits (up to 250).
 	Get(ctx context.Context, repo domain.Repo, number int) (domain.Fetched, error)
 	// Issue reads the linked issue; the caller omits it on any error.
@@ -76,7 +79,39 @@ type GitLab interface {
 // RepoPathUpdater stores a GitLab project's current path (spec FR47).
 type RepoPathUpdater interface {
 	// UpdateRepoPath sets full_name, owner, name and web URL of the workspace's repository from p.
-	// It returns false, and changes nothing, when the new full_name is the stored full_name of
-	// another repository of the same workspace and host.
-	UpdateRepoPath(ctx context.Context, workspaceID, repoID string, p domain.GitLabProject) (updated bool, err error)
+	// When the new full_name is the stored full_name of another repository of the same workspace
+	// and host, nothing changes and that repository's id is returned ("" = stored). It logs
+	// nothing: followProjectPath reports the collision.
+	UpdateRepoPath(ctx context.Context, workspaceID, repoID string, p domain.GitLabProject) (skippedFor string, err error)
+}
+
+// followProjectPath stores the project's current path when it differs from the stored one (spec
+// FR47, rename-follow). The stored path is kept, and the sync goes on by project id, when
+//   - the fetched path is not a plain project path that agrees with its own parts (the add rule,
+//     domain.GitLabProject.CheckPath): one WARN with the repository id and the project id, no path;
+//   - another repository of the workspace and host holds the new path: one WARN with both
+//     repository ids;
+//   - the store fails: one WARN with the error.
+//
+// The next sync tries again. Only a ended ctx is returned.
+func followProjectPath(ctx context.Context, log *slog.Logger, store RepoPathUpdater, workspaceID string, repo domain.Repo, p domain.GitLabProject) error {
+	if p.FullName == "" || p.FullName == repo.Owner+"/"+repo.Name || (p.Owner == repo.Owner && p.Name == repo.Name) {
+		return nil
+	}
+	if err := p.CheckPath(); err != nil {
+		log.WarnContext(ctx, "gitlab project path refused; keeping the stored path", "repo_id", repo.ID, "project_id", p.ID)
+		return nil
+	}
+	heldBy, err := store.UpdateRepoPath(ctx, workspaceID, repo.ID, p)
+	switch {
+	case err != nil:
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		log.WarnContext(ctx, "gitlab project path not stored; keeping the stored path", "repo_id", repo.ID, "err", err)
+	case heldBy != "":
+		log.WarnContext(ctx, "gitlab project path is taken in the workspace; keeping the stored path",
+			"repo_id", repo.ID, "other_repo_id", heldBy)
+	}
+	return nil
 }

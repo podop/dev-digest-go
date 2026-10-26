@@ -82,6 +82,26 @@ func (e *StatusError) Error() string {
 // StatusCode lets retry.IsTransient classify the error.
 func (e *StatusError) StatusCode() int { return e.Status }
 
+// Status predicates, so a caller above the HTTP layer classifies an answer without net/http.
+
+// IsNotFound reports a 404.
+func (e *StatusError) IsNotFound() bool { return e.Status == http.StatusNotFound }
+
+// IsMethodNotAllowed reports a 405 (a server that is not GitLab answers so for /user).
+func (e *StatusError) IsMethodNotAllowed() bool { return e.Status == http.StatusMethodNotAllowed }
+
+// IsUnauthorized reports a 401.
+func (e *StatusError) IsUnauthorized() bool { return e.Status == http.StatusUnauthorized }
+
+// IsForbidden reports a 403.
+func (e *StatusError) IsForbidden() bool { return e.Status == http.StatusForbidden }
+
+// IsRateLimited reports a 429.
+func (e *StatusError) IsRateLimited() bool { return e.Status == http.StatusTooManyRequests }
+
+// IsRedirect reports a 3xx status.
+func (e *StatusError) IsRedirect() bool { return e.Status >= 300 && e.Status < 400 }
+
 // ResumeAt is when the host may be called again according to the answer: RetryAfter, else Reset,
 // else the zero time (FR27, A4).
 func (e *StatusError) ResumeAt() time.Time {

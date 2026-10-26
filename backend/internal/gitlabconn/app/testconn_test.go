@@ -1,9 +1,11 @@
 package app_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"strings"
 	"testing"
@@ -415,5 +417,51 @@ func TestTestConnection_LatencyUsesTheClock(t *testing.T) {
 	got, err := e.svc.TestConnection(t.Context(), id1, "")
 	if err != nil || got.LatencyMS == nil || *got.LatencyMS < 40 {
 		t.Errorf("TestConnection() = %+v, %v, want latency_ms >= 40", got, err)
+	}
+}
+
+func TestTestConnection_LogsOneLineWithProviderHostOkAndLatency(t *testing.T) { // AC8, NFR9
+	tests := []struct {
+		name   string
+		token  string
+		fail   bool
+		wantOK string
+	}{
+		{name: "connected", token: testToken, wantOK: "ok=true"},
+		{name: "user call fails", token: testToken, fail: true, wantOK: "ok=false"},
+		{name: "no token", token: "", wantOK: "ok=false"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv()
+			e.seed(id1, "Corp", baseURL, "gitlab.corp.example", tc.token)
+			var logs bytes.Buffer
+			e.svc = app.NewService(app.Deps{Store: e.store, Secrets: e.secrets, Repos: e.repos, GitLab: e.gl,
+				Clock: func() time.Time { return e.now }, Log: slog.New(slog.NewTextHandler(&logs, nil))})
+			if tc.fail {
+				e.gl.user = func(context.Context) (gitlab.User, error) { return gitlab.User{}, errBoom }
+			}
+			if _, err := e.svc.TestConnection(t.Context(), id1, ""); err != nil {
+				t.Fatalf("TestConnection() error = %v", err)
+			}
+			lines := strings.Split(strings.TrimSpace(logs.String()), "\n")
+			var test []string
+			for _, l := range lines {
+				if strings.Contains(l, "level=INFO") && strings.Contains(l, "connection test") {
+					test = append(test, l)
+				}
+			}
+			if len(test) != 1 {
+				t.Fatalf("INFO test lines = %d (%q), want exactly 1", len(test), test)
+			}
+			for _, want := range []string{"provider=gitlab", "host=gitlab.corp.example", tc.wantOK, "latency_ms="} {
+				if !strings.Contains(test[0], want) {
+					t.Errorf("test log line %q lacks %q", test[0], want)
+				}
+			}
+			if strings.Contains(logs.String(), testToken) {
+				t.Errorf("log %q holds the token", logs.String())
+			}
+		})
 	}
 }

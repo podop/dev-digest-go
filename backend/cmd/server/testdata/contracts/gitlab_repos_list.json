@@ -1,0 +1,17 @@
+[
+  {
+    "clone_path": "/data/workspace/@gitlab/gitlab.example.com/42",
+    "connection_id": "00000000-0000-4000-8000-000000000004",
+    "created_by": "00000000-0000-4000-8000-000000000003",
+    "default_branch": "develop",
+    "full_name": "acme/platform/payments",
+    "host": "gitlab.example.com",
+    "id": "00000000-0000-4000-8000-000000000001",
+    "last_polled_at": "2026-01-01T00:00:00.000Z",
+    "name": "payments",
+    "owner": "acme/platform",
+    "provider": "gitlab",
+    "web_url": "https://gitlab.example.com/acme/platform/payments",
+    "workspace_id": "00000000-0000-4000-8000-000000000002"
+  }
+]

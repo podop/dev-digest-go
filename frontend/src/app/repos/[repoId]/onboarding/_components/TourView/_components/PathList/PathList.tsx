@@ -1,6 +1,7 @@
 /* PathList — body of the "Critical paths" and "Guided reading path" sections. Paths are monospace,
    truncated with the full path as tooltip. Critical paths get an "Open" button (the code host at the
-   tour's indexed commit, new tab); the reading path is a numbered list. Empty → "Not enough information". */
+   tour's indexed commit, new tab; none until the repository list has loaded); the
+   reading path is a numbered list. Empty → "Not enough information". */
 "use client";
 
 import { useTranslations } from "next-intl";
@@ -16,18 +17,15 @@ export type PathListVariant = "critical" | "reading";
 export function PathList({
   items,
   variant,
-  repoFullName,
   indexedSha,
 }: {
   items: readonly OnboardingPathItem[];
   variant: PathListVariant;
-  /** `owner/name`, for the Open link. */
-  repoFullName: string;
   /** Commit the tour was generated at; Open is pinned to it. */
   indexedSha: string;
 }) {
   const t = useTranslations("onboarding");
-  const repo = useLinkRepo(repoFullName);
+  const repo = useLinkRepo();
   if (items.length === 0) return <p style={s.empty}>{t("empty")}</p>;
 
   if (variant === "reading") {
@@ -59,13 +57,15 @@ export function PathList({
             {item.path}
           </span>
           <span style={s.reasonInline}>— {item.reason}</span>
-          <Button
-            size="sm"
-            aria-label={t("paths.openAria", { path: item.path, host: codeHostName(repo) })}
-            onClick={() => openPathOnHost(repo, indexedSha, item.path)}
-          >
-            {t("paths.open")}
-          </Button>
+          {repo && (
+            <Button
+              size="sm"
+              aria-label={t("paths.openAria", { path: item.path, host: codeHostName(repo) })}
+              onClick={() => openPathOnHost(repo, indexedSha, item.path)}
+            >
+              {t("paths.open")}
+            </Button>
+          )}
         </li>
       ))}
     </ul>

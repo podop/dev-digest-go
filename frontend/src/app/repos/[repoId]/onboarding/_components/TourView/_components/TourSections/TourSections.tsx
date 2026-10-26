@@ -14,29 +14,29 @@ import { RunSteps } from "../RunSteps";
 import { FirstTasks } from "../FirstTasks";
 import { s } from "./styles";
 
-function SectionContent({ id, tour, repoFullName }: { id: OnboardingSectionId; tour: OnboardingTour; repoFullName: string }) {
+function SectionContent({ id, tour }: { id: OnboardingSectionId; tour: OnboardingTour }) {
   switch (id) {
     case "architecture":
       return <ArchitectureCard architecture={tour.architecture} />;
     case "critical-paths":
-      return <PathList items={tour.critical_paths} variant="critical" repoFullName={repoFullName} indexedSha={tour.indexed_sha} />;
+      return <PathList items={tour.critical_paths} variant="critical" indexedSha={tour.indexed_sha} />;
     case "run-locally":
       return <RunSteps steps={tour.run_steps} />;
     case "reading-path":
-      return <PathList items={tour.reading_path} variant="reading" repoFullName={repoFullName} indexedSha={tour.indexed_sha} />;
+      return <PathList items={tour.reading_path} variant="reading" indexedSha={tour.indexed_sha} />;
     case "first-tasks":
       return <FirstTasks tasks={tour.first_tasks} />;
   }
 }
 
-export function TourSections({ tour, repoFullName }: { tour: OnboardingTour | null; repoFullName: string }) {
+export function TourSections({ tour }: { tour: OnboardingTour | null }) {
   const t = useTranslations("onboarding");
   return (
     <div style={s.stack}>
       {ONBOARDING_SECTION_IDS.map((id) => (
         <SectionCard key={id} id={id} title={t(`sections.${id}`)} icon={SECTION_ICON[id]}>
           {tour ? (
-            <SectionContent id={id} tour={tour} repoFullName={repoFullName} />
+            <SectionContent id={id} tour={tour} />
           ) : (
             <div aria-hidden style={s.skeleton}>
               <Skeleton height={14} />

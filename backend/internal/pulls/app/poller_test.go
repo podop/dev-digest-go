@@ -139,15 +139,15 @@ type pollStore struct {
 	listErr  error
 	// UpdateRepoPath: the path updates it was asked for, and what it answers.
 	pathUpdates []domain.GitLabProject
-	pathUpdated bool
+	pathHeldBy  string // the repo id the new path collides with; "" = stored
 	pathErr     error
 }
 
-func (s *pollStore) UpdateRepoPath(_ context.Context, _, _ string, p domain.GitLabProject) (bool, error) {
+func (s *pollStore) UpdateRepoPath(_ context.Context, _, _ string, p domain.GitLabProject) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pathUpdates = append(s.pathUpdates, p)
-	return s.pathUpdated, s.pathErr
+	return s.pathHeldBy, s.pathErr
 }
 
 func (s *pollStore) ListWithoutDiffStats(_ context.Context, _, repo string, since time.Time, limit int) ([]domain.Pull, error) {
@@ -280,6 +280,22 @@ func (s *logSink) warns() []string {
 	return out
 }
 
+// warnAttrs returns the attributes of the WARN records, one map per record, plus "msg".
+func (s *logSink) warnAttrs() []map[string]string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []map[string]string
+	for _, r := range s.recs {
+		if r.Level != slog.LevelWarn {
+			continue
+		}
+		m := map[string]string{"msg": r.Message}
+		r.Attrs(func(a slog.Attr) bool { m[a.Key] = a.Value.String(); return true })
+		out = append(out, m)
+	}
+	return out
+}
+
 type pollRig struct {
 	gh        *pollGitHub
 	stats     *pollStats
@@ -294,7 +310,7 @@ type pollRig struct {
 
 func newRig(targets ...domain.PollTarget) *pollRig {
 	return &pollRig{
-		gh: &pollGitHub{}, stats: &pollStats{}, gl: &pollGitLab{}, store: &pollStore{pathUpdated: true}, logs: &logSink{}, targets: targets,
+		gh: &pollGitHub{}, stats: &pollStats{}, gl: &pollGitLab{}, store: &pollStore{}, logs: &logSink{}, targets: targets,
 		intervals: &pollIntervals{set: map[string]time.Duration{}},
 	}
 }

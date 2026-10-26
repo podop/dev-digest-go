@@ -89,6 +89,7 @@ function routes(over: Record<string, RouteHandler> = {}) {
     "GET /pulls/pr1/reviews": [REVIEW],
     "GET /pulls/pr1/comments": [],
     "GET /pulls/pr1/runs/active": [],
+    "GET /repos": [GITHUB_REPO],
     "POST /findings/:id/:action": (req) => ({ finding: { id: req.params.id } }),
     ...over,
   });
@@ -103,15 +104,17 @@ function Wrapper({
 }) {
   const [order, setOrder] = React.useState<DiffOrder>(initialOrder);
   return (
-    <DiffTab
-      prId="pr1"
-      filesCount={FILES.length}
-      files={FILES}
-      canComment
-      order={order}
-      onSetOrder={setOrder}
-      focus={focus}
-    />
+    <RepoProvider>
+      <DiffTab
+        prId="pr1"
+        filesCount={FILES.length}
+        files={FILES}
+        canComment
+        order={order}
+        onSetOrder={setOrder}
+        focus={focus}
+      />
+    </RepoProvider>
   );
 }
 
@@ -408,12 +411,22 @@ describe("DiffTab — deep-link focus (?file/?line)", () => {
 describe("DiffTab — GitLab PR: no posting (FR45; AC34)", () => {
   function renderOn(repo: typeof GITLAB_REPO, options?: Parameters<typeof renderWithProviders>[1]) {
     routes({ "GET /repos": [repo] });
-    return renderWithProviders(
-      <RepoProvider>
-        <Wrapper initialOrder="original" />
-      </RepoProvider>,
-      options,
-    );
+    return renderWithProviders(<Wrapper initialOrder="original" />, options);
+  }
+
+  /** `GET /repos` held until `release()`: the repository (so its host) is unknown meanwhile. */
+  function renderHeld(repo: typeof GITLAB_REPO) {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    routes({
+      "GET /repos": async () => {
+        await gate;
+        return [repo];
+      },
+    });
+    return { ...renderWithProviders(<Wrapper initialOrder="original" />), release };
   }
 
   it("offers neither 'Post to PR' nor an inline composer, and says comments are not shown yet", async () => {
@@ -426,6 +439,36 @@ describe("DiffTab — GitLab PR: no posting (FR45; AC34)", () => {
 
     await user.hover(screen.getByText("added line"));
     expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
+  });
+
+  it("offers no posting and no GitLab note while the repository list loads, and still none once it is GitLab (FR45)", async () => {
+    const { user, release } = renderHeld(GITLAB_REPO);
+
+    expect(await screen.findByText("Hardcoded secret")).toBeInTheDocument();
+    await user.hover(screen.getByText("added line"));
+    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Comments from GitLab are not shown yet.")).not.toBeInTheDocument();
+
+    release();
+    expect(await screen.findByText("Comments from GitLab are not shown yet.")).toBeInTheDocument();
+    await user.hover(screen.getByText("added line"));
+    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
+  });
+
+  it("a GitHub PR offers posting only once the repository list has loaded", async () => {
+    const { user, release } = renderHeld(GITHUB_REPO);
+
+    expect(await screen.findByText("Hardcoded secret")).toBeInTheDocument();
+    await user.hover(screen.getByText("added line"));
+    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
+
+    release();
+    expect(await screen.findByRole("button", { name: "Post to PR" })).toBeInTheDocument();
+    await user.hover(screen.getByText("added line"));
+    expect(await screen.findByRole("button", { name: "Add a comment on this line" })).toBeInTheDocument();
   });
 
   it("a GitHub PR keeps the button and the composer and has no GitLab note", async () => {

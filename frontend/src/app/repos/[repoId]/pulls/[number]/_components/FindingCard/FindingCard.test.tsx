@@ -92,11 +92,11 @@ describe("FindingCard — extraActions slot", () => {
 describe("FindingCard — file link on the repository's code host (FR41; AC32)", () => {
   const SPACED: FindingRecord = { ...FINDING, file: "src/a b.ts", start_line: 10, end_line: 20 };
 
-  function renderOn(repo: typeof GITLAB_REPO, props: { repoFullName?: string | null } = {}) {
+  function renderOn(repo: typeof GITLAB_REPO) {
     mockFetch({ "GET /repos": [repo] });
     return renderWithProviders(
       <RepoProvider>
-        <FindingCard f={SPACED} headSha="abc123" onAction={() => {}} {...props} />
+        <FindingCard f={SPACED} headSha="abc123" onAction={() => {}} />
       </RepoProvider>,
     );
   }
@@ -110,7 +110,7 @@ describe("FindingCard — file link on the repository's code host (FR41; AC32)",
   });
 
   it("links a GitHub finding as before, with or without web_url", async () => {
-    renderOn(GITHUB_REPO, { repoFullName: "acme/api" });
+    renderOn(GITHUB_REPO);
     expect(await screen.findByRole("link", { name: "src/a b.ts:10-20" })).toHaveAttribute(
       "href",
       "https://github.com/acme/api/blob/abc123/src/a%20b.ts#L10-L20",
@@ -120,6 +120,33 @@ describe("FindingCard — file link on the repository's code host (FR41; AC32)",
     expect(await screen.findByRole("link", { name: "src/a b.ts:10-20" })).toHaveAttribute(
       "href",
       "https://github.com/acme/api/blob/abc123/src/a%20b.ts#L10-L20",
+    );
+  });
+
+  it("links nothing for a GitLab finding until the repository list has loaded, never a github.com link (FR41)", async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    mockFetch({
+      "GET /repos": async () => {
+        await gate;
+        return [GITLAB_REPO];
+      },
+    });
+    renderWithProviders(
+      <RepoProvider>
+        <FindingCard f={SPACED} headSha="abc123" onAction={() => {}} />
+      </RepoProvider>,
+    );
+
+    expect(screen.getByText("src/a b.ts:10-20")).toBeInTheDocument();
+    expect(screen.queryByRole("link")).toBeNull();
+
+    release();
+    expect(await screen.findByRole("link", { name: "src/a b.ts:10-20" })).toHaveAttribute(
+      "href",
+      "https://git.corp.example/gitlab/acme/platform/payments/-/blob/abc123/src/a%20b.ts#L10-20",
     );
   });
 });

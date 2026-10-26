@@ -40,7 +40,6 @@ export function FindingCard({
   defaultExpanded,
   onAction,
   pending,
-  repoFullName,
   headSha,
   publish,
   extraActions,
@@ -50,7 +49,6 @@ export function FindingCard({
   defaultExpanded?: boolean;
   onAction?: (action: FindingActionKind, reply?: string) => void;
   pending?: boolean;
-  repoFullName?: string | null;
   headSha?: string | null;
   /** "Post to PR" as an inline comment; omitted → no button. */
   publish?: FindingPublish;
@@ -61,7 +59,7 @@ export function FindingCard({
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
   const bodyId = React.useId();
   const toggle = () => setExpanded((e) => !e);
-  const repo = useLinkRepo(repoFullName);
+  const repo = useLinkRepo();
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
   const fileHref = headSha ? (blobUrl(repo, headSha, f.file, f.start_line, f.end_line) ?? undefined) : undefined;
   const accepted = !!f.accepted_at;
