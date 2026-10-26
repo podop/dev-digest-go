@@ -373,7 +373,8 @@ func TestExportCustomProvider(t *testing.T) {
 			name, from, to string
 			ok             bool
 		}{
-			{"own header 5", "secrets.DEVDIGEST_MY_GW_HEADER_2", "secrets.DEVDIGEST_MY_GW_HEADER_5", true},
+			{"own header 1", "secrets.DEVDIGEST_MY_GW_HEADER_2", "secrets.DEVDIGEST_MY_GW_HEADER_1", true},
+			{"header 3 the provider does not define (AC33)", "secrets.DEVDIGEST_MY_GW_HEADER_2", "secrets.DEVDIGEST_MY_GW_HEADER_3", false},
 			{"openrouter key", "secrets.DEVDIGEST_MY_GW_API_KEY", "secrets.OPENROUTER_API_KEY", false},
 			{"another provider's key", "secrets.DEVDIGEST_MY_GW_API_KEY", "secrets.DEVDIGEST_OTHER_API_KEY", false},
 			{"header 6", "secrets.DEVDIGEST_MY_GW_HEADER_2", "secrets.DEVDIGEST_MY_GW_HEADER_6", false},

@@ -1,0 +1,8 @@
+{
+  "latency_ms": 0,
+  "message": "OK — 2 models available",
+  "model": "m1",
+  "model_reachable": true,
+  "ok": true,
+  "provider": "custom:live"
+}

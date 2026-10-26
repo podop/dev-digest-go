@@ -1,0 +1,35 @@
+{
+  "files": [
+    {
+      "contents": "name: \"OpenAI Reviewer\"\nprovider: \"openai\"\nmodel: \"gpt-4.1\"\nsystem_prompt: \"Review the diff.\\n  Indented line: with a colon # and \\\"quotes\\\"\\n\\ttabbed line  \\n\"\nskills: []\nstrategy: \"single-pass\"\nci_fail_on: \"critical\"\nversion: 1\npricing:\n  promptPerM: 2\n  completionPerM: 8\n",
+      "editable": false,
+      "path": ".devdigest/agents/openai-reviewer.yaml"
+    },
+    {
+      "contents": "",
+      "editable": false,
+      "path": ".devdigest/memory.jsonl"
+    },
+    {
+      "contents": "ZmFrZS1ydW5uZXItZXhlY3V0YWJsZQ==\n",
+      "editable": false,
+      "path": ".devdigest/runner/devdigest-runner-linux-amd64.gz.b64"
+    },
+    {
+      "contents": "4b2d20d402496e65ec3908d838e25374a8e84ca00dab843fcaf337027686dc3f  devdigest-runner\n",
+      "editable": false,
+      "path": ".devdigest/runner/devdigest-runner-linux-amd64.sha256"
+    },
+    {
+      "contents": "name: DevDigest Review · openai-reviewer\n\non:\n  pull_request:\n    types: [opened, synchronize, reopened]\n\npermissions:\n  contents: read\n  pull-requests: write\n\njobs:\n  review:\n    name: DevDigest Review · openai-reviewer\n    if: github.event.pull_request.head.repo.full_name == github.repository\n    runs-on: ubuntu-24.04\n    steps:\n      - name: Check out the pull request\n        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n          persist-credentials: false\n\n      - name: Run the DevDigest review\n        shell: bash\n        run: |\n          base64 -d .devdigest/runner/devdigest-runner-linux-amd64.gz.b64 | gzip -dc \u003e \"$RUNNER_TEMP/devdigest-runner\"\n          cd \"$RUNNER_TEMP\" \u0026\u0026 sha256sum --check --strict \"$GITHUB_WORKSPACE/.devdigest/runner/devdigest-runner-linux-amd64.sha256\"\n          chmod +x \"$RUNNER_TEMP/devdigest-runner\"\n          cd \"$GITHUB_WORKSPACE\" \u0026\u0026 \"$RUNNER_TEMP/devdigest-runner\"\n        env:\n          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          DEVDIGEST_AGENT: openai-reviewer\n          DEVDIGEST_POST_AS: github_review\n          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}\n\n      - name: Upload the review result\n        if: always()\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\n        with:\n          name: devdigest-result-openai-reviewer\n          path: devdigest-result.json\n",
+      "editable": true,
+      "path": ".github/workflows/devdigest-review-openai-reviewer.yml"
+    }
+  ],
+  "installation": null,
+  "pr_url": null,
+  "required_secrets": [
+    "OPENAI_API_KEY"
+  ],
+  "required_variables": []
+}

@@ -195,3 +195,27 @@ func TestRunner(t *testing.T) {
 		}
 	}
 }
+
+func TestAllowedSecretNames_OnlyTheProvidersOwnHeaders(t *testing.T) {
+	cases := []struct {
+		provider string
+		headers  int
+		want     []string
+	}{
+		{"openrouter", 3, []string{"OPENROUTER_API_KEY"}},
+		{"openai", 0, []string{"OPENAI_API_KEY"}},
+		{"custom:my-gw", 0, []string{"DEVDIGEST_MY_GW_API_KEY"}},
+		{"custom:my-gw", 2, []string{"DEVDIGEST_MY_GW_API_KEY", "DEVDIGEST_MY_GW_HEADER_1", "DEVDIGEST_MY_GW_HEADER_2"}},
+		{"custom:my-gw", 9, []string{"DEVDIGEST_MY_GW_API_KEY", "DEVDIGEST_MY_GW_HEADER_1", "DEVDIGEST_MY_GW_HEADER_2", "DEVDIGEST_MY_GW_HEADER_3", "DEVDIGEST_MY_GW_HEADER_4", "DEVDIGEST_MY_GW_HEADER_5"}},
+		{"custom:my-gw", -1, []string{"DEVDIGEST_MY_GW_API_KEY"}},
+	}
+	for _, c := range cases {
+		got, ok := domain.AllowedSecretNames(c.provider, c.headers)
+		if !ok || cmp.Diff(c.want, got) != "" {
+			t.Errorf("AllowedSecretNames(%q, %d) = %v, %v; want %v, true", c.provider, c.headers, got, ok, c.want)
+		}
+	}
+	if _, ok := domain.AllowedSecretNames("custom:Bad", 1); ok {
+		t.Error("AllowedSecretNames accepted a malformed custom id")
+	}
+}

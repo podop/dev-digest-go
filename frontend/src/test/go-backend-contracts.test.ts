@@ -41,6 +41,11 @@ import {
   Conflict,
   ConflictTake,
   CostSegment,
+  CustomProvider,
+  CustomProviderDeleted,
+  CustomProviderHeader,
+  CustomProviderInUseDetails,
+  CustomProviderModel,
   DownstreamImpact,
   EvalAgentDashboard,
   EvalAgentOverview,
@@ -80,6 +85,7 @@ import {
   LeaderboardSizeBucket,
   LeaderboardTopFinding,
   ModelInfo,
+  ModelPricing,
   MultiAgentRun,
   MultiAgentRunSummary,
   ONBOARDING_LIMITS,
@@ -425,6 +431,26 @@ const spendCapReached = ApiErrorBody.extend({
     .strict(),
 }).strict();
 
+// ---- Custom model providers (specs/2026-10-24-custom-model-providers.md §7): the settings routes. ----
+// Secret values are never part of an answer: key_configured / value_configured are the only traces.
+const customProvider = CustomProvider.extend({
+  extra_headers: z.array(CustomProviderHeader.strict()),
+  models: z.array(CustomProviderModel.extend({ pricing: ModelPricing.strict().nullable() }).strict()),
+}).strict();
+// A conflict that names what uses the provider; the details object is strict.
+const customProviderInUse = ApiErrorBody.extend({
+  error: ApiErrorBody.shape.error
+    .extend({ code: z.literal("provider_in_use"), details: CustomProviderInUseDetails.strict() })
+    .strict(),
+}).strict();
+// The connection test of a custom provider: warning is present (null when the list was read).
+const customProviderTest = ConnTestResult.extend({
+  provider: z.string().regex(/^custom:[a-z0-9-]{1,32}$/),
+  latency_ms: z.number().int().nonnegative(),
+  model: z.string().min(1),
+  model_reachable: z.boolean().nullable(),
+}).strict();
+
 // ---- Settings slice B (specs/2026-10-23-settings-b-workspace.md): rename, stats, export, reset. ----
 const workspaceInfo = WorkspaceInfo.extend({
   workspaceId: uuid,
@@ -654,6 +680,10 @@ const contracts: Record<string, z.ZodTypeAny> = {
   // ---- Phase 6: export-to-CI ----
   ci_export_files: ciExport,
   ci_export_open_pr: ciExport,
+  ci_export_files_custom: ciExport,
+  ci_export_files_openai: ciExport,
+  ci_export_files_anthropic: ciExport,
+  ci_export_open_pr_custom: ciExport,
   ci_installations: z.object({ installations: z.array(ciInstallation) }).strict(),
   ci_runs_all: ciRuns,
   ci_runs_agent: ciRuns,
@@ -696,6 +726,40 @@ const contracts: Record<string, z.ZodTypeAny> = {
   // An agent and a skill of a plugin carry its owner; the plugin object is strict here.
   agent_get_plugin: Agent.extend({ plugin: pluginRef }).strict(),
   skill_get_plugin: Skill.extend({ plugin: pluginRef }).strict(),
+
+  // ---- Custom model providers ----
+  custom_providers_create: customProvider,
+  custom_providers_create_anthropic: customProvider,
+  custom_providers_update: customProvider,
+  custom_providers_list: z.array(customProvider),
+  custom_providers_deleted: CustomProviderDeleted.extend({ deleted: z.string().regex(/^custom:[a-z0-9-]{1,32}$/) }).strict(),
+  custom_providers_in_use: customProviderInUse,
+  // 422 validation_error: details are the httpx issues (params.issue holds the Zod-style issue).
+  custom_providers_invalid: ApiErrorBody.extend({
+    error: ApiErrorBody.shape.error
+      .extend({
+        code: z.literal("validation_error"),
+        details: z.array(
+          z
+            .object({
+              keyword: z.string(),
+              instancePath: z.string().startsWith("/"),
+              schemaPath: z.string(),
+              message: z.string(),
+              params: z
+                .object({ issue: z.object({ code: z.string(), path: z.array(z.union([z.string(), z.number()])), message: z.string() }).strict() })
+                .strict(),
+            })
+            .strict(),
+        ),
+      })
+      .strict(),
+  }).strict(),
+  custom_providers_models: z.array(ModelInfo.extend({ provider: z.string().regex(/^custom:[a-z0-9-]{1,32}$/) }).strict()),
+  custom_providers_test_ok: customProviderTest.extend({ model_reachable: z.boolean(), warning: z.undefined() }).strict(),
+  custom_providers_test_warning: customProviderTest
+    .extend({ model_reachable: z.null(), warning: z.literal("Model list not available; key not verified") })
+    .strict(),
 };
 
 const read = (name: string): unknown =>
@@ -1140,6 +1204,31 @@ describe("Go backend golden responses", () => {
     const openPr = read("ci_export_open_pr") as { installation: Record<string, unknown> | null; pr_url: unknown };
     expect(openPr.installation).toMatchObject({ slug: "ci-reviewer", target_type: "gha" });
     expect(openPr.pr_url).toEqual(expect.stringMatching(/^https:\/\/github\.com\/.+\/pull\/\d+$/));
+  });
+
+  it("the CI export goldens of the other providers list their secrets and variables", () => {
+    type Listed = { required_secrets: string[]; required_variables: string[] };
+    expect(read("ci_export_files") as Listed).toMatchObject({
+      required_secrets: ["OPENROUTER_API_KEY"],
+      required_variables: [],
+    });
+    expect(read("ci_export_files_openai") as Listed).toMatchObject({
+      required_secrets: ["OPENAI_API_KEY"],
+      required_variables: [],
+    });
+    expect(read("ci_export_files_anthropic") as Listed).toMatchObject({
+      required_secrets: ["ANTHROPIC_API_KEY"],
+      required_variables: [],
+    });
+    for (const name of ["ci_export_files_custom", "ci_export_open_pr_custom"]) {
+      expect(read(name) as Listed, name).toMatchObject({
+        required_secrets: ["DEVDIGEST_MY_GW_API_KEY", "DEVDIGEST_MY_GW_HEADER_1", "DEVDIGEST_MY_GW_HEADER_2"],
+        required_variables: ["DEVDIGEST_MY_GW_BASE_URL"],
+      });
+    }
+    expect((read("ci_export_open_pr_custom") as { installation: unknown }).installation).toMatchObject({
+      target_type: "gha",
+    });
   });
 
   it("the CI runs goldens: newest first lists, and runs of a deleted agent keep a null agent", () => {

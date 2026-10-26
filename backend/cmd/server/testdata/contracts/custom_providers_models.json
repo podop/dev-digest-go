@@ -1,0 +1,15 @@
+[
+  {
+    "id": "m-live",
+    "provider": "custom:live"
+  },
+  {
+    "id": "m1",
+    "label": "Model one",
+    "pricing": {
+      "completionPerM": 4,
+      "promptPerM": 1
+    },
+    "provider": "custom:live"
+  }
+]

@@ -312,7 +312,7 @@ func workflowText(req ExportRequest, slug string, triggers []domain.Trigger, pro
 		}
 		text = generated
 	}
-	names, _ := domain.SecretNames(provider) // resolveProvider admitted only providers that have names
+	names, _ := domain.AllowedSecretNames(provider, headerCount) // resolveProvider admitted only providers that have names
 	if res := wfrules.CheckWith(text, names); !res.OK {
 		return "", apperr.Validation("The workflow breaks a security rule").
 			WithCode(codeWorkflowInsecure).

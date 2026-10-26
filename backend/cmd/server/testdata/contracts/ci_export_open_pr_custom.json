@@ -1,0 +1,49 @@
+{
+  "files": [
+    {
+      "contents": "name: \"CI Reviewer\"\nprovider: \"custom:my-gw\"\nmodel: \"gw-model-1\"\nsystem_prompt: \"Review the diff.\\n  Indented line: with a colon # and \\\"quotes\\\"\\n\\ttabbed line  \\n\"\nskills: []\nstrategy: \"single-pass\"\nci_fail_on: \"critical\"\nversion: 1\ncustom_provider:\n  protocol: \"openai\"\n  auth_mode: \"bearer\"\n  auth_header: null\n  extra_headers:\n    - \"X-Tenant\"\n    - \"X-Project\"\n  structured_output: \"strict\"\n  pricing:\n    promptPerM: 1.5\n    completionPerM: 6\n",
+      "editable": false,
+      "path": ".devdigest/agents/ci-reviewer.yaml"
+    },
+    {
+      "contents": "",
+      "editable": false,
+      "path": ".devdigest/memory.jsonl"
+    },
+    {
+      "contents": "ZmFrZS1ydW5uZXItZXhlY3V0YWJsZQ==\n",
+      "editable": false,
+      "path": ".devdigest/runner/devdigest-runner-linux-amd64.gz.b64"
+    },
+    {
+      "contents": "4b2d20d402496e65ec3908d838e25374a8e84ca00dab843fcaf337027686dc3f  devdigest-runner\n",
+      "editable": false,
+      "path": ".devdigest/runner/devdigest-runner-linux-amd64.sha256"
+    },
+    {
+      "contents": "name: DevDigest Review · ci-reviewer\n\non:\n  pull_request:\n    types: [opened, synchronize, reopened]\n\npermissions:\n  contents: read\n  pull-requests: write\n\njobs:\n  review:\n    name: DevDigest Review · ci-reviewer\n    if: github.event.pull_request.head.repo.full_name == github.repository\n    runs-on: [self-hosted, linux, x64]\n    steps:\n      - name: Check out the pull request\n        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262\n        with:\n          ref: ${{ github.event.pull_request.head.sha }}\n          persist-credentials: false\n\n      - name: Run the DevDigest review\n        shell: bash\n        run: |\n          base64 -d .devdigest/runner/devdigest-runner-linux-amd64.gz.b64 | gzip -dc \u003e \"$RUNNER_TEMP/devdigest-runner\"\n          cd \"$RUNNER_TEMP\" \u0026\u0026 sha256sum --check --strict \"$GITHUB_WORKSPACE/.devdigest/runner/devdigest-runner-linux-amd64.sha256\"\n          chmod +x \"$RUNNER_TEMP/devdigest-runner\"\n          cd \"$GITHUB_WORKSPACE\" \u0026\u0026 \"$RUNNER_TEMP/devdigest-runner\"\n        env:\n          DEVDIGEST_LLM_BASE_URL: ${{ vars.DEVDIGEST_MY_GW_BASE_URL }}\n          DEVDIGEST_LLM_API_KEY: ${{ secrets.DEVDIGEST_MY_GW_API_KEY }}\n          DEVDIGEST_LLM_HEADER_1: ${{ secrets.DEVDIGEST_MY_GW_HEADER_1 }}\n          DEVDIGEST_LLM_HEADER_2: ${{ secrets.DEVDIGEST_MY_GW_HEADER_2 }}\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n          DEVDIGEST_AGENT: ci-reviewer\n          DEVDIGEST_POST_AS: github_review\n          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}\n\n      - name: Upload the review result\n        if: always()\n        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02\n        with:\n          name: devdigest-result-ci-reviewer\n          path: devdigest-result.json\n",
+      "editable": true,
+      "path": ".github/workflows/devdigest-review-ci-reviewer.yml"
+    }
+  ],
+  "installation": {
+    "agent_id": "00000000-0000-4000-8000-000000000002",
+    "id": "00000000-0000-4000-8000-000000000001",
+    "installed_at": "2026-01-01T00:00:00.000Z",
+    "last_run": null,
+    "manifest_version": 1,
+    "repo": "acme/payments-api",
+    "slug": "ci-reviewer",
+    "target_type": "gha",
+    "workflow_path": ".github/workflows/devdigest-review-ci-reviewer.yml"
+  },
+  "pr_url": "https://github.com/acme/payments-api/pull/41",
+  "required_secrets": [
+    "DEVDIGEST_MY_GW_API_KEY",
+    "DEVDIGEST_MY_GW_HEADER_1",
+    "DEVDIGEST_MY_GW_HEADER_2"
+  ],
+  "required_variables": [
+    "DEVDIGEST_MY_GW_BASE_URL"
+  ]
+}

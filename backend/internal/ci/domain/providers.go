@@ -101,6 +101,19 @@ func SecretNames(provider string) ([]string, bool) {
 	return names, true
 }
 
+// AllowedSecretNames are the secret names an exported (or edited) workflow of provider may read
+// (FR28, AC33): the key of a built-in; for a custom provider DEVDIGEST_<S>_API_KEY plus
+// DEVDIGEST_<S>_HEADER_<n> for the provider's own headerCount extra headers only (capped at
+// MaxExtraHeaders), so a header the provider does not define stays refused. GITHUB_TOKEN is
+// always allowed by wfrules.CheckWith.
+func AllowedSecretNames(provider string, headerCount int) ([]string, bool) {
+	names, ok := SecretNames(provider)
+	if !ok || !IsCustomProvider(provider) {
+		return names, ok
+	}
+	return names[:1+min(max(headerCount, 0), MaxExtraHeaders)], true
+}
+
 // RequiredSecrets are the secrets the user must add before the workflow works (FR29,
 // GITHUB_TOKEN excluded): the key of a built-in; for a custom provider DEVDIGEST_<S>_API_KEY only
 // when keyConfigured, plus DEVDIGEST_<S>_HEADER_<n> for each of headerCount extra headers (capped

@@ -1,0 +1,18 @@
+{
+  "error": {
+    "code": "provider_in_use",
+    "details": {
+      "agents": [
+        {
+          "id": "00000000-0000-4000-8000-000000000001",
+          "name": "Reviewer on synapse"
+        }
+      ],
+      "default_model": true,
+      "feature_models": [
+        "conventions"
+      ]
+    },
+    "message": "Custom provider custom:synapse is used and cannot be deleted"
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "error": {
+    "code": "validation_error",
+    "details": [
+      {
+        "instancePath": "/id",
+        "keyword": "invalid_string",
+        "message": "Invalid custom provider id: expected custom:\u003cslug\u003e with 1-32 characters of a-z, 0-9 and -",
+        "params": {
+          "issue": {
+            "code": "invalid_string",
+            "message": "Invalid custom provider id: expected custom:\u003cslug\u003e with 1-32 characters of a-z, 0-9 and -",
+            "path": [
+              "id"
+            ]
+          }
+        },
+        "schemaPath": "#/id/invalid_string"
+      },
+      {
+        "instancePath": "/base_url",
+        "keyword": "custom",
+        "message": "Base URL must not be a link-local or unspecified address",
+        "params": {
+          "issue": {
+            "code": "custom",
+            "message": "Base URL must not be a link-local or unspecified address",
+            "path": [
+              "base_url"
+            ]
+          }
+        },
+        "schemaPath": "#/base_url/custom"
+      },
+      {
+        "instancePath": "/structured_output",
+        "keyword": "invalid_enum_value",
+        "message": "Invalid enum value. Expected 'strict' | 'json_object' | 'prompt_only', received 'loose'",
+        "params": {
+          "issue": {
+            "code": "invalid_enum_value",
+            "message": "Invalid enum value. Expected 'strict' | 'json_object' | 'prompt_only', received 'loose'",
+            "path": [
+              "structured_output"
+            ]
+          }
+        },
+        "schemaPath": "#/structured_output/invalid_enum_value"
+      }
+    ],
+    "message": "Request validation failed"
+  }
+}
