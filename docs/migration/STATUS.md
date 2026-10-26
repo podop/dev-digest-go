@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-26 evening (see ▶ Resume here; custom model providers done) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-26 night (see ▶ Resume here; GitLab A done) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -19,13 +19,32 @@ frontend contract test 148/148.
 Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user's standing orders:
 - run features autonomously in multi-agent waves and lanes;
 - approve plans by default and escalate only CRITICAL items (spec contradictions that change behaviour, destructive or irreversible choices, security, an NFR failure that needs a spec change);
-- next: GitLab A → B ∥ C (specs `specs/2026-10-24-gitlab-*.md`, committed 4819a47, not yet planned).
+- next: GitLab B ∥ C (specs `specs/2026-10-24-gitlab-{b,c}-*.md`, committed 4819a47, not yet planned); open for the user: GitLab A AC36 with a real gitlab.com token (checklist in `.sdd/review/2026-10-26-gitlab-a-connection-sync/s38-manual.md`).
 
 | Feature | State |
 |---|---|
 | PR Leaderboard, Settings A, B, Cost ledger, Settings C | done and committed (specs `implemented`, plans `done`) |
+| **GitLab A** (connections + MR sync) | **done** — plan `d181249`, `9cbf097` (W1–W3), `f9682c3` (W4), `d56ddf3` (W5 + fix r1); spec `implemented` (D36–D44), plan `done`; the stand runs it (rebuilt, migrations up to **0010**) |
 | **Custom model providers** | **done** — plan `84c2f39`, `e10495f` (W1–W4), `67549cd` (W5), fix rounds `0f108b8`, `f86f362`; spec `implemented` (D30–D37), plan `done`; the stand runs it (rebuilt, migrations up to **0009**) |
 | **Settings D** (integrations / plugins) | **done** — `ebaceb5` (W1–W3), `00c0ecd` (W4 + D19/D21), `fd90f3d` (fix r1), `4a31756` (fix r2); spec `implemented` (D19–D22), plan `done`; the stand runs it (rebuilt, migrations up to **0008**) |
+
+**GitLab A gate** (reports in `.sdd/review/2026-10-26-gitlab-a-connection-sync/`, git-ignored):
+| Reviewer | r1 (`d181249..f9682c3`) | r2 (`f9682c3..d56ddf3`) |
+|---|---|---|
+| Architecture | **PASS**; M1 env read in gitcli, M2 collision WARN in the store, M3 cross-section UI import, L4 net/http in app → fixed | **PASS**, 0 findings |
+| Security | **PASS** (0 HIGH/MEDIUM); L1 rename-follow path unvalidated, L2 scrubber missed `glrtr`/dots → fixed | **PASS**; L1/L2 closed (58 hostile paths refused); I1 `.GIT` follow-up |
+| Plan verification | 171 / 1 FAIL (AC8 log line) / 9 pending → fixed | **no FAIL** (22 PASS; G1 closed by the orchestrator's `make backend-check`; AC36 real part PENDING-USER) |
+- Gates: `make backend-check` green on the closed tree (162 packages, cmd/server 712 s; `-timeout 25m` now in the Makefile); frontend 244 files / 1614 tests, contract test 227/227.
+- W4 found and fixed (f9682c3): Basic-form token scrub, one FR47 WARN, EC12 segment limit before host binding; user ruling EC30 (D38).
+- S38 throwaway `devdigest-go-ga` (removed, stand untouched): AC25 connections p95 16–60 ms at normal load (101–104 ms at load ~26; server median 6–11 ms); AC36 stub run 12/12 (two instances incl. a relative URL root and a corporate CA, 0 console errors, only reads, Basic `oauth2`, 0 token hits).
+- Decisions D36–D44 (spec): fork rule, no proxy, CA bundle + refuse start; CI pickers GitHub only; EC30 per-call binding; one AC8 line; validated rename-follow; segment limit; token pattern; paging on raw pages; UI waits for the repo list.
+
+**GitLab A follow-ups (not fixed):**
+- AC36 with a real gitlab.com token (user).
+- Pre-existing, found by S38: under `LLM_PROVIDER_OVERRIDE=mock` the provider test still calls the real `/models` endpoints (`settings/adapters/providers/providers.go:124-150`, `cmd/server/app.go:466`), contrary to `.env.example`.
+- Every `GET /repos/:id/pulls` triggers a GitLab list sync (FR21 by design; mind gitlab.com rate limits); award cards truncate the host label; "Fastest merge" showed "—" with 2 merged MRs in the S38 run (not investigated); GitLab clones fetch the default branch only.
+- `intelGit` reads all poll targets per resync; `autoTokens` lists repos on every status read; `codehost.ProjectRef` accepts an upper-case `.GIT` suffix; `runbus TestBus_Concurrent` flakes under a full `-race -shuffle` run (passes alone); the AC40 background-cycle component test flaked once (now retries); AC8's 15 s timeout case waits in real time.
+- The custom-providers follow-up "git clone ignores `DEVDIGEST_EXTRA_CA_FILE`" is fixed for GitLab remotes (git CA bundle); GitHub clones still use git's default roots.
 
 **Custom model providers gate** (reports in `.sdd/review/2026-10-26-custom-model-providers/`, git-ignored):
 | Reviewer | r1 (`aa7c5be..67549cd`) | r2 (`67549cd..0f108b8`) |
@@ -63,14 +82,14 @@ Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user
 - `GET /skills` always returns `evidence_files: null` (pre-existing, skills store).
 - Security r3 INFO: the overflow warning says "N more item(s)" but counts fields; the 3 s wall-clock preview test could flake on a busy CI host (measures ~0.2 s).
 - arch r1 optional: one-line comment for Raw/Exec in `plugins/adapters/postgres/remove.go`.
-- `make backend-check` can hit the 10 m default package timeout for `cmd/server` under load (INSIGHTS).
+- `make backend-check` could hit the 10 m default package timeout for `cmd/server` (fixed in GitLab A: `-timeout 25m`).
 
 **Orchestration notes** (git-ignored): `.sdd/orchestration/`:
-- lane rules `lane-common-{b,c,d,cp,ledger}.md`;
-- carry-over notes `{b,c,d,cp,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
+- lane rules `lane-common-{b,c,d,cp,ga,ledger}.md`;
+- carry-over notes `{b,c,d,cp,ga,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
 Reports for each feature: `.sdd/review/<date>-<slug>/`.
 
-Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D · 0009 custom providers.
+Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D · 0009 custom providers · 0010 GitLab A.
 
 ## After the migration — PR Leaderboard (in progress) and Settings (specs only) · 2026-10-23 night
 **PR Leaderboard** (new feature, not Node parity). Spec `specs/2026-10-23-pr-leaderboard.md` (+D18–D26), plan

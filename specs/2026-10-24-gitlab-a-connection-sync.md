@@ -1,5 +1,5 @@
 # GitLab A — connections, repositories and merge request sync
-Spec: GitLab slice A (GitLab connections, GitLab repositories next to GitHub ones, MR sync, host-aware links) · Status: ready-for-planning · Date: 2026-10-24
+Spec: GitLab slice A (GitLab connections, GitLab repositories next to GitHub ones, MR sync, host-aware links) · Status: implemented (2026-10-26, 9cbf097..d56ddf3; D36–D44; AC36 real-gitlab.com part pending the user) · Date: 2026-10-24
 Areas: api, git, sync, db, ui
 Design sources: the user's request of 2026-10-24 (translated): "Add support for GitLab, not just GitHub, with all its
 PR sync features — the full spec of the functionality that currently exists for GitHub." The user's answers of
@@ -1238,6 +1238,32 @@ strict golden are unchanged.
   install dialog list GitHub repos only; SCR4 diff stats via GraphQL `projects(ids:[gid])` (query complexity measured
   in the manual step); SCR6 leaderboard rows' `repo` is the repo name; SCR7 moved code paths updated; A1–A13 as in
   the plan's context pack. The migration number is 0010.
+
+- D38 — EC30/FR48 (user, 2026-10-26): the binding is resolved by host key at every GitLab call, so a connection
+  deleted while a list sync waits on its project read lets that request finish and sends no MR-list request; a sync
+  that is already waiting on the MR list finishes and stores its rows.
+- D39 — AC8/NFR9: a GitLab connection test writes exactly one INFO line, "gitlab connection test", with
+  `provider=gitlab`, `connection_id`, `host`, `ok` and `latency_ms`; the settings line of other providers is unchanged.
+  The connection id is not a secret (plan-verify r1, orchestrator, 2026-10-26).
+- D40 — FR47: a fetched project path is stored only when it passes the add rule (`codehost.ProjectRef`: plain
+  segments, 2–21 of them, namespace + path = `path_with_namespace`); otherwise the repository keeps its stored path,
+  one WARN names the repository and project ids only, and the sync goes on by project id. A path collision logs one
+  WARN (both repository ids) from the use case, not the store (security r1 L1, arch r1 M2, orchestrator, 2026-10-26).
+- D41 — EC12/FR12: for a host without a connection, a GitLab URL whose path has fewer than 2 or more than 21
+  segments is 422 `validation_error`, not `repo_host_not_connected`; with a connection the limit applies after the
+  connection's path prefix is stripped (W4 finding, orchestrator, 2026-10-26).
+- D42 — FR31/NFR1: one GitLab token pattern (the 12 prefixes, `[\w.-]{8,}`) masks foreign tokens in GitLab error
+  text, and the client scrubber also masks the token's Basic `oauth2:<token>` base64 form (W4, security r1 L2,
+  orchestrator, 2026-10-26).
+- D43 — FR21/FR22: the poller pages on while GitLab returned a full raw page, counted before MRs without a `sha` are
+  dropped (plan-verify r1, orchestrator, 2026-10-26).
+- D44 — FR41/FR45/FR13 (UI): host-aware links, "Post to PR" and the inline composer render only once the repository
+  list has loaded (no guessed github.com link, no posting UI on a GitLab PR while loading); the leaderboard labels
+  come from the response's own `repos`; the Automatic Reviews subtitle names "your code hosts" once a GitLab
+  repository exists (orchestrator, 2026-10-26).
+- Follow-ups (not fixed, 2026-10-26): `codehost.ProjectRef` accepts an upper-case `.GIT` suffix (security r2 I1);
+  AC36 against a real gitlab.com token (personal and project access token scopes/expiry, private nested-group clone,
+  audit log of reads only) is pending the user — checklist in `.sdd/review/2026-10-26-gitlab-a-connection-sync/s38-manual.md`.
 
 ## 17. Open questions
 None open. Q1–Q9 of the draft were answered by the user on 2026-10-24 and are recorded as D25–D34 (Q1 → D25, D26;

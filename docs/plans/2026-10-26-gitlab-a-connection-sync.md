@@ -1,5 +1,5 @@
 # Development Plan: GitLab A — connections and MR sync
-Plan: GitLab A · Status: approved (user 2026-10-26: SCR1, SCR2, SCR5 answered as planned; SCR3, SCR4, SCR6, SCR7, A1–A13 under pre-approval; spec D36–D37; migration 0010; run autonomously) · Spec: specs/2026-10-24-gitlab-a-connection-sync.md (reconciled at 13aaf62) · Base: feat/go-backend-phase-1@13aaf62
+Plan: GitLab A · Status: done (2026-10-26; 9cbf097 W1–W3, f9682c3 W4, d56ddf3 W5 + fix r1; gate arch r2 PASS, security r2 PASS, plan-verify r2 no FAIL (AC36 real part pending the user); spec D38–D44) · Earlier: approved (user 2026-10-26: SCR1, SCR2, SCR5 answered as planned; SCR3, SCR4, SCR6, SCR7, A1–A13 under pre-approval; spec D36–D37; migration 0010; run autonomously) · Spec: specs/2026-10-24-gitlab-a-connection-sync.md (reconciled at 13aaf62) · Base: feat/go-backend-phase-1@13aaf62
 Packages: backend, frontend · Context pack: docs/plans/2026-10-26-gitlab-a-connection-sync.context.md
 Execution: multi-agent, parallel lanes (user default)
 

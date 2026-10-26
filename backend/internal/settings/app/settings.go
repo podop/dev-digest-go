@@ -314,8 +314,8 @@ func (s *Service) TestCustomConnection(ctx context.Context, workspaceID string, 
 // key (when given) is saved by the port. An unknown or empty id is a 404 gitlab_connection_not_found
 // error and nothing is saved; the check's own failures come back as ok=false data with the key
 // value scrubbed. The port logs the test's one INFO line (provider, host, ok, latency_ms), so this
-// method adds none: a GitLab test leaves exactly one line (AC8); neither the key nor the connection
-// id reaches a log line.
+// method adds none: a GitLab test leaves exactly one line (AC8); the key never reaches a log line
+// (the port's line names the connection id, which is not a secret).
 func (s *Service) TestGitLabConnection(ctx context.Context, connectionID, key string) (ConnTestResult, error) {
 	if s.d.GitLab == nil || connectionID == "" {
 		return ConnTestResult{}, gitLabNotFound()

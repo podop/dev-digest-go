@@ -27,6 +27,8 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-26 — src/test/go-backend-contracts.test.ts: the UI Repo contract has provider/host/web_url/connection_id optional, so Repo.strict() passes a golden that drops them → pin them per golden with Repo.extend({...}).strict(); a token-leak regex /"token"/ also matches validation details path ['token'] → match the key form '"token":' (GitLab A S37)
+- 2026-10-26 — lib/link-repo useLinkRepo() is null until RepoProvider's GET /repos has loaded (no guessed github.com link, no posting UI): tests of link-building or posting leaves mount the real RepoProvider with mockFetch({'GET /repos': [repo]}) and a mocked usePathname, assert with findBy* after the load, and prove the pre-load state by holding GET /repos behind a deferred promise (an async mockFetch handler) — an absence check before the load passes vacuously (link-repo.test.tsx, DiffTab.test.tsx)
 - 2026-10-26 — src/components/key-field/ResultBanner.tsx looks up keyField.providers.${result.provider}, which has no key for custom:<slug> ids → render a custom ConnTestResult with its own banner (SettingsApiKeys CustomProviderDialog TestResultBanner)
 - 2026-10-26 — server 422 validation_error details (backend platform/httpx NewValidationError) are [{keyword, instancePath: "/base_url", schemaPath, message, params: {issue: {code, path: ["extra_headers",0,"value"], message}}}], not Zod-style [{path, message}] → field-error parsers read params.issue.path, then instancePath split on "/" (CustomProviderDialog/helpers.ts fieldErrorsFrom); a Zod-only parser silently routes every field error to the banner
 - 2026-10-26 — src/lib/dialog-focus useDialogFocus: a shared hook already gives vendored-Modal dialogs Escape-to-close, a focus trap and focus return, and honours e.defaultPrevented so an open Select closes first (used by RemoveRepoDialog and the Settings › Integrations dialogs) → reuse it instead of a new document keydown listener per dialog
@@ -64,6 +66,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-26 — src/test/render.tsx renderHookWithProviders has no wrapper option → test a hook that needs RepoProvider through a small probe component rendered with renderWithProviders (link-repo.test.tsx)
 - 2026-10-26 — theme in UI checks: data-theme comes from localStorage key dd-theme (default dark), so Playwright colorScheme: "light" does not switch the app → set localStorage dd-theme=light before load for light screenshots (Settings D S26 ac25-light.js)
 - 2026-10-26 — next-intl ICU: a message containing <word> (e.g. the placeholder "devdigest-<workspace>") throws INVALID_MESSAGE: UNCLOSED_TAG because <…> is parsed as a rich-text tag → keep angle brackets out of message text (PluginExportDialog)
 - 2026-10-25 — lint: the repo-wide pnpm lint (biome lint --error-on-warnings .) carries ~158 pre-existing infos and 'pnpm exec next lint' opens an interactive ESLint setup prompt (no ESLint here) → gate a change with pnpm exec biome lint --error-on-warnings <changed dir>
@@ -101,6 +104,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Recurring Errors & Fixes
 <!-- error message → cause → fix -->
+- 2026-10-26 — src/test strayText allowlists match whole text nodes: turning '#{number}' JSX (two nodes '#' + '7') into one template string (prRef → '#7' / '!7') makes a '"#"' allowlist entry miss → allow a pattern like /^[#!]\d+$/ (agents RunHistory.test.tsx, GitLab A S30)
 - 2026-10-26 — src/test pseudoMessages + strayText: a hard-coded separator character between two message spans (e.g. " · " in JSX) is reported as stray text → put such separators inside the message string (PluginImportCard, PluginExportCard last-export line)
 - 2026-10-26 — src/test/fetch-mock.ts mockFetch parses only string bodies, so a raw File/Blob upload shows no body in api.requests() → assert raw uploads on http.fetch.mock.calls[i][1] (init.body is the same File; read headers with new Headers(init.headers)) (lib/hooks/plugins/plugins.test.tsx, PluginImportCard.test.tsx)
 - 2026-10-21 — `ECONNRESET` / `ETIMEDOUT` from pnpm install inside docker build (frontend/Dockerfile deps stage hung 20+ min) on WSL2 → cause: many parallel registry downloads get reset on the default bridge network (single downloads work) → fix: build with network: host (docker-compose.yml build.network) — already configured, keep it
