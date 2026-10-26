@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -165,6 +166,52 @@ func TestService_Add_GitLab_NotConnected(t *testing.T) {
 	if _, _, err := svc.Add(t.Context(), ws, "u", mustParsed(t, "https://gitlab.com/acme/web")); err == nil {
 		t.Error("Add() without a GitLab port succeeded, want repo_host_not_connected")
 	}
+}
+
+// FR12, EC12: a path of more than 21 segments is a validation error whether or not a connection
+// exists for the host, and a deep path below a connection's prefix stays valid.
+func TestService_Add_GitLab_SegmentLimitBeforeHostBinding(t *testing.T) {
+	segments := func(n int) string {
+		parts := make([]string, n)
+		for i := range parts {
+			parts[i] = "g" + strconv.Itoa(i)
+		}
+		return strings.Join(parts, "/")
+	}
+	corp := app.GitLabConn{ID: "c-2", Name: "Corp", BaseURL: "https://git.corp.example/gitlab", Host: "git.corp.example"}
+
+	t.Run("22 segments on an unconnected host", func(t *testing.T) {
+		e := newGitLabEnv()
+		for _, url := range []string{"https://gitlab.com/" + segments(22), "git@gitlab.com:" + segments(22) + ".git"} {
+			_, created, err := e.add(t, url)
+			if created {
+				t.Errorf("Add(%q) created a repository, want a validation error", url)
+			}
+			assertURLIssue(t, err, domain.InvalidURLMessage)
+		}
+		if len(e.projects.calls)+len(e.queue.jobs)+len(e.store.adds) != 0 {
+			t.Errorf("calls %d, jobs %d, inserts %d, want none", len(e.projects.calls), len(e.queue.jobs), len(e.store.adds))
+		}
+	})
+	t.Run("21 segments on an unconnected host is not connected", func(t *testing.T) {
+		e := newGitLabEnv()
+		_, _, err := e.add(t, "https://gitlab.com/"+segments(21))
+		if ae, ok := apperr.As(err); !ok || ae.Code != "repo_host_not_connected" {
+			t.Errorf("Add(21 segments) error = %v, want repo_host_not_connected", err)
+		}
+	})
+	t.Run("22 segments of which one is the prefix", func(t *testing.T) {
+		e := newGitLabEnv(corp)
+		e.projects.project = gitlab.Project{ID: 7, PathWithNamespace: segments(21), Path: "g20", NamespaceFullPath: segments(20)}
+		if _, _, err := e.add(t, "https://git.corp.example/gitlab/"+segments(21)); err != nil {
+			t.Errorf("Add(prefix + 21 segments) error = %v, want success", err)
+		}
+	})
+	t.Run("22 segments below the prefix", func(t *testing.T) {
+		e := newGitLabEnv(corp)
+		_, _, err := e.add(t, "https://git.corp.example/gitlab/"+segments(22))
+		assertURLIssue(t, err, domain.InvalidURLMessage)
+	})
 }
 
 func TestService_Add_GitLab_SSHHostBinding(t *testing.T) {

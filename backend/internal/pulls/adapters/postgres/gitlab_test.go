@@ -133,6 +133,9 @@ func TestUpdateRepoPath(t *testing.T) {
 			t.Errorf("colliding repo changed (-before +after):\n%s", diff)
 		}
 		line := logs.String()
+		if n := strings.Count(line, "level=WARN"); n != 1 {
+			t.Errorf("WARN lines = %d in %q, want exactly 1", n, line)
+		}
 		if !strings.Contains(line, "level=WARN") || !strings.Contains(line, "repo_id="+id) || !strings.Contains(line, "other_repo_id="+keep) {
 			t.Errorf("WARN line = %q, want a WARN naming repo_id=%s and other_repo_id=%s", line, id, keep)
 		}

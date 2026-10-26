@@ -1,0 +1,38 @@
+{
+  "error": {
+    "code": "validation_error",
+    "details": [
+      {
+        "instancePath": "/base_url",
+        "keyword": "custom",
+        "message": "Base URL must start with https://",
+        "params": {
+          "issue": {
+            "code": "custom",
+            "message": "Base URL must start with https://",
+            "path": [
+              "base_url"
+            ]
+          }
+        },
+        "schemaPath": "#/base_url/custom"
+      },
+      {
+        "instancePath": "/token",
+        "keyword": "custom",
+        "message": "Token must not contain whitespace or control characters",
+        "params": {
+          "issue": {
+            "code": "custom",
+            "message": "Token must not contain whitespace or control characters",
+            "path": [
+              "token"
+            ]
+          }
+        },
+        "schemaPath": "#/token/custom"
+      }
+    ],
+    "message": "Request validation failed"
+  }
+}

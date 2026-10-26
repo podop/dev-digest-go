@@ -1,0 +1,10 @@
+{
+  "base_url": "https://gitlab.corp.example/gitlab",
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "host": "gitlab.corp.example",
+  "id": "00000000-0000-4000-8000-000000000001",
+  "name": "gitlab.corp.example",
+  "repo_count": 0,
+  "token_configured": true,
+  "updated_at": "2026-01-01T00:00:00.000Z"
+}

@@ -556,8 +556,9 @@ func TestPoller_aPathAnotherRepoHasKeepsTheStoredPathAndTheSyncGoesOn(t *testing
 		if got := r.store.markedTimes("a", base); len(got) != 1 {
 			t.Errorf("repo marked polled %d times, want 1", len(got))
 		}
-		if got := r.logs.warns(); len(got) != 1 {
-			t.Errorf("WARN lines = %q, want one for the kept path", got)
+		// FR47: the collision is logged once, by the store, with both repository ids; the poller adds no line.
+		if got := r.logs.warns(); len(got) != 0 {
+			t.Errorf("WARN lines = %q, want none from the poller for the kept path", got)
 		}
 	})
 }

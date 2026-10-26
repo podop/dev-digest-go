@@ -1,0 +1,12 @@
+{
+  "expires_at": null,
+  "instance_version": null,
+  "latency_ms": null,
+  "login": null,
+  "message": "The token needs the api or read_api scope",
+  "ok": false,
+  "provider": "gitlab",
+  "scopes": null,
+  "token_access": null,
+  "warnings": []
+}

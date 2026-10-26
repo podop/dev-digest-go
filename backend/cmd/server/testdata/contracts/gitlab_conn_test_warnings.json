@@ -1,0 +1,31 @@
+{
+  "expires_at": "2026-11-06",
+  "instance_version": "16.11.3-ee",
+  "latency_ms": 0,
+  "login": "ann",
+  "message": "Connected as @ann",
+  "ok": true,
+  "provider": "gitlab",
+  "scopes": [
+    "read_api"
+  ],
+  "token_access": "read_only",
+  "warnings": [
+    {
+      "code": "read_only_token",
+      "message": "Read-only token: sync works; posting to merge requests and GitLab CI export will fail"
+    },
+    {
+      "code": "no_repository_scope",
+      "message": "Without read_repository, private projects may not be cloned"
+    },
+    {
+      "code": "token_expiring",
+      "message": "Token expires on 2026-11-06 (in 14 days)"
+    },
+    {
+      "code": "version_unsupported",
+      "message": "GitLab 16.11.3-ee is older than the supported 17.0; some features may fail"
+    }
+  ]
+}

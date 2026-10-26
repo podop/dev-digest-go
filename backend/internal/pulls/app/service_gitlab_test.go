@@ -149,6 +149,24 @@ func TestListForRepo_gitlabRenamedProjectUpdatesPath(t *testing.T) {
 	}
 }
 
+// FR47: the store logs a path collision once, with both repository ids; the service adds no line.
+func TestListForRepo_gitlabPathCollisionLogsNoSecondWarn(t *testing.T) {
+	moved := domain.GitLabProject{ID: 42, FullName: "acme/platform/api", Owner: "acme/platform", Name: "api"}
+	gl := &fakeGitLab{project: moved, listed: []domain.Listed{{Number: 1, HeadSHA: "h", Status: "open"}}}
+	st := newStore()
+	st.repos[glRepoID] = glRepo
+	st.pathBlocked = true
+	logs := &logSink{}
+	svc := app.NewService(st, &fakeGitHub{}, slog.New(logs), func() time.Time { return now }, app.WithGitLab(gl))
+
+	if _, err := svc.ListForRepo(t.Context(), wsID, glRepoID); err != nil {
+		t.Fatalf("ListForRepo() error = %v", err)
+	}
+	if got := logs.warns(); len(got) != 0 {
+		t.Errorf("WARN lines = %q, want none from the service for a path collision", got)
+	}
+}
+
 func TestListForRepo_gitlabFailureServesStored(t *testing.T) {
 	tests := []struct {
 		name      string

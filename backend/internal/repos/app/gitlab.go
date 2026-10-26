@@ -120,12 +120,21 @@ func urlIssue(message string) *apperr.Error {
 // apiSuffix is appended to a connection's base URL to get its REST root.
 const apiSuffix = "/api/v4"
 
-// addGitLab is Add for a GitLab URL (spec FR13-FR15, FR47): bind the host to a connection, cut
+// addGitLab is Add for a GitLab URL (spec FR12-FR15, FR47): bind the host to a connection, cut
 // the connection's path prefix, read the project once with the connection's token, then store
 // it under the project's canonical path. Nothing is stored and no job is enqueued on any error.
 func (s *Service) addGitLab(ctx context.Context, workspaceID, userID string, parsed domain.Parsed) (domain.Repo, bool, error) {
 	conn, err := s.bindConnection(ctx, parsed)
 	if err != nil {
+		// Without a connection there is no path prefix to cut, so the project path limits of
+		// FR12 hold for the whole path and a bad one is a validation error, not "not connected"
+		// (EC12).
+		var nc *NotConnectedError
+		if errors.As(err, &nc) {
+			if _, lerr := parsed.WithoutPrefix(""); lerr != nil {
+				return domain.Repo{}, false, urlIssue(domain.InvalidURLMessage)
+			}
+		}
 		return domain.Repo{}, false, err
 	}
 	rest, err := parsed.WithoutPrefix(pathPrefix(conn.BaseURL))

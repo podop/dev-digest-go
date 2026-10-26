@@ -1,0 +1,15 @@
+{
+  "expires_at": "2026-11-22",
+  "instance_version": "17.5.1-ee",
+  "latency_ms": 0,
+  "login": "ann",
+  "message": "Connected as @ann",
+  "ok": true,
+  "provider": "gitlab",
+  "scopes": [
+    "api",
+    "read_repository"
+  ],
+  "token_access": "full",
+  "warnings": []
+}

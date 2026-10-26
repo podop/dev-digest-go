@@ -348,17 +348,13 @@ func (p *Poller) syncProject(ctx context.Context, workspaceID string, repo domai
 	if proj.FullName == repo.Owner+"/"+repo.Name {
 		return nil
 	}
-	updated, err := p.store.UpdateRepoPath(ctx, workspaceID, repo.ID, proj)
-	switch {
-	case err != nil:
+	// A collision answers (false, nil) and the store has already logged it once with both ids.
+	if _, err := p.store.UpdateRepoPath(ctx, workspaceID, repo.ID, proj); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		p.log.WarnContext(ctx, "background poll: the project path was not stored",
 			"workspace_id", workspaceID, "repo_id", repo.ID, "err", err)
-	case !updated:
-		p.log.WarnContext(ctx, "background poll: the project path belongs to another repository of the workspace; the stored path is kept",
-			"workspace_id", workspaceID, "repo_id", repo.ID)
 	}
 	return nil
 }

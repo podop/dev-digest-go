@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/url"
 	"strconv"
@@ -35,6 +36,18 @@ func TestScrub(t *testing.T) {
 				t.Errorf("scrub(%q) = %q, still holds a token-shaped run", tc.in, got)
 			}
 		})
+	}
+}
+
+// NFR1: git sends the token as HTTP Basic "oauth2:<token>"; an error body that echoes that header
+// must not reach a log line.
+func TestScrub_MasksTheBasicCredential(t *testing.T) {
+	const tok = "glpat-AbCdEfGhIjKlMnOpQrSt"
+	basic := base64.StdEncoding.EncodeToString([]byte("oauth2:" + tok))
+	in := "403 Forbidden (credential " + basic + ")"
+	want := "403 Forbidden (credential " + mask + ")"
+	if got := scrub(in, tok); got != want {
+		t.Errorf("scrub(%q) = %q, want %q", in, got, want)
 	}
 }
 

@@ -1,0 +1,12 @@
+{
+  "expires_at": null,
+  "instance_version": null,
+  "latency_ms": null,
+  "login": null,
+  "message": "GitLab rejected the token (401): it is wrong, expired or revoked",
+  "ok": false,
+  "provider": "gitlab",
+  "scopes": null,
+  "token_access": null,
+  "warnings": []
+}

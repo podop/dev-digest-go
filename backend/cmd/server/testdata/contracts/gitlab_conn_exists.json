@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "gitlab_connection_exists",
+    "message": "A GitLab connection for gitlab.corp.example already exists"
+  }
+}

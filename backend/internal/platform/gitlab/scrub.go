@@ -1,6 +1,7 @@
 package gitlab
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/url"
 	"regexp"
@@ -15,12 +16,17 @@ const mask = "[REDACTED]"
 // random above their prefix, so an 8-byte run is never an ordinary word.
 const minFragment = 8
 
+// gitUser is the user name git sends with a GitLab token (platform/gitcli builds its Basic
+// credential from the same pair).
+const gitUser = "oauth2"
+
 // tokenShape matches GitLab token shapes (glpat-…, glptt-…, glrt-…, gldt-…, glcbt-…, glagent-…)
 // so a token of another connection echoed by a proxy is masked too.
 var tokenShape = regexp.MustCompile(`(?i)\b(?:glpat|glptt|glrt|gldt|glcbt|glagent|glft|glimt|glsoat|glffct|gloas)-[\w-]{8,}`)
 
 // scrub drops token, and anything that reveals part of it, from s: the whole token in its plain,
-// JSON-escaped, quoted and URL-escaped forms, token-shaped runs, and every run of at least
+// JSON-escaped, quoted and URL-escaped forms, the base64 HTTP Basic credential git sends to the
+// same host, token-shaped runs, and every run of at least
 // minFragment bytes that occurs inside the token (NFR1: "no token, or part of one"). Redaction
 // must run before any truncation of s. An empty token leaves s unchanged apart from token-shaped
 // runs.
@@ -49,6 +55,8 @@ func tokenForms(token string) []string {
 	if q := strconv.Quote(token); len(q) >= 2 {
 		forms = append(forms, q[1:len(q)-1])
 	}
+	// A server may echo the Basic credential git sends (a proxy page, a reflected header).
+	forms = append(forms, base64.StdEncoding.EncodeToString([]byte(gitUser+":"+token)))
 	// Longest first, so a form that contains another is not left half-masked.
 	for i := 1; i < len(forms); i++ {
 		for j := i; j > 0 && len(forms[j]) > len(forms[j-1]); j-- {

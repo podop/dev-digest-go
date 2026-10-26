@@ -438,19 +438,15 @@ func (s *Service) syncListGitLab(ctx context.Context, workspaceID string, repo d
 }
 
 // updateRepoPath stores the project's current path when it differs from the stored one (FR47). A
-// collision (another repository holds the new full_name) or a store failure keeps the stored path;
-// the sync goes on by project id and the next fetch tries again.
+// collision (another repository holds the new full_name; the store logs the one WARN) or a store
+// failure keeps the stored path; the sync goes on by project id and the next fetch tries again.
 func (s *Service) updateRepoPath(ctx context.Context, workspaceID string, repo domain.Repo, p domain.GitLabProject) {
 	if p.FullName == "" || (p.Owner == repo.Owner && p.Name == repo.Name) {
 		return
 	}
-	updated, err := s.store.UpdateRepoPath(ctx, workspaceID, repo.ID, p)
-	switch {
-	case err != nil:
+	// A collision answers (false, nil) and the store has already logged it once with both ids.
+	if _, err := s.store.UpdateRepoPath(ctx, workspaceID, repo.ID, p); err != nil {
 		s.log.WarnContext(ctx, "gitlab project path not stored; keeping the stored path", "repo_id", repo.ID, "err", err)
-	case !updated:
-		s.log.WarnContext(ctx, "gitlab project path held by another repository; keeping the stored path",
-			"repo_id", repo.ID, "project_id", repo.ProjectID, "host", repo.Host)
 	}
 }
 

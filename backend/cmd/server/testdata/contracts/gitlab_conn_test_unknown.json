@@ -1,0 +1,21 @@
+{
+  "expires_at": null,
+  "instance_version": null,
+  "latency_ms": 0,
+  "login": "ann",
+  "message": "Connected as @ann",
+  "ok": true,
+  "provider": "gitlab",
+  "scopes": null,
+  "token_access": null,
+  "warnings": [
+    {
+      "code": "scopes_unknown",
+      "message": "The token's scopes could not be read"
+    },
+    {
+      "code": "version_unknown",
+      "message": "The GitLab version could not be read"
+    }
+  ]
+}
