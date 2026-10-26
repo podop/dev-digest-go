@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -19,9 +20,6 @@ const (
 	ActionCheckout       = "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"
 	ActionUploadArtifact = "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"
 )
-
-// SecretNames are the only secrets a workflow may reference.
-var SecretNames = []string{"OPENROUTER_API_KEY", "GITHUB_TOKEN"}
 
 // ErrInvalidWorkflowOptions is returned by BuildWorkflow for a slug, trigger list or post_as that
 // would put user-controlled text into the YAML.
@@ -58,6 +56,14 @@ type WorkflowOptions struct {
 	Slug     string
 	Triggers []Trigger
 	PostAs   PostAs
+	// Provider is the agent's provider: a built-in or a well-formed custom id. Empty means
+	// openrouter, the Phase 6 workflow.
+	Provider string
+	// Runner picks runs-on (FR25); empty means GitHub-hosted.
+	Runner Runner
+	// HeaderCount is the number of extra headers of a custom provider (0 to MaxExtraHeaders): one
+	// DEVDIGEST_LLM_HEADER_<n> line each (FR26). It is ignored for a built-in provider.
+	HeaderCount int
 }
 
 // workflowTemplate is the text of spec 7.6.5 with @@NAME@@ placeholders. The values are checked
@@ -76,7 +82,7 @@ jobs:
   review:
     name: @@CHECK@@
     if: @@FORK_GUARD@@
-    runs-on: @@RUNNER_OS@@
+    runs-on: @@RUNS_ON@@
     steps:
       - name: Check out the pull request
         uses: @@CHECKOUT@@
@@ -92,8 +98,7 @@ jobs:
           chmod +x "$RUNNER_TEMP/@@RUNNER_NAME@@"
           cd "$GITHUB_WORKSPACE" && "$RUNNER_TEMP/@@RUNNER_NAME@@"
         env:
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+@@PROVIDER_ENV@@          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEVDIGEST_AGENT: @@SLUG@@
           DEVDIGEST_POST_AS: @@POST_AS@@
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -105,6 +110,32 @@ jobs:
           name: @@ARTIFACT@@
           path: @@RESULT_FILE@@
 `
+
+// providerEnvLines is the run step's env lines (10-space indent, each ending in a newline) that
+// hand the provider's credentials to the runner, before GITHUB_TOKEN (FR26, FR35). Only fixed
+// names and names derived from a validated slug are written (NFR8). An empty provider is
+// openrouter; false for an invalid provider or header count.
+func providerEnvLines(provider string, headerCount int) (string, bool) {
+	const indent = "          "
+	if provider == "" {
+		provider = ProviderOpenRouter
+	}
+	if name, ok := builtinSecret(provider); ok {
+		return indent + name + ": ${{ secrets." + name + " }}\n", true
+	}
+	slug, ok := CustomSlug(provider)
+	if !ok || headerCount < 0 || headerCount > MaxExtraHeaders {
+		return "", false
+	}
+	env, _ := EnvName(slug)
+	var b strings.Builder
+	b.WriteString(indent + "DEVDIGEST_LLM_BASE_URL: ${{ vars." + BaseURLVariable(env) + " }}\n")
+	b.WriteString(indent + "DEVDIGEST_LLM_API_KEY: ${{ secrets." + APIKeySecret(env) + " }}\n")
+	for n := 1; n <= headerCount; n++ {
+		b.WriteString(indent + "DEVDIGEST_LLM_HEADER_" + strconv.Itoa(n) + ": ${{ secrets." + HeaderSecret(env, n) + " }}\n")
+	}
+	return b.String(), true
+}
 
 // BuildWorkflow generates the hardened per-agent workflow (spec 7.6.5). It decodes the committed
 // runner, verifies its checksum and runs it; there is no Node setup step. The result passes
@@ -127,11 +158,20 @@ func BuildWorkflow(o WorkflowOptions) (string, error) {
 	if !ValidPostAs(o.PostAs) {
 		return "", fmt.Errorf("%w: post_as", ErrInvalidWorkflowOptions)
 	}
+	runsOn, ok := o.Runner.RunsOn()
+	if !ok {
+		return "", fmt.Errorf("%w: runner", ErrInvalidWorkflowOptions)
+	}
+	providerEnv, ok := providerEnvLines(o.Provider, o.HeaderCount)
+	if !ok {
+		return "", fmt.Errorf("%w: provider", ErrInvalidWorkflowOptions)
+	}
 	return strings.NewReplacer(
 		"@@CHECK@@", CheckName(o.Slug),
 		"@@TRIGGERS@@", strings.Join(names, ", "),
 		"@@FORK_GUARD@@", ForkGuardExpr,
-		"@@RUNNER_OS@@", RunnerOS,
+		"@@RUNS_ON@@", runsOn,
+		"@@PROVIDER_ENV@@", providerEnv,
 		"@@CHECKOUT@@", ActionCheckout,
 		"@@RUNNER_PATH@@", RunnerPath,
 		"@@RUNNER_NAME@@", RunnerBinaryName,

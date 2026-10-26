@@ -46,8 +46,13 @@ const (
 
 var (
 	allowedTriggers = []string{"opened", "synchronize", "reopened"}
-	secretNames     = []string{"OPENROUTER_API_KEY", "GITHUB_TOKEN"}
+	// builtinSecretNames is what Check allows next to GITHUB_TOKEN: the secret of the openrouter
+	// workflow, the only one before custom providers.
+	builtinSecretNames = []string{"OPENROUTER_API_KEY"}
 )
+
+// githubToken is the one secret every generated workflow may reference (FR28).
+const githubToken = "GITHUB_TOKEN"
 
 // jsSpace is the character set of JavaScript's \s and String.prototype.trim. Go's \s is ASCII only.
 const jsSpace = `\t\n\x0b\f\r \x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}`
@@ -79,8 +84,18 @@ var untrusted = []string{
 }
 
 // Check runs the size limit, the YAML syntax and the seven rules over a workflow text and returns
-// the first broken one. The size (UTF-8 bytes) is checked before the text is parsed.
+// the first broken one. The size (UTF-8 bytes) is checked before the text is parsed. It allows
+// GITHUB_TOKEN and OPENROUTER_API_KEY as secret references: CheckWith(text, []string{"OPENROUTER_API_KEY"}).
 func Check(text string) Result {
+	return CheckWith(text, builtinSecretNames)
+}
+
+// CheckWith is Check with the secret names the workflow of this export may reference (FR28): the
+// `secrets` rule allows GITHUB_TOKEN, which is always allowed, plus names. Names are matched
+// exactly (case-sensitive, as GitHub secret names are written in the generated workflow); an
+// empty name allows nothing, so `secrets` without a member never passes. A name the caller does
+// not list, and `secrets: inherit`, stay refused. Every other rule is the same as in Check.
+func CheckWith(text string, names []string) Result {
 	if len(text) > maxWorkflowBytes {
 		return fail(InvalidYAML)
 	}
@@ -109,7 +124,7 @@ func Check(text string) Result {
 	if w.exhausted {
 		return fail(InvalidYAML)
 	}
-	if !secretsOK(jobs, exprs) {
+	if !secretsOK(jobs, exprs, names) {
 		return fail(Secrets)
 	}
 	if !actionsPinned(jobs) {
@@ -204,8 +219,8 @@ func permissionsOK(doc *object, jobs []*object) bool {
 }
 
 // secretsOK: no job has a `secrets` key (secrets: inherit), and every reference to `secrets`
-// inside an expression names a secret the generated workflow uses.
-func secretsOK(jobs []*object, exprs []string) bool {
+// inside an expression names GITHUB_TOKEN or one of names.
+func secretsOK(jobs []*object, exprs []string, names []string) bool {
 	for _, job := range jobs {
 		if _, ok := job.vals["secrets"]; ok {
 			return false
@@ -213,7 +228,7 @@ func secretsOK(jobs []*object, exprs []string) bool {
 	}
 	for _, e := range exprs {
 		for _, m := range reSecretRef.FindAllStringSubmatch(e, -1) {
-			if !slices.Contains(secretNames, m[1]) {
+			if m[1] == "" || (m[1] != githubToken && !slices.Contains(names, m[1])) {
 				return false
 			}
 		}

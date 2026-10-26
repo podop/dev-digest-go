@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Modal, FormField, TextInput, Textarea } from "@devdigest/ui";
 import type { Provider } from "@devdigest/shared";
-import { Select } from "@/components/select";
+import { ProviderSelect, useProviderUndefined } from "@/components/provider-select";
 import { useCreateAgent, useSettings } from "@/lib/hooks";
 import { ModelSelectField } from "@/app/agents/_components/ModelSelectField";
 import { DEFAULT_AGENT_MODEL, DEFAULT_AGENT_PROVIDER } from "@/lib/model-defaults";
-import { MODAL_WIDTH, PROVIDER_OPTIONS } from "./constants";
+import { MODAL_WIDTH } from "./constants";
 import { s } from "./styles";
 
 interface ModelChoice {
@@ -20,6 +20,7 @@ interface ModelChoice {
 /** Create-agent modal — name/description/provider/model/system-prompt. */
 export function CreateAgentModal({ onClose }: { onClose: () => void }) {
   const t = useTranslations("agents");
+  const tp = useTranslations("providerSelect");
   const router = useRouter();
   const create = useCreateAgent();
   const [name, setName] = React.useState("");
@@ -31,6 +32,8 @@ export function CreateAgentModal({ onClose }: { onClose: () => void }) {
   const base: ModelChoice = settings?.default_model ?? { provider: DEFAULT_AGENT_PROVIDER, model: DEFAULT_AGENT_MODEL };
   const [picked, setPicked] = React.useState<ModelChoice | null>(null);
   const { provider, model } = picked ?? base;
+  // A default model on a custom provider that no longer exists: pick another provider to create (FR19).
+  const providerUndefined = useProviderUndefined(provider);
   const [systemPrompt, setSystemPrompt] = React.useState(t("create.defaultSystemPrompt"));
 
   // Model ids are provider-specific (gpt-4.1 vs openai/gpt-4.1), so a provider
@@ -62,7 +65,7 @@ export function CreateAgentModal({ onClose }: { onClose: () => void }) {
           <Button kind="ghost" onClick={onClose}>
             {t("create.cancel")}
           </Button>
-          <Button kind="primary" icon="Plus" onClick={submit} disabled={create.isPending || !model}>
+          <Button kind="primary" icon="Plus" onClick={submit} disabled={create.isPending || !model || providerUndefined}>
             {create.isPending ? t("create.creating") : t("create.create")}
           </Button>
         </div>
@@ -79,13 +82,8 @@ export function CreateAgentModal({ onClose }: { onClose: () => void }) {
             placeholder={t("create.fields.descriptionPlaceholder")}
           />
         </FormField>
-        <FormField label={t("create.fields.provider")}>
-          <Select
-            value={provider}
-            onChange={changeProvider}
-            options={[...PROVIDER_OPTIONS]}
-            aria-label={t("create.fields.provider")}
-          />
+        <FormField label={t("create.fields.provider")} hint={providerUndefined ? tp("blockedHint") : undefined}>
+          <ProviderSelect value={provider} onChange={changeProvider} aria-label={t("create.fields.provider")} />
         </FormField>
         <ModelSelectField provider={provider} value={model} onChange={setModel} />
         <FormField label={t("create.fields.systemPrompt")}>

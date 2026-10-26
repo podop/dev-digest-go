@@ -1,8 +1,9 @@
 /* InstallActionDialog — "Install in a repo" (FR3): pick one connected repository and ≥ 1
    agents, then install them one at a time with the CI export (action "open_pr"), showing the
    PR link or the error per agent; Retry failed re-runs only the failed ones (EC13). Agents of a
-   disabled plugin are not offered (FR18); non-OpenRouter ones are listed unselectable with the
-   reason. Escape, the focus trap and focus return come from useDialogFocus; the card behind
+   disabled plugin are not offered (FR18); agents on an undefined custom provider are listed
+   unselectable with the reason (FR32). One Runner choice applies to the whole run: Self-hosted
+   by default once a custom-provider agent is picked, until the user chooses. Escape, the focus trap and focus return come from useDialogFocus; the card behind
    refetches by itself (useInstallCi invalidates it). */
 "use client";
 
@@ -12,9 +13,10 @@ import { useTranslations } from "next-intl";
 import { Button, ErrorState, Modal } from "@devdigest/ui";
 import { Select } from "@/components/select";
 import { useDialogFocus } from "@/lib/dialog-focus";
-import { useAgents, useRepos } from "@/lib/hooks";
+import { useAgents, useCustomProviders, useRepos } from "@/lib/hooks";
 import { AgentRow } from "./_components/AgentRow";
-import { failedIds, hasStarted, offeredAgents } from "./helpers";
+import { RunnerField } from "./_components/RunnerField";
+import { defaultRunner, failedIds, hasStarted, offeredAgents, type Runner } from "./helpers";
 import { useInstallRun } from "./useInstallRun";
 import { s } from "./styles";
 
@@ -25,17 +27,26 @@ export function InstallActionDialog({ onClose }: { onClose: () => void }) {
   const t = useTranslations("integrationsGithubAction.dialog");
   const repos = useRepos();
   const agents = useAgents();
+  const customProviders = useCustomProviders();
   const [repo, setRepo] = React.useState("");
   const [picked, setPicked] = React.useState<ReadonlySet<string>>(new Set());
-  const { runs, busy, run } = useInstallRun(repo);
+  // null = the user has not chosen: the Runner follows the selection (FR32).
+  const [chosenRunner, setChosenRunner] = React.useState<Runner | null>(null);
+  const offers = React.useMemo(
+    () => offeredAgents(agents.data ?? [], customProviders.data),
+    [agents.data, customProviders.data],
+  );
+  const order = offers.map((o) => o.agent.id);
+  // An agent whose provider got undefined since it was picked is dropped from the run.
+  const selected = offers.filter((o) => o.block === null && picked.has(o.agent.id)).map((o) => o.agent.id);
+  const runner = chosenRunner ?? defaultRunner(offers, new Set(selected));
+  const { runs, busy, run } = useInstallRun(repo, runner);
   // A run is a request chain: leaving mid-way would orphan the rest, so Close waits for it.
   const close = () => {
     if (!busy) onClose();
   };
   const ref = useDialogFocus(close);
 
-  const offers = React.useMemo(() => offeredAgents(agents.data ?? []), [agents.data]);
-  const order = offers.map((o) => o.agent.id);
   const repoOptions = React.useMemo(
     () => [
       { value: "", label: t("repoPlaceholder") },
@@ -45,7 +56,6 @@ export function InstallActionDialog({ onClose }: { onClose: () => void }) {
   );
   const started = hasStarted(runs);
   const failed = failedIds(runs, order);
-  const selected = order.filter((id) => picked.has(id));
   const toggle = (id: string) =>
     setPicked((prev) => {
       const next = new Set(prev);
@@ -76,7 +86,10 @@ export function InstallActionDialog({ onClose }: { onClose: () => void }) {
                 kind="primary"
                 loading={busy}
                 disabled={repo === "" || selected.length === 0}
-                onClick={() => void run(selected)}
+                onClick={() => {
+                  setChosenRunner(runner); // frozen for Retry failed
+                  void run(selected);
+                }}
               >
                 {busy ? t("actions.installing") : t("actions.install")}
               </Button>
@@ -114,6 +127,8 @@ export function InstallActionDialog({ onClose }: { onClose: () => void }) {
               </div>
             )}
           </div>
+
+          <RunnerField value={runner} locked={busy || started} onChange={setChosenRunner} />
 
           <fieldset style={s.field}>
             <legend style={s.label}>{t("agentsLegend")}</legend>

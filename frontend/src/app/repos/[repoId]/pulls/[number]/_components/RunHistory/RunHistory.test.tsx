@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderWithProviders, screen, cleanup } from "@/test/render";
+import { mockFetch } from "@/test/fetch-mock";
 import type { FindingRecord, RunSummary } from "@devdigest/shared";
 import { RunHistory } from "./RunHistory";
 
@@ -175,5 +176,37 @@ describe("RunHistory — actions", () => {
   it("a running run cannot be deleted", () => {
     renderWithProviders(<RunHistory runs={[run({ status: "running" })]} onOpenTrace={() => {}} onDelete={() => {}} />);
     expect(screen.queryByRole("button", { name: "Delete run" })).toBeNull();
+  });
+});
+
+describe("RunHistory — provider name (FR20, AC25)", () => {
+  it("shows a custom provider's current name, the built-in name, and the raw id for an undefined custom id", async () => {
+    mockFetch({
+      "GET /settings/custom-providers": [
+        {
+          id: "custom:synapse",
+          name: "Synapse EU",
+          protocol: "openai",
+          base_url: "https://gw.example.com/v1",
+          plain_http: false,
+          auth_mode: "bearer",
+          auth_header: null,
+          structured_output: "strict",
+          key_configured: true,
+          extra_headers: [],
+          models: [],
+          created_at: "2026-10-26T10:00:00.000Z",
+          updated_at: "2026-10-26T10:00:00.000Z",
+        },
+      ],
+    });
+    renderRuns([
+      run({ run_id: "r1", provider: "custom:synapse", model: "m1" }),
+      run({ run_id: "r2", provider: "custom:ghost", model: "m2" }),
+      run({ run_id: "r3", provider: "openrouter", model: "m3" }),
+    ]);
+    expect(await screen.findByText("Synapse EU")).toBeInTheDocument();
+    expect(screen.getByText("custom:ghost")).toBeInTheDocument();
+    expect(screen.getByText("OpenRouter")).toBeInTheDocument();
   });
 });

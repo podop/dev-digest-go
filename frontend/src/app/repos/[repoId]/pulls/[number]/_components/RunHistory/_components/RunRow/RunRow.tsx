@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Icon, CircularScore } from "@devdigest/ui";
 import type { RunSummary, FindingRecord } from "@devdigest/shared";
 import { CostText } from "@/components/cost-text";
+import { ProviderName } from "@/components/provider-name";
 import { FindingsHover, countBySeverity } from "@/components/findings-hover";
 import { OUTCOME_STYLE } from "../../constants";
 import { outcomeKey, usageTokens } from "../../helpers";
@@ -52,7 +53,7 @@ export function RunRow({ run: r, findings, onOpenTrace, onGoToReview, onDelete, 
             <span>{agentName}</span>
           )}{" "}
           <span className="mono" style={s.model}>
-            {r.provider}/{r.model}
+            {r.provider && <ProviderName id={r.provider} />}/{r.model}
           </span>
         </div>
         {r.status === "failed" && r.error && (

@@ -1,11 +1,22 @@
-/* ConfigureStep — workflow options: trigger chips (at least one), the secrets the workflow
-   reads (static, no status), "Post results as", and how to block merges. Once the workflow
-   was edited the options are locked, since changing one would regenerate and drop the edit. */
+/* ConfigureStep — workflow options: trigger chips (at least one), the Runner (with the
+   custom provider's self-hosted note), the secrets and variables the workflow needs (from the
+   export response), "Post results as", and how to block merges. Once the workflow was edited
+   the options are locked, since changing one would regenerate and drop the edit. */
 "use client";
 
 import { useTranslations } from "next-intl";
 import { Badge } from "@devdigest/ui";
-import { POST_AS_OPTIONS, SECRET_KEYS, TRIGGERS, type PostAs, type Trigger, type TriggerState } from "../../constants";
+import {
+  POST_AS_OPTIONS,
+  RUNNER_OPTIONS,
+  TRIGGERS,
+  type PostAs,
+  type Runner,
+  type Trigger,
+  type TriggerState,
+} from "../../constants";
+import type { Requirements as RequirementsData } from "../../helpers";
+import { Requirements } from "../Requirements";
 import { s } from "./styles";
 
 export function ConfigureStep({
@@ -13,6 +24,9 @@ export function ConfigureStep({
   onToggleTrigger,
   postAs,
   onPostAsChange,
+  runner,
+  onRunnerChange,
+  requirements,
   locked,
   slug,
 }: {
@@ -20,6 +34,10 @@ export function ConfigureStep({
   onToggleTrigger: (trigger: Trigger) => void;
   postAs: PostAs;
   onPostAsChange: (value: PostAs) => void;
+  runner: Runner;
+  onRunnerChange: (value: Runner) => void;
+  /** Secrets and variables from the preview response, and the agent's custom provider. */
+  requirements: RequirementsData;
   /** The workflow was edited in Preview. */
   locked: boolean;
   slug: string | null;
@@ -59,19 +77,29 @@ export function ConfigureStep({
         )}
       </fieldset>
 
-      <section style={s.group} aria-label={t("secretsTitle")}>
-        <h3 style={s.legend}>{t("secretsTitle")}</h3>
-        <ul style={s.secrets}>
-          {SECRET_KEYS.map((key) => (
-            <li key={key} style={s.secret}>
-              <span className="mono" style={s.secretKey}>
-                {key}
-              </span>
-              <span style={s.muted}>{t(`secrets.${key}`)}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <fieldset style={s.group} disabled={locked}>
+        <legend style={s.legend}>{t("runnerLabel")}</legend>
+        {RUNNER_OPTIONS.map((opt) => (
+          <label key={opt.value} style={s.radio}>
+            <input
+              type="radio"
+              name="ci-runner"
+              value={opt.value}
+              checked={runner === opt.value}
+              disabled={locked}
+              onChange={() => onRunnerChange(opt.value)}
+            />
+            {t(`runner.${opt.labelKey}`)}
+          </label>
+        ))}
+        {requirements.custom && (
+          <p style={s.muted}>
+            {t("selfHostedNote", { name: requirements.custom.name, host: requirements.custom.host })}
+          </p>
+        )}
+      </fieldset>
+
+      <Requirements {...requirements} />
 
       <fieldset style={s.group} disabled={locked}>
         <legend style={s.legend}>{t("postResultsLabel")}</legend>

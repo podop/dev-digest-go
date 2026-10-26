@@ -50,12 +50,22 @@ describe("plugin helpers", () => {
     expect(isPluginDisabled(undefined)).toBe(false);
   });
 
-  it("ciExportable offers OpenRouter agents of an enabled or no plugin, and says why not otherwise", () => {
+  it("ciExportable offers openrouter, openai, anthropic and defined custom agents of an enabled or no plugin, and says why not otherwise (FR32, EC34)", () => {
+    const custom = [{ id: "custom:synapse", name: "Synapse" }];
     expect(ciExportable({ provider: "openrouter" })).toEqual({ ok: true });
     expect(ciExportable({ provider: "openrouter", plugin: ON })).toEqual({ ok: true });
-    expect(ciExportable({ provider: "anthropic" })).toEqual({ ok: false, reason: "provider_not_supported" });
+    expect(ciExportable({ provider: "anthropic" }, custom)).toEqual({ ok: true });
+    expect(ciExportable({ provider: "openai" }, [])).toEqual({ ok: true });
+    expect(ciExportable({ provider: "custom:synapse" }, custom)).toEqual({ ok: true });
+    expect(ciExportable({ provider: "custom:ghost" }, custom)).toEqual({ ok: false, reason: "custom_not_configured" });
+    expect(ciExportable({ provider: "custom:synapse" }, [])).toEqual({ ok: false, reason: "custom_not_configured" });
+    // The provider list is not known yet: the server decides.
+    expect(ciExportable({ provider: "custom:ghost" })).toEqual({ ok: true });
     expect(ciExportable({ provider: "openrouter", plugin: OFF })).toEqual({ ok: false, reason: "plugin_disabled" });
-    expect(ciExportable({ provider: "openai", plugin: OFF })).toEqual({ ok: false, reason: "provider_not_supported" });
+    expect(ciExportable({ provider: "openai", plugin: OFF })).toEqual({ ok: false, reason: "plugin_disabled" });
+    expect(ciExportable({ provider: "custom:synapse", plugin: OFF }, custom)).toEqual({ ok: false, reason: "plugin_disabled" });
+    // A malformed id is not a provider CI knows.
+    expect(ciExportable({ provider: "custom:Bad Id" as never }, custom)).toEqual({ ok: false, reason: "provider_not_supported" });
   });
 
   it("upload kind, media type and limit follow the file extension", () => {

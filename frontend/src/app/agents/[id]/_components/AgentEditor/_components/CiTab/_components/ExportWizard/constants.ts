@@ -25,9 +25,15 @@ export const DEFAULT_POST_AS: PostAs = "github_review";
 
 export type InstallMethod = "pr" | "zip";
 
-/** Secrets the workflow reads; `GITHUB_TOKEN` is provided by Actions (FR11). */
-export const SECRET_KEYS = ["OPENROUTER_API_KEY", "GITHUB_TOKEN"] as const;
-export const OPENROUTER_SECRET = SECRET_KEYS[0];
+/** Provided by Actions, never set by the user (FR11); the other secrets and the variables come from the export response (FR31). */
+export const GITHUB_TOKEN_SECRET = "GITHUB_TOKEN";
+
+export type Runner = NonNullable<CiExportOptions["runner"]>;
+/** Order of the "Runner" options; their labels are `ci.exportWizard.runner.<labelKey>`. */
+export const RUNNER_OPTIONS: readonly { value: Runner; labelKey: "githubHosted" | "selfHosted" }[] = [
+  { value: "github_hosted", labelKey: "githubHosted" },
+  { value: "self_hosted", labelKey: "selfHosted" },
+];
 
 /** Paths the export always contains (FR6). */
 export const RUNNER_BUNDLE_PATH = ".devdigest/runner/index.js";

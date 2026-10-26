@@ -1026,10 +1026,10 @@ func newRecordingClient(h *runHarness) *recordingClient {
 	return c
 }
 
-func (c *recordingClient) Ready(p llm.Provider) error {
+func (c *recordingClient) ReadyIn(ctx context.Context, ws string, p llm.Provider) error {
 	c.h.record("llm.resolve", []any{string(p)}, nil)
 	c.h.clock.bump(1)
-	return c.inner.Ready(p)
+	return c.inner.ReadyIn(ctx, ws, p)
 }
 
 func (c *recordingClient) Redact(s string) string { return c.inner.Redact(s) }

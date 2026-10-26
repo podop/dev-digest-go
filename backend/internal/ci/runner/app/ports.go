@@ -12,6 +12,8 @@ import (
 	"context"
 	"errors"
 
+	cidomain "dev-digest-go/backend/internal/ci/domain"
+	"dev-digest-go/backend/internal/llm/custom"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 )
@@ -80,11 +82,89 @@ type GitHub interface {
 	PostComment(ctx context.Context, token string, pr PullRef, body string) error
 }
 
-// LLM builds the engine's LLM port for a model (adapters over the OpenRouter client, with the
-// runner's fixed endpoint, retries and timeouts). It is bound to the OPENROUTER_API_KEY of the
-// environment; an empty key fails at the first call, not here.
+// LLM builds the engine's LLM port for a model of an openrouter manifest (adapters over the
+// OpenRouter client, with the runner's fixed endpoint, retries and timeouts). It is bound to the
+// OPENROUTER_API_KEY of the environment; an empty key fails at the first call, not here. Other
+// manifest providers go through Providers.
 type LLM interface {
 	For(model string) reviewerapp.LLM
+}
+
+// Header is an extra request header of a custom provider with its value.
+type Header struct {
+	Name, Value string
+}
+
+// CustomEndpoint is everything a custom provider call needs beyond the shared fields of
+// ProviderSelection. The use case has already applied the FR3 base URL rules and the FR4 header
+// rules; the adapter still applies the outbound policy (no redirects, no proxy, the address guard).
+type CustomEndpoint struct {
+	// BaseURL is the normalised DEVDIGEST_LLM_BASE_URL (custom.CheckBaseURL).
+	BaseURL  string
+	Protocol custom.Protocol
+	AuthMode custom.AuthMode
+	// AuthHeader is the credential header of the header auth mode, empty for bearer.
+	AuthHeader string
+	// Headers are the extra headers with their values, in manifest order.
+	Headers []Header
+	// Mode is the structured-output mode (FR33).
+	Mode custom.Mode
+}
+
+// ProviderSelection names the provider and model of a manifest that is not openrouter, with the
+// one credential the use case read for it (A10: the OpenRouter key is never part of it).
+type ProviderSelection struct {
+	// Provider is "openai", "anthropic" or "custom:<slug>". It is also the name the strict-mode
+	// hint uses (SCR4).
+	Provider string
+	Model    string
+	// Key is OPENAI_API_KEY, ANTHROPIC_API_KEY or DEVDIGEST_LLM_API_KEY; empty is allowed here:
+	// a built-in fails at its first call, a custom provider then sends no auth header (EC19).
+	Key string
+	// Price is the manifest price; nil = unpriced. Adapters price reported tokens only (SCR7), for
+	// instance with ManifestPricer.
+	Price *cidomain.Pricing
+	// Custom is set exactly for a custom provider.
+	Custom *CustomEndpoint
+}
+
+// Secrets are the values the adapter must keep out of every error text and log line: the key and
+// the extra header values.
+func (s ProviderSelection) Secrets() []string {
+	var out []string
+	if s.Key != "" {
+		out = append(out, s.Key)
+	}
+	if s.Custom != nil {
+		for _, h := range s.Custom.Headers {
+			out = append(out, h.Value)
+		}
+	}
+	return out
+}
+
+// Providers builds the engine's LLM port for an openai, anthropic or custom manifest (the runner
+// binary wires the adapters: the built-in endpoints with their fixed limits, or a custom adapter
+// over Custom). It fails only when it cannot build the port; a rejected key shows at the first call.
+type Providers interface {
+	For(sel ProviderSelection) (reviewerapp.LLM, error)
+}
+
+// ManifestPricer prices a model from the manifest price (P5, FR36): tokens_in x promptPerM / 1e6 +
+// tokens_out x completionPerM / 1e6. It satisfies llm.Pricer. A nil Pricing prices nothing. The
+// caller passes only token counts a provider reported (SCR7).
+type ManifestPricer struct {
+	Pricing *cidomain.Pricing
+}
+
+// Estimate returns the cost of the tokens in USD, or nil when the manifest has no price or a count
+// is negative.
+func (p ManifestPricer) Estimate(_ string, tokensIn, tokensOut int) *float64 {
+	if p.Pricing == nil || tokensIn < 0 || tokensOut < 0 {
+		return nil
+	}
+	cost := float64(tokensIn)*p.Pricing.PromptPerM/1e6 + float64(tokensOut)*p.Pricing.CompletionPerM/1e6
+	return &cost
 }
 
 // Out is the job log. Lines carry no environment value other than those spec 7.8.9 lists, no

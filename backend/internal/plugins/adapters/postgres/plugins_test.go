@@ -175,10 +175,10 @@ func newRemovalFixture(t *testing.T) *removalFixture {
 	e.evalCase(t, e.ws, "agent", f.userAgent, "mine case")
 	e.evalCase(t, e.ws, "agent", f.reviewer, "added later")
 	e.learning(t, e.ws, "", "mine")
-	e.exec(t, `INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'o/r', 'gha')`, f.reviewer)
-	e.exec(t, `INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'o/r2', 'gha')`, f.reviewer)
-	e.exec(t, `INSERT INTO ci_installations (agent_id, repo, target_type)
-		VALUES ((SELECT id FROM agents WHERE plugin_id = ? AND name = 'keep-reviewer'), 'o/r', 'gha')`, f.neighbour)
+	e.exec(t, `INSERT INTO ci_installations (agent_id, repo, target_type, provider) VALUES (?, 'o/r', 'gha', 'openrouter')`, f.reviewer)
+	e.exec(t, `INSERT INTO ci_installations (agent_id, repo, target_type, provider) VALUES (?, 'o/r2', 'gha', 'openrouter')`, f.reviewer)
+	e.exec(t, `INSERT INTO ci_installations (agent_id, repo, target_type, provider)
+		VALUES ((SELECT id FROM agents WHERE plugin_id = ? AND name = 'keep-reviewer'), 'o/r', 'gha', 'openrouter')`, f.neighbour)
 	f.run = e.scalar(t, `INSERT INTO agent_runs (workspace_id, agent_id, status) VALUES (?, ?, 'done') RETURNING id`, e.ws, f.reviewer)
 	return f
 }

@@ -7,6 +7,7 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge } from "@devdigest/ui";
 import type { RunTrace, FindingRecord } from "@devdigest/shared";
+import { ProviderName } from "@/components/provider-name";
 import { PROMPT_COLORS } from "../../constants";
 import { formatTokens, formatUsd } from "@/lib/format-usage";
 import { formatSeconds, toolCallKeys } from "../../helpers";
@@ -35,7 +36,7 @@ export function TraceBody({ trace, findings }: { trace: RunTrace; findings: Find
           </Row>
           <Row label={t("trace.config.provider")}>
             <span className="mono" style={s.configProvider}>
-              {trace.config.provider ?? "—"}
+              {trace.config.provider ? <ProviderName id={trace.config.provider} /> : "—"}
             </span>
           </Row>
           <Row label={t("trace.config.memoryPulled")}>

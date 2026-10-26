@@ -4,6 +4,10 @@ import type { CSSProperties } from "react";
 export const s = {
   wrap: { maxWidth: 640 } satisfies CSSProperties,
   row: { marginBottom: 18 } satisfies CSSProperties,
+  pickers: { display: "flex", gap: 10, alignItems: "flex-start" } satisfies CSSProperties,
+  provider: { width: 170, flexShrink: 0 } satisfies CSSProperties,
+  model: { flex: 1, minWidth: 0 } satisfies CSSProperties,
+  blocked: { fontSize: 13, fontWeight: 600, color: "var(--warn)" } satisfies CSSProperties,
   defaultTag: {
     marginLeft: 8,
     fontSize: 12,

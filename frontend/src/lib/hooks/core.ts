@@ -6,7 +6,8 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import { aboutKeys, providerKeys, repoKeys, prKeys, settingsKeys } from "./keys";
+import { isCustomId } from "../providers/custom";
+import { aboutKeys, customProviderKeys, providerKeys, repoKeys, prKeys, settingsKeys } from "./keys";
 import type {
   Settings,
   SettingsUpdate,
@@ -58,6 +59,9 @@ export function useTestConnection() {
         qc.invalidateQueries({ queryKey: providerKeys.all });
         qc.invalidateQueries({ queryKey: settingsKeys.secretsStatus() });
       }
+      // A custom provider's key is saved before it is tested (even when the test fails):
+      // its "Key saved" badge reads `key_configured` from the custom-provider list.
+      if (isCustomId(res.provider)) qc.invalidateQueries({ queryKey: customProviderKeys.all });
     },
   });
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"dev-digest-go/backend/internal/ci/domain"
+	"dev-digest-go/backend/internal/ci/domain/wfrules"
 )
 
 // wantWorkflow is the text of spec 7.6.5 for slug security-reviewer, triggers [synchronize] and
@@ -126,6 +127,139 @@ func TestNormalizeTriggers(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("NormalizeTriggers(%v) mismatch (-want +got):\n%s", tc.in, diff)
+			}
+		})
+	}
+}
+
+// wfOpts are the options of wantWorkflow with the given provider-related fields.
+func wfOpts(provider string, runner domain.Runner, headers int) domain.WorkflowOptions {
+	return domain.WorkflowOptions{
+		Slug: "security-reviewer", Triggers: []domain.Trigger{domain.TriggerSynchronize}, PostAs: domain.PostAsNone,
+		Provider: provider, Runner: runner, HeaderCount: headers,
+	}
+}
+
+const keyLineOpenRouter = "          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}\n"
+
+// P12: an explicit openrouter provider and the GitHub-hosted runner change no byte; the header
+// count is ignored for a built-in provider.
+func TestBuildWorkflow_OpenRouterByteIdentical(t *testing.T) {
+	for _, o := range []domain.WorkflowOptions{
+		wfOpts("openrouter", "", 0),
+		wfOpts("openrouter", domain.RunnerGitHubHosted, 0),
+		wfOpts("openrouter", "", 4),
+	} {
+		got, err := domain.BuildWorkflow(o)
+		if err != nil {
+			t.Fatalf("BuildWorkflow(%+v) error = %v", o, err)
+		}
+		if diff := cmp.Diff(wantWorkflow, got); diff != "" {
+			t.Errorf("BuildWorkflow(%+v) mismatch (-want +got):\n%s", o, diff)
+		}
+	}
+}
+
+// FR25: self_hosted changes only the runs-on line.
+func TestBuildWorkflow_SelfHostedChangesOnlyRunsOn(t *testing.T) {
+	got, err := domain.BuildWorkflow(wfOpts("openrouter", domain.RunnerSelfHosted, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(wantWorkflow, "    runs-on: ubuntu-24.04\n", "    runs-on: [self-hosted, linux, x64]\n", 1)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("BuildWorkflow(self_hosted) mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// FR35, AC45: openai and anthropic replace only the key line.
+func TestBuildWorkflow_BuiltinProviders(t *testing.T) {
+	tests := []struct{ provider, secret string }{{"openai", "OPENAI_API_KEY"}, {"anthropic", "ANTHROPIC_API_KEY"}}
+	for _, tc := range tests {
+		t.Run(tc.provider, func(t *testing.T) {
+			got, err := domain.BuildWorkflow(wfOpts(tc.provider, "", 0))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := strings.Replace(wantWorkflow, keyLineOpenRouter, "          "+tc.secret+": ${{ secrets."+tc.secret+" }}\n", 1)
+			if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("BuildWorkflow(%s) mismatch (-want +got):\n%s", tc.provider, diff)
+			}
+			if strings.Contains(got, "OPENROUTER") {
+				t.Errorf("BuildWorkflow(%s) mentions OPENROUTER", tc.provider)
+			}
+			names, _ := domain.SecretNames(tc.provider)
+			if r := wfrules.CheckWith(got, names); !r.OK {
+				t.Errorf("CheckWith(BuildWorkflow(%s)) = rule %s, want OK", tc.provider, r.Rule)
+			}
+			if r := wfrules.Check(got); r.OK {
+				t.Errorf("Check(BuildWorkflow(%s)) = OK, want the secrets rule to refuse", tc.provider)
+			}
+		})
+	}
+}
+
+// FR26, EC25, AC30: the custom provider env lines come before GITHUB_TOKEN, one header line per
+// header in order, and nothing of OPENROUTER remains.
+func TestBuildWorkflow_CustomProvider(t *testing.T) {
+	got, err := domain.BuildWorkflow(wfOpts("custom:my-gw", domain.RunnerSelfHosted, 2))
+	if err != nil {
+		t.Fatal(err)
+	}
+	envLines := "          DEVDIGEST_LLM_BASE_URL: ${{ vars.DEVDIGEST_MY_GW_BASE_URL }}\n" +
+		"          DEVDIGEST_LLM_API_KEY: ${{ secrets.DEVDIGEST_MY_GW_API_KEY }}\n" +
+		"          DEVDIGEST_LLM_HEADER_1: ${{ secrets.DEVDIGEST_MY_GW_HEADER_1 }}\n" +
+		"          DEVDIGEST_LLM_HEADER_2: ${{ secrets.DEVDIGEST_MY_GW_HEADER_2 }}\n"
+	want := strings.Replace(wantWorkflow, keyLineOpenRouter, envLines, 1)
+	want = strings.Replace(want, "    runs-on: ubuntu-24.04\n", "    runs-on: [self-hosted, linux, x64]\n", 1)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("BuildWorkflow(custom:my-gw) mismatch (-want +got):\n%s", diff)
+	}
+	names, _ := domain.SecretNames("custom:my-gw")
+	if r := wfrules.CheckWith(got, names); !r.OK {
+		t.Errorf("CheckWith(BuildWorkflow(custom:my-gw)) = rule %s, want OK", r.Rule)
+	}
+	// EC20: the same text with another provider's key is refused.
+	other := strings.Replace(got, "secrets.DEVDIGEST_MY_GW_API_KEY", "secrets.DEVDIGEST_OTHER_API_KEY", 1)
+	if r := wfrules.CheckWith(other, names); r.OK || r.Rule != wfrules.Secrets {
+		t.Errorf("CheckWith(text with DEVDIGEST_OTHER_API_KEY) = %+v, want rule secrets", r)
+	}
+}
+
+func TestBuildWorkflow_CustomProviderHeaderCounts(t *testing.T) {
+	for n := 0; n <= domain.MaxExtraHeaders; n++ {
+		got, err := domain.BuildWorkflow(wfOpts("custom:gw", "", n))
+		if err != nil {
+			t.Fatalf("BuildWorkflow(headers=%d) error = %v", n, err)
+		}
+		if c := strings.Count(got, "DEVDIGEST_LLM_HEADER_"); c != n {
+			t.Errorf("BuildWorkflow(headers=%d) has %d header lines", n, c)
+		}
+		if !strings.Contains(got, "DEVDIGEST_LLM_BASE_URL: ${{ vars.DEVDIGEST_GW_BASE_URL }}\n") {
+			t.Errorf("BuildWorkflow(headers=%d) lacks the base URL line", n)
+		}
+	}
+}
+
+// NFR8: nothing but fixed text and derived names gets into the YAML.
+func TestBuildWorkflow_InvalidProviderOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		o    domain.WorkflowOptions
+	}{
+		{"unknown provider", wfOpts("gemini", "", 0)},
+		{"empty custom slug", wfOpts("custom:", "", 0)},
+		{"slug with newline", wfOpts("custom:a\n  evil: 1", "", 0)},
+		{"uppercase slug", wfOpts("custom:ABC", "", 0)},
+		{"too many headers", wfOpts("custom:a", "", 6)},
+		{"negative headers", wfOpts("custom:a", "", -1)},
+		{"unknown runner", wfOpts("openrouter", "ubuntu-latest", 0)},
+		{"runner injection", wfOpts("openrouter", "self_hosted\n  evil: 1", 0)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got, err := domain.BuildWorkflow(tc.o); !errors.Is(err, domain.ErrInvalidWorkflowOptions) {
+				t.Errorf("BuildWorkflow(%+v) = (%q, %v), want ErrInvalidWorkflowOptions", tc.o, got, err)
 			}
 		})
 	}

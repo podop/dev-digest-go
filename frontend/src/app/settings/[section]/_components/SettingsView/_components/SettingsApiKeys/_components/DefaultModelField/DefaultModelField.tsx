@@ -3,12 +3,11 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, FormField, Icon, SearchableSelect, TextInput } from "@devdigest/ui";
-import { Select } from "@/components/select";
-import { useProviderModels, useSecretsStatus, useSettings, useUpdateSettings } from "@/lib/hooks";
+import { ProviderSelect, useProviderUndefined } from "@/components/provider-select";
+import { useCustomProviders, useProviderModels, useSecretsStatus, useSettings, useUpdateSettings } from "@/lib/hooks";
 import { toModelOptions } from "@/lib/model-label";
+import { isCustomId, providerName } from "@/lib/providers/custom";
 import type { Provider } from "@/lib/types";
-// Zod-free subpath: the barrel would pull zod + every schema into /settings.
-import { PROVIDER_IDS } from "@devdigest/shared/constants/feature-models";
 import { s } from "./styles";
 
 /** Provider shown before any default model is saved. */
@@ -22,8 +21,10 @@ const FALLBACK_PROVIDER: Provider = "openrouter";
  */
 export function DefaultModelField() {
   const t = useTranslations("settingsBudget");
+  const tp = useTranslations("providerSelect");
   const { data: settings } = useSettings();
   const { data: secrets } = useSecretsStatus();
+  const { data: custom } = useCustomProviders();
   const update = useUpdateSettings();
 
   const saved = settings?.default_model ?? null;
@@ -32,6 +33,10 @@ export function DefaultModelField() {
   const [typed, setTyped] = React.useState<string | null>(null);
   const provider = pickedProvider ?? saved?.provider ?? FALLBACK_PROVIDER;
   const savedModel = saved && saved.provider === provider ? saved.model : "";
+
+  // A saved custom provider that no longer exists: nothing can be saved until another one is picked (FR19).
+  const providerUndefined = useProviderUndefined(provider);
+  const shownName = providerName(provider, custom);
 
   const models = useProviderModels(provider);
   const listUnavailable = models.isError || (models.data !== undefined && models.data.length === 0);
@@ -42,10 +47,12 @@ export function DefaultModelField() {
   }
 
   const typedModel = (typed ?? savedModel).trim();
-  const canSaveTyped = typedModel !== "" && typedModel !== savedModel && !update.isPending;
-  const providerOptions = PROVIDER_IDS.map((id) => ({ value: id, label: t(`defaultModel.providers.${id}`) }));
+  const canSaveTyped = typedModel !== "" && typedModel !== savedModel && !update.isPending && !providerUndefined;
 
-  const saveModel = (model: string) => update.mutate({ default_model: { provider, model } });
+  const saveModel = (model: string) => {
+    if (providerUndefined) return;
+    update.mutate({ default_model: { provider, model } });
+  };
   const saveTyped = () => {
     if (!canSaveTyped) return;
     update.mutate({ default_model: { provider, model: typedModel } }, { onSuccess: () => setTyped(null) });
@@ -59,13 +66,12 @@ export function DefaultModelField() {
     <FormField label={t("defaultModel.label")} hint={t("defaultModel.hint")}>
       <fieldset aria-label={t("defaultModel.label")} style={s.row}>
         <div style={s.provider}>
-          <Select
+          <ProviderSelect
             value={provider}
             onChange={(p) => {
               setPickedProvider(p);
               setTyped(null);
             }}
-            options={providerOptions}
             aria-label={t("defaultModel.providerAria")}
             mono={false}
           />
@@ -100,13 +106,19 @@ export function DefaultModelField() {
       {listUnavailable && (
         <div style={s.note}>
           <Icon.Info size={14} />
-          <span>{t("defaultModel.freeTextHint", { provider: t(`defaultModel.providers.${provider}`) })}</span>
+          <span>{t("defaultModel.freeTextHint", { provider: shownName })}</span>
         </div>
       )}
-      {secrets?.[provider] === false && (
+      {providerUndefined && (
         <div role="note" style={s.warn}>
           <Icon.AlertTriangle size={14} />
-          <span>{t("defaultModel.noKey", { provider: t(`defaultModel.providers.${provider}`) })}</span>
+          <span>{tp("blockedHint")}</span>
+        </div>
+      )}
+      {!isCustomId(provider) && secrets?.[provider] === false && (
+        <div role="note" style={s.warn}>
+          <Icon.AlertTriangle size={14} />
+          <span>{t("defaultModel.noKey", { provider: shownName })}</span>
         </div>
       )}
       {update.isError && (

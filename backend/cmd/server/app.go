@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/x509"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -45,6 +46,7 @@ import (
 	conventionspg "dev-digest-go/backend/internal/conventions/adapters/postgres"
 	conventionsapp "dev-digest-go/backend/internal/conventions/app"
 	conventionshttp "dev-digest-go/backend/internal/conventions/transport/http"
+	customprovidershttp "dev-digest-go/backend/internal/customproviders/transport/http"
 	evalspeers "dev-digest-go/backend/internal/evals/adapters/peers"
 	evalspg "dev-digest-go/backend/internal/evals/adapters/postgres"
 	evalsapp "dev-digest-go/backend/internal/evals/app"
@@ -71,6 +73,7 @@ import (
 	perfpg "dev-digest-go/backend/internal/performance/adapters/postgres"
 	perfapp "dev-digest-go/backend/internal/performance/app"
 	performancehttp "dev-digest-go/backend/internal/performance/transport/http"
+	"dev-digest-go/backend/internal/platform/egress"
 	"dev-digest-go/backend/internal/platform/gitcli"
 	"dev-digest-go/backend/internal/platform/github"
 	"dev-digest-go/backend/internal/platform/httpx"
@@ -221,6 +224,15 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 	}
 	log := logging.New(o.logOut, cfg.LogLevel)
 
+	// The extra CA is read before anything else starts: a bad file stops the process with one ERROR
+	// line that names the variable and the path, never the file content (FR14, EC27).
+	rootCAs, err := egress.LoadExtraCA(cfg.ExtraCAFile)
+	if err != nil {
+		log.ErrorContext(ctx, "startup failed", "step", "extra_ca", "variable", "DEVDIGEST_EXTRA_CA_FILE",
+			"path", cfg.ExtraCAFile, "error", err)
+		return fmt.Errorf("DEVDIGEST_EXTRA_CA_FILE: %w", err)
+	}
+
 	db, err := postgres.Open(ctx, cfg.DatabaseURL, log, postgres.WithMaxOpenConns(cfg.DBMaxOpenConns))
 	if err != nil {
 		return err
@@ -237,7 +249,7 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 
 	o.jobs.Logger = log
 	runner := jobs.New(jobspg.NewStore(db), o.jobs)
-	w, err := wire(cfg, o, db, sqlDB, runner, log)
+	w, err := wire(cfg, o, db, sqlDB, runner, rootCAs, log)
 	if err != nil {
 		return err
 	}
@@ -339,13 +351,15 @@ func registerJobs(r *jobs.Runner, clone, refresh, extract jobs.Handler, extractT
 	r.Register(inteldomain.KindResync, intel.resync, jobs.WithTimeout(inteldomain.JobTimeout))
 }
 
-// llmAdapters builds the provider adapters; with LLM_PROVIDER_OVERRIDE=mock every provider is a
-// deterministic mock and startup logs one warning (D214).
-func llmAdapters(cfg config.Config, urls llmURLs, log *slog.Logger) map[llm.Provider]llm.Adapter {
+// llmAdapters builds the provider adapters, trusting rootCAs besides the system store (nil = the
+// system store only); with LLM_PROVIDER_OVERRIDE=mock every provider is a deterministic mock and
+// startup logs one warning (D214).
+func llmAdapters(cfg config.Config, urls llmURLs, rootCAs *x509.CertPool, log *slog.Logger) map[llm.Provider]llm.Adapter {
+	hc := extraCAClient(rootCAs)
 	ads := map[llm.Provider]llm.Adapter{
-		llm.OpenAI:     openaicompat.NewOpenAI(openaicompat.Options{BaseURL: urls.openAI}),
-		llm.Anthropic:  anthropic.New(anthropic.Options{BaseURL: urls.anthropic}),
-		llm.OpenRouter: openaicompat.NewOpenRouter(openaicompat.Options{BaseURL: urls.openRouter}),
+		llm.OpenAI:     openaicompat.NewOpenAI(openaicompat.Options{BaseURL: urls.openAI, HTTPClient: hc}),
+		llm.Anthropic:  anthropic.New(anthropic.Options{BaseURL: urls.anthropic, HTTPClient: hc}),
+		llm.OpenRouter: openaicompat.NewOpenRouter(openaicompat.Options{BaseURL: urls.openRouter, HTTPClient: hc}),
 	}
 	if cfg.LLMProviderOverride == config.LLMProviderMock {
 		for p := range ads {
@@ -357,13 +371,16 @@ func llmAdapters(cfg config.Config, urls llmURLs, log *slog.Logger) map[llm.Prov
 	return ads
 }
 
-// wire builds the adapters, use cases, job handlers and routes.
-func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs.Runner, log *slog.Logger) (*wired, error) {
+// wire builds the adapters, use cases, job handlers and routes. rootCAs is the extra trust store
+// (DEVDIGEST_EXTRA_CA_FILE) that every outbound HTTPS client gets besides the system one; nil = the
+// system store only. A client a test injected through options is left as it is.
+func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs.Runner, rootCAs *x509.CertPool, log *slog.Logger) (*wired, error) {
 	sec := secrets.New(filepath.Join(cfg.DataDir, secrets.FileName), o.getenv)
 	githubToken := func() string { return sec.Get(secrets.GitHubToken) }
 	gh := github.New(github.Options{
 		BaseURL:        o.githubBaseURL,
 		Token:          githubToken,
+		HTTPClient:     extraCAClient(rootCAs),
 		ArtifactClient: o.artifactClient,
 	})
 	git, err := gitcli.New(gitcli.Options{
@@ -392,11 +409,20 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		now = time.Now
 	}
 
+	// Custom model providers: the use cases resolve a `custom:<slug>` id to an adapter per call, so
+	// the LLM client takes them as its resolver. Under the mock override every well-formed custom id
+	// answers with the mock instead (A4).
+	cpSvc := newCustomProviders(db, sec, rootCAs, now, log)
+
 	llmOpts := o.llm
 	llmOpts.Keys = sec
 	llmOpts.Adapters = o.llmAdapters
 	if llmOpts.Adapters == nil {
-		llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, log)
+		llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, rootCAs, log)
+	}
+	llmOpts.Custom = cpSvc
+	if cfg.LLMProviderOverride == config.LLMProviderMock {
+		llmOpts.Custom = mockCustomResolver{delay: cfg.LLMMockDelay}
 	}
 	llmOpts.Logger = log
 	// The cost ledger records every answered LLM attempt (FR1) and every new CI run (FR6). The
@@ -410,7 +436,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Store:     settingspg.NewStore(db),
 		Secrets:   sec,
 		GitHub:    gh,
-		Providers: providers.New(o.providers),
+		Providers: providers.New(providersOptions(o.providers, rootCAs)),
+		Custom:    settingsCustom{svc: cpSvc},
 		Clock:     now,
 		Logger:    log,
 	})
@@ -449,11 +476,12 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	pullsStore := pullspg.NewStore(db)
 	pullsSvc := pullsapp.NewService(pullsStore, pullsgh.New(gh), log, nil)
 
-	agentsSvc := agentsapp.NewService(agentsdb.NewStore(db), tx, llmClient, log)
+	agentsSvc := agentsapp.NewService(agentsdb.NewStore(db), tx, llmClient, log,
+		agentsapp.WithCustomProviders(agentsCustom{svc: cpSvc}))
 
 	skillsStore := skillspg.NewStore(db)
 	skillsSvc := skillsapp.NewService(skillsStore, tx, time.Now)
-	importer := skillsapp.NewImporter(urlfetch.New(o.urlfetch), cat)
+	importer := skillsapp.NewImporter(urlfetch.New(urlfetchOptions(o.urlfetch, rootCAs)), cat)
 
 	convStore := conventionspg.NewStore(db)
 	convSvc := conventionsapp.NewService(convStore, convStore, runner, conventionsapp.ServiceOptions{Redact: llmClient, Budget: spendSvc})
@@ -573,6 +601,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	}
 	ciExport := ciapp.NewExportService(ciapp.ExportDeps{
 		Agents: ciAgents, Repos: cipeers.NewRepos(reposSvc), Store: ciStore, Runner: runnerBundle, GitHub: ciGitHub, Log: log,
+		Custom: ciCustom{svc: cpSvc}, Prices: ciPrices{book: llmClient},
 	})
 	ciIngest := ciapp.NewIngestService(ciapp.IngestDeps{
 		Agents: ciAgents, Store: ciStore, GitHub: ciGitHub, Zip: zipentry.New(), Clock: now, Log: log,
@@ -603,6 +632,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	})
 	health.AddRoutes(e, sqlDB, log)
 	settingshttp.AddRoutes(e, settingshttp.NewHandler(settingsSvc, resolver))
+	customprovidershttp.AddRoutes(e, cpSvc, resolver)
 	reposhttp.AddRoutes(e, reposSvc, resolver)
 	pullshttp.AddRoutes(e, pullsSvc, resolver)
 	agentshttp.AddRoutes(e, agentsSvc, resolver)
@@ -624,7 +654,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	cihttp.AddInstallationsRoute(e, ciapp.NewInstallationsService(ciStore), resolver)
 	leaderboardhttp.AddRoutes(e, lbapp.NewService(lbpg.NewStore(db), now), resolver)
 	spendhttp.AddRoutes(e, spendSvc, resolver)
-	pluginshttp.AddRoutes(e, newPluginsService(db, settingsSvc, now, log, orDev(o.build.version)), resolver)
+	pluginshttp.AddRoutes(e, newPluginsService(db, settingsSvc, pluginsCustom{svc: cpSvc}, now, log, orDev(o.build.version)), resolver)
 	// Automatic reviews (Settings C): the trigger runs after each background-poll cycle (the poller's
 	// Observer below); the service is built even with PR_POLL_ENABLED=false so the status line can say
 	// poll_disabled. Starts go through the reviews start with source "auto"; the cap is checked once per
@@ -672,7 +702,9 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	// the same source as the shared client's, and the interval from each workspace's Settings.
 	var poller *pullsapp.Poller
 	if cfg.PRPollEnabled {
-		pages := github.New(github.Options{BaseURL: o.githubBaseURL, Token: githubToken, Retry: &retry.Options{}})
+		pages := github.New(github.Options{
+			BaseURL: o.githubBaseURL, Token: githubToken, HTTPClient: extraCAClient(rootCAs), Retry: &retry.Options{},
+		})
 		pollGH := pullsgh.New(pages)
 		poller = pullsapp.NewPoller(pullsapp.PollerDeps{
 			Targets:   pullsStore,

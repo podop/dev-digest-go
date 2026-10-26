@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	cidomain "dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/ci/runner/domain"
+	"dev-digest-go/backend/internal/llm/custom"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
 )
 
@@ -86,6 +88,18 @@ func run(ctx context.Context, cfg Config, deps Deps) (result, error) {
 	if err != nil {
 		return result{}, err
 	}
+
+	// 1b. The environment of the manifest's provider (A9): checked now, before the skills, the pull
+	// request or any GitHub call, so a bad configuration fails with nothing posted (EC18). The
+	// OpenRouter key is read only for an openrouter manifest (A10).
+	sel, err := providerSelection(manifest, env, deps.Out)
+	if err != nil {
+		return result{}, err
+	}
+	reviewLLM, err := llmFor(deps, manifest, sel)
+	if err != nil {
+		return result{}, err
+	}
 	skills, err := LoadSkillBodies(deps.Files, dir, manifest.Skills)
 	if err != nil {
 		return result{}, err
@@ -142,9 +156,10 @@ func run(ctx context.Context, cfg Config, deps Deps) (result, error) {
 		Skills:        skillInput,
 		PRDescription: prc.Body,
 		Task:          "Review PR #" + strconv.Itoa(prc.Number) + ": " + prc.Title,
-	}, deps.LLM.For(manifest.Model), nil, reviewerapp.Options{})
+	}, reviewLLM, nil, reviewerapp.Options{})
 	if err != nil {
-		return result{}, &ModelCallError{Class: modelCallClass(err), cause: err}
+		class := modelCallClass(err)
+		return result{}, &ModelCallError{Class: class, cause: err, Hint: strictModeHint(manifest, class)}
 	}
 	durationMS := now().Sub(start).Milliseconds()
 
@@ -231,10 +246,106 @@ func envValue(env Env, key string) domain.EnvValue {
 	return domain.EnvValue{Value: v, Set: ok}
 }
 
-// redact removes the two secrets of the environment from a failure message. The clients scrub
+// The names of the runner's environment (spec 7.8.3, FR30).
+const (
+	envLLMBaseURL = "DEVDIGEST_LLM_BASE_URL"
+	envLLMAPIKey  = "DEVDIGEST_LLM_API_KEY"
+	envLLMHeader  = "DEVDIGEST_LLM_HEADER_" // + n, 1..custom.MaxHeaders
+)
+
+// providerSelection reads the environment of the manifest's provider and nothing else (A10):
+// nil for an openrouter manifest (Deps.LLM serves it, bound to OPENROUTER_API_KEY), else the
+// provider, its one key and, for a custom provider, the base URL and header values, checked
+// (A9, FR30). A plain-http non-loopback base URL prints one warning line.
+func providerSelection(m Manifest, env Env, out Out) (*ProviderSelection, error) {
+	get := func(key string) string { v, _ := env.Lookup(key); return v }
+	switch m.Provider {
+	case cidomain.ProviderOpenAI:
+		return &ProviderSelection{Provider: m.Provider, Model: m.Model, Key: get(cidomain.SecretOpenAI), Price: m.Pricing}, nil
+	case cidomain.ProviderAnthropic:
+		return &ProviderSelection{Provider: m.Provider, Model: m.Model, Key: get(cidomain.SecretAnthropic), Price: m.Pricing}, nil
+	}
+	slug, isCustom := cidomain.CustomSlug(m.Provider)
+	if !isCustom || m.CustomProvider == nil {
+		return nil, nil
+	}
+	envName, _ := cidomain.EnvName(slug)
+	cp := m.CustomProvider
+
+	baseURL, set := env.Lookup(envLLMBaseURL)
+	where := envLLMBaseURL + " (repository variable " + cidomain.BaseURLVariable(envName) + ")"
+	if !set || baseURL == "" {
+		return nil, domain.NewRunnerError(where + " is empty: it must be the base URL of the custom provider, http:// or https://")
+	}
+	norm, plainHTTP, msg := custom.CheckBaseURL(baseURL)
+	if msg != "" {
+		return nil, domain.NewRunnerError(where + " is not usable: " + msg)
+	}
+	if plainHTTP {
+		out.Stderr(LogLine("[agent-runner] warning: ", envLLMBaseURL+" is a plain http address: the API key and the headers travel unencrypted"))
+	}
+
+	key := get(envLLMAPIKey)
+	if key != "" {
+		if msg := custom.CheckHeaderValue(key); msg != "" {
+			return nil, domain.NewRunnerError(envLLMAPIKey + " (repository secret " + cidomain.APIKeySecret(envName) + ") is not usable: " + msg)
+		}
+	}
+	headers := make([]Header, 0, len(cp.ExtraHeaders))
+	for i, name := range cp.ExtraHeaders {
+		n := strconv.Itoa(i + 1)
+		value := get(envLLMHeader + n)
+		hwhere := envLLMHeader + n + " (repository secret " + cidomain.HeaderSecret(envName, i+1) + ")"
+		if value == "" {
+			return nil, domain.NewRunnerError(hwhere + " is empty: it must hold the value of an extra header of the custom provider")
+		}
+		if msg := custom.CheckHeaderValue(value); msg != "" {
+			return nil, domain.NewRunnerError(hwhere + " is not usable: " + msg)
+		}
+		headers = append(headers, Header{Name: name, Value: value})
+	}
+	authHeader := ""
+	if cp.AuthMode == custom.AuthHeader {
+		authHeader = cp.AuthHeader
+	}
+	return &ProviderSelection{
+		Provider: m.Provider, Model: m.Model, Key: key, Price: m.Pricing,
+		Custom: &CustomEndpoint{
+			BaseURL: norm, Protocol: cp.Protocol, AuthMode: cp.AuthMode, AuthHeader: authHeader,
+			Headers: headers, Mode: cp.StructuredOutput,
+		},
+	}, nil
+}
+
+// llmFor is the engine's LLM port for the manifest: Deps.LLM for openrouter, else Deps.Providers.
+func llmFor(deps Deps, m Manifest, sel *ProviderSelection) (reviewerapp.LLM, error) {
+	if sel == nil {
+		return deps.LLM.For(m.Model), nil
+	}
+	if deps.Providers == nil {
+		return nil, domain.NewRunnerError("This runner cannot call the provider of the manifest")
+	}
+	l, err := deps.Providers.For(*sel)
+	if err != nil {
+		return nil, &ModelCallError{Class: modelCallClass(err), cause: err}
+	}
+	return l, nil
+}
+
+// knownSecretNames are the environment variables whose values never reach the job log (NFR7,
+// A10): every key and token the runner knows, whether the manifest's provider reads it or not.
+func knownSecretNames() []string {
+	names := []string{cidomain.SecretOpenRouter, cidomain.SecretOpenAI, cidomain.SecretAnthropic, "GITHUB_TOKEN", envLLMAPIKey}
+	for n := 1; n <= custom.MaxHeaders; n++ {
+		names = append(names, envLLMHeader+strconv.Itoa(n))
+	}
+	return names
+}
+
+// redact removes every known secret of the environment from a failure message. The clients scrub
 // their own errors; this is the last line of defence for the job log.
 func redact(env Env, s string) string {
-	for _, key := range []string{"OPENROUTER_API_KEY", "GITHUB_TOKEN"} {
+	for _, key := range knownSecretNames() {
 		if v, _ := env.Lookup(key); len(v) >= minRedactLen {
 			s = strings.ReplaceAll(s, v, "[REDACTED]")
 		}

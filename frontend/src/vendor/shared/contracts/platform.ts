@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Provider } from './knowledge.js';
+import { CustomProviderId, ModelPricing, Provider } from './knowledge.js';
 import { FEATURE_MODEL_IDS } from '../constants/feature-models.js';
 import {
   ABOUT_RUNNER_KIND,
@@ -150,7 +150,8 @@ export const SettingsUpdate = Settings.partial().extend({
 export type SettingsUpdate = z.infer<typeof SettingsUpdate>;
 
 // ---- Connection test ----
-export const ConnTestProvider = z.enum(['openai', 'anthropic', 'openrouter', 'github']);
+/** A built-in provider, GitHub, or a custom provider id (`custom:<slug>`). */
+export const ConnTestProvider = z.union([z.enum(['openai', 'anthropic', 'openrouter', 'github']), CustomProviderId]);
 export type ConnTestProvider = z.infer<typeof ConnTestProvider>;
 
 export const ConnTestRequest = z.object({
@@ -173,6 +174,8 @@ export const ConnTestResult = z.object({
   /** GitHub only: the token's login and OAuth scopes (scopes null = not reported, e.g. fine-grained). */
   login: z.string().nullish(),
   scopes: z.array(z.string()).nullish(),
+  /** Custom providers: an ok answer that did not verify the key (e.g. "Model list not available; key not verified"). */
+  warning: z.string().nullish(),
 });
 export type ConnTestResult = z.infer<typeof ConnTestResult>;
 
@@ -217,6 +220,123 @@ export const SecretsStatus = z.object({
   github: z.boolean(),
 });
 export type SecretsStatus = z.infer<typeof SecretsStatus>;
+
+// ---- Custom model providers (Settings › API Keys; specs/2026-10-24-custom-model-providers.md §7) ----
+export const CustomProviderProtocol = z.enum(['openai', 'anthropic']);
+export type CustomProviderProtocol = z.infer<typeof CustomProviderProtocol>;
+
+export const CustomProviderAuthMode = z.enum(['bearer', 'header']);
+export type CustomProviderAuthMode = z.infer<typeof CustomProviderAuthMode>;
+
+/** `json_object` is valid only with protocol `openai`. */
+export const CustomProviderStructuredOutput = z.enum(['strict', 'json_object', 'prompt_only']);
+export type CustomProviderStructuredOutput = z.infer<typeof CustomProviderStructuredOutput>;
+
+/** Limits of the definition (FR1, FR4). */
+export const CUSTOM_PROVIDER_LIMITS = {
+  maxProviders: 20,
+  nameMin: 1,
+  nameMax: 80,
+  baseUrlMax: 2048,
+  apiKeyMin: 1,
+  apiKeyMax: 4096,
+  maxHeaders: 5,
+  headerNameMax: 64,
+  headerValueMax: 4096,
+  maxModels: 200,
+  modelIdMax: 200,
+  modelLabelMax: 200,
+  priceMax: 10_000,
+  priceMaxDecimals: 6,
+} as const;
+
+/** A manual model of a custom provider (response). */
+export const CustomProviderModel = z.object({
+  id: z.string(),
+  label: z.string().nullable(),
+  pricing: ModelPricing.nullable(),
+});
+export type CustomProviderModel = z.infer<typeof CustomProviderModel>;
+
+/** An extra header of a custom provider (response): the value is never returned. */
+export const CustomProviderHeader = z.object({
+  name: z.string(),
+  value_configured: z.boolean(),
+});
+export type CustomProviderHeader = z.infer<typeof CustomProviderHeader>;
+
+/** GET/POST/PUT `/settings/custom-providers` response item. Secret values are never returned. */
+export const CustomProvider = z.object({
+  /** `custom:<slug>`. */
+  id: CustomProviderId,
+  name: z.string(),
+  protocol: CustomProviderProtocol,
+  base_url: z.string(),
+  /** True for plain `http` to a host that is not loopback. */
+  plain_http: z.boolean(),
+  auth_mode: CustomProviderAuthMode,
+  /** null for `bearer`. */
+  auth_header: z.string().nullable(),
+  structured_output: CustomProviderStructuredOutput,
+  key_configured: z.boolean(),
+  extra_headers: z.array(CustomProviderHeader),
+  models: z.array(CustomProviderModel),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type CustomProvider = z.infer<typeof CustomProvider>;
+
+const customProviderPrice = z.number().min(0).max(CUSTOM_PROVIDER_LIMITS.priceMax);
+
+/** A manual model in a request: price per 1M tokens in USD, 0–10,000 (decimals are checked by the server). */
+export const CustomProviderModelInput = z.object({
+  id: z.string().min(1).max(CUSTOM_PROVIDER_LIMITS.modelIdMax),
+  label: z.string().max(CUSTOM_PROVIDER_LIMITS.modelLabelMax).nullish(),
+  pricing: z.object({ promptPerM: customProviderPrice, completionPerM: customProviderPrice }).nullish(),
+});
+export type CustomProviderModelInput = z.infer<typeof CustomProviderModelInput>;
+
+/** An extra header in a request: `value` is write-only; omitted = keep the stored value of the same-named header. */
+export const CustomProviderHeaderInput = z.object({
+  name: z.string().min(1).max(CUSTOM_PROVIDER_LIMITS.headerNameMax),
+  value: z.string().min(1).max(CUSTOM_PROVIDER_LIMITS.headerValueMax).optional(),
+});
+export type CustomProviderHeaderInput = z.infer<typeof CustomProviderHeaderInput>;
+
+/**
+ * POST `/settings/custom-providers` body. `api_key` is write-only: on PUT omitted = keep,
+ * `null` = remove, a string = replace. Omitted `auth_mode`/`auth_header`/`structured_output`
+ * take the server defaults (FR4, FR1).
+ */
+export const CustomProviderInput = z.object({
+  id: CustomProviderId,
+  name: z.string().trim().min(CUSTOM_PROVIDER_LIMITS.nameMin).max(CUSTOM_PROVIDER_LIMITS.nameMax),
+  protocol: CustomProviderProtocol,
+  base_url: z.string().min(1).max(CUSTOM_PROVIDER_LIMITS.baseUrlMax),
+  auth_mode: CustomProviderAuthMode.optional(),
+  auth_header: z.string().nullish(),
+  structured_output: CustomProviderStructuredOutput.optional(),
+  api_key: z.string().min(CUSTOM_PROVIDER_LIMITS.apiKeyMin).max(CUSTOM_PROVIDER_LIMITS.apiKeyMax).nullish(),
+  extra_headers: z.array(CustomProviderHeaderInput).max(CUSTOM_PROVIDER_LIMITS.maxHeaders).optional(),
+  models: z.array(CustomProviderModelInput).max(CUSTOM_PROVIDER_LIMITS.maxModels).optional(),
+});
+export type CustomProviderInput = z.infer<typeof CustomProviderInput>;
+
+/** PUT `/settings/custom-providers/:id` body: the POST body without `id`. */
+export const CustomProviderUpdate = CustomProviderInput.omit({ id: true });
+export type CustomProviderUpdate = z.infer<typeof CustomProviderUpdate>;
+
+/** DELETE `/settings/custom-providers/:id` → 200. */
+export const CustomProviderDeleted = z.object({ deleted: z.string() });
+export type CustomProviderDeleted = z.infer<typeof CustomProviderDeleted>;
+
+/** `error.details` of the 409 `provider_in_use` answer (FR6). */
+export const CustomProviderInUseDetails = z.object({
+  agents: z.array(z.object({ id: z.string(), name: z.string() })),
+  feature_models: z.array(FeatureModelId),
+  default_model: z.boolean(),
+});
+export type CustomProviderInUseDetails = z.infer<typeof CustomProviderInUseDetails>;
 
 // ---- Repos ----
 /**

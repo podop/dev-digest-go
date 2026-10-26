@@ -30,7 +30,8 @@
       "openai": "OpenAI",
       "anthropic": "Anthropic"
     },
-    "keyLabel": "{provider} API key"
+    "keyLabel": "{provider} API key",
+    "customLink": "Use a custom provider"
   },
   "github": {
     "title": "Connect GitHub",

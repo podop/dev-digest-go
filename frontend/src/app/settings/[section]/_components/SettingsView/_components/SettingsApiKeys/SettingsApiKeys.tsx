@@ -7,6 +7,7 @@ import { KeyField, KEY_PAGE_URLS } from "@/components/key-field";
 import { useAbout, useSecretsStatus } from "@/lib/hooks";
 import { sectionHref } from "../../constants";
 import { SectionTitle } from "../SectionTitle";
+import { CustomProviders } from "./_components/CustomProviders";
 import { DefaultModelField } from "./_components/DefaultModelField";
 import { SpendCapField } from "./_components/SpendCapField";
 import { KEY_ROWS } from "./constants";
@@ -32,7 +33,7 @@ function SecretsInfoBox({ secretsFile }: { secretsFile: string }) {
   );
 }
 
-/** Settings → API Keys: provider keys (FR2–FR4), default model (FR8), monthly spend cap (FR11), secrets info box (FR15). */
+/** Settings → API Keys: provider keys (FR2–FR4), custom providers (custom-providers FR16), default model (FR8), monthly spend cap (FR11), secrets info box (FR15). */
 export function SettingsApiKeys() {
   const t = useTranslations("apiKeys");
   const { data: status } = useSecretsStatus();
@@ -51,6 +52,7 @@ export function SettingsApiKeys() {
           optional={row.optional}
         />
       ))}
+      <CustomProviders />
       <DefaultModelField />
       <SpendCapField />
       {about && <SecretsInfoBox secretsFile={about.secrets_file} />}

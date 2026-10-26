@@ -56,3 +56,10 @@ func StaticCost(model string, tokensIn, tokensOut int) *float64 {
 	c := p.cost(tokensIn, tokensOut)
 	return &c
 }
+
+// StaticPerM returns the static table's price of a model in USD per 1,000,000 input and output
+// tokens; false when the model is not listed.
+func StaticPerM(model string) (promptPerM, completionPerM float64, ok bool) {
+	p, ok := staticPrices[model]
+	return p.in, p.out, ok
+}

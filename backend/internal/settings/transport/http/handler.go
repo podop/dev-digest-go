@@ -30,6 +30,8 @@ type service interface {
 	Update(ctx context.Context, workspaceID, userID string, entries app.Bag) (app.Bag, error)
 	SecretsStatus() app.SecretsStatus
 	TestConnection(ctx context.Context, workspaceID string, provider app.Provider, key string) app.ConnTestResult
+	CustomDefined(ctx context.Context, workspaceID, id string) bool
+	TestCustomConnection(ctx context.Context, workspaceID string, id app.Provider, key string) (app.ConnTestResult, error)
 }
 
 // identities resolves the single-tenant context (*tenancy.Resolver).
@@ -73,15 +75,34 @@ func (h *Handler) put(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	entries, issues := parseSettingsUpdate(body)
+	ctx := c.Request().Context()
+	// The workspace is resolved before the body is validated only when a custom provider id has to
+	// be looked up (FR7); a body without one is validated first, as before.
+	var (
+		id         tenancy.Identity
+		resolved   bool
+		resolveErr error
+	)
+	resolve := func() error {
+		if !resolved {
+			id, resolveErr = h.ids.Resolve(ctx)
+			resolved = true
+		}
+		return resolveErr
+	}
+	entries, issues := parseSettingsUpdate(body, func(provider string) bool {
+		return resolve() == nil && h.svc.CustomDefined(ctx, id.WorkspaceID, provider)
+	})
+	if resolveErr != nil {
+		return resolveErr
+	}
 	if issues != nil {
 		return httpx.NewValidationError(issues...)
 	}
-	id, err := h.ids.Resolve(c.Request().Context())
-	if err != nil {
+	if err := resolve(); err != nil {
 		return err
 	}
-	bag, err := h.svc.Update(c.Request().Context(), id.WorkspaceID, id.UserID, entries)
+	bag, err := h.svc.Update(ctx, id.WorkspaceID, id.UserID, entries)
 	if err != nil {
 		return err
 	}
@@ -107,6 +128,18 @@ func (h *Handler) testConnection(c *echo.Context) error {
 		return httpx.NewValidationError(issues...)
 	}
 	ctx := c.Request().Context()
+	if req.Provider.IsCustom() {
+		// A custom provider belongs to a workspace: no workspace, no provider (404 from the use case).
+		id, err := h.ids.Resolve(ctx)
+		if err != nil {
+			return err
+		}
+		res, err := h.svc.TestCustomConnection(ctx, id.WorkspaceID, req.Provider, req.Key)
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, connTestResponse(res))
+	}
 	workspaceID := ""
 	if req.Provider != app.GitHub {
 		if id, err := h.ids.Resolve(ctx); err == nil {
@@ -116,8 +149,9 @@ func (h *Handler) testConnection(c *echo.Context) error {
 	return c.JSON(http.StatusOK, connTestResponse(h.svc.TestConnection(ctx, workspaceID, req.Provider, req.Key)))
 }
 
-// llmConnTest is the test-connection answer for openai, anthropic and openrouter. The optional
-// fields are always present, null when the test failed.
+// llmConnTest is the test-connection answer for openai, anthropic, openrouter and custom
+// providers. The optional fields are always present, null when the test failed; warning is
+// present only on a custom provider test that passed without verifying the key (FR11).
 type llmConnTest struct {
 	Provider       app.Provider `json:"provider"`
 	OK             bool         `json:"ok"`
@@ -125,6 +159,7 @@ type llmConnTest struct {
 	LatencyMS      *int         `json:"latency_ms"`
 	Model          *string      `json:"model"`
 	ModelReachable *bool        `json:"model_reachable"`
+	Warning        *string      `json:"warning,omitempty"`
 }
 
 // githubConnTest is the test-connection answer for github. The optional fields are always
@@ -144,7 +179,7 @@ func connTestResponse(r app.ConnTestResult) any {
 	if r.Provider == app.GitHub {
 		return githubConnTest{Provider: r.Provider, OK: r.OK, Message: r.Message, LatencyMS: r.LatencyMS, Login: r.Login, Scopes: r.Scopes}
 	}
-	return llmConnTest{Provider: r.Provider, OK: r.OK, Message: r.Message, LatencyMS: r.LatencyMS, Model: r.Model, ModelReachable: r.ModelReachable}
+	return llmConnTest{Provider: r.Provider, OK: r.OK, Message: r.Message, LatencyMS: r.LatencyMS, Model: r.Model, ModelReachable: r.ModelReachable, Warning: r.Warning}
 }
 
 // readBody returns the request body as a JSON document (see httpx.ReadJSONBody); the body

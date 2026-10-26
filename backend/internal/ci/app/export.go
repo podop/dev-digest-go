@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/ci/domain/wfrules"
@@ -13,16 +14,18 @@ import (
 
 // Wire codes and texts of the export answers (spec 7.2, 7.6).
 const (
-	codeAgentNotFound       = "agent_not_found"
-	codeUnsupportedTarget   = "unsupported_target"
-	codeUnsupportedProvider = "unsupported_provider"
-	codeInvalidTriggers     = "invalid_triggers"
-	codeRepoNotFound        = "repo_not_found"
-	codeSlugConflict        = "ci_slug_conflict"
-	codeSkillSlugConflict   = "skill_slug_conflict"
-	codeWorkflowInsecure    = "workflow_insecure"
-	codeRunnerMissing       = "runner_bundle_missing"
-	codeManifestInvalid     = "manifest_invalid"
+	codeAgentNotFound     = "agent_not_found"
+	codeUnsupportedTarget = "unsupported_target"
+	// codeProviderNotConfigured is the 422 for an agent on an undefined custom provider (FR24). The
+	// former unsupported_provider is never produced any more (D26).
+	codeProviderNotConfigured = "provider_not_configured"
+	codeInvalidTriggers       = "invalid_triggers"
+	codeRepoNotFound          = "repo_not_found"
+	codeSlugConflict          = "ci_slug_conflict"
+	codeSkillSlugConflict     = "skill_slug_conflict"
+	codeWorkflowInsecure      = "workflow_insecure"
+	codeRunnerMissing         = "runner_bundle_missing"
+	codeManifestInvalid       = "manifest_invalid"
 	// CodePluginDisabled is the code of the 409 for an agent of a disabled plugin (the same wire
 	// code the plugins, reviews and evals contexts use; duplicated, not imported).
 	CodePluginDisabled = "plugin_disabled"
@@ -38,6 +41,12 @@ type ExportDeps struct {
 	Store  Store
 	Runner RunnerBundle
 	GitHub GitHub
+	// Custom reads the workspace's custom providers; nil = every custom provider is undefined
+	// (the export of such an agent answers 422 provider_not_configured).
+	Custom CustomProviders
+	// Prices is the price book for the `pricing` key of openai / anthropic manifests (FR35); nil =
+	// no built-in model has a price.
+	Prices ModelPrices
 	// Log receives the content-free publish failure line; nil discards it.
 	Log *slog.Logger
 }
@@ -80,9 +89,9 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 	if req.Target != domain.TargetGHA {
 		return domain.Export{}, apperr.Validation("Only GitHub Actions can be exported").WithCode(codeUnsupportedTarget)
 	}
-	if agent.Provider != domain.ProviderOpenRouter {
-		return domain.Export{}, apperr.Validation("Only agents on the openrouter provider can be exported to CI").
-			WithCode(codeUnsupportedProvider)
+	prov, err := s.resolveProvider(ctx, workspaceID, &agent)
+	if err != nil {
+		return domain.Export{}, err
 	}
 	triggers, ok := domain.NormalizeTriggers(req.Triggers)
 	if !ok {
@@ -105,7 +114,7 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 		return domain.Export{}, err
 	}
 
-	workflow, err := workflowText(req, slug, triggers)
+	workflow, err := workflowText(req, slug, triggers, agent.Provider, prov.headerCount)
 	if err != nil {
 		return domain.Export{}, err
 	}
@@ -118,6 +127,7 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 	for i, sk := range skills {
 		slugs[i] = sk.slug
 	}
+	s.priceBuiltIn(&agent)
 	manifest, err := domain.BuildManifest(agent, slugs)
 	if err != nil {
 		return domain.Export{}, manifestError(err)
@@ -134,19 +144,25 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 		domain.File{Path: domain.RunnerSumPath, Contents: domain.RunnerSumFile(runner.SHA256)},
 		domain.File{Path: domain.WorkflowPath(slug), Contents: workflow, Editable: true},
 	)
+	required := domain.Export{
+		Files:             files,
+		RequiredSecrets:   domain.RequiredSecrets(agent.Provider, prov.keyConfigured, prov.headerCount),
+		RequiredVariables: domain.RequiredVariables(agent.Provider),
+	}
 	if req.Action == domain.ActionFiles {
-		return domain.Export{Files: files}, nil
+		return required, nil
 	}
 
 	if !s.d.GitHub.Configured() {
 		return domain.Export{}, apperr.Config(msgNoToken)
 	}
-	prURL, err := s.publish(ctx, repo, slug, runner, files)
+	prURL, err := s.publish(ctx, repo, slug, runner, required)
 	if err != nil {
 		return domain.Export{}, err
 	}
 	err = s.d.Store.UpsertInstallation(ctx, domain.NewInstallation{
 		AgentID: agent.ID, Repo: repo.FullName, Slug: slug, ManifestVersion: agent.Version,
+		Provider: agent.Provider,
 	})
 	if errors.Is(err, ErrSlugTaken) {
 		return domain.Export{}, slugConflict(slug)
@@ -161,7 +177,62 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 	if !found {
 		return domain.Export{}, apperr.Internal("The CI installation was not saved")
 	}
-	return domain.Export{Installation: &inst, Files: files, PRURL: &prURL}, nil
+	required.Installation, required.PRURL = &inst, &prURL
+	return required, nil
+}
+
+// providerInfo is what the provider step learned for the rest of the export.
+type providerInfo struct {
+	// headerCount is the number of extra headers of a custom provider, 0 for a built-in.
+	headerCount int
+	// keyConfigured is true when a custom provider has a stored key; unused for a built-in.
+	keyConfigured bool
+}
+
+// resolveProvider is the provider step of the checks (spec 7.6.1, FR24): openrouter, openai and
+// anthropic are exportable as they are; a custom id must be defined in the workspace, and its
+// definition and manual price are copied into the agent for the manifest. An undefined custom id
+// is 422 provider_not_configured. A value that is neither can only come from a corrupted row (the
+// database CHECK and the agent validation refuse it): it is reported as the manifest problem it
+// would be, never as the retired unsupported_provider.
+func (s *ExportService) resolveProvider(ctx context.Context, workspaceID string, agent *domain.ExportAgent) (providerInfo, error) {
+	switch agent.Provider {
+	case domain.ProviderOpenRouter, domain.ProviderOpenAI, domain.ProviderAnthropic:
+		return providerInfo{}, nil
+	}
+	if !domain.IsCustomProvider(agent.Provider) {
+		return providerInfo{}, manifestError(&domain.ManifestError{Issues: []domain.ManifestIssue{
+			{Path: "provider", Message: "Invalid provider"},
+		}})
+	}
+	notConfigured := apperr.Validation(fmt.Sprintf("Custom provider %s is not configured", agent.Provider)).
+		WithCode(codeProviderNotConfigured)
+	if s.d.Custom == nil {
+		return providerInfo{}, notConfigured
+	}
+	ce, ok, err := s.d.Custom.ForExport(ctx, workspaceID, agent.Provider, agent.Model)
+	if err != nil {
+		return providerInfo{}, fmt.Errorf("load custom provider: %w", err)
+	}
+	if !ok {
+		return providerInfo{}, notConfigured
+	}
+	cfg := ce.Config
+	cfg.ExtraHeaders = slices.Clone(cfg.ExtraHeaders)
+	agent.Custom = &cfg
+	agent.Pricing = ce.Pricing
+	return providerInfo{headerCount: len(cfg.ExtraHeaders), keyConfigured: ce.KeyConfigured}, nil
+}
+
+// priceBuiltIn sets the price book's price of an openai / anthropic model on the agent (FR35,
+// D29); no price, no port or another provider leaves it unset, and the export never fails for it.
+func (s *ExportService) priceBuiltIn(agent *domain.ExportAgent) {
+	if s.d.Prices == nil || (agent.Provider != domain.ProviderOpenAI && agent.Provider != domain.ProviderAnthropic) {
+		return
+	}
+	if p, ok := s.d.Prices.PerM(agent.Provider, agent.Model); ok {
+		agent.Pricing = &p
+	}
 }
 
 // ListInstallations returns the agent's installations, newest first, each with its last run.
@@ -227,18 +298,22 @@ func skillFiles(skills []domain.ExportSkill) ([]skillFile, error) {
 // workflowText is the workflow of the export: the edited text of the request (an empty string is
 // text, checked and refused as invalid_yaml, as Node does with `??`), else the generated one. Both
 // pass the workflow rules (spec 7.6.6).
-func workflowText(req ExportRequest, slug string, triggers []domain.Trigger) (string, error) {
+func workflowText(req ExportRequest, slug string, triggers []domain.Trigger, provider string, headerCount int) (string, error) {
 	var text string
 	if req.Workflow != nil {
 		text = *req.Workflow
 	} else {
-		generated, err := domain.BuildWorkflow(domain.WorkflowOptions{Slug: slug, Triggers: triggers, PostAs: req.PostAs})
+		generated, err := domain.BuildWorkflow(domain.WorkflowOptions{
+			Slug: slug, Triggers: triggers, PostAs: req.PostAs,
+			Provider: provider, Runner: req.Runner, HeaderCount: headerCount,
+		})
 		if err != nil {
 			return "", fmt.Errorf("build workflow: %w", err)
 		}
 		text = generated
 	}
-	if res := wfrules.Check(text); !res.OK {
+	names, _ := domain.SecretNames(provider) // resolveProvider admitted only providers that have names
+	if res := wfrules.CheckWith(text, names); !res.OK {
 		return "", apperr.Validation("The workflow breaks a security rule").
 			WithCode(codeWorkflowInsecure).
 			WithDetails(map[string]string{"rule": string(res.Rule)})
@@ -264,9 +339,9 @@ func manifestError(err error) error {
 // publish commits the files to the CI branch and returns the URL of the open pull request of that
 // branch (reused) or of a new one (spec 7.6.7). Every GitHub failure becomes a 422
 // github_permission_denied or a 502 github_unavailable; the log line carries the status only.
-func (s *ExportService) publish(ctx context.Context, repo domain.ImportedRepo, slug string, runner RunnerArtifact, files []domain.File) (string, error) {
+func (s *ExportService) publish(ctx context.Context, repo domain.ImportedRepo, slug string, runner RunnerArtifact, ex domain.Export) (string, error) {
 	ref := RepoRef{Owner: repo.Owner, Name: repo.Name}
-	url, err := s.commitAndOpen(ctx, ref, repo.DefaultBranch, slug, runner, files)
+	url, err := s.commitAndOpen(ctx, ref, repo.DefaultBranch, slug, runner, ex)
 	if err == nil {
 		return url, nil
 	}
@@ -286,10 +361,10 @@ func (s *ExportService) publish(ctx context.Context, repo domain.ImportedRepo, s
 	return "", apperr.ExternalService(domain.UnavailableMessage).WithCode(string(domain.CodeUnavailable)).WithCause(err)
 }
 
-func (s *ExportService) commitAndOpen(ctx context.Context, ref RepoRef, base, slug string, runner RunnerArtifact, files []domain.File) (string, error) {
-	commit := make([]CommitFile, len(files))
-	paths := make([]string, len(files))
-	for i, f := range files {
+func (s *ExportService) commitAndOpen(ctx context.Context, ref RepoRef, base, slug string, runner RunnerArtifact, ex domain.Export) (string, error) {
+	commit := make([]CommitFile, len(ex.Files))
+	paths := make([]string, len(ex.Files))
+	for i, f := range ex.Files {
 		commit[i] = CommitFile{Path: f.Path, Contents: f.Contents, AsBlob: f.Path == domain.RunnerPath}
 		paths[i] = f.Path
 	}
@@ -310,6 +385,6 @@ func (s *ExportService) commitAndOpen(ctx context.Context, ref RepoRef, base, sl
 		Title: domain.PRTitle,
 		Head:  domain.Branch,
 		Base:  base,
-		Body:  domain.BuildPRBody(slug, paths, runner.SHA256, runner.BuildID),
+		Body:  domain.BuildPRBodyFor(slug, paths, runner.SHA256, runner.BuildID, ex.RequiredSecrets, ex.RequiredVariables),
 	})
 }

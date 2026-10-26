@@ -67,6 +67,29 @@ func (b *PriceBook) Estimate(model string, tokensIn, tokensOut int) *float64 {
 	return StaticCost(model, tokensIn, tokensOut)
 }
 
+// PerM returns the price of a model in USD per 1,000,000 input and output tokens: the live
+// OpenRouter price when cached, else the static table; false for an unknown model. Like Estimate
+// it never waits for the network.
+func (b *PriceBook) PerM(model string) (promptPerM, completionPerM float64, ok bool) {
+	b.mu.Lock()
+	b.maybeRefreshLocked()
+	p, live := b.live[model]
+	b.mu.Unlock()
+	if live {
+		return p.in, p.out, true
+	}
+	return StaticPerM(model)
+}
+
+// PerM returns the price of a model from the Client's own price book, else the static table
+// (a Client built with Options.Prices has no book); false for an unknown model.
+func (c *Client) PerM(model string) (promptPerM, completionPerM float64, ok bool) {
+	if c.book == nil {
+		return StaticPerM(model)
+	}
+	return c.book.PerM(model)
+}
+
 // Refresh fetches the live prices now and waits for the answer (warm-up, tests). It reports
 // the fetch error; the PriceBook keeps working from the static table either way.
 func (b *PriceBook) Refresh(ctx context.Context) error {

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ConnTestProvider, SecretsStatus } from "@/lib/types";
-import { renderWithProviders, screen, cleanup, waitFor } from "@/test/render";
+import { renderWithProviders, screen, cleanup, waitFor, pseudoMessages } from "@/test/render";
 import { mockFetch } from "@/test/fetch-mock";
+import { strayText } from "@/test/pseudo";
 import { ModelStep } from "./ModelStep";
 
 afterEach(cleanup);
@@ -60,5 +61,29 @@ describe("ModelStep", () => {
     expect(await screen.findByText("Invalid key")).toBeInTheDocument();
     expect(cont()).toBeDisabled();
     expect(screen.queryByText("Already connected")).toBeNull();
+  });
+
+  it("enables Continue with a custom provider and no key at all (FR21, D21)", async () => {
+    const onContinue = vi.fn();
+    const { user } = renderWithProviders(<ModelStep secrets={NONE} customCount={1} onTested={vi.fn()} onContinue={onContinue} />);
+    expect(cont()).toBeEnabled();
+    expect(screen.queryByText("Already connected")).toBeNull();
+    await user.click(cont());
+    expect(onContinue).toHaveBeenCalledTimes(1);
+  });
+
+  it("links to API Keys for a custom provider, keeping the built-in choice and its key field (AC26, FR21)", () => {
+    renderWithProviders(<ModelStep secrets={NONE} onTested={vi.fn()} onContinue={vi.fn()} />);
+    expect(screen.getByRole("link", { name: "Use a custom provider" })).toHaveAttribute("href", "/settings/api-keys");
+    expect(screen.getByRole("radio", { name: "OpenRouter" })).toBeChecked();
+    expect(screen.getByRole("textbox", { name: "OpenRouter API key" })).toBeInTheDocument();
+  });
+
+  it("renders the custom-provider link from the message file, with no hard-coded copy (AC22)", () => {
+    const { container } = renderWithProviders(<ModelStep secrets={NONE} onTested={vi.fn()} onContinue={vi.fn()} />, {
+      messages: pseudoMessages(),
+    });
+    expect(screen.getByRole("link", { name: "⟦setup.model.customLink⟧" })).toHaveAttribute("href", "/settings/api-keys");
+    expect(strayText(container)).toEqual([]);
   });
 });

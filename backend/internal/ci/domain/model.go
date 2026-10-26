@@ -60,7 +60,8 @@ const (
 // TargetGHA is the only CI target that can be exported.
 const TargetGHA = "gha"
 
-// ProviderOpenRouter is the only agent provider that can be exported.
+// ProviderOpenRouter is the provider of the Phase 6 export and of every installation that predates
+// the stored export-time provider. The other exportable providers are in providers.go.
 const ProviderOpenRouter = "openrouter"
 
 // Trigger is a pull_request activity type a workflow reacts to.
@@ -112,6 +113,31 @@ type ExportAgent struct {
 	Skills  []ExportSkill
 	// Plugin is the installed plugin that owns the agent; nil for a user-created agent.
 	Plugin *PluginRef
+	// Custom is the definition of the agent's custom provider (FR27); set only when Provider is
+	// "custom:<slug>". It never holds the base URL, the key or a header value.
+	Custom *CustomProviderConfig
+	// Pricing is the price of the agent's model: the manual price of a custom provider's model, or
+	// the price book's price of an openai / anthropic model at export time (FR27, FR35). Nil when
+	// the model has none. It is ignored for openrouter.
+	Pricing *Pricing
+}
+
+// Pricing is the price of a model in USD per 1M input and output tokens (the manifest key
+// `pricing`, FR27, FR35).
+type Pricing struct {
+	PromptPerM, CompletionPerM float64
+}
+
+// CustomProviderConfig is what the manifest carries of a custom provider (FR27).
+type CustomProviderConfig struct {
+	// Protocol is "openai" or "anthropic"; AuthMode is "bearer" or "header".
+	Protocol, AuthMode string
+	// AuthHeader names the credential header of the header auth mode; nil for bearer.
+	AuthHeader *string
+	// ExtraHeaders are the extra header names in order, at most MaxExtraHeaders.
+	ExtraHeaders []string
+	// StructuredOutput is "strict", "json_object" or "prompt_only".
+	StructuredOutput string
 }
 
 // PluginRef names the plugin that owns an exported agent and whether it is enabled.
@@ -141,6 +167,9 @@ type Export struct {
 	Installation *Installation
 	Files        []File
 	PRURL        *string
+	// RequiredSecrets and RequiredVariables are the repository secrets and variables the user
+	// must add (FR29); see RequiredSecrets and RequiredVariables.
+	RequiredSecrets, RequiredVariables []string
 }
 
 // ManifestIssue is one validation problem of a manifest (details.issues of manifest_invalid).
@@ -167,7 +196,10 @@ type Installation struct {
 	// Slug and ManifestVersion are nil for rows that predate the slug.
 	Slug            *string
 	ManifestVersion *int
-	LastRun         *Run
+	// Provider is the agent's provider at the last open_pr export (FR37): a built-in id or
+	// "custom:<slug>". The ingest records its runs with it.
+	Provider string
+	LastRun  *Run
 }
 
 // Run is a ci_runs row joined to its agent run, installation and agent, as the lists read it.
@@ -196,6 +228,8 @@ type Run struct {
 type NewInstallation struct {
 	AgentID, Repo, Slug string
 	ManifestVersion     int
+	// Provider is the agent's provider at export time (FR37); a repeated export overwrites it.
+	Provider string
 }
 
 // RunKey identifies a workflow run attempt on GitHub.

@@ -243,6 +243,9 @@ func TestExport_Statuses(t *testing.T) {
 		Installation: &domain.Installation{ID: instID, AgentID: agentID, Repo: "acme/widgets", TargetType: "gha", InstalledAt: installed, Slug: ptr("reviewer"), ManifestVersion: ptr(2)},
 		Files:        []domain.File{{Path: ".github/workflows/devdigest-review-reviewer.yml", Contents: "on: x\n", Editable: true}, {Path: "a", Contents: "b"}},
 		PRURL:        ptr("https://github.com/acme/widgets/pull/1"),
+
+		RequiredSecrets:   []string{"DEVDIGEST_MY_GW_API_KEY", "DEVDIGEST_MY_GW_HEADER_1"},
+		RequiredVariables: []string{"DEVDIGEST_MY_GW_BASE_URL"},
 	}}
 	srv := newServer(t, f)
 
@@ -259,21 +262,23 @@ func TestExport_Statuses(t *testing.T) {
 			map[string]any{"path": ".github/workflows/devdigest-review-reviewer.yml", "contents": "on: x\n", "editable": true},
 			map[string]any{"path": "a", "contents": "b", "editable": false},
 		},
-		"pr_url": "https://github.com/acme/widgets/pull/1",
+		"pr_url":             "https://github.com/acme/widgets/pull/1",
+		"required_secrets":   []any{"DEVDIGEST_MY_GW_API_KEY", "DEVDIGEST_MY_GW_HEADER_1"},
+		"required_variables": []any{"DEVDIGEST_MY_GW_BASE_URL"},
 	}
 	if diff := cmp.Diff(want, decode(t, r)); diff != "" {
 		t.Errorf("open_pr body mismatch (-want +got):\n%s", diff)
 	}
-	if !strings.HasPrefix(r.Body, `{"installation":{"id":`) || !strings.Contains(r.Body, `"files":[`) || !strings.HasSuffix(strings.TrimSpace(r.Body), `"pr_url":"https://github.com/acme/widgets/pull/1"}`) {
+	if !strings.HasPrefix(r.Body, `{"installation":{"id":`) || !strings.Contains(r.Body, `"files":[`) || !strings.HasSuffix(strings.TrimSpace(r.Body), `"pr_url":"https://github.com/acme/widgets/pull/1","required_secrets":["DEVDIGEST_MY_GW_API_KEY","DEVDIGEST_MY_GW_HEADER_1"],"required_variables":["DEVDIGEST_MY_GW_BASE_URL"]}`) {
 		t.Errorf("keys are not in contract order: %s", r.Body)
 	}
 
-	f.export = domain.Export{Files: []domain.File{{Path: "w", Contents: "c", Editable: true}}}
+	f.export = domain.Export{Files: []domain.File{{Path: "w", Contents: "c", Editable: true}}, RequiredSecrets: []string{"OPENAI_API_KEY"}}
 	r = postJSON(t, srv, "/agents/"+agentID+"/export-ci", `{"repo":"acme/widgets","action":"files"}`)
 	if r.Status != http.StatusOK {
 		t.Fatalf("files status = %d, want 200 (%s)", r.Status, r.Body)
 	}
-	if diff := cmp.Diff(map[string]any{"installation": nil, "files": []any{map[string]any{"path": "w", "contents": "c", "editable": true}}, "pr_url": nil}, decode(t, r)); diff != "" {
+	if diff := cmp.Diff(map[string]any{"installation": nil, "files": []any{map[string]any{"path": "w", "contents": "c", "editable": true}}, "pr_url": nil, "required_secrets": []any{"OPENAI_API_KEY"}, "required_variables": []any{}}, decode(t, r)); diff != "" {
 		t.Errorf("files body mismatch (-want +got):\n%s", diff)
 	}
 
@@ -281,6 +286,9 @@ func TestExport_Statuses(t *testing.T) {
 	r = postJSON(t, srv, "/agents/"+agentID+"/export-ci", `{"repo":"acme/widgets","action":"files"}`)
 	if !strings.Contains(r.Body, `"files":[]`) {
 		t.Errorf("empty files must be [] not null: %s", r.Body)
+	}
+	if !strings.Contains(r.Body, `"required_secrets":[]`) || !strings.Contains(r.Body, `"required_variables":[]`) {
+		t.Errorf("empty required lists must be [] not null: %s", r.Body)
 	}
 }
 
@@ -292,22 +300,25 @@ func TestExport_RequestMapping(t *testing.T) {
 		want app.ExportRequest
 	}{
 		{"defaults", `{"repo":"acme/widgets"}`, app.ExportRequest{
-			Repo: "acme/widgets", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview,
+			Repo: "acme/widgets", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}}},
-		{"all fields", `{"repo":"acme/widgets","target":"gha","action":"files","post_as":"none","triggers":["reopened","opened"],"base":"x","workflow":"on: y\n","extra":1}`, app.ExportRequest{
-			Repo: "acme/widgets", Target: "gha", Action: domain.ActionFiles, PostAs: domain.PostAsNone,
+		{"all fields", `{"repo":"acme/widgets","target":"gha","action":"files","post_as":"none","runner":"self_hosted","triggers":["reopened","opened"],"base":"x","workflow":"on: y\n","extra":1}`, app.ExportRequest{
+			Repo: "acme/widgets", Target: "gha", Action: domain.ActionFiles, PostAs: domain.PostAsNone, Runner: domain.RunnerSelfHosted,
 			Triggers: []string{"reopened", "opened"}, Workflow: ptr("on: y\n")}},
+		{"runner github_hosted", `{"repo":"r","runner":"github_hosted"}`, app.ExportRequest{
+			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
+			Triggers: []string{"opened", "synchronize", "reopened"}}},
 		{"null workflow", `{"repo":"r","workflow":null}`, app.ExportRequest{
-			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview,
+			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}}},
 		{"empty workflow stays empty", `{"repo":"r","workflow":""}`, app.ExportRequest{
-			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview,
+			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}, Workflow: ptr("")}},
 		{"unsupported target reaches the use case", `{"repo":"r","target":"circle"}`, app.ExportRequest{
-			Repo: "r", Target: "circle", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview,
+			Repo: "r", Target: "circle", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}}},
 		{"empty triggers reach the use case", `{"repo":" a/b/c ","triggers":[]}`, app.ExportRequest{
-			Repo: " a/b/c ", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview,
+			Repo: " a/b/c ", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{}}},
 	}
 	for _, tc := range tests {
@@ -341,6 +352,8 @@ func TestExport_ValidationIssues(t *testing.T) {
 		{"repo null", `{"repo":null}`, []issueDetail{{"invalid_type", "/repo", "Expected string, received null"}}},
 		{"bad enum", `{"repo":"a/b","action":"merge"}`, []issueDetail{{"invalid_enum_value", "/action", "Invalid enum value. Expected 'open_pr' | 'files', received 'merge'"}}},
 		{"enum wrong type", `{"repo":"a/b","post_as":1}`, []issueDetail{{"invalid_type", "/post_as", "Expected 'github_review' | 'pr_comment' | 'none', received number"}}},
+		{"runner enum", `{"repo":"a/b","runner":"windows"}`, []issueDetail{{"invalid_enum_value", "/runner", "Invalid enum value. Expected 'github_hosted' | 'self_hosted', received 'windows'"}}},
+		{"runner wrong type", `{"repo":"a/b","runner":1}`, []issueDetail{{"invalid_type", "/runner", "Expected 'github_hosted' | 'self_hosted', received number"}}},
 		{"target null", `{"repo":"a/b","target":null}`, []issueDetail{{"invalid_type", "/target", "Expected 'gha' | 'circle' | 'jenkins' | 'cli', received null"}}},
 		{"triggers not array", `{"repo":"a/b","triggers":"opened"}`, []issueDetail{{"invalid_type", "/triggers", "Expected array, received string"}}},
 		{"trigger element", `{"repo":"a/b","triggers":["opened",1]}`, []issueDetail{{"invalid_type", "/triggers/1", "Expected string, received number"}}},

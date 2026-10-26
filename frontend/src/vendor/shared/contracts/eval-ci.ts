@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Verdict, Finding } from './findings.js';
-import { EvalRun, EvalOwnerKind, Conformance, Provider, CiFailOn } from './knowledge.js';
+import { EvalRun, EvalOwnerKind, Conformance, Provider, CiFailOn, ModelPricing } from './knowledge.js';
+import { CustomProviderAuthMode, CustomProviderProtocol, CustomProviderStructuredOutput } from './platform.js';
 
 /**
  * A4 — Eval / CI / Compose / Conformance API contracts (L06).
@@ -149,6 +150,19 @@ export type CiFile = z.infer<typeof CiFile>;
  * schema for both ends guarantees the formats never drift. `skills` are slugs
  * resolved to `.devdigest/skills/<slug>.md`.
  */
+/** What the runner needs of a custom provider (no secrets: the key and header values come from the CI secrets). */
+export const AgentManifestCustomProvider = z.object({
+  protocol: CustomProviderProtocol,
+  auth_mode: CustomProviderAuthMode,
+  /** null for `bearer`. */
+  auth_header: z.string().nullable(),
+  /** Names of the extra headers, in order; their values are the secrets `DEVDIGEST_<S>_HEADER_<n>`. */
+  extra_headers: z.array(z.string()),
+  structured_output: CustomProviderStructuredOutput,
+  pricing: ModelPricing.nullable(),
+});
+export type AgentManifestCustomProvider = z.infer<typeof AgentManifestCustomProvider>;
+
 export const AgentManifest = z.object({
   name: z.string().min(1),
   provider: Provider.default('openrouter'),
@@ -167,6 +181,10 @@ export const AgentManifest = z.object({
   ci_fail_on: CiFailOn.default('critical'),
   /** Agent version at export (specs/export-to-ci.md) — "outdated" + trace. */
   version: z.number().int().nullish(),
+  /** Price of a built-in `openai` / `anthropic` model at export time; never for `openrouter` or custom. */
+  pricing: ModelPricing.optional(),
+  /** Present when `provider` is `custom:<slug>`. */
+  custom_provider: AgentManifestCustomProvider.optional(),
 });
 export type AgentManifest = z.infer<typeof AgentManifest>;
 /** Caller-facing input type — `.default()` fields stay optional. */
@@ -184,6 +202,8 @@ export const CiExportInput = z.object({
   /** Workflow edited in Preview; omitted → the generated one. Checked against the
    *  workflow rule list (422 workflow_insecure). */
   workflow: z.string().max(65_536).nullish(),
+  /** `runs-on` of the generated job: GitHub-hosted (default) or `[self-hosted, linux, x64]`. */
+  runner: z.enum(['github_hosted', 'self_hosted']).default('github_hosted'),
 });
 export type CiExportInput = z.infer<typeof CiExportInput>;
 /** Caller-facing input type — `.default()` fields stay optional (web hooks). */
@@ -271,6 +291,10 @@ export const CiExport = z.object({
   installation: CiInstallation.nullable(),
   files: z.array(CiFile),
   pr_url: z.string().nullable(),
+  /** Names of the repository Actions secrets the workflow needs (never `GITHUB_TOKEN`). */
+  required_secrets: z.array(z.string()).default([]),
+  /** Names of the repository Actions variables the workflow needs. */
+  required_variables: z.array(z.string()).default([]),
 });
 export type CiExport = z.infer<typeof CiExport>;
 

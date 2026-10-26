@@ -42,5 +42,9 @@
     "target_type": "gha",
     "workflow_path": ".github/workflows/devdigest-review-ci-reviewer.yml"
   },
-  "pr_url": "https://github.com/acme/payments-api/pull/41"
+  "pr_url": "https://github.com/acme/payments-api/pull/41",
+  "required_secrets": [
+    "OPENROUTER_API_KEY"
+  ],
+  "required_variables": []
 }

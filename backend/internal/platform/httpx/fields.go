@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -152,4 +153,22 @@ func QueryString(c *echo.Context, name string, rule StringRule) (string, []Issue
 		return "", nil
 	}
 	return rule.Check(values[0], name)
+}
+
+// PathParam returns the path param name as the client meant it: percent-decoded exactly once.
+// Echo routes on the raw path when the request has one (URL.RawPath is set when the client's
+// encoding differs from Go's default, e.g. "custom%3Asynapse") and then leaves param values
+// encoded; otherwise it routes on the decoded path and the value is already decoded. This makes
+// "custom%3Asynapse" and "custom:synapse" equal, and "custom%253Asynapse" the literal
+// "custom%3Asynapse" in both cases. A malformed escape ("%zz") returns the raw value, which no
+// valid id matches. Relies on the router default (UnescapePathParamValues off).
+func PathParam(c *echo.Context, name string) string {
+	raw := c.Param(name)
+	if c.Request().URL.RawPath == "" {
+		return raw
+	}
+	if v, err := url.PathUnescape(raw); err == nil {
+		return v
+	}
+	return raw
 }

@@ -9,6 +9,11 @@ import { ConfigTab } from "./ConfigTab";
 let api: ReturnType<typeof mockFetch>;
 beforeEach(() => {
   api = mockFetch({
+    "GET /settings/custom-providers": [
+      { id: "custom:synapse", name: "Synapse" },
+      { id: "custom:lab", name: "Lab" },
+    ],
+    "GET /providers/:provider/models": [],
     "GET /providers/openai/models": [{ id: "gpt-4.1", provider: "openai" }],
     "PUT /agents/:id": (req) => ({ ...AGENT, ...(req.body as object) }),
   });
@@ -71,8 +76,43 @@ describe("ConfigTab save", () => {
 
   it("picking a new provider from the themed Select saves only that field", async () => {
     const { user } = renderWithProviders(<ConfigTab agent={AGENT} />);
-    await pickOption(user, screen.getByRole("combobox", { name: "Provider" }), "anthropic");
+    await pickOption(user, screen.getByRole("combobox", { name: "Provider" }), "Anthropic");
     await user.click(screen.getByRole("button", { name: "Save agent" }));
     expect(await savedPatch()).toEqual({ provider: "anthropic" });
+  });
+
+  it("lists the built-ins, then the custom providers by name, and loads the picked provider's models (AC24)", async () => {
+    const { user } = renderWithProviders(<ConfigTab agent={AGENT} />);
+    await user.click(screen.getByRole("combobox", { name: "Provider" }));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(5));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "OpenRouter",
+      "OpenAI",
+      "Anthropic",
+      "Lab",
+      "Synapse",
+    ]);
+    await user.click(screen.getByRole("option", { name: "Synapse" }));
+
+    await waitFor(() => expect(api.requests("GET", "/providers/custom%3Asynapse/models")).toHaveLength(1));
+    await user.click(screen.getByRole("button", { name: "Save agent" }));
+    expect(await savedPatch()).toEqual({ provider: "custom:synapse" });
+  });
+
+  it("shows an undefined custom provider as Not configured and keeps Save disabled until another is picked (EC23)", async () => {
+    const { user } = renderWithProviders(<ConfigTab agent={{ ...AGENT, provider: "custom:ghost" }} />);
+    const box = screen.getByRole("combobox", { name: "Provider" });
+    expect(await screen.findByText("This provider is not configured. Pick another provider to save.")).toBeInTheDocument();
+    expect(box).toHaveTextContent("custom:ghost · Not configured");
+
+    // editing another field does not unblock it
+    await user.type(screen.getByDisplayValue("Security Reviewer"), "!");
+    const save = screen.getByRole("button", { name: "Save agent" });
+    expect(save).toBeDisabled();
+
+    await pickOption(user, box, "OpenAI");
+    expect(save).toBeEnabled();
+    await user.click(save);
+    expect(await savedPatch()).toEqual({ name: "Security Reviewer!", provider: "openai" });
   });
 });

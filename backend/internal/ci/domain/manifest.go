@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -13,6 +14,10 @@ var (
 	manifestProviders  = []string{"openai", "anthropic", "openrouter"}
 	manifestStrategies = []string{"auto", "single-pass", "map-reduce"}
 	manifestCIFailOn   = []string{"never", "critical", "warning", "any"}
+
+	manifestProtocols  = []string{"openai", "anthropic"}
+	manifestAuthModes  = []string{"bearer", "header"}
+	manifestStructured = []string{"strict", "json_object", "prompt_only"}
 )
 
 // Manifest is the agent contract the studio writes to .devdigest/agents/<slug>.yaml and the CI
@@ -27,6 +32,23 @@ type Manifest struct {
 	Strategy string
 	CIFailOn string
 	Version  int
+	// CustomProvider is set only for a custom provider (FR27); it follows Version in the file.
+	CustomProvider *ManifestCustomProvider
+	// Pricing is set only for an openai / anthropic agent whose model has a price (FR35); it
+	// follows Version in the file.
+	Pricing *Pricing
+}
+
+// ManifestCustomProvider is the `custom_provider` block (FR27), keys in this order. It never
+// holds the base URL, the key or a header value.
+type ManifestCustomProvider struct {
+	Protocol, AuthMode string
+	// AuthHeader is nil (YAML null) for bearer.
+	AuthHeader       *string
+	ExtraHeaders     []string
+	StructuredOutput string
+	// Pricing is the manual price of the agent's model, or nil (YAML null).
+	Pricing *Pricing
 }
 
 // ManifestError is the failure of BuildManifest: the agent cannot be serialised as a manifest.
@@ -51,7 +73,8 @@ func BuildManifest(agent ExportAgent, skillSlugs []string) (Manifest, error) {
 	if agent.Name == "" {
 		issues = append(issues, ManifestIssue{Path: "name", Message: "String must contain at least 1 character(s)"})
 	}
-	if !inList(manifestProviders, agent.Provider) {
+	custom := IsCustomProvider(agent.Provider)
+	if !inList(manifestProviders, agent.Provider) && !custom {
 		issues = append(issues, enumIssue("provider", manifestProviders, agent.Provider))
 	}
 	if agent.Model == "" {
@@ -62,6 +85,20 @@ func BuildManifest(agent ExportAgent, skillSlugs []string) (Manifest, error) {
 	}
 	if !inList(manifestCIFailOn, agent.CIFailOn) {
 		issues = append(issues, enumIssue("ci_fail_on", manifestCIFailOn, agent.CIFailOn))
+	}
+	var block *ManifestCustomProvider
+	if custom {
+		var customIssues []ManifestIssue
+		block, customIssues = buildCustomBlock(agent.Custom, agent.Pricing)
+		issues = append(issues, customIssues...)
+	}
+	var topPricing *Pricing
+	if (agent.Provider == ProviderOpenAI || agent.Provider == ProviderAnthropic) && agent.Pricing != nil {
+		if !validPricing(*agent.Pricing) {
+			issues = append(issues, ManifestIssue{Path: "pricing", Message: "Number must be finite and greater than or equal to 0"})
+		}
+		p := *agent.Pricing
+		topPricing = &p
 	}
 	if len(issues) > 0 {
 		return Manifest{}, &ManifestError{Issues: issues}
@@ -77,6 +114,67 @@ func BuildManifest(agent ExportAgent, skillSlugs []string) (Manifest, error) {
 		Strategy:     agent.Strategy,
 		CIFailOn:     agent.CIFailOn,
 		Version:      agent.Version,
+
+		CustomProvider: block,
+		Pricing:        topPricing,
+	}, nil
+}
+
+func validPricing(p Pricing) bool {
+	ok := func(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && v >= 0 }
+	return ok(p.PromptPerM) && ok(p.CompletionPerM)
+}
+
+// buildCustomBlock validates the custom provider definition of an exported agent and copies it
+// into the manifest block. The auth header is dropped for bearer auth (FR27: null for bearer).
+func buildCustomBlock(c *CustomProviderConfig, price *Pricing) (*ManifestCustomProvider, []ManifestIssue) {
+	if c == nil {
+		return nil, []ManifestIssue{{Path: "custom_provider", Message: "Required"}}
+	}
+	var issues []ManifestIssue
+	if !inList(manifestProtocols, c.Protocol) {
+		issues = append(issues, enumIssue("custom_provider.protocol", manifestProtocols, c.Protocol))
+	}
+	if !inList(manifestAuthModes, c.AuthMode) {
+		issues = append(issues, enumIssue("custom_provider.auth_mode", manifestAuthModes, c.AuthMode))
+	}
+	var authHeader *string
+	if c.AuthMode == "header" {
+		if c.AuthHeader == nil || *c.AuthHeader == "" {
+			issues = append(issues, ManifestIssue{Path: "custom_provider.auth_header", Message: "String must contain at least 1 character(s)"})
+		} else {
+			h := *c.AuthHeader
+			authHeader = &h
+		}
+	}
+	if len(c.ExtraHeaders) > MaxExtraHeaders {
+		issues = append(issues, ManifestIssue{Path: "custom_provider.extra_headers", Message: fmt.Sprintf("Array must contain at most %d element(s)", MaxExtraHeaders)})
+	}
+	for i, h := range c.ExtraHeaders {
+		if h == "" {
+			issues = append(issues, ManifestIssue{Path: fmt.Sprintf("custom_provider.extra_headers.%d", i), Message: "String must contain at least 1 character(s)"})
+		}
+	}
+	if !inList(manifestStructured, c.StructuredOutput) {
+		issues = append(issues, enumIssue("custom_provider.structured_output", manifestStructured, c.StructuredOutput))
+	} else if c.StructuredOutput == "json_object" && c.Protocol == "anthropic" {
+		issues = append(issues, ManifestIssue{Path: "custom_provider.structured_output", Message: "json_object needs the openai protocol"})
+	}
+	var pricing *Pricing
+	if price != nil {
+		if !validPricing(*price) {
+			issues = append(issues, ManifestIssue{Path: "custom_provider.pricing", Message: "Number must be finite and greater than or equal to 0"})
+		}
+		p := *price
+		pricing = &p
+	}
+	if len(issues) > 0 {
+		return nil, issues
+	}
+	return &ManifestCustomProvider{
+		Protocol: c.Protocol, AuthMode: c.AuthMode, AuthHeader: authHeader,
+		ExtraHeaders:     append([]string{}, c.ExtraHeaders...),
+		StructuredOutput: c.StructuredOutput, Pricing: pricing,
 	}, nil
 }
 
@@ -122,7 +220,41 @@ func (m Manifest) YAML() string {
 	b.WriteString("strategy: " + yamlString(m.Strategy) + "\n")
 	b.WriteString("ci_fail_on: " + yamlString(m.CIFailOn) + "\n")
 	b.WriteString("version: " + strconv.Itoa(m.Version) + "\n")
+	if c := m.CustomProvider; c != nil {
+		b.WriteString("custom_provider:\n")
+		b.WriteString("  protocol: " + yamlString(c.Protocol) + "\n")
+		b.WriteString("  auth_mode: " + yamlString(c.AuthMode) + "\n")
+		if c.AuthHeader == nil {
+			b.WriteString("  auth_header: null\n")
+		} else {
+			b.WriteString("  auth_header: " + yamlString(*c.AuthHeader) + "\n")
+		}
+		if len(c.ExtraHeaders) == 0 {
+			b.WriteString("  extra_headers: []\n")
+		} else {
+			b.WriteString("  extra_headers:\n")
+			for _, h := range c.ExtraHeaders {
+				b.WriteString("    - " + yamlString(h) + "\n")
+			}
+		}
+		b.WriteString("  structured_output: " + yamlString(c.StructuredOutput) + "\n")
+		if c.Pricing == nil {
+			b.WriteString("  pricing: null\n")
+		} else {
+			b.WriteString("  pricing:\n")
+			writePricing(&b, "    ", *c.Pricing)
+		}
+	}
+	if m.Pricing != nil {
+		b.WriteString("pricing:\n")
+		writePricing(&b, "  ", *m.Pricing)
+	}
 	return b.String()
+}
+
+func writePricing(b *strings.Builder, indent string, p Pricing) {
+	b.WriteString(indent + "promptPerM: " + strconv.FormatFloat(p.PromptPerM, 'f', -1, 64) + "\n")
+	b.WriteString(indent + "completionPerM: " + strconv.FormatFloat(p.CompletionPerM, 'f', -1, 64) + "\n")
 }
 
 // yamlString writes s as a JSON string literal with the extra escapes of Manifest.YAML. Bytes

@@ -99,7 +99,10 @@ func gitHubOK(t *testing.T) *githubStub {
 }
 
 func TestDefaultEndpoints(t *testing.T) {
-	want := endpoints{OpenRouter: "https://openrouter.ai/api/v1", GitHub: "https://api.github.com"}
+	want := endpoints{
+		OpenRouter: "https://openrouter.ai/api/v1", OpenAI: "https://api.openai.com/v1",
+		Anthropic: "https://api.anthropic.com/v1", GitHub: "https://api.github.com",
+	}
 	if got := defaultEndpoints(); got != want {
 		t.Errorf("defaultEndpoints() = %+v, want %+v", got, want)
 	}
@@ -116,6 +119,19 @@ func TestEnvKeys_OnlyTheTwoNames(t *testing.T) {
 	for _, name := range []string{"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "PATH", ""} {
 		if got := k.Get(name); got != "" {
 			t.Errorf("Get(%q) = %q, want empty: the runner knows two names only", name, got)
+		}
+	}
+}
+
+// A10, EC29: the client of a built-in provider reads its one key under its own name, nothing else.
+func TestSoleKey(t *testing.T) {
+	k := soleKey{name: keynames.OpenAIKey, key: "sk-openai"}
+	if got := k.Get(keynames.OpenAIKey); got != "sk-openai" {
+		t.Errorf("Get(%q) = %q, want the key", keynames.OpenAIKey, got)
+	}
+	for _, name := range []string{keynames.OpenRouterKey, keynames.AnthropicKey, keynames.GitHubToken, ""} {
+		if got := k.Get(name); got != "" {
+			t.Errorf("Get(%q) = %q, want empty", name, got)
 		}
 	}
 }

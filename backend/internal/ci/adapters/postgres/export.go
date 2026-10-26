@@ -26,8 +26,9 @@ func (s *Store) SlugOwner(ctx context.Context, repo, slug string) (string, bool,
 	return agentID, true, nil
 }
 
-// UpsertInstallation implements app.Store. Only slug and manifest_version change on a repeated
-// export; installed_at keeps the time of the first one. The statement runs in a savepoint when
+// UpsertInstallation implements app.Store. Only slug, manifest_version and provider change on a
+// repeated export (the provider is the agent's provider at that export, FR37); installed_at keeps
+// the time of the first one. The statement runs in a savepoint when
 // the caller is in a transaction, so a lost race on (repo, slug) does not abort it.
 func (s *Store) UpsertInstallation(ctx context.Context, in domain.NewInstallation) error {
 	if err := checkInstallation(in); err != nil {
@@ -39,6 +40,7 @@ func (s *Store) UpsertInstallation(ctx context.Context, in domain.NewInstallatio
 		TargetType:      domain.TargetGHA,
 		Slug:            in.Slug,
 		ManifestVersion: in.ManifestVersion,
+		Provider:        in.Provider,
 	}
 	err := s.conn(ctx).Transaction(func(tx *gorm.DB) error {
 		return tx.Clauses(clause.OnConflict{
@@ -46,6 +48,7 @@ func (s *Store) UpsertInstallation(ctx context.Context, in domain.NewInstallatio
 			DoUpdates: clause.Assignments(map[string]any{
 				"slug":             row.Slug,
 				"manifest_version": row.ManifestVersion,
+				"provider":         row.Provider,
 			}),
 		}).Create(&row).Error
 	})

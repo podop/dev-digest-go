@@ -284,3 +284,51 @@ func decodeDetails(t *testing.T, rec *httptest.ResponseRecorder) []httpx.IssueDe
 	}
 	return body.Error.Details
 }
+
+func TestPathParam(t *testing.T) {
+	e := newEcho(t, httpx.Options{})
+	e.GET("/providers/:id/models", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"id": httpx.PathParam(c, "id")})
+	})
+	tests := []struct {
+		name, path, want string
+	}{
+		{"literal colon", "/providers/custom:synapse/models", "custom:synapse"},
+		{"encoded colon", "/providers/custom%3Asynapse/models", "custom:synapse"},
+		{"encoded colon lowercase hex", "/providers/custom%3asynapse/models", "custom:synapse"},
+		{"plain", "/providers/openai/models", "openai"},
+		{"decoded once", "/providers/custom%253Asynapse/models", "custom%3Asynapse"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			var body map[string]string
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("GET %s: status %d, body %q: %v", tc.path, rec.Code, rec.Body.String(), err)
+			}
+			if got := body["id"]; got != tc.want {
+				t.Errorf("PathParam for GET %s = %q, want %q", tc.path, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPathParam_MalformedEscapeStaysRaw(t *testing.T) {
+	e := newEcho(t, httpx.Options{})
+	e.GET("/providers/:id/models", func(c *echo.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{"id": httpx.PathParam(c, "id")})
+	})
+	req := httptest.NewRequest(http.MethodGet, "/providers/x/models", nil)
+	req.URL.Path = "/providers/custom%zz/models" // httptest refuses to parse a bad escape
+	req.URL.RawPath = "/providers/custom%zz/models"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	var body map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("status %d, body %q: %v", rec.Code, rec.Body.String(), err)
+	}
+	if got, want := body["id"], "custom%zz"; got != want {
+		t.Errorf("PathParam(malformed escape) = %q, want %q", got, want)
+	}
+}

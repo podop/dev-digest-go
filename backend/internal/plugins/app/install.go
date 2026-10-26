@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"dev-digest-go/backend/internal/plugins/domain"
 )
@@ -44,7 +45,22 @@ func (s *Service) Preview(ctx context.Context, workspaceID string, in ImportInpu
 	if err != nil {
 		return domain.PreviewDoc{}, err
 	}
-	return c.prepared.Preview(c.found), nil
+	doc := c.prepared.Preview(c.found)
+	used := c.prepared.CustomProviders()
+	if len(used) == 0 || s.d.CustomProviders == nil {
+		return doc, nil
+	}
+	defined, err := s.d.CustomProviders.CustomDefined(ctx, workspaceID, used)
+	if err != nil {
+		return domain.PreviewDoc{}, fmt.Errorf("check custom providers: %w", err)
+	}
+	var missing []string
+	for _, id := range used {
+		if !slices.Contains(defined, id) {
+			missing = append(missing, id)
+		}
+	}
+	return doc.WithUndefinedProviders(missing), nil
 }
 
 // Install runs the preview's checks, refuses with 409 plugin_conflict before writing when a name is

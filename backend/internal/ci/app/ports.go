@@ -54,6 +54,37 @@ type RepoDirectory interface {
 	FindByFullName(ctx context.Context, workspaceID, fullName string) (domain.ImportedRepo, bool, error)
 }
 
+// CustomExport is what an export needs of a defined custom provider (FR24, FR27, FR29): the
+// definition without the base URL, the key and any header value, whether a key is stored, and the
+// manual price of the agent's model.
+type CustomExport struct {
+	// Config is the manifest's view of the definition; len(Config.ExtraHeaders) is the header
+	// count of the workflow and of the required secrets.
+	Config domain.CustomProviderConfig
+	// KeyConfigured reports whether the workspace stores a key for the provider (FR29: only then
+	// is DEVDIGEST_<S>_API_KEY a required secret).
+	KeyConfigured bool
+	// Pricing is the manual price of the agent's model, nil when the model has none.
+	Pricing *domain.Pricing
+}
+
+// CustomProviders reads the workspace's custom providers (peer adapter over the customproviders
+// context). A nil port in ExportDeps makes every custom id undefined.
+type CustomProviders interface {
+	// ForExport returns the export view of the provider with the public id "custom:<slug>" for
+	// the agent's model; false = not defined in the workspace.
+	ForExport(ctx context.Context, workspaceID, providerID, model string) (CustomExport, bool, error)
+}
+
+// ModelPrices is the server price book as an export reads it (FR35). A nil port in ExportDeps
+// means no built-in model has a price.
+type ModelPrices interface {
+	// PerM returns the price of an openai / anthropic model in USD per 1M input and output tokens
+	// as of now; false = the book has no price for the model (the manifest then has no `pricing`
+	// key and the export still succeeds).
+	PerM(provider, model string) (domain.Pricing, bool)
+}
+
 // RunnerArtifact is the Go CI runner as the export ships it (spec 7.8.2).
 type RunnerArtifact struct {
 	// Encoded is the file content of RunnerPath: gzip of the executable, standard base64 on one
@@ -93,8 +124,9 @@ type Store interface {
 	FindInstallation(ctx context.Context, workspaceID, agentID, repo string) (domain.Installation, bool, error)
 	// SlugOwner returns the agent that owns slug in repo; false when nobody does.
 	SlugOwner(ctx context.Context, repo, slug string) (agentID string, found bool, err error)
-	// UpsertInstallation inserts or updates on (agent_id, repo, target gha), setting slug and
-	// manifest_version; a unique violation on (repo, slug) is ErrSlugTaken.
+	// UpsertInstallation inserts or updates on (agent_id, repo, target gha), setting slug,
+	// manifest_version and provider (FR37: the agent's provider at export time, overwritten by a
+	// re-export); a unique violation on (repo, slug) is ErrSlugTaken.
 	UpsertInstallation(ctx context.Context, in domain.NewInstallation) error
 	// StoredRunKeys returns which of keys are already stored.
 	StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[domain.RunKey]bool, error)
@@ -114,6 +146,12 @@ type Recorded struct {
 	AgentRunID string
 	// Stored is false when the run (same run id and attempt) was already stored.
 	Stored bool
+	// Provider is the provider the agent_runs row was stored with: the installation's stored
+	// export-time provider read in the same transaction (FR37); empty unless Stored. The ledger
+	// entry uses it, so both rows agree even when a re-export commits in between. Empty from a
+	// store that does not report it: the ingest then uses the provider of the installation it
+	// listed.
+	Provider string
 }
 
 // CIRun is a newly stored CI run as the cost ledger needs it (spec FR6). It carries ids and the

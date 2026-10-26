@@ -1,6 +1,7 @@
 package domain_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -31,5 +32,78 @@ func TestBuildPRBody(t *testing.T) {
 		"abc123", "0123456789ab")
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("BuildPRBody() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+const prBodyStep1Tail = " (Settings > Secrets and variables > Actions).\n"
+
+// stepOne returns the "1. …" line and the sentence after it of a PR body.
+func stepOne(t *testing.T, body string) string {
+	t.Helper()
+	i := strings.Index(body, "1. ")
+	j := strings.Index(body, "\n2. Merge this PR.")
+	if i < 0 || j < 0 {
+		t.Fatalf("PR body has no step 1:\n%s", body)
+	}
+	return body[i:j]
+}
+
+func TestBuildPRBodyFor_Step1(t *testing.T) {
+	tests := []struct {
+		name      string
+		secrets   []string
+		variables []string
+		want      string
+	}{
+		{
+			"openrouter", []string{"OPENROUTER_API_KEY"}, nil,
+			"1. Add the repository Actions secret `OPENROUTER_API_KEY`" + prBodyStep1Tail,
+		},
+		{
+			"openai", []string{"OPENAI_API_KEY"}, []string{},
+			"1. Add the repository Actions secret `OPENAI_API_KEY`" + prBodyStep1Tail,
+		},
+		{
+			"custom with three secrets and the variable (AC31)",
+			[]string{"DEVDIGEST_MY_GW_API_KEY", "DEVDIGEST_MY_GW_HEADER_1", "DEVDIGEST_MY_GW_HEADER_2"},
+			[]string{"DEVDIGEST_MY_GW_BASE_URL"},
+			"1. Add the repository Actions secrets `DEVDIGEST_MY_GW_API_KEY`, `DEVDIGEST_MY_GW_HEADER_1`, `DEVDIGEST_MY_GW_HEADER_2`" +
+				" and the variable `DEVDIGEST_MY_GW_BASE_URL`" + prBodyStep1Tail,
+		},
+		{
+			"custom with one secret and the variable",
+			[]string{"DEVDIGEST_GW_API_KEY"}, []string{"DEVDIGEST_GW_BASE_URL"},
+			"1. Add the repository Actions secret `DEVDIGEST_GW_API_KEY` and the variable `DEVDIGEST_GW_BASE_URL`" + prBodyStep1Tail,
+		},
+		{
+			"keyless custom without headers",
+			[]string{}, []string{"DEVDIGEST_NET_BASE_URL"},
+			"1. Add the repository Actions variable `DEVDIGEST_NET_BASE_URL`" + prBodyStep1Tail,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			body := domain.BuildPRBodyFor("gw", []string{"a.yaml"}, "sha", "build", tc.secrets, tc.variables)
+			got := stepOne(t, body)
+			want := strings.TrimSuffix(tc.want, "\n") + "\n   This PR triggers the review workflow on itself, so its check stays red until the secret exists."
+			if got != want {
+				t.Errorf("BuildPRBodyFor() step 1 = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// P12: BuildPRBody is BuildPRBodyFor with the openrouter secret, and the rest of the body (files,
+// steps 2 and 3, runner paragraph) does not depend on the provider.
+func TestBuildPRBodyFor_RestUnchanged(t *testing.T) {
+	paths := []string{"a.yaml", "b.yml"}
+	base := domain.BuildPRBody("gw", paths, "sha", "build")
+	if got := domain.BuildPRBodyFor("gw", paths, "sha", "build", []string{"OPENROUTER_API_KEY"}, nil); got != base {
+		t.Errorf("BuildPRBodyFor(openrouter) differs from BuildPRBody:\n%s\n---\n%s", got, base)
+	}
+	custom := domain.BuildPRBodyFor("gw", paths, "sha", "build", []string{"DEVDIGEST_X_API_KEY"}, []string{"DEVDIGEST_X_BASE_URL"})
+	wantRest := strings.Replace(base, "secret `OPENROUTER_API_KEY`", "secret `DEVDIGEST_X_API_KEY` and the variable `DEVDIGEST_X_BASE_URL`", 1)
+	if custom != wantRest {
+		t.Errorf("custom body differs from the openrouter body beyond step 1 (-want +got):\n%s", cmp.Diff(wantRest, custom))
 	}
 }

@@ -1,25 +1,35 @@
 // Command devdigest-runner is the DevDigest CI runner: a static linux/amd64 executable that the
 // exported GitHub Actions workflow runs in someone else's repository to review a pull request
 // with the backend's review engine. It reads secrets from the environment only, never links the
-// secrets-file store, a database, Echo, git or cgo (see closure_test.go), and prices nothing.
+// secrets-file store, a database, Echo, git or cgo (see closure_test.go), and has no price book:
+// the cost of a call is what the provider reports or, for an openai, anthropic or custom manifest,
+// the manifest price.
 package main
 
 import (
 	"context"
 	"crypto/rand"
+	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
+	cidomain "dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/ci/runner/adapters/env"
 	"dev-digest-go/backend/internal/ci/runner/adapters/ghapi"
 	runnerapp "dev-digest-go/backend/internal/ci/runner/app"
 	"dev-digest-go/backend/internal/llm"
+	"dev-digest-go/backend/internal/llm/adapters/anthropic"
 	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
+	"dev-digest-go/backend/internal/llm/custom"
+	"dev-digest-go/backend/internal/platform/egress"
 	"dev-digest-go/backend/internal/platform/keynames"
 	"dev-digest-go/backend/internal/reviewer/adapters/llmcall"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
@@ -33,11 +43,30 @@ var buildID = "dev"
 // at httptest servers.
 type endpoints struct {
 	OpenRouter string // API root including /v1
+	OpenAI     string // API root including /v1
+	Anthropic  string // API root including /v1
 	GitHub     string // API root
 }
 
 func defaultEndpoints() endpoints {
-	return endpoints{OpenRouter: openaicompat.DefaultOpenRouterBaseURL, GitHub: ghapi.DefaultBaseURL}
+	return endpoints{
+		OpenRouter: openaicompat.DefaultOpenRouterBaseURL,
+		OpenAI:     openaicompat.DefaultOpenAIBaseURL,
+		Anthropic:  anthropic.DefaultBaseURL,
+		GitHub:     ghapi.DefaultBaseURL,
+	}
+}
+
+// envExtraCAFile names the optional PEM bundle a custom provider's HTTPS certificate may chain to
+// (a gateway with a private CA, reached from a self-hosted runner).
+const envExtraCAFile = "DEVDIGEST_EXTRA_CA_FILE"
+
+// The runner limits of a built-in openai or anthropic manifest (FR36): the Phase 6 limits of the
+// OpenRouter path, not the studio's own openai/anthropic defaults. The 360 s total budget of one
+// structured call is the client's default.
+var builtInPolicy = llm.Policy{
+	RequestTimeout: 180 * time.Second, Retries: 2,
+	ListTimeout: 15 * time.Second, ListRetries: 2,
 }
 
 func main() {
@@ -72,7 +101,10 @@ func (c commandSafeWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// envKeys reads the two names the runner knows from the environment; everything else is unset.
+// envKeys reads the two names the OpenRouter client knows from the environment; everything else is
+// unset. Only the OpenRouter path uses it: an openai, anthropic or custom manifest gets its own
+// client (providers) whose keys hold the one credential of that provider, so the OpenRouter key
+// never reaches it (A10, EC29).
 type envKeys struct{ getenv func(string) string }
 
 func (k envKeys) Get(name string) string {
@@ -83,7 +115,8 @@ func (k envKeys) Get(name string) string {
 	return ""
 }
 
-// noPrices is the runner's price book: none. The cost of a call is only what OpenRouter reports.
+// noPrices is the runner's price book for OpenRouter: none. The cost of a call is only what
+// OpenRouter reports.
 type noPrices struct{}
 
 func (noPrices) Estimate(string, int, int) *float64 { return nil }
@@ -108,8 +141,128 @@ func (r reviewLLM) For(model string) reviewerapp.LLM {
 	return llmcall.New(llmcall.Config{Client: r.client, Provider: llm.OpenRouter, Model: model, RunID: "ci-runner"})
 }
 
+// soleKey is the key reader of a built-in provider's client: the one key of the manifest's
+// provider under its own name, nothing else.
+type soleKey struct{ name, key string }
+
+func (k soleKey) Get(name string) string {
+	if name == k.name {
+		return k.key
+	}
+	return ""
+}
+
+// limited gives a built-in adapter the runner's limits instead of its own.
+type limited struct {
+	llm.Adapter
+	policy llm.Policy
+}
+
+func (l limited) Policy() llm.Policy { return l.policy }
+
+// fixedCustom resolves the one custom provider of the run, whatever the workspace.
+type fixedCustom struct {
+	id   llm.Provider
+	call llm.CustomCall
+}
+
+func (f fixedCustom) Resolve(_ context.Context, _ string, p llm.Provider) (llm.CustomCall, error) {
+	if p != f.id {
+		return llm.CustomCall{}, llm.ErrCustomNotConfigured
+	}
+	return f.call, nil
+}
+
+// providers builds the engine's LLM port for an openai, anthropic or custom manifest (FR30, FR36).
+// Each selection gets its own client: no price book (the manifest price prices the tokens), one
+// key, the secrets of the selection redacted from every error.
+type providers struct {
+	ep     endpoints
+	stderr io.Writer
+	// rootCAs is the trust store for a custom provider's HTTPS; nil = the system store.
+	rootCAs *x509.CertPool
+}
+
+var _ runnerapp.Providers = providers{}
+
+func (p providers) logger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(commandSafeWriter{w: p.stderr}, &slog.HandlerOptions{Level: slog.LevelWarn}))
+}
+
+func (p providers) For(sel runnerapp.ProviderSelection) (reviewerapp.LLM, error) {
+	provider := llm.Provider(sel.Provider)
+	opts := llm.Options{
+		Logger: p.logger(),
+		// A non-nil Pricer, so the client never starts the live price book.
+		Prices: runnerapp.ManifestPricer{Pricing: sel.Price},
+		// A response without usage carries estimated tokens, which a manifest price never prices (SCR7).
+		PriceReportedUsageOnly: true,
+	}
+	switch {
+	case provider == llm.OpenAI:
+		opts.Keys = soleKey{name: provider.KeyName(), key: sel.Key}
+		opts.Adapters = map[llm.Provider]llm.Adapter{
+			llm.OpenAI: limited{Adapter: openaicompat.NewOpenAI(openaicompat.Options{BaseURL: p.ep.OpenAI}), policy: builtInPolicy},
+		}
+	case provider == llm.Anthropic:
+		opts.Keys = soleKey{name: provider.KeyName(), key: sel.Key}
+		opts.Adapters = map[llm.Provider]llm.Adapter{
+			llm.Anthropic: limited{Adapter: anthropic.New(anthropic.Options{BaseURL: p.ep.Anthropic}), policy: builtInPolicy},
+		}
+	case provider.IsCustom() && sel.Custom != nil:
+		opts.Keys = soleKey{}
+		opts.Custom = fixedCustom{id: provider, call: p.customCall(provider, sel)}
+	default:
+		return nil, errors.New("unsupported provider " + sel.Provider)
+	}
+	client := llm.New(opts)
+	return llmcall.New(llmcall.Config{Client: client, Provider: provider, Model: sel.Model, RunID: "ci-runner"}), nil
+}
+
+// customCall is the call description of a custom provider: its adapter over the egress client
+// (no redirects, no proxy, the address guard), the manifest price and the values to redact.
+func (p providers) customCall(id llm.Provider, sel runnerapp.ProviderSelection) llm.CustomCall {
+	ep := sel.Custom
+	hc := egress.Client{Guard: custom.ForbiddenAddr, RootCAs: p.rootCAs}.HTTPClient()
+	headers := make(map[string]string, len(ep.Headers))
+	for _, h := range ep.Headers {
+		headers[h.Name] = h.Value
+	}
+	var adapter llm.Adapter
+	switch ep.Protocol {
+	case custom.ProtocolAnthropic:
+		adapter = anthropic.NewCustom(anthropic.CustomOptions{
+			ID: string(id), Name: string(id), BaseURL: ep.BaseURL, AuthMode: ep.AuthMode, AuthHeader: ep.AuthHeader,
+			Key: sel.Key, Headers: headers, HTTPClient: hc,
+		})
+	default:
+		adapter = openaicompat.NewCustom(openaicompat.CustomOptions{
+			ID: string(id), Name: string(id), BaseURL: ep.BaseURL, AuthMode: ep.AuthMode, AuthHeader: ep.AuthHeader,
+			Key: sel.Key, Headers: headers, HTTPClient: hc,
+		})
+	}
+	return llm.CustomCall{
+		Adapter: adapter, Name: string(id), Protocol: ep.Protocol, Mode: ep.Mode,
+		Price: runnerapp.ManifestPricer{Pricing: sel.Price}, Secrets: sel.Secrets(),
+	}
+}
+
+// secretNames are the environment variables whose values never reach the job log (NFR7, A10):
+// every key and token the runner knows, whichever provider the manifest names.
+func secretNames() []string {
+	names := []string{cidomain.SecretOpenRouter, cidomain.SecretOpenAI, cidomain.SecretAnthropic, keynames.GitHubToken, "DEVDIGEST_LLM_API_KEY"}
+	for n := 1; n <= custom.MaxHeaders; n++ {
+		names = append(names, "DEVDIGEST_LLM_HEADER_"+strconv.Itoa(n))
+	}
+	return names
+}
+
+// minRedactLen is the shortest value the panic redactor scrubs, as in the use case.
+const minRedactLen = 8
+
 // run is the runner. It returns the process exit code. The review is the one engine local reviews
-// and evals run (reviewer/app.Run), over the OpenRouter client of newClient.
+// and evals run (reviewer/app.Run): over the OpenRouter client of newClient for an openrouter
+// manifest, over the client of providers for any other.
 func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr io.Writer, ep endpoints) (code int) {
 	getenv := func(name string) string { v, _ := lookup(name); return v }
 	out := env.NewOut(stdout, stderr)
@@ -117,8 +270,8 @@ func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr
 		// A panic is a bug, not a review result; it still must not leave a key in the job log.
 		if r := recover(); r != nil {
 			msg := fmt.Sprint(r)
-			for _, name := range []string{keynames.OpenRouterKey, keynames.GitHubToken} {
-				if v := getenv(name); len(v) >= 8 {
+			for _, name := range secretNames() {
+				if v := getenv(name); len(v) >= minRedactLen {
 					msg = strings.ReplaceAll(msg, v, "[REDACTED]")
 				}
 			}
@@ -127,13 +280,20 @@ func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr
 		}
 	}()
 
+	rootCAs, err := egress.LoadExtraCA(getenv(envExtraCAFile))
+	if err != nil {
+		out.Stderr(runnerapp.LogLine("[agent-runner] FAILED: ", envExtraCAFile+": "+err.Error()))
+		return runnerapp.ExitFailed
+	}
+
 	client := newClient(getenv, stderr, ep)
 	defer client.Close()
 	return runnerapp.Run(ctx, runnerapp.Config{BuildID: buildID}, runnerapp.Deps{
-		Env:    env.Process{LookupEnv: lookup},
-		Files:  env.Files{},
-		GitHub: ghapi.New(ghapi.Options{BaseURL: ep.GitHub}),
-		LLM:    reviewLLM{client: client},
-		Out:    out,
+		Env:       env.Process{LookupEnv: lookup},
+		Files:     env.Files{},
+		GitHub:    ghapi.New(ghapi.Options{BaseURL: ep.GitHub}),
+		LLM:       reviewLLM{client: client},
+		Providers: providers{ep: ep, stderr: stderr, rootCAs: rootCAs},
+		Out:       out,
 	})
 }

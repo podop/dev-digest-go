@@ -38,6 +38,7 @@ type rig struct {
 	reader  *fakeReader
 	names   *fakeNames
 	inst    *fakeInstaller
+	custom  *fakeCustom
 	plugins *fakePlugins
 	last    *fakeLastExports
 	logs    *bytes.Buffer
@@ -46,11 +47,11 @@ type rig struct {
 func newRig(t *testing.T) *rig {
 	t.Helper()
 	r := &rig{
-		reader: &fakeReader{}, names: &fakeNames{}, inst: &fakeInstaller{}, plugins: &fakePlugins{},
+		reader: &fakeReader{}, names: &fakeNames{}, inst: &fakeInstaller{}, custom: &fakeCustom{}, plugins: &fakePlugins{},
 		last: &fakeLastExports{}, logs: &bytes.Buffer{},
 	}
 	r.svc = app.NewService(app.Deps{
-		Reader: r.reader, Names: r.names, Installer: r.inst, Plugins: r.plugins, LastExports: r.last,
+		Reader: r.reader, Names: r.names, Installer: r.inst, CustomProviders: r.custom, Plugins: r.plugins, LastExports: r.last,
 		WorkspaceNames: fakeWorkspace{name: "Acme Corp", found: true},
 		Clock:          func() time.Time { return fixedNow },
 		Log:            slog.New(slog.NewJSONHandler(r.logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
@@ -403,6 +404,95 @@ func TestList(t *testing.T) {
 			t.Errorf("List() error = %v, want it to wrap the settings error", err)
 		}
 	})
+}
+
+// customInput is a bundle with agents on custom:ghost twice, custom:synapse and openai (EC16).
+func customInput() app.ImportInput {
+	return app.ImportInput{Media: "application/json", Body: []byte(`{"manifest":{"name":"acme","version":"1.0.0","format":"devdigest-plugin/v1"},` +
+		`"agents":[{"name":"A","provider":"custom:ghost","model":"m","system_prompt":"p"},` +
+		`{"name":"B","provider":"custom:synapse","model":"m","system_prompt":"p"},` +
+		`{"name":"C","provider":"custom:ghost","model":"m","system_prompt":"p"},` +
+		`{"name":"D","provider":"openai","model":"m","system_prompt":"p"}],` +
+		`"skills":[],"eval_cases":[],"conventions":[]}`)}
+}
+
+func TestPreview_WarnsOncePerUndefinedCustomProvider(t *testing.T) {
+	r := newRig(t)
+	r.custom.defined = []string{"custom:synapse"}
+
+	doc, err := r.svc.Preview(ctx(t), ws, customInput())
+	if err != nil {
+		t.Fatalf("Preview() error = %v", err)
+	}
+	if diff := cmp.Diff([]string{"Provider custom:ghost is not configured here"}, doc.Warnings); diff != "" {
+		t.Errorf("Preview().Warnings mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([][]string{{"custom:ghost", "custom:synapse"}}, r.custom.asked); diff != "" {
+		t.Errorf("CustomDefined() ids (distinct, first use) mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff("custom:ghost", doc.Agents[0].Provider); diff != "" {
+		t.Errorf("Preview().Agents[0].Provider mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestPreview_NoWarningWhenAllCustomProvidersAreDefined(t *testing.T) {
+	r := newRig(t)
+	r.custom.defined = []string{"custom:synapse", "custom:ghost"}
+	doc, err := r.svc.Preview(ctx(t), ws, customInput())
+	if err != nil {
+		t.Fatalf("Preview() error = %v", err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Errorf("Preview().Warnings = %v, want none", doc.Warnings)
+	}
+}
+
+func TestPreview_AsksNoOneWithoutCustomProviders(t *testing.T) {
+	r := newRig(t)
+	if _, err := r.svc.Preview(ctx(t), ws, jsonInput("acme")); err != nil {
+		t.Fatalf("Preview() error = %v", err)
+	}
+	if len(r.custom.asked) != 0 {
+		t.Errorf("CustomDefined() was called %d time(s) for a bundle on built-in providers, want 0", len(r.custom.asked))
+	}
+}
+
+func TestPreview_CustomProviderLookupFailure(t *testing.T) {
+	r := newRig(t)
+	r.custom.err = errBoom
+	if _, err := r.svc.Preview(ctx(t), ws, customInput()); !errors.Is(err, errBoom) {
+		t.Errorf("Preview() error = %v, want it to wrap the lookup error", err)
+	}
+}
+
+func TestInstall_KeepsUndefinedCustomProviders(t *testing.T) {
+	r := newRig(t)
+	if _, err := r.svc.Install(ctx(t), ws, customInput()); err != nil {
+		t.Fatalf("Install() error = %v", err)
+	}
+	var got []string
+	for _, a := range r.inst.plans[0].Agents {
+		got = append(got, a.Provider)
+	}
+	if diff := cmp.Diff([]string{"custom:ghost", "custom:synapse", "custom:ghost", "openai"}, got); diff != "" {
+		t.Errorf("installed providers mismatch (-want +got):\n%s", diff)
+	}
+	if len(r.custom.asked) != 0 {
+		t.Errorf("Install() asked CustomDefined %d time(s), want 0: an undefined provider never blocks (FR15)", len(r.custom.asked))
+	}
+}
+
+func TestPreview_WithoutACustomProvidersPort(t *testing.T) {
+	r := newRig(t)
+	svc := app.NewService(app.Deps{Reader: r.reader, Names: r.names, Installer: r.inst, Plugins: r.plugins, LastExports: r.last,
+		WorkspaceNames: fakeWorkspace{name: "Acme", found: true}})
+	doc, err := svc.Preview(ctx(t), ws, customInput())
+	if err != nil {
+		t.Fatalf("Preview() error = %v", err)
+	}
+	if len(doc.Warnings) != 0 {
+		t.Errorf("Preview().Warnings = %v, want none without the port", doc.Warnings)
+	}
 }
 
 func TestPreview_WritesNothing(t *testing.T) {

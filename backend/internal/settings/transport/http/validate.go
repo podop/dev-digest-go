@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/httpx"
 	"dev-digest-go/backend/internal/settings/app"
 )
@@ -45,9 +46,16 @@ var (
 	knownKeys = []string{"polling_interval_min", "theme", "density", "sync_to_folder", "automatic_reviews", "feature_models", "default_model", "monthly_spend_cap_usd", "retention_days", "workspace_name", "plugin_last_export"}
 )
 
+// definedFunc reports whether a well-formed custom provider id is defined in the workspace; nil
+// means none is (FR7).
+type definedFunc func(id string) bool
+
+func (d definedFunc) defined(id string) bool { return d != nil && d(id) }
+
 // parseSettingsUpdate validates a PUT /settings body (section 7.2) and returns the entries to
 // write. Known keys are checked and normalized, unknown keys pass through with any JSON value.
-func parseSettingsUpdate(body []byte) (app.Bag, []httpx.Issue) {
+// A custom provider id in default_model or feature_models is accepted when defined says so.
+func parseSettingsUpdate(body []byte, defined definedFunc) (app.Bag, []httpx.Issue) {
 	var obj map[string]json.RawMessage
 	if issues := decodeObject(body, &obj); issues != nil {
 		return nil, issues
@@ -81,9 +89,9 @@ func parseSettingsUpdate(body []byte) (app.Bag, []httpx.Issue) {
 		case "automatic_reviews":
 			value, is = automaticReviews(raw, key)
 		case "feature_models":
-			value, is = featureModels(raw, key)
+			value, is = featureModels(raw, defined, key)
 		case "default_model":
-			value, is = defaultModel(raw, key)
+			value, is = defaultModel(raw, defined, key)
 		case "monthly_spend_cap_usd":
 			value, is = spendCap(raw, key)
 		case "retention_days":
@@ -114,7 +122,15 @@ type connTestRequest struct {
 	Key      string
 }
 
-// parseConnTest validates {provider, key?}; other fields are ignored.
+// isCustomID reports whether s is a well-formed custom provider id (`custom:<slug>`).
+func isCustomID(s string) bool {
+	_, ok := custom.ParseID(s)
+	return ok
+}
+
+// parseConnTest validates {provider, key?}; other fields are ignored. The provider is a
+// connection-test provider or a well-formed custom provider id (whether it is defined is the use
+// case's 404, FR11).
 func parseConnTest(body []byte) (connTestRequest, []httpx.Issue) {
 	var obj map[string]json.RawMessage
 	if issues := decodeObject(body, &obj); issues != nil {
@@ -129,7 +145,7 @@ func parseConnTest(body []byte) (connTestRequest, []httpx.Issue) {
 		var name string
 		if !decodeString(raw, &name) {
 			issues = append(issues, typeIssue("string", raw, "provider"))
-		} else if !slices.Contains(app.ProviderNames(), name) {
+		} else if !slices.Contains(app.ProviderNames(), name) && !isCustomID(name) {
 			issues = append(issues, enumIssue(app.ProviderNames(), name, "provider"))
 		} else {
 			req.Provider = app.Provider(name)
@@ -302,7 +318,7 @@ type featureModelChoice struct {
 
 // featureModels validates feature_models: an object keyed by feature id (any subset) whose
 // values are {provider, model}. Extra fields of a choice are dropped, like Zod does.
-func featureModels(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue) {
+func featureModels(raw json.RawMessage, defined definedFunc, path ...any) (json.RawMessage, []httpx.Issue) {
 	if t := jsonType(raw); t != "object" {
 		return nil, []httpx.Issue{issue(codeInvalidType, "Expected object, received "+t, path...)}
 	}
@@ -324,7 +340,7 @@ func featureModels(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.I
 			issues = append(issues, enumIssue(featureIDs, id, at...))
 			continue
 		}
-		choice, is := featureModel(entries[id], at)
+		choice, is := featureModel(entries[id], defined, at)
 		issues = append(issues, is...)
 		if is == nil {
 			clean[id] = choice
@@ -342,11 +358,11 @@ func featureModels(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.I
 
 // defaultModel validates default_model: null (clears it) or a {provider, model} choice, checked
 // like a feature_models entry. Extra fields of the choice are dropped.
-func defaultModel(raw json.RawMessage, path ...any) (json.RawMessage, []httpx.Issue) {
+func defaultModel(raw json.RawMessage, defined definedFunc, path ...any) (json.RawMessage, []httpx.Issue) {
 	if jsonType(raw) == "null" {
 		return json.RawMessage("null"), nil
 	}
-	choice, issues := featureModel(raw, path)
+	choice, issues := featureModel(raw, defined, path)
 	if issues != nil {
 		return nil, issues
 	}
@@ -425,7 +441,7 @@ func atMostDecimals(text string, n int) bool {
 	return r.Mul(r, scale).IsInt()
 }
 
-func featureModel(raw json.RawMessage, path []any) (featureModelChoice, []httpx.Issue) {
+func featureModel(raw json.RawMessage, defined definedFunc, path []any) (featureModelChoice, []httpx.Issue) {
 	if t := jsonType(raw); t != "object" {
 		return featureModelChoice{}, []httpx.Issue{issue(codeInvalidType, "Expected object, received "+t, path...)}
 	}
@@ -444,8 +460,14 @@ func featureModel(raw json.RawMessage, path []any) (featureModelChoice, []httpx.
 		switch {
 		case !decodeString(p, &s):
 			issues = append(issues, typeIssue("string", p, at...))
-		case !slices.Contains(providerIDs, s):
+		case slices.Contains(providerIDs, s):
+			choice.Provider = s
+		case !isCustomID(s):
 			issues = append(issues, enumIssue(providerIDs, s, at...))
+		case !defined.defined(s):
+			// FR7: a well-formed custom id the workspace does not define. A malformed one
+			// (custom:Bad) is the enum issue above, as for any invalid value.
+			issues = append(issues, issue(codeCustom, "Custom provider "+s+" is not configured", at...))
 		default:
 			choice.Provider = s
 		}

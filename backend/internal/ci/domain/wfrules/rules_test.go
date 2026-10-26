@@ -462,3 +462,65 @@ func manyAnchors(n int) string {
 	}
 	return b.String()
 }
+
+// customGenerated is the generated workflow of a custom-provider export: its own secrets in place
+// of OPENROUTER_API_KEY (FR28).
+func customGenerated() string {
+	return strings.Replace(generated,
+		"          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}\n",
+		"          DEVDIGEST_ACME_API_KEY: ${{ secrets.DEVDIGEST_ACME_API_KEY }}\n"+
+			"          DEVDIGEST_ACME_HEADER_1: ${{ secrets.DEVDIGEST_ACME_HEADER_1 }}\n", 1)
+}
+
+func TestCheckWith(t *testing.T) {
+	acme := []string{"DEVDIGEST_ACME_API_KEY", "DEVDIGEST_ACME_HEADER_1", "DEVDIGEST_ACME_HEADER_2"}
+	custom := customGenerated()
+	if custom == generated {
+		t.Fatal("test bug: customGenerated did not change the workflow")
+	}
+	tests := []struct {
+		name  string
+		text  string
+		names []string
+		want  wfrules.Rule // "" = passes
+	}{
+		{"own secrets pass", custom, acme, ""},
+		{"own secrets without the list are refused", custom, nil, wfrules.Secrets},
+		{"own secrets under another slug are refused", custom, []string{"DEVDIGEST_OTHER_API_KEY"}, wfrules.Secrets},
+		{"openrouter workflow is refused with only custom names", generated, acme, wfrules.Secrets}, // OPENROUTER_API_KEY is not listed
+		{"openrouter secret is refused for a custom export (EC20)", edit(t, "secrets.GITHUB_TOKEN", "secrets.OPENROUTER_API_KEY"), acme, wfrules.Secrets},
+		{"foreign custom secret is refused (EC20)", strings.Replace(custom, "secrets.DEVDIGEST_ACME_HEADER_1", "secrets.DEVDIGEST_OTHER_API_KEY", 1), acme, wfrules.Secrets},
+		{"unlisted header index is refused", strings.Replace(custom, "secrets.DEVDIGEST_ACME_HEADER_1", "secrets.DEVDIGEST_ACME_HEADER_3", 1), acme, wfrules.Secrets},
+		{"GITHUB_TOKEN passes with an empty list", strings.Replace(generated, "secrets.OPENROUTER_API_KEY", "secrets.GITHUB_TOKEN", 1), nil, ""},
+		{"names are case-sensitive", strings.Replace(custom, "secrets.DEVDIGEST_ACME_API_KEY", "secrets.devdigest_acme_api_key", 1), acme, wfrules.Secrets},
+		{"keyword case is ignored as in Check", strings.Replace(custom, "secrets.DEVDIGEST_ACME_API_KEY", "SECRETS.DEVDIGEST_ACME_API_KEY", 1), acme, ""},
+		{"an empty name allows no bare secrets", edit(t, "${{ secrets.GITHUB_TOKEN }}", "${{ toJSON(secrets) }}"), []string{""}, wfrules.Secrets},
+		{"secrets by index stays refused", strings.Replace(custom, "secrets.DEVDIGEST_ACME_API_KEY", "secrets['DEVDIGEST_ACME_API_KEY']", 1), acme, wfrules.Secrets},
+		{"secrets: inherit stays refused", edit(t, guardLine, guardLine+"    secrets: inherit\n"), acme, wfrules.Secrets},
+		{"other rules are unchanged: unpinned action", strings.Replace(custom, "uses: "+checkoutPin, "uses: a/b@main", 1), acme, wfrules.UnpinnedAction},
+		{"other rules are unchanged: untrusted expression", strings.Replace(custom, "DEVDIGEST_AGENT: test", "DEVDIGEST_AGENT: ${{ github.event.pull_request.title }}", 1), acme, wfrules.UntrustedExpression},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := wfrules.CheckWith(tc.text, tc.names)
+			want := wfrules.Result{OK: tc.want == "", Rule: tc.want}
+			if got != want {
+				t.Errorf("CheckWith(%s) = %+v, want %+v", tc.name, got, want)
+			}
+		})
+	}
+}
+
+// Check is CheckWith with the one secret of the openrouter workflow, and the list is not retained
+// or modified.
+func TestCheckEqualsCheckWithOpenRouter(t *testing.T) {
+	names := []string{"OPENROUTER_API_KEY"}
+	for _, tc := range ruleCases(t) {
+		if got, want := wfrules.CheckWith(tc.text, names), wfrules.Check(tc.text); got != want {
+			t.Errorf("CheckWith(%s, openrouter) = %+v, Check = %+v", tc.name, got, want)
+		}
+	}
+	if len(names) != 1 || names[0] != "OPENROUTER_API_KEY" {
+		t.Errorf("names = %v after CheckWith, want unchanged", names)
+	}
+}

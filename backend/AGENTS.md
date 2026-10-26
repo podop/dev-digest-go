@@ -154,6 +154,43 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   `payload_too_large`, read with `httpx.ReadRawBody`) is the only way around JSON-only bodies, and the only
   route that uses it is `POST /plugins/import` (zip ≤ 5 MiB, json ≤ 20 MiB); the Origin and Host guards
   still apply to it.
+- Custom model providers (`customproviders` context, migration 0009, spec D30): a workspace defines up to 20
+  gateways `custom:<slug>` (OpenAI or Anthropic protocol, base URL, bearer or header auth, ≤ 5 extra headers,
+  manual models with optional prices, `structured_output` strict | json_object | prompt_only) through
+  `GET/POST /settings/custom-providers` and `PUT/DELETE /settings/custom-providers/:id`. The public id is
+  `custom:<slug>`; the tables keep the bare slug (PK `(workspace_id, id)`). Every route that carries a provider id
+  reads it with `httpx.PathParam`, which decodes `custom%3A…` once. The context is reached only through
+  consumer-side ports bound in `cmd/server/customproviders.go` (settings `Deps.Custom`, agents
+  `WithCustomProviders`, plugins `Deps.CustomProviders` — a nil port silently drops the dry-run warning —, ci
+  `ExportDeps.Custom` and `Prices`) and as `llm.Options.Custom`. Pure rules (id, base URL, header names, modes,
+  forbidden addresses) live in `internal/llm/custom` (stdlib only, shared with the CI runner); the CI names
+  (`DEVDIGEST_<S>_BASE_URL`, `…_API_KEY`, `…_HEADER_<n>`) in `ci/domain/providers.go`.
+  - LLM calls: `llm.Client` resolves the provider per call from `Charge.WorkspaceID` (`CustomResolver.Resolve`
+    builds the adapter with the stored key and header values, so it is never shared); `Ready`/`ListModels` serve
+    built-ins only, custom ids go through `ReadyIn`/`ListModelsIn(ctx, ws, p)` (the reviews and evals peers use
+    them). Cost per attempt: a finite reported cost, else the manual model price on reported usage only, else
+    NULL — the built-in and live price books are never consulted for a custom model and estimated tokens are never
+    priced (SCR7); `GET /settings/spend` counts the NULLs as `unpriced_count`. The mode shapes the body (the
+    adapters) and the schema text (the client); a 400/422 in strict mode gets the FR33 hint. Under
+    `LLM_PROVIDER_OVERRIDE=mock` `mockCustomResolver` answers any well-formed custom id with the mock (A4).
+  - Outbound: one `egress.Client` (no proxy, A3; no redirects; a connect-time guard `custom.ForbiddenAddr` refuses
+    link-local and unspecified addresses, loopback and private ones are allowed) serves every custom adapter.
+    `DEVDIGEST_EXTRA_CA_FILE` is read once by `serve` (`egress.LoadExtraCA`; a bad file → one ERROR naming the
+    variable and the path, then exit) and added by `extraCAClient`/`egress.WithRootCAs` to the GitHub clients, the
+    built-in LLM adapters, the providers listing, the skill URL import and the custom adapters; `git clone` over
+    HTTPS is not covered. A client a test injects through `options` keeps its own TLS roots.
+  - Secrets: `secrets.Store.Custom/SetCustom/DeleteCustom/RestoreCustom`, keyed by workspace and public id, no
+    environment fallback, never in a response, error or log; written inside the DB transaction and restored when
+    it does not commit (A7); `CustomCall.Secrets` feeds the redaction of every error and log line of the call.
+  - Consistency: delete locks the provider row `FOR UPDATE` and then reads the references (agents,
+    `feature_models`, `default_model` → 409 `provider_in_use`); agent writes lock it `FOR SHARE` (`LockDefined`,
+    after the agent row, inside the same transaction); settings checks are best effort (A8). Workspace reset and
+    plugin remove keep providers (A12). Down 0009 refuses while an agent uses `custom:%` (A11).
+  - CI: `ci_installations.provider` (NOT NULL, no default) is the export-time provider; a CI run's `agent_runs` and
+    ledger rows carry it (`app.Recorded.Provider`), not the agent's current one. openrouter exports are
+    byte-identical to before; an openai/anthropic agent is exportable (`pricing` from the price book, via
+    `llm.Client.PerM`), a custom one gets `custom_provider` and manual pricing in the manifest, and an undefined
+    one answers 422 `provider_not_configured`. The runner reads `DEVDIGEST_LLM_*` from the workflow env.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

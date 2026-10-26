@@ -127,6 +127,33 @@ func preview(up Upload, found Conflicts, texts cleanTexts) PreviewDoc {
 	return doc
 }
 
+// UndefinedProviderWarning is the dry-run warning of an agent provider id that is not defined in
+// the target workspace (FR15).
+func UndefinedProviderWarning(id string) string { return "Provider " + id + " is not configured here" }
+
+// CustomProviders lists the distinct custom provider ids the bundle's agents use, in first-use
+// order. The bundle passed Validate, so every id is well-formed.
+func (p Prepared) CustomProviders() []string {
+	var ids []string
+	for _, a := range p.Upload.Bundle.Agents {
+		if IsCustomProvider(a.Provider) && !slices.Contains(ids, a.Provider) {
+			ids = append(ids, a.Provider)
+		}
+	}
+	return ids
+}
+
+// WithUndefinedProviders adds one warning per id, in the order given, to a copy of the preview.
+// The ids are the custom providers of the bundle that the target workspace does not define; the
+// install still creates the agents with those strings (FR15, EC16).
+func (d PreviewDoc) WithUndefinedProviders(ids []string) PreviewDoc {
+	d.Warnings = slices.Clone(d.Warnings)
+	for _, id := range ids {
+		d.Warnings = append(d.Warnings, UndefinedProviderWarning(id))
+	}
+	return d
+}
+
 // Installed skills take this source and the provenance "plugin:<name>" (A4).
 const InstalledSkillSource = "imported_file"
 

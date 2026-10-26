@@ -23,6 +23,8 @@ export interface CiExportOptions {
   repo: string;
   triggers: readonly string[];
   post_as: NonNullable<CiExportInputBody["post_as"]>;
+  /** `runs-on` of the generated job; omitted → the server default (GitHub-hosted). */
+  runner?: NonNullable<CiExportInputBody["runner"]>;
 }
 
 /** Input of the "open PR" export: the options plus the workflow edited in Preview (omitted → generated). */
@@ -70,7 +72,7 @@ export function useWorkspaceCiInstallations() {
  *  the wizard shows its error inline, and a 422 is not worth a retry. */
 export function useCiExportFiles(agentId: string | null | undefined, opts: CiExportOptions | null) {
   return useQuery({
-    queryKey: ciKeys.exportFiles(agentId, opts?.repo, opts?.triggers ?? [], opts?.post_as),
+    queryKey: ciKeys.exportFiles(agentId, opts?.repo, opts?.triggers ?? [], opts?.post_as, opts?.runner),
     queryFn: () =>
       api.post<CiExport>(`/agents/${agentId}/export-ci`, {
         repo: opts?.repo,
@@ -78,6 +80,7 @@ export function useCiExportFiles(agentId: string | null | undefined, opts: CiExp
         action: "files",
         post_as: opts?.post_as,
         triggers: opts?.triggers,
+        ...(opts?.runner ? { runner: opts.runner } : {}),
       }),
     enabled: !!agentId && opts != null,
     retry: false,
@@ -96,6 +99,7 @@ export function useOpenCiPr(agentId: string) {
         action: "open_pr",
         post_as: input.post_as,
         triggers: input.triggers,
+        ...(input.runner ? { runner: input.runner } : {}),
         ...(input.workflow ? { workflow: input.workflow } : {}),
       }),
     meta: { quietErrorCodes: ["*"] },
@@ -124,6 +128,8 @@ export interface InstallCiInput {
   agentId: string;
   /** "owner/name". */
   repo: string;
+  /** `runs-on` of the generated job; omitted = the server default (GitHub-hosted). */
+  runner?: CiExportInputBody["runner"];
 }
 
 /** POST /agents/:id/export-ci { action: "open_pr" } for the agent in the variables, so one hook
@@ -132,8 +138,13 @@ export interface InstallCiInput {
 export function useInstallCi() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ agentId, repo }: InstallCiInput) =>
-      api.post<CiExport>(`/agents/${agentId}/export-ci`, { repo, target: "gha", action: "open_pr" }),
+    mutationFn: ({ agentId, repo, runner }: InstallCiInput) =>
+      api.post<CiExport>(`/agents/${agentId}/export-ci`, {
+        repo,
+        target: "gha",
+        action: "open_pr",
+        ...(runner ? { runner } : {}),
+      }),
     meta: { quietErrorCodes: ["*"] },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ciKeys.installationsAll() });

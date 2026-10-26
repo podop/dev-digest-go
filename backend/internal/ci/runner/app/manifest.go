@@ -8,19 +8,23 @@ import (
 	"math/big"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
 
+	cidomain "dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/ci/runner/domain"
+	"dev-digest-go/backend/internal/llm/custom"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 )
 
 // Manifest is the agent manifest the export wrote to <dir>/agents/<slug>.yaml, validated the way
 // the Node runner's AgentManifest schema does (spec 7.8.4). Unknown keys are ignored.
 type Manifest struct {
-	Name         string
+	Name string
+	// Provider is openrouter, openai, anthropic or "custom:<slug>" (FR30, FR36).
 	Provider     string
 	Model        string
 	SystemPrompt string
@@ -31,6 +35,26 @@ type Manifest struct {
 	// Version is the agent version at export; nil when absent or null. It is a float64 because
 	// the Node schema accepts any integer-valued number, whatever its size.
 	Version *float64
+	// CustomProvider is the validated custom_provider block; set exactly when Provider is a custom
+	// provider id (FR30).
+	CustomProvider *CustomProvider
+	// Pricing is the manifest price of the model, nil when the run is unpriced: the block's
+	// pricing for a custom provider, the top-level pricing for openai / anthropic. An openrouter
+	// manifest never has one: the runner reads no pricing key there (FR36).
+	Pricing *cidomain.Pricing
+}
+
+// CustomProvider is the custom_provider block of the manifest (FR27): the shape of the provider,
+// never its base URL, key or header values.
+type CustomProvider struct {
+	Protocol custom.Protocol
+	AuthMode custom.AuthMode
+	// AuthHeader names the credential header of the header auth mode; empty for bearer.
+	AuthHeader string
+	// ExtraHeaders are the extra header names in order; DEVDIGEST_LLM_HEADER_<n> holds the value of
+	// the n-th.
+	ExtraHeaders     []string
+	StructuredOutput custom.Mode
 }
 
 // maxManifestVersion is the largest version the artifact can carry (a JavaScript safe integer).
@@ -167,7 +191,7 @@ func validateManifest(root any) (Manifest, []issue) {
 	}
 
 	m.Name = str("name", true)
-	m.Provider = enum("provider", providerValues, "openrouter")
+	m.Provider = provider(obj, enum)
 	m.Model = str("model", true)
 	m.SystemPrompt = str("system_prompt", false)
 
@@ -204,7 +228,165 @@ func validateManifest(root any) (Manifest, []issue) {
 	default:
 		add("Expected number, received "+parsedType(v), "version")
 	}
+
+	switch {
+	case cidomain.IsCustomProvider(m.Provider):
+		m.CustomProvider, m.Pricing = validateCustomBlock(obj, add)
+	case m.Provider == cidomain.ProviderOpenAI || m.Provider == cidomain.ProviderAnthropic:
+		v, _ := obj.get("pricing")
+		m.Pricing = validatePricing(v, add, "pricing")
+	}
 	return m, issues
+}
+
+// provider reads the provider key: one of the three built-ins, or a well-formed custom provider
+// id. Anything else is the enum issue of the built-in list.
+func provider(obj *ymap, enum func(string, []string, string) string) string {
+	if v, _ := obj.get("provider"); v != nil {
+		if s, ok := v.(string); ok && cidomain.IsCustomProvider(s) {
+			return s
+		}
+	}
+	return enum("provider", providerValues, "openrouter")
+}
+
+// Enum values of the custom_provider block, in the order of the issue texts.
+var (
+	protocolValues   = []string{"openai", "anthropic"}
+	authModeValues   = []string{"bearer", "header"}
+	structuredValues = []string{"strict", "json_object", "prompt_only"}
+)
+
+// validateCustomBlock applies the FR27 schema of the custom_provider block and its pricing. Issue
+// texts name the allowed values, never the received ones: the manifest is the repository's text.
+func validateCustomBlock(obj *ymap, add func(string, ...string)) (*CustomProvider, *cidomain.Pricing) {
+	const block = "custom_provider"
+	raw, present := obj.get(block)
+	cp, isObj := raw.(*ymap)
+	if !isObj {
+		if !present || raw == nil {
+			add("Required", block)
+		} else {
+			add("Expected object, received "+parsedType(raw), block)
+		}
+		return nil, nil
+	}
+	at := func(key string, rest ...string) []string { return append([]string{block, key}, rest...) }
+	addAt := func(msg, key string, rest ...string) { add(msg, at(key, rest...)...) }
+
+	enumAt := func(key string, values []string, def string) string {
+		v, ok := cp.get(key)
+		if !ok || v == nil {
+			if def == "" {
+				addAt("Required", key)
+			}
+			return def
+		}
+		s, isString := v.(string)
+		if !isString {
+			addAt("Expected "+joinValues(values)+", received "+parsedType(v), key)
+			return def
+		}
+		if !slices.Contains(values, s) {
+			addAt("Invalid enum value. Expected "+joinValues(values), key)
+			return def
+		}
+		return s
+	}
+	out := &CustomProvider{
+		Protocol: custom.Protocol(enumAt("protocol", protocolValues, "")),
+		AuthMode: custom.AuthMode(enumAt("auth_mode", authModeValues, "")),
+	}
+
+	switch v, _ := cp.get("auth_header"); h := v.(type) {
+	case nil:
+		if out.AuthMode == custom.AuthHeader {
+			addAt("Required", "auth_header")
+		}
+	case string:
+		if out.AuthMode == custom.AuthHeader {
+			if msg := custom.CheckHeaderName(h, ""); msg != "" {
+				addAt(msg, "auth_header")
+			}
+			out.AuthHeader = h
+		}
+	default:
+		addAt("Expected string, received "+parsedType(v), "auth_header")
+	}
+
+	out.ExtraHeaders = []string{}
+	switch v, _ := cp.get("extra_headers"); list := v.(type) {
+	case nil:
+	case []any:
+		if len(list) > custom.MaxHeaders {
+			addAt(fmt.Sprintf("Array must contain at most %d element(s)", custom.MaxHeaders), "extra_headers")
+		}
+		for i, item := range list {
+			name, ok := item.(string)
+			if !ok {
+				addAt("Expected string, received "+parsedType(item), "extra_headers", strconv.Itoa(i))
+				continue
+			}
+			msg := custom.CheckHeaderName(name, out.AuthHeader)
+			if msg == "" && slices.ContainsFunc(out.ExtraHeaders, func(prev string) bool { return strings.EqualFold(prev, name) }) {
+				msg = "Header name is duplicated"
+			}
+			if msg != "" {
+				addAt(msg, "extra_headers", strconv.Itoa(i))
+				continue
+			}
+			out.ExtraHeaders = append(out.ExtraHeaders, name)
+		}
+	default:
+		addAt("Expected array, received "+parsedType(v), "extra_headers")
+	}
+
+	out.StructuredOutput = custom.Mode(enumAt("structured_output", structuredValues, string(custom.DefaultMode)))
+	if out.StructuredOutput == custom.ModeJSONObject && out.Protocol != custom.ProtocolOpenAI && out.Protocol.Valid() {
+		addAt("json_object needs the openai protocol", "structured_output")
+	}
+
+	v, _ := cp.get("pricing")
+	return out, validatePricing(v, add, block, "pricing")
+}
+
+// validatePricing reads a {promptPerM, completionPerM} object: null or absent = no price; both
+// numbers must be finite and at least 0.
+func validatePricing(v any, add func(string, ...string), at ...string) *cidomain.Pricing {
+	if v == nil {
+		return nil
+	}
+	obj, ok := v.(*ymap)
+	if !ok {
+		add("Expected object, received "+parsedType(v), at...)
+		return nil
+	}
+	bad := false
+	num := func(key string) float64 {
+		raw, present := obj.get(key)
+		path := append(slices.Clone(at), key)
+		switch n := raw.(type) {
+		case float64:
+			if math.IsNaN(n) || math.IsInf(n, 0) || n < 0 {
+				add("Number must be finite and greater than or equal to 0", path...)
+				bad = true
+			}
+			return n
+		default:
+			if !present || raw == nil {
+				add("Required", path...)
+			} else {
+				add("Expected number, received "+parsedType(raw), path...)
+			}
+			bad = true
+		}
+		return 0
+	}
+	p := cidomain.Pricing{PromptPerM: num("promptPerM"), CompletionPerM: num("completionPerM")}
+	if bad {
+		return nil
+	}
+	return &p
 }
 
 // joinValues is Zod's text for a set of literals: 'a' | 'b'.

@@ -17,6 +17,12 @@ export const s = {
     background: on ? "var(--bg-hover)" : "transparent",
     border: `1px solid ${on ? "var(--accent)" : "var(--border-strong)"}`,
   }),
+  customLink: {
+    display: "inline-block",
+    marginTop: 12,
+    fontSize: 13,
+    color: "var(--accent)",
+  } satisfies CSSProperties,
   connected: {
     display: "inline-flex",
     alignItems: "center",

@@ -24,8 +24,12 @@ type Deps struct {
 	Env    Env
 	Files  Files
 	GitHub GitHub
-	LLM    LLM
-	Out    Out
+	// LLM serves an openrouter manifest.
+	LLM LLM
+	// Providers serves an openai, anthropic or custom manifest; nil fails those runs before any
+	// GitHub call.
+	Providers Providers
+	Out       Out
 	// Engine is the review engine; nil = reviewer/app.Run.
 	Engine Engine
 	// Now is the clock of the engine's wall time; nil = time.Now.

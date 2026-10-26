@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Repo, SecretsStatus } from "@/lib/types";
+import type { CustomProvider, Repo, SecretsStatus } from "@/lib/types";
 import { renderWithProviders, screen, cleanup, waitFor, within, pseudoMessages } from "@/test/render";
 import { mockFetch, jsonResponse } from "@/test/fetch-mock";
 import { strayText } from "@/test/pseudo";
@@ -16,6 +16,23 @@ afterEach(() => {
   nav.push.mockReset();
 });
 
+const CUSTOM = "GET /settings/custom-providers";
+const customProvider = (over: Partial<CustomProvider> = {}): CustomProvider => ({
+  id: "custom:synapse",
+  name: "Synapse",
+  protocol: "openai",
+  base_url: "https://gw.example.com/v1",
+  plain_http: false,
+  auth_mode: "bearer",
+  auth_header: null,
+  structured_output: "strict",
+  key_configured: false,
+  extra_headers: [],
+  models: [],
+  created_at: "2026-10-26T10:00:00Z",
+  updated_at: "2026-10-26T10:00:00Z",
+  ...over,
+});
 const NONE: SecretsStatus = { openai: false, anthropic: false, openrouter: false, github: false };
 const repo = (id: string, full_name: string): Repo => ({
   id,
@@ -46,7 +63,7 @@ describe("SetupView step resolution (FR22)", () => {
   it("opens the first incomplete step and pulls a later requested step back to it (AC19, EC14)", async () => {
     mockFetch({
       "GET /settings/secrets-status": { ...NONE, openrouter: true },
-      "GET /repos": [],
+      [CUSTOM]: [], "GET /repos": [],
     });
     renderWithProviders(<Host initial="repo" />);
     // Model key is there, the token is not: ?step=repo shows step github.
@@ -57,7 +74,7 @@ describe("SetupView step resolution (FR22)", () => {
   });
 
   it("falls back to the first incomplete step for a missing or invalid step, and to repo when all are complete", async () => {
-    const api = mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": [] });
+    const api = mockFetch({ "GET /settings/secrets-status": NONE, [CUSTOM]: [], "GET /repos": [] });
     const first = renderWithProviders(<Host initial="bogus" />);
     expect(await screen.findByRole("heading", { name: "Connect a model provider" })).toBeInTheDocument();
     first.unmount();
@@ -75,7 +92,7 @@ describe("SetupView ?step contract", () => {
   it("honours ?step=model when everything is done (About → Run setup again, D14) and pins missing steps in the URL", async () => {
     const api = mockFetch({
       "GET /settings/secrets-status": { ...NONE, openrouter: true, github: true },
-      "GET /repos": [repo("r1", "acme/api")],
+      [CUSTOM]: [], "GET /repos": [repo("r1", "acme/api")],
     });
     const first = renderWithProviders(<Host initial="model" />);
     expect(await screen.findByRole("heading", { name: "Connect a model provider" })).toBeInTheDocument();
@@ -100,7 +117,7 @@ describe("SetupView ?step contract", () => {
   });
 
   it("replaces a too-far step with the earliest unmet one in the URL (AC21 earlier step)", async () => {
-    mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": [] });
+    mockFetch({ "GET /settings/secrets-status": NONE, [CUSTOM]: [], "GET /repos": [] });
     renderWithProviders(<Host initial="repo" />);
     expect(await screen.findByRole("heading", { name: "Connect a model provider" })).toBeInTheDocument();
     expect(nav.replace).toHaveBeenCalledWith("/setup?step=model");
@@ -112,7 +129,7 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
     let secrets = NONE;
     mockFetch({
       "GET /settings/secrets-status": () => secrets,
-      "GET /repos": [],
+      [CUSTOM]: [], "GET /repos": [],
       "POST /settings/test-connection": (req) => {
         const { provider } = req.body as { provider: "openrouter" | "github" };
         secrets = { ...secrets, [provider]: true };
@@ -157,7 +174,7 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
     // The test passes but the secrets refetch keeps answering "no key": the view trusts its own passing test.
     mockFetch({
       "GET /settings/secrets-status": NONE,
-      "GET /repos": [],
+      [CUSTOM]: [], "GET /repos": [],
       "POST /settings/test-connection": { provider: "openrouter", ok: true, message: "OK" },
     });
     const { user } = renderWithProviders(<Host />);
@@ -169,13 +186,35 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
   });
 });
 
+describe("SetupView with a custom provider (FR21, D21, AC26)", () => {
+  it("stays on the github step when Home sends a workspace with a custom provider and no token there (no bounce to model)", async () => {
+    mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": [], [CUSTOM]: [customProvider()] });
+    renderWithProviders(<Host initial="github" />);
+    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
+    expect(current()).toHaveTextContent("GitHub token");
+    expect(steps()[0]).toHaveTextContent("completed");
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("Continue works on the model step without a key and moves on to github", async () => {
+    mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": [], [CUSTOM]: [customProvider()] });
+    const { user } = renderWithProviders(<Host initial="model" />);
+    expect(await screen.findByRole("heading", { name: "Connect a model provider" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Use a custom provider" })).toHaveAttribute("href", "/settings/api-keys");
+    expect(cont()).toBeEnabled();
+    await user.click(cont());
+    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=github");
+    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
+  });
+});
+
 describe("SetupView loading and errors", () => {
   it("shows a skeleton while loading, then an error with Retry that reloads (no step content)", async () => {
     let fail = true;
     const api = mockFetch({
       "GET /settings/secrets-status": () =>
         fail ? jsonResponse({ error: { code: "boom", message: "x" } }, 500) : { ...NONE, openrouter: true, github: true },
-      "GET /repos": [],
+      [CUSTOM]: [], "GET /repos": [],
     });
     const { user } = renderWithProviders(<Host />);
     expect(screen.getByRole("status", { name: "Loading setup" })).toHaveAttribute("aria-busy", "true");
@@ -189,13 +228,27 @@ describe("SetupView loading and errors", () => {
     expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
     expect(api.requests("GET", "/settings/secrets-status").length).toBeGreaterThanOrEqual(2);
   });
+
+  it("shows the error with Retry when only the custom providers fail to load", async () => {
+    let fail = true;
+    mockFetch({
+      "GET /settings/secrets-status": { ...NONE, openrouter: true, github: true },
+      "GET /repos": [],
+      [CUSTOM]: () => (fail ? jsonResponse({ error: { code: "boom", message: "x" } }, 500) : []),
+    });
+    const { user } = renderWithProviders(<Host />);
+    expect(await screen.findByText("Could not load setup")).toBeInTheDocument();
+    fail = false;
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
+  });
 });
 
 describe("SetupView messages (AC22)", () => {
   it("takes every visible string of the three steps from the message files (pseudo bundle)", async () => {
     mockFetch({
       "GET /settings/secrets-status": { ...NONE, anthropic: true },
-      "GET /repos": [],
+      [CUSTOM]: [], "GET /repos": [],
       "POST /settings/test-connection": { provider: "github", ok: true, message: "Token ok", login: "ann", scopes: ["gist"] },
       "POST /repos": repo("r9", "acme/api"),
       "GET /repos/r9/index-state": { repoId: "r9", status: "full", lastIndexedSha: "abc", updatedAt: "2026-10-24T10:00:00Z" },

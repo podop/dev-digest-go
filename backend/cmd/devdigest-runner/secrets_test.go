@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -232,5 +233,106 @@ func TestSecrets_NoTokenWithPostingOff(t *testing.T) {
 	}
 	if reqs := gh.requests(); len(reqs) != 1 || reqs[0].Method != http.MethodGet {
 		t.Errorf("GitHub requests = %+v, want only the diff fetch", reqs)
+	}
+}
+
+// NFR7, EC29: a gateway that fails and echoes the whole request (headers and body) leaves no
+// secret of the environment in the job log, the artifact or a posted body, whichever provider the
+// manifest names. Every key of the environment is set, so a key read by the wrong provider would
+// show up too.
+func TestSecrets_EveryProviderKindLeavesNone(t *testing.T) {
+	const (
+		openAI     = "sk-OPENAI-MARKER-0123"
+		anthropic  = "sk-ANT-MARKER-0123456"
+		gateway    = "sk-GATEWAY-MARKER-0123"
+		tenant     = "tenant-MARKER-0001"
+		team       = "team-MARKER-0002"
+		orMarker   = "sk-OR-MARKER-0123456"
+		githubMark = "ghp_MARKER_0123456789"
+	)
+	all := []string{openAI, anthropic, gateway, tenant, team, orMarker, githubMark}
+	env := map[string]string{
+		"OPENAI_API_KEY": openAI, "ANTHROPIC_API_KEY": anthropic, "OPENROUTER_API_KEY": orMarker, "GITHUB_TOKEN": githubMark,
+		"DEVDIGEST_LLM_API_KEY": gateway, "DEVDIGEST_LLM_HEADER_1": tenant, "DEVDIGEST_LLM_HEADER_2": team,
+	}
+	kinds := []struct {
+		name, manifest, protocol string
+	}{
+		{"openrouter", testManifest, "openai"},
+		{"openai", cpManifest("openai", "gpt-4.1", cpPrice[2:]), "openai"},
+		{"anthropic", cpManifest("anthropic", "claude-sonnet", ""), "anthropic"},
+		{"custom openai", cpManifest("custom:my-gw", "m1", cpCustomBlock("openai", "bearer", "", "strict")), "openai"},
+		{"custom anthropic", cpManifest("custom:my-gw", "m1", cpCustomBlock("anthropic", "header", "x-api-key", "strict")), "anthropic"},
+	}
+	for _, kind := range kinds {
+		for _, status := range []int{400, 401, 500} {
+			t.Run(kind.name+" "+http.StatusText(status), func(t *testing.T) {
+				g := newCPGateway(t, cpGatewayOpts{protocol: kind.protocol, status: status})
+				e := maps(env)
+				e["DEVDIGEST_LLM_BASE_URL"] = g.srv.URL + "/v1"
+				r := cpExecute(t, kind.manifest, e, endpoints{
+					OpenRouter: g.srv.URL + "/v1", OpenAI: g.srv.URL + "/v1", Anthropic: g.srv.URL + "/v1",
+				})
+				if r.code != 1 {
+					t.Errorf("exit code = %d, want 1\nstderr: %s", r.code, r.stderr)
+				}
+				if len(g.requests()) == 0 {
+					t.Fatal("the gateway was never called: the echo path was not exercised")
+				}
+				if r.hasArtifact || r.posts() != 0 {
+					t.Errorf("artifact %v, posts %d; want neither for a failed run", r.hasArtifact, r.posts())
+				}
+				cpAssertClean(t, r, all...)
+			})
+		}
+	}
+}
+
+func maps(m map[string]string) map[string]string {
+	out := make(map[string]string, len(m)+1)
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
+}
+
+// NFR7: the panic redactor scrubs every name the runner knows, not only the OpenRouter key and the
+// GitHub token. The first environment read panics with a message that holds every value.
+func TestSecrets_PanicRedactsEveryKnownName(t *testing.T) {
+	names := secretNames()
+	want := []string{
+		"OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "DEVDIGEST_LLM_API_KEY",
+		"DEVDIGEST_LLM_HEADER_1", "DEVDIGEST_LLM_HEADER_2", "DEVDIGEST_LLM_HEADER_3", "DEVDIGEST_LLM_HEADER_4", "DEVDIGEST_LLM_HEADER_5",
+	}
+	if !slices.Equal(names, want) {
+		t.Fatalf("secretNames() = %v, want %v", names, want)
+	}
+	values := map[string]string{}
+	var msg strings.Builder
+	for _, n := range names {
+		values[n] = "value-of-" + n + "-0123"
+		msg.WriteString(values[n] + " ")
+	}
+	first := true
+	lookup := func(k string) (string, bool) {
+		if first {
+			first = false
+			panic("boom " + msg.String())
+		}
+		v, ok := values[k]
+		return v, ok
+	}
+	var stdout, stderr bytes.Buffer
+	code := run(t.Context(), lookup, &stdout, &stderr, defaultEndpoints())
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "fatal error: boom ") {
+		t.Fatalf("stderr = %q, want the fatal error line", stderr.String())
+	}
+	for _, n := range names {
+		if strings.Contains(stderr.String(), values[n]) || strings.Contains(stdout.String(), values[n]) {
+			t.Errorf("the value of %s reached the job log:\n%s", n, stderr.String())
+		}
 	}
 }

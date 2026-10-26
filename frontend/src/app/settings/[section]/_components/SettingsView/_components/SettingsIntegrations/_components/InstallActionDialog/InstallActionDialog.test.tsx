@@ -3,7 +3,7 @@
 import React from "react";
 import { describe, it, expect, afterEach } from "vitest";
 import type { Agent } from "@devdigest/shared";
-import type { Repo } from "@/lib/types";
+import type { CustomProvider, Repo } from "@/lib/types";
 import { renderWithProviders, screen, cleanup, waitFor, within, pseudoMessages } from "@/test/render";
 import { mockFetch, jsonResponse } from "@/test/fetch-mock";
 import { pickOption } from "@/test/select";
@@ -35,7 +35,37 @@ const HIDDEN = agent("a5", "Pack Reviewer", { plugin: OFF });
 const HIDDEN_CLAUDE = agent("a6", "Pack Claude", { provider: "anthropic", plugin: OFF });
 const ON_PLUGIN = agent("a7", "Pack On Reviewer", { plugin: { ...OFF, enabled: true } });
 
-const ok = (pr: string | null) => jsonResponse({ installation: null, files: [], pr_url: pr }, 201);
+const OPENAI_AGENT = agent("a8", "GPT Reviewer", { provider: "openai" });
+const SYNAPSE_AGENT = agent("a9", "Synapse Reviewer", { provider: "custom:synapse" });
+const GHOST_AGENT = agent("a10", "Ghost Reviewer", { provider: "custom:ghost" });
+
+const SYNAPSE: CustomProvider = {
+  id: "custom:synapse",
+  name: "Synapse",
+  protocol: "openai",
+  base_url: "https://llm.acme.test/v1",
+  plain_http: false,
+  auth_mode: "bearer",
+  auth_header: null,
+  structured_output: "strict",
+  key_configured: true,
+  extra_headers: [],
+  models: [],
+  created_at: "2026-10-26T10:00:00.000Z",
+  updated_at: "2026-10-26T10:00:00.000Z",
+};
+
+const ok = (pr: string | null, needs: { secrets?: string[]; variables?: string[] } = {}) =>
+  jsonResponse(
+    {
+      installation: null,
+      files: [],
+      pr_url: pr,
+      required_secrets: needs.secrets ?? ["OPENROUTER_API_KEY"],
+      required_variables: needs.variables ?? [],
+    },
+    201,
+  );
 
 function Harness() {
   const [open, setOpen] = React.useState(false);
@@ -56,7 +86,11 @@ async function openDialog(user: ReturnType<typeof renderWithProviders>["user"]) 
 
 describe("InstallActionDialog", () => {
   it("lists agents with reasons for the unselectable ones, hides disabled-plugin agents, and keeps Install off until repo + agent", async () => {
-    mockFetch({ "GET /repos": [REPO], "GET /agents": [A1, CLAUDE, HIDDEN, HIDDEN_CLAUDE, ON_PLUGIN] });
+    mockFetch({
+      "GET /repos": [REPO],
+      "GET /agents": [A1, CLAUDE, OPENAI_AGENT, SYNAPSE_AGENT, GHOST_AGENT, HIDDEN, HIDDEN_CLAUDE, ON_PLUGIN],
+      "GET /settings/custom-providers": [SYNAPSE],
+    });
     const { user } = renderWithProviders(<Harness />);
     await openDialog(user);
 
@@ -65,9 +99,14 @@ describe("InstallActionDialog", () => {
     const security = await screen.findByRole("checkbox", { name: "Security Reviewer" });
     expect(screen.getByRole("checkbox", { name: "Pack On Reviewer" })).toBeEnabled();
 
-    const claude = screen.getByRole("checkbox", { name: "Claude Reviewer" });
-    expect(claude).toBeDisabled();
-    expect(claude).toHaveAccessibleDescription("Only OpenRouter agents can run in GitHub Actions.");
+    // openai, anthropic and a defined custom provider are installable; an undefined custom id is not (FR32, EC34).
+    expect(screen.getByRole("checkbox", { name: "Claude Reviewer" })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "GPT Reviewer" })).toBeEnabled();
+    expect(await screen.findByRole("checkbox", { name: "Ghost Reviewer" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Ghost Reviewer" })).toHaveAccessibleDescription(
+      "Custom provider custom:ghost is not configured",
+    );
+    expect(screen.getByRole("checkbox", { name: "Synapse Reviewer" })).toBeEnabled();
     expect(screen.queryByText("Pack Reviewer")).not.toBeInTheDocument();
     expect(screen.queryByText("Pack Claude")).not.toBeInTheDocument();
 
@@ -86,7 +125,8 @@ describe("InstallActionDialog", () => {
     let a2Fails = true;
     const api = mockFetch({
       "GET /repos": [REPO],
-      "GET /agents": [A1, A2, A3, CLAUDE],
+      "GET /agents": [A1, A2, A3, GHOST_AGENT],
+      "GET /settings/custom-providers": [],
       "POST /agents/:id/export-ci": async (req) => {
         inFlight++;
         maxInFlight = Math.max(maxInFlight, inFlight);
@@ -113,12 +153,12 @@ describe("InstallActionDialog", () => {
     expect(order).toEqual(["a1", "a2", "a3"]); // the third was still tried
     expect(maxInFlight).toBe(1);
     for (const r of api.requests("POST")) {
-      expect(r.body).toEqual({ repo: "acme/api", target: "gha", action: "open_pr" });
+      expect(r.body).toEqual({ repo: "acme/api", target: "gha", action: "open_pr", runner: "github_hosted" });
     }
     const links = screen.getAllByRole("link", { name: "View pull request" });
     expect(links[0]).toHaveAttribute("href", "https://github.com/acme/api/pull/1");
     expect(links[1]).toHaveAttribute("href", "https://github.com/acme/api/pull/3");
-    expect(screen.getByRole("checkbox", { name: "Claude Reviewer" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Ghost Reviewer" })).toBeDisabled();
 
     a2Fails = false;
     await user.click(screen.getByRole("button", { name: "Retry failed" }));
@@ -126,6 +166,86 @@ describe("InstallActionDialog", () => {
     expect(order).toEqual(["a1", "a2", "a3", "a2"]); // only the failed agent again
     expect(screen.queryByRole("button", { name: "Retry failed" })).not.toBeInTheDocument();
     expect(screen.queryByText(/^Failed:/)).not.toBeInTheDocument();
+  });
+
+  it("offers one Runner for the run, Self-hosted once a custom-provider agent is picked, and lists each agent's secrets and variables (FR32, AC37)", async () => {
+    const api = mockFetch({
+      "GET /repos": [REPO],
+      "GET /agents": [A1, SYNAPSE_AGENT, CLAUDE, GHOST_AGENT],
+      "GET /settings/custom-providers": [SYNAPSE],
+      "POST /agents/:id/export-ci": (req) => {
+        switch (req.params.id) {
+          case "a9":
+            return ok("https://github.com/acme/api/pull/2", {
+              secrets: ["DEVDIGEST_SYNAPSE_API_KEY", "DEVDIGEST_SYNAPSE_HEADER_1"],
+              variables: ["DEVDIGEST_SYNAPSE_BASE_URL"],
+            });
+          case "a4":
+            return ok("https://github.com/acme/api/pull/3", { secrets: ["ANTHROPIC_API_KEY"] });
+          default:
+            return ok("https://github.com/acme/api/pull/1");
+        }
+      },
+    });
+    const { user } = renderWithProviders(<Harness />);
+    await openDialog(user);
+    await pickOption(user, await screen.findByRole("combobox", { name: "Repository" }), "acme/api");
+
+    const hosted = screen.getByRole("radio", { name: "GitHub-hosted" });
+    const selfHosted = screen.getByRole("radio", { name: "Self-hosted (linux x64)" });
+    expect(hosted).toBeChecked();
+
+    await user.click(await screen.findByRole("checkbox", { name: "Security Reviewer" }));
+    await user.click(screen.getByRole("checkbox", { name: "Claude Reviewer" }));
+    expect(hosted).toBeChecked(); // openrouter and anthropic stay GitHub-hosted
+    expect(screen.getByRole("checkbox", { name: "Ghost Reviewer" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Ghost Reviewer" })).toHaveAccessibleDescription(
+      "Custom provider custom:ghost is not configured",
+    );
+
+    await user.click(screen.getByRole("checkbox", { name: "Synapse Reviewer" }));
+    expect(selfHosted).toBeChecked();
+    await user.click(screen.getByRole("checkbox", { name: "Synapse Reviewer" }));
+    expect(hosted).toBeChecked(); // the default follows the selection
+    await user.click(screen.getByRole("checkbox", { name: "Synapse Reviewer" }));
+    expect(selfHosted).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Install" }));
+    await waitFor(() => expect(screen.getAllByRole("link", { name: "View pull request" })).toHaveLength(3));
+    expect(api.requests("POST").map((r) => r.body)).toEqual([
+      { repo: "acme/api", target: "gha", action: "open_pr", runner: "self_hosted" },
+      { repo: "acme/api", target: "gha", action: "open_pr", runner: "self_hosted" },
+      { repo: "acme/api", target: "gha", action: "open_pr", runner: "self_hosted" },
+    ]);
+    expect(selfHosted).toBeDisabled(); // locked once the run started
+
+    const rowOf = (name: string) => screen.getByRole("checkbox", { name }).closest("li") as HTMLElement;
+    const security = within(rowOf("Security Reviewer"));
+    expect(security.getByText("OPENROUTER_API_KEY")).toBeInTheDocument();
+    expect(security.queryByText("Variables to add:")).not.toBeInTheDocument();
+    const synapse = within(rowOf("Synapse Reviewer"));
+    expect(synapse.getByText("DEVDIGEST_SYNAPSE_API_KEY")).toBeInTheDocument();
+    expect(synapse.getByText("DEVDIGEST_SYNAPSE_HEADER_1")).toBeInTheDocument();
+    expect(synapse.getByText("DEVDIGEST_SYNAPSE_BASE_URL")).toBeInTheDocument();
+    expect(within(rowOf("Claude Reviewer")).getByText("ANTHROPIC_API_KEY")).toBeInTheDocument();
+  });
+
+  it("keeps the Runner the user chose when the selection changes", async () => {
+    const api = mockFetch({
+      "GET /repos": [REPO],
+      "GET /agents": [A1, SYNAPSE_AGENT],
+      "GET /settings/custom-providers": [SYNAPSE],
+      "POST /agents/:id/export-ci": () => ok("https://github.com/acme/api/pull/1"),
+    });
+    const { user } = renderWithProviders(<Harness />);
+    await openDialog(user);
+    await pickOption(user, await screen.findByRole("combobox", { name: "Repository" }), "acme/api");
+
+    await user.click(await screen.findByRole("checkbox", { name: "Synapse Reviewer" }));
+    await user.click(screen.getByRole("radio", { name: "GitHub-hosted" }));
+    await user.click(screen.getByRole("button", { name: "Install" }));
+    await screen.findByRole("link", { name: "View pull request" });
+    expect(api.requests("POST")[0]!.body).toMatchObject({ runner: "github_hosted" });
   });
 
   it("shows a spinner on the running agent and 'Waiting' on the queued one; Close and Escape wait for the run", async () => {
@@ -225,9 +345,12 @@ describe("InstallActionDialog messages (AC22)", () => {
   it("takes every visible string from the message files (pseudo bundle), results and reasons included", async () => {
     mockFetch({
       "GET /repos": [REPO],
-      "GET /agents": [A1, A2, CLAUDE],
+      "GET /agents": [A1, A2, CLAUDE, GHOST_AGENT],
+      "GET /settings/custom-providers": [],
       "POST /agents/:id/export-ci": (req) =>
-        req.params.id === "a2" ? jsonResponse({ error: { code: "validation_error", message: "No model" } }, 422) : ok("https://github.com/acme/api/pull/1"),
+        req.params.id === "a2"
+          ? jsonResponse({ error: { code: "validation_error", message: "No model" } }, 422)
+          : ok("https://github.com/acme/api/pull/1", { variables: ["DEVDIGEST_X_BASE_URL"] }),
     });
     const { user } = renderWithProviders(<Harness />, { messages: pseudoMessages() });
     await user.click(screen.getByRole("button", { name: "open dialog" }));
@@ -241,6 +364,20 @@ describe("InstallActionDialog messages (AC22)", () => {
     await screen.findByText("⟦integrationsGithubAction.dialog.progress.done⟧");
 
     // Data: the harness trigger, repo and agent names, and the server's error text.
-    expect(strayText(document.body, ["open dialog", "acme/api", "Security Reviewer", "Style Reviewer", "Claude Reviewer"])).toEqual([]);
+    expect(screen.getByRole("checkbox", { name: "Ghost Reviewer" })).toHaveAccessibleDescription(
+      "⟦integrationsGithubAction.dialog.reason.custom_not_configured⟧",
+    );
+    expect(
+      strayText(document.body, [
+        "open dialog",
+        "acme/api",
+        "Security Reviewer",
+        "Style Reviewer",
+        "Claude Reviewer",
+        "Ghost Reviewer",
+        "OPENROUTER_API_KEY",
+        "DEVDIGEST_X_BASE_URL",
+      ]),
+    ).toEqual([]);
   });
 });

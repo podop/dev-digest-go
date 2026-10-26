@@ -39,10 +39,15 @@ describe("ci hooks of Settings › Integrations", () => {
     const { result } = renderHookWithProviders(() => useInstallCi(), { queryClient: qc });
 
     await act(() => result.current.mutateAsync({ agentId: "a1", repo: "o/a" }));
-    await act(() => result.current.mutateAsync({ agentId: "a2", repo: "o/a" }));
+    await act(() => result.current.mutateAsync({ agentId: "a2", repo: "o/a", runner: "self_hosted" }));
 
     expect(http.requests("POST", "/agents/a1/export-ci")[0]?.body).toEqual({ repo: "o/a", target: "gha", action: "open_pr" });
-    expect(http.requests("POST", "/agents/a2/export-ci")).toHaveLength(1);
+    expect(http.requests("POST", "/agents/a2/export-ci")[0]?.body).toEqual({
+      repo: "o/a",
+      target: "gha",
+      action: "open_pr",
+      runner: "self_hosted",
+    });
     const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
     expect(keys).toContain(JSON.stringify(ciKeys.installationsAll()));
     expect(keys).toContain(JSON.stringify(ciKeys.repoInstallations()));

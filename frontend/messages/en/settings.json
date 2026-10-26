@@ -1,10 +1,11 @@
 {
   "models": {
     "title": "Feature Models",
-    "body": "Choose the model each system feature uses. The list and live prices come from OpenRouter; a feature without a choice uses the workspace default model, or its built-in default when none is set.",
+    "body": "Choose the provider and model each system feature uses. The model list comes from the chosen provider (OpenRouter adds live prices); a feature without a choice uses the workspace default model, or its built-in default when none is set.",
     "usingDefault": "default",
     "usingDefaultModel": "Default model ({model})",
     "search": "Search models…",
+    "providerAria": "{feature} provider",
     "liveNote": "Prices are pulled live from OpenRouter — USD per 1M input/output tokens.",
     "noKeyNote": "Add an OpenRouter API key under API Keys to load the model list and prices."
   },

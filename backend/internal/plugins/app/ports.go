@@ -40,6 +40,14 @@ type Names interface {
 	Conflicts(ctx context.Context, workspaceID, pluginName string, skillNames []string) (domain.Conflicts, error)
 }
 
+// CustomProviders reads which custom providers the workspace defines (FR15). The plugins context
+// never creates or reads a definition; it only learns whether an id exists, to warn in the dry run.
+type CustomProviders interface {
+	// CustomDefined returns the ids among ids (`custom:<slug>`, well-formed) that the workspace
+	// defines, in the order of ids. An id that is not defined is left out.
+	CustomDefined(ctx context.Context, workspaceID string, ids []string) (defined []string, err error)
+}
+
 // Installer creates an installed plugin with everything it owns.
 type Installer interface {
 	// Install creates, in one all-or-nothing transaction, the plugin (disabled) and every agent,

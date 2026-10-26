@@ -43,7 +43,6 @@ func (c *issues) text(path, s string, minLen, maxLen int) {
 	}
 }
 
-// oneOf checks an enum field.
 // visibleText is text for a body or prompt that an install stores without hidden text: besides
 // the length rules on the raw value, something must stay once the hidden text is removed (L2).
 // cleaned and h are the result of stripHidden(s), computed once per request.
@@ -58,10 +57,44 @@ func (c *issues) visibleText(path, s string, minLen, maxLen int, cleaned string,
 	}
 }
 
+// oneOf checks an enum field.
 func (c *issues) oneOf(path, value string, allowed []string) {
 	if !slices.Contains(allowed, value) {
 		c.add("%s must be one of %s (found %s)", path, quoteList(allowed), quoteShort(value))
 	}
+}
+
+// provider checks an agent's provider: a built-in id or a well-formed custom id (FR15). Whether
+// a custom provider is defined in the target workspace is not a bundle rule; Preview warns.
+func (c *issues) provider(path, value string) {
+	if slices.Contains(agentProviders, value) || IsCustomProvider(value) {
+		return
+	}
+	c.add("%s must be one of %s, or custom:<slug> with 1 to %d lowercase letters, digits or hyphens (found %s)",
+		path, quoteList(agentProviders), customSlugMax, quoteShort(value))
+}
+
+// customProviderPrefix and customSlugMax are llm/custom's IDPrefix and MaxSlugLen. The domain
+// copies them (it imports nothing of the module); cmd/server's drift test compares the rule with
+// llm/custom.ParseID and the CHECK agents_provider_chk.
+const (
+	customProviderPrefix = "custom:"
+	customSlugMax        = 32
+)
+
+// IsCustomProvider reports whether s is a well-formed custom provider id: `custom:` and 1 to 32
+// characters of [a-z0-9-].
+func IsCustomProvider(s string) bool {
+	slug, ok := strings.CutPrefix(s, customProviderPrefix)
+	if !ok || slug == "" || len(slug) > customSlugMax {
+		return false
+	}
+	for i := 0; i < len(slug); i++ {
+		if ch := slug[i]; (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func quoteList(values []string) string {
@@ -282,7 +315,7 @@ func validate(b Bundle, texts cleanTexts) error {
 		}
 		agentNames[a.Name] = struct{}{}
 		c.text(p+".description", a.Description, 0, -1)
-		c.oneOf(p+".provider", a.Provider, agentProviders)
+		c.provider(p+".provider", a.Provider)
 		c.text(p+".model", a.Model, 1, AgentModelMax)
 		c.visibleText(p+".system_prompt", a.SystemPrompt, 1, AgentPromptMax, texts.agentPrompts[i], texts.promptHidden[i])
 		c.oneOf(p+".strategy", a.Strategy, agentStrategies)

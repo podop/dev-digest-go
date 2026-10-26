@@ -12,9 +12,11 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"time"
 
+	"dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/keynames"
 	"dev-digest-go/backend/internal/platform/retry"
 )
@@ -71,6 +73,14 @@ func (p Provider) KeyName() string {
 		return keynames.OpenRouterKey
 	}
 	return ""
+}
+
+// IsCustom reports whether p is the id of a custom provider: `custom:` plus a well-formed slug
+// (custom.ParseID). It says nothing about whether the provider is defined; Valid stays true for
+// the built-in providers only.
+func (p Provider) IsCustom() bool {
+	_, ok := custom.ParseID(string(p))
+	return ok
 }
 
 // Role is the author of a message.
@@ -231,6 +241,9 @@ type Attempt struct {
 	MaxTokens   int
 	// SessionID is Request.SessionID; only OpenRouter sends it.
 	SessionID string
+	// Mode is the structured-output mode of a custom provider (CustomCall.Mode); empty for the
+	// built-in providers, whose adapters ignore it.
+	Mode custom.Mode
 }
 
 // Usage is the token usage a provider reported.
@@ -280,6 +293,40 @@ type Pricer interface {
 	Estimate(model string, tokensIn, tokensOut int) *float64
 }
 
+// ErrCustomNotConfigured is returned by CustomResolver.Resolve for a well-formed custom provider
+// id that is not defined in the workspace.
+var ErrCustomNotConfigured = errors.New("custom provider is not configured")
+
+// CustomCall is everything a call through one custom provider needs, resolved per call from the
+// provider's stored definition and secrets.
+type CustomCall struct {
+	// Adapter performs the request; it already carries the base URL, auth, extra headers and the
+	// outbound policy, so it is not shared between providers.
+	Adapter Adapter
+	// Name is the provider's display name, for error texts.
+	Name string
+	// Protocol is the provider's wire protocol; the Client uses it only to word the FR33 hint
+	// (the Anthropic protocol has no JSON-object mode). Empty is read as the Anthropic wording,
+	// which is valid for every protocol.
+	Protocol custom.Protocol
+	// Host is the host of the provider's base URL; the Client logs it with every request (NFR6).
+	Host string
+	// Mode is the provider's structured-output mode; the Client copies it to Attempt.Mode.
+	Mode custom.Mode
+	// Price prices the provider's manual models; nil = every model unpriced. The built-in and
+	// live price books are never consulted for a custom provider.
+	Price Pricer
+	// Secrets are the key and the extra-header values; the Client redacts them from every error
+	// text and log line of the call.
+	Secrets []string
+}
+
+// CustomResolver resolves a custom provider id of a workspace to a CustomCall. It returns
+// ErrCustomNotConfigured (possibly wrapped) when the id is not defined there.
+type CustomResolver interface {
+	Resolve(ctx context.Context, workspaceID string, p Provider) (CustomCall, error)
+}
+
 // Options configures a Client.
 type Options struct {
 	// Keys and Adapters are required. A provider without an adapter cannot be called.
@@ -302,6 +349,13 @@ type Options struct {
 	// Recorder receives the usage of every answered attempt (see Recorder). Nil = off; pass a
 	// true nil interface, never a typed-nil pointer.
 	Recorder Recorder
+	// Custom resolves custom provider ids per call. Nil = custom providers are not available.
+	Custom CustomResolver
+	// PriceReportedUsageOnly makes a built-in attempt whose response carried no usage (the tokens
+	// are the client's estimate) unpriced, unless the provider reported a cost: estimated tokens
+	// are never priced (spec D30, SCR7). Off = the price book prices estimated usage, as the
+	// studio's ledger does.
+	PriceReportedUsageOnly bool
 }
 
 // Client runs structured calls and model listings. It is safe for concurrent use.
@@ -314,6 +368,9 @@ type Client struct {
 	budget   time.Duration
 	backoff  retry.Options
 	recorder Recorder
+	custom   CustomResolver
+	// reportedOnly is Options.PriceReportedUsageOnly.
+	reportedOnly bool
 }
 
 // New builds a Client. It panics when Keys is nil: a wiring error caught at startup.
@@ -329,6 +386,9 @@ func New(opts Options) *Client {
 		budget:   opts.TotalBudget,
 		backoff:  opts.Retry,
 		recorder: opts.Recorder,
+		custom:   opts.Custom,
+
+		reportedOnly: opts.PriceReportedUsageOnly,
 	}
 	if c.log == nil {
 		c.log = slog.New(slog.DiscardHandler)

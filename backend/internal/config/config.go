@@ -76,6 +76,11 @@ type Config struct {
 	// DBMaxOpenConns is DB_MAX_OPEN_CONNS: the size of the Postgres connection pool
 	// (1-MaxDBMaxOpenConns, default DefaultDBMaxOpenConns).
 	DBMaxOpenConns int
+	// ExtraCAFile is DEVDIGEST_EXTRA_CA_FILE: the path of a PEM bundle whose certificates are added
+	// to the system trust store for every outbound HTTPS call (custom providers behind a private
+	// CA). "" = system store only. Config only trims it: the server reads the file at start and
+	// refuses to start when it is unreadable or holds no certificate.
+	ExtraCAFile string
 }
 
 // Load reads the configuration through getenv (os.Getenv in production).
@@ -103,7 +108,8 @@ type Config struct {
 // PR_POLL_ENABLED (default on, off only on "false") switches the background PR poll.
 // DB_MAX_OPEN_CONNS (integer 1-90, default 20) caps the connections of the Postgres pool; work
 // beyond the cap waits for a free connection (Postgres itself refuses clients above its
-// max_connections, 100 by default).
+// max_connections, 100 by default). DEVDIGEST_EXTRA_CA_FILE (optional path to a PEM bundle) is
+// returned as ExtraCAFile; the server checks the file at start.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
 		Addr:             valueOr(getenv("API_ADDR"), ":3001"),
@@ -117,6 +123,7 @@ func Load(getenv func(string) string) (Config, error) {
 		// Spec 7.14: on unless the trimmed value is exactly "false".
 		ReviewIntentEnabled: enabled(getenv("REVIEW_INTENT_ENABLED")),
 		PRPollEnabled:       enabled(getenv("PR_POLL_ENABLED")),
+		ExtraCAFile:         strings.TrimSpace(getenv("DEVDIGEST_EXTRA_CA_FILE")),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")

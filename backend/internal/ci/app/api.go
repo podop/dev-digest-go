@@ -20,17 +20,23 @@ type ExportRequest struct {
 	// Workflow is the edited workflow; nil (absent or null) = generate it. An empty string is
 	// text like any other and is refused by the workflow rules as invalid_yaml (Node `??`).
 	Workflow *string
+	// Runner is where the generated job runs (FR25): github_hosted or self_hosted; empty =
+	// github_hosted. It only shapes the generated workflow; an edited Workflow is used as sent.
+	Runner domain.Runner
 }
 
 // Exporter is the export use cases as transport sees them; *ExportService implements it. Failures
 // are apperr errors that httpx renders; ids are UUIDs by the time they get here.
 type Exporter interface {
 	// Export runs the checks of spec 7.6.1 in order (404 agent_not_found, 422 unsupported_target,
-	// 422 unsupported_provider, 422 invalid_triggers, 404 repo_not_found, 409 ci_slug_conflict,
-	// 422 skill_slug_conflict, 422 workflow_insecure, 500 runner_bundle_missing, 422
+	// 422 provider_not_configured for an undefined custom provider (every other provider is
+	// exportable, FR24), 422 invalid_triggers, 404 repo_not_found, 409 ci_slug_conflict, 422
+	// skill_slug_conflict, 422 workflow_insecure, 500 runner_bundle_missing, 422
 	// manifest_invalid), then answers the files (action files: no GitHub call, no write) or, for
 	// open_pr, checks the token (500 config_error), publishes (422 github_permission_denied, 502
-	// github_unavailable), upserts the installation (409 ci_slug_conflict) and answers with it.
+	// github_unavailable), upserts the installation with the agent's provider (409
+	// ci_slug_conflict) and answers with it. Both actions answer RequiredSecrets and
+	// RequiredVariables (FR29).
 	Export(ctx context.Context, workspaceID, agentID string, req ExportRequest) (domain.Export, error)
 	// ListInstallations returns the agent's installations, newest first, each with its last run;
 	// 404 agent_not_found.

@@ -5,10 +5,13 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/labstack/echo/v5"
 
+	"dev-digest-go/backend/internal/agents/app"
 	"dev-digest-go/backend/internal/agents/domain"
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/platform/httpx"
@@ -28,7 +31,7 @@ type service interface {
 	SetSkills(ctx context.Context, workspaceID, id string, skillIDs []string) ([]domain.SkillLink, error)
 	LinkSkill(ctx context.Context, workspaceID, id, skillID string, order *int) ([]domain.SkillLink, error)
 	AgentModels(ctx context.Context, workspaceID, id string) ([]llm.ModelInfo, error)
-	ProviderModels(ctx context.Context, provider string) []llm.ModelInfo
+	ProviderModels(ctx context.Context, workspaceID, provider string) ([]llm.ModelInfo, error)
 }
 
 // resolver finds the workspace and user a request acts as.
@@ -192,7 +195,7 @@ func (h *Handler) create(c *echo.Context) error {
 	}
 	a, err := h.svc.Create(c.Request().Context(), id.WorkspaceID, id.UserID, in)
 	if err != nil {
-		return err
+		return providerError(err)
 	}
 	return c.JSON(http.StatusCreated, toAgentResponse(a))
 }
@@ -216,7 +219,7 @@ func (h *Handler) update(c *echo.Context) error {
 	}
 	a, err := h.svc.Update(c.Request().Context(), id.WorkspaceID, agentID, patch)
 	if err != nil {
-		return err
+		return providerError(err)
 	}
 	return c.JSON(http.StatusOK, toAgentResponse(a))
 }
@@ -338,12 +341,31 @@ func (h *Handler) agentModels(c *echo.Context) error {
 }
 
 func (h *Handler) providerModels(c *echo.Context) error {
-	provider, err := httpx.PathEnum(c, "id", domain.Providers())
+	// PathParam decodes `custom%3Asynapse` like `custom:synapse` (EC14). A malformed id is a
+	// 422 as for any unknown provider; a well-formed custom id that is not defined answers [].
+	provider := httpx.PathParam(c, "id")
+	if !slices.Contains(domain.Providers(), provider) && !isCustomID(provider) {
+		return httpx.NewValidationError(httpx.EnumIssue(domain.Providers(), provider, "id"))
+	}
+	id, err := h.tenants.Resolve(c.Request().Context())
 	if err != nil {
 		return err
 	}
-	if _, err := h.tenants.Resolve(c.Request().Context()); err != nil {
+	models, err := h.svc.ProviderModels(c.Request().Context(), id.WorkspaceID, provider)
+	if err != nil {
 		return err
 	}
-	return c.JSON(http.StatusOK, h.svc.ProviderModels(c.Request().Context(), provider))
+	return c.JSON(http.StatusOK, models)
+}
+
+// providerError turns the refusal of an undefined custom provider into the 422 at the provider
+// path; any other error passes through.
+func providerError(err error) error {
+	var undefined *app.UndefinedProviderError
+	if errors.As(err, &undefined) {
+		return httpx.NewValidationError(httpx.Issue{
+			Code: httpx.CodeCustom, Path: []any{"provider"}, Message: undefined.Error(),
+		})
+	}
+	return err
 }

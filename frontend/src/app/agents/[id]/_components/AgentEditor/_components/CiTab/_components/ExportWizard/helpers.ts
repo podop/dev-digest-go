@@ -1,6 +1,14 @@
 import type { CiFile } from "@devdigest/shared";
 import { ApiError } from "@/lib/api";
-import { RUNNER_BUNDLE_PATH, TRIGGERS, WORKFLOW_PATH_PATTERN, type Trigger, type TriggerState } from "./constants";
+import { isCustomId } from "@/lib/providers/custom";
+import {
+  RUNNER_BUNDLE_PATH,
+  TRIGGERS,
+  WORKFLOW_PATH_PATTERN,
+  type Runner,
+  type Trigger,
+  type TriggerState,
+} from "./constants";
 
 const KIB = 1024;
 const MIB = KIB * KIB;
@@ -78,4 +86,41 @@ export function describeError(err: unknown, fallback: string): WizardError {
     return { code: err.code ?? null, message: err.message || fallback, rule };
   }
   return { code: null, message: fallback, rule: null };
+}
+
+/** Self-hosted for a custom-provider agent (its gateway is usually private), GitHub-hosted otherwise (FR31, D18). */
+export function defaultRunner(provider: string): Runner {
+  return isCustomId(provider) ? "self_hosted" : "github_hosted";
+}
+
+/** What the wizard shows of the agent's custom provider. */
+export interface CustomInfo {
+  name: string;
+  baseUrl: string;
+  /** Host (with a non-default port) of the base URL. */
+  host: string;
+}
+
+/** What the workflow needs in the repository settings, from the export response (FR31). */
+export interface Requirements {
+  secrets: readonly string[];
+  variables: readonly string[];
+  /** Set for a custom-provider agent: its base URL is the value of the variable. */
+  custom: CustomInfo | null;
+}
+
+/** Whether a base URL points to the machine the studio runs on (`localhost`, 127.0.0.0/8, `::1`) (EC21). */
+export function isLoopbackBaseUrl(baseUrl: string): boolean {
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "[::1]" ||
+    /^127(\.\d{1,3}){3}$/.test(host)
+  );
 }

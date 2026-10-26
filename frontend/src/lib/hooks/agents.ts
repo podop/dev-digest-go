@@ -74,7 +74,7 @@ export function useDeleteAgent() {
 export function useProviderModels(provider: Provider | null | undefined) {
   return useQuery({
     queryKey: providerKeys.models(provider),
-    queryFn: () => api.get<ModelInfo[]>(`/providers/${provider}/models`),
+    queryFn: () => api.get<ModelInfo[]>(`/providers/${encodeURIComponent(provider ?? "")}/models`),
     enabled: !!provider,
     staleTime: 5 * 60_000,
   });

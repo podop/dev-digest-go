@@ -1,12 +1,13 @@
 /* InstallStep — finish by opening a PR (default) or by downloading the files as a zip.
    A successful PR shows its link and the next steps; the first PR run fails until the
-   OPENROUTER_API_KEY secret exists, so that comes first (EC17). */
+   secrets and variables exist (listed from the export response), so those come first (EC17). */
 "use client";
 
 import { useTranslations } from "next-intl";
 import { Badge } from "@devdigest/ui";
-import { OPENROUTER_SECRET, type InstallMethod } from "../../constants";
-import { safeHttpUrl, zipFileName, type WizardError } from "../../helpers";
+import type { InstallMethod } from "../../constants";
+import { safeHttpUrl, zipFileName, type Requirements as RequirementsData, type WizardError } from "../../helpers";
+import { Requirements } from "../Requirements";
 import { WizardErrorBox } from "../WizardErrorBox";
 import { s } from "./styles";
 
@@ -21,6 +22,7 @@ export function InstallStep({
   prDone,
   prUrl,
   zipName,
+  requirements,
 }: {
   method: InstallMethod;
   onMethodChange: (method: InstallMethod) => void;
@@ -34,6 +36,8 @@ export function InstallStep({
   prUrl: string | null;
   /** Name of the zip downloaded last. */
   zipName: string | null;
+  /** Secrets and variables the workflow needs, from the export response. */
+  requirements: RequirementsData;
 }) {
   const t = useTranslations("ci.exportWizard");
   const check = t("checkName", { slug: slug ?? "<slug>" });
@@ -50,10 +54,11 @@ export function InstallStep({
         )}
         <p style={s.label}>{t("nextStepsTitle")}</p>
         <ol style={s.steps}>
-          <li>{t("nextAddSecret", { key: OPENROUTER_SECRET })}</li>
+          <li>{t("nextAddSecrets")}</li>
           <li>{t("nextMerge")}</li>
           <li>{t("nextRequiredCheck", { check })}</li>
         </ol>
+        <Requirements {...requirements} />
       </div>
     );
   }
@@ -93,7 +98,8 @@ export function InstallStep({
         </span>
       </label>
 
-      <p style={s.muted}>{t("secretNote", { key: OPENROUTER_SECRET })}</p>
+      <p style={s.muted}>{t("secretNote")}</p>
+      <Requirements {...requirements} />
       {pending && (
         <p role="status" style={s.muted}>
           {t("installing")}

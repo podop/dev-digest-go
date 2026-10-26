@@ -17,6 +17,7 @@ const CONN = "POST /settings/test-connection";
 function stubApi(extra: Record<string, unknown> = {}) {
   return mockFetch({
     "GET /settings/secrets-status": { openrouter: true, openai: false, anthropic: false, github: true },
+    "GET /settings/custom-providers": [],
     "GET /settings": { feature_models: {}, default_model: null, monthly_spend_cap_usd: null },
     "GET /settings/spend": {
       month_start: "2026-10-01T00:00:00.000Z",
@@ -134,6 +135,37 @@ describe("SettingsApiKeys", () => {
     expect(within(box).getByRole("link", { name: "GitHub Integration" })).toHaveAttribute("href", "/settings/github");
   });
 
+  it("shows the custom providers block below the built-in rows, above the default model (FR16, AC21)", async () => {
+    stubApi({
+      "GET /settings/custom-providers": [
+        {
+          id: "custom:synapse",
+          name: "Synapse",
+          protocol: "openai",
+          base_url: "https://gw.example.com/v1",
+          plain_http: false,
+          auth_mode: "bearer",
+          auth_header: null,
+          structured_output: "strict",
+          key_configured: true,
+          extra_headers: [],
+          models: [],
+          created_at: "2026-10-26T00:00:00Z",
+          updated_at: "2026-10-26T00:00:00Z",
+        },
+      ],
+    });
+    renderWithProviders(<SettingsApiKeys />);
+
+    const heading = await screen.findByRole("heading", { name: "Custom providers" });
+    expect(await screen.findByText("Synapse")).toBeInTheDocument();
+    // the built-in rows stay as they were: three key fields, none for the custom provider
+    expect(screen.getAllByText(/ API key$/).map((el) => el.textContent)).toEqual(["OpenRouter API key", "OpenAI API key", "Anthropic API key"]);
+    const follows = (a: Node, b: Node) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(screen.getByText("Anthropic API key"), heading)).toBe(true);
+    expect(follows(heading, await screen.findByText("Default model"))).toBe(true);
+  });
+
   it("shows no info box when /about fails", async () => {
     stubApi({ "GET /about": new Response("{}", { status: 500, headers: { "content-type": "application/json" } }) });
     renderWithProviders(<SettingsApiKeys />);
@@ -150,6 +182,7 @@ describe("SettingsApiKeys", () => {
     // Only data is left: the secrets path is wrapped by the rich-text tag, which pseudo messages lack.
     expect(strayText(container)).toEqual([]);
     expect(screen.getByText("⟦apiKeys.title⟧")).toBeInTheDocument();
+    expect(screen.getByText("⟦customProviders.empty⟧")).toBeInTheDocument();
     expect(screen.getAllByText("⟦keyField.badge.notConnected⟧")).toHaveLength(2);
     expect(screen.getByText("⟦keyField.optional⟧")).toBeInTheDocument();
   });

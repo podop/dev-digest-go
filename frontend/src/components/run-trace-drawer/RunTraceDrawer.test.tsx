@@ -171,5 +171,38 @@ describe("Run Trace drawer — accessible sections", () => {
     expect(tool).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText(/single-pass \(preview truncated\)/)).toBeInTheDocument();
   });
+  it("names a custom provider by its current name and falls back to the raw id (FR20, AC25)", async () => {
+    const custom = {
+      id: "custom:synapse",
+      name: "Synapse",
+      protocol: "openai",
+      base_url: "https://gw.example.com/v1",
+      plain_http: false,
+      auth_mode: "bearer",
+      auth_header: null,
+      structured_output: "strict",
+      key_configured: true,
+      extra_headers: [],
+      models: [],
+      created_at: "2026-10-26T10:00:00.000Z",
+      updated_at: "2026-10-26T10:00:00.000Z",
+    };
+    mockFetch({
+      "GET /runs/r1/trace": { ...TRACE, config: { ...TRACE.config, provider: "custom:synapse" } },
+      "GET /settings/custom-providers": [custom],
+    });
+    const first = renderWithProviders(
+      <RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />,
+    );
+    expect(await screen.findByText("Synapse")).toBeInTheDocument();
+    first.unmount();
+
+    mockFetch({
+      "GET /runs/r1/trace": { ...TRACE, config: { ...TRACE.config, provider: "custom:ghost" } },
+      "GET /settings/custom-providers": [custom],
+    });
+    renderWithProviders(<RunTraceDrawer runId="r1" agentName="Security" prNumber={482} onClose={() => {}} />);
+    expect(await screen.findByText("custom:ghost")).toBeInTheDocument();
+  });
 });
 

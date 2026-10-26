@@ -6,7 +6,7 @@
 import { useTranslations } from "next-intl";
 import { Button, ExportWizardSteps, Modal } from "@devdigest/ui";
 import { LAST_STEP, MODAL_WIDTH, STEP_KEYS } from "./constants";
-import { describeError } from "./helpers";
+import { describeError, type Requirements } from "./helpers";
 import { s } from "./styles";
 import { useDialogFocus, useExportWizard } from "./useExportWizard";
 import { ConfigureStep } from "./_components/ConfigureStep";
@@ -17,17 +17,20 @@ import { TargetStep } from "./_components/TargetStep";
 export function ExportWizard({
   agentId,
   agentName,
+  provider,
   initialRepo,
   onClose,
 }: {
   agentId: string;
   agentName: string;
+  /** The agent's provider id (`openrouter`, `openai`, `anthropic` or `custom:<slug>`). */
+  provider: string;
   /** A row's "Update" preselects its repository. */
   initialRepo?: string;
   onClose: () => void;
 }) {
   const t = useTranslations("ci.exportWizard");
-  const w = useExportWizard({ agentId, initialRepo });
+  const w = useExportWizard({ agentId, provider, initialRepo });
   const ref = useDialogFocus(onClose);
   const fallback = t("unknownError");
   const { step, openPr } = w;
@@ -37,6 +40,13 @@ export function ExportWizard({
   const installError = openPr.isError ? describeError(openPr.error, fallback) : null;
   const edited = w.edited != null;
   const installed = openPr.isSuccess;
+  // The PR response lists the same names as the preview; either one is the server's answer.
+  const exported = openPr.data ?? w.preview.data;
+  const requirements: Requirements = {
+    secrets: exported?.required_secrets ?? [],
+    variables: exported?.required_variables ?? [],
+    custom: w.custom,
+  };
 
   return (
     <div ref={ref} style={s.contents}>
@@ -108,6 +118,9 @@ export function ExportWizard({
             onToggleTrigger={w.toggleTrigger}
             postAs={w.postAs}
             onPostAsChange={w.setPostAs}
+            runner={w.runner}
+            onRunnerChange={w.setRunner}
+            requirements={requirements}
             locked={edited}
             slug={w.slug}
           />
@@ -124,6 +137,7 @@ export function ExportWizard({
             prDone={installed}
             prUrl={openPr.data?.pr_url ?? null}
             zipName={w.zipName}
+            requirements={requirements}
           />
         )}
       </Modal>

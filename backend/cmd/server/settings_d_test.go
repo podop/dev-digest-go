@@ -21,6 +21,7 @@ import (
 
 	agentsdomain "dev-digest-go/backend/internal/agents/domain"
 	evalsdomain "dev-digest-go/backend/internal/evals/domain"
+	customllm "dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
 	pluginsdomain "dev-digest-go/backend/internal/plugins/domain"
 	skillsdomain "dev-digest-go/backend/internal/skills/domain"
@@ -1577,8 +1578,8 @@ func TestSettingsD_CIInstallationsByRepo(t *testing.T) { // AC1, FR1, EC12
 	foreign := scalar[string](t, e.db.DB, `INSERT INTO agents (workspace_id, name, provider, model, system_prompt) VALUES (?, 'foreign', 'openai', 'm', 'p') RETURNING id::text`, other)
 
 	inst := func(agent, repo, target, slug string, at string) string {
-		return e.id(t, `INSERT INTO ci_installations (agent_id, repo, target_type, slug, installed_at)
-			VALUES (?, ?, ?, NULLIF(?, ''), ?::timestamptz) RETURNING id::text`, agent, repo, target, slug, at)
+		return e.id(t, `INSERT INTO ci_installations (agent_id, repo, target_type, slug, installed_at, provider)
+			VALUES (?, ?, ?, NULLIF(?, ''), ?::timestamptz, 'openrouter') RETURNING id::text`, agent, repo, target, slug, at)
 	}
 	x1 := inst(a1, "acme/api", "gha", "zeta", "2026-10-01T10:00:00Z")
 	x2 := inst(a2, "acme/api", "gha", "", "2026-10-01T11:00:00Z")
@@ -1647,17 +1648,39 @@ func TestSettingsD_CIInstallationsByRepo(t *testing.T) { // AC1, FR1, EC12
 
 // ---- drift of the limits the plugins domain copies (P3) ----
 
-// sdCheckValues returns the values of a CHECK constraint `col = ANY (ARRAY['a'::text, …])`.
+// sdCheckDef returns the definition of a CHECK constraint.
+func sdCheckDef(t testing.TB, db *pgtest.Database, table, constraint string) string {
+	t.Helper()
+	return scalar[string](t, db.DB, `SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c
+		JOIN pg_class r ON r.oid = c.conrelid WHERE r.relname = ? AND c.conname = ?`, table, constraint)
+}
+
+// sdCheckValues returns the literal values of a CHECK constraint `col = ANY (ARRAY['a'::text, …])`.
+// A regular expression of the constraint (`col ~ '^…$'::text`) is not a value: sdCheckPatterns
+// returns it.
 func sdCheckValues(t testing.TB, db *pgtest.Database, table, constraint string) []string {
 	t.Helper()
-	def := scalar[string](t, db.DB, `SELECT pg_get_constraintdef(c.oid) FROM pg_constraint c
-		JOIN pg_class r ON r.oid = c.conrelid WHERE r.relname = ? AND c.conname = ?`, table, constraint)
+	def := sdCheckDef(t, db, table, constraint)
 	var out []string
 	for _, m := range regexp.MustCompile(`'([^']+)'::text`).FindAllStringSubmatch(def, -1) {
+		if strings.HasPrefix(m[1], "^") {
+			continue
+		}
 		out = append(out, m[1])
 	}
 	if len(out) == 0 {
 		t.Fatalf("constraint %s.%s = %q holds no values", table, constraint, def)
+	}
+	return out
+}
+
+// sdCheckPatterns returns the regular expressions of a CHECK constraint (`col ~ '^…$'::text`).
+func sdCheckPatterns(t testing.TB, db *pgtest.Database, table, constraint string) []string {
+	t.Helper()
+	def := sdCheckDef(t, db, table, constraint)
+	var out []string
+	for _, m := range regexp.MustCompile(`~ '([^']+)'::text`).FindAllStringSubmatch(def, -1) {
+		out = append(out, m[1])
 	}
 	return out
 }
@@ -1694,6 +1717,33 @@ func TestSettingsD_PluginDomainLimitsMatchTheirOrigins(t *testing.T) { // P3
 		}
 		if pluginsdomain.DefaultCIFailOn != agentsdomain.DefaultCIFailOn {
 			t.Errorf("plugins DefaultCIFailOn = %q, agents has %q", pluginsdomain.DefaultCIFailOn, agentsdomain.DefaultCIFailOn)
+		}
+	})
+
+	// Custom provider ids are a pattern, not a list (spec FR15): the built-in list above is compared
+	// exactly, and the CHECK of agents.provider must additionally carry the custom pattern, which is
+	// llm/custom's id rule that the bundle validation copies.
+	t.Run("AgentProviders custom pattern", func(t *testing.T) {
+		const wantPattern = `^custom:[a-z0-9-]{1,32}$`
+		if diff := cmp.Diff([]string{wantPattern}, sdCheckPatterns(t, db, "agents", "agents_provider_chk")); diff != "" {
+			t.Errorf("agents_provider_chk patterns mismatch (-want +got):\n%s", diff)
+		}
+		pattern := regexp.MustCompile(wantPattern)
+		for _, id := range []string{
+			"custom:a", "custom:synapse", "custom:a-b-9", "custom:" + strings.Repeat("a", customllm.MaxSlugLen),
+			"custom:" + strings.Repeat("a", customllm.MaxSlugLen+1), "custom:", "custom:Bad!", "custom:a_b", "Custom:a",
+			"custom:a\n", " custom:a", "openai", "",
+		} {
+			_, parsed := customllm.ParseID(id)
+			if got := pluginsdomain.IsCustomProvider(id); got != parsed || got != pattern.MatchString(id) {
+				t.Errorf("custom id %q: plugins IsCustomProvider = %v, llm/custom ParseID = %v, CHECK pattern = %v; want all equal",
+					id, got, parsed, pattern.MatchString(id))
+			}
+		}
+		for _, name := range pluginsdomain.AgentProviders() {
+			if pluginsdomain.IsCustomProvider(name) {
+				t.Errorf("built-in provider %q is a custom id", name)
+			}
 		}
 	})
 
@@ -1774,7 +1824,7 @@ func TestContracts_SettingsD(t *testing.T) {
 
 	for _, agent := range []string{f.agentA, f.agentB} {
 		repoName := map[string]string{f.agentA: "acme/api", f.agentB: "acme/web"}[agent]
-		inst := e.id(t, `INSERT INTO ci_installations (agent_id, repo, target_type, slug) VALUES (?, ?, 'gha', 'slug') RETURNING id::text`, agent, repoName)
+		inst := e.id(t, `INSERT INTO ci_installations (agent_id, repo, target_type, slug, provider) VALUES (?, ?, 'gha', 'slug', 'openrouter') RETURNING id::text`, agent, repoName)
 		if agent == f.agentA {
 			run := e.id(t, `INSERT INTO agent_runs (workspace_id, agent_id, status, source) VALUES (?, ?, 'done', 'ci') RETURNING id::text`, e.ws, agent)
 			e.exec(t, `INSERT INTO ci_runs (ci_installation_id, agent_run_id, ran_at, status, github_url) VALUES (?, ?, '2026-10-12T09:15:30Z', 'succeeded', 'https://github.com/acme/api/actions/runs/2')`, inst, run)

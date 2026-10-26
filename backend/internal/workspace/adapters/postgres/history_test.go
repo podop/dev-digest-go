@@ -86,7 +86,7 @@ func (e *historyEnv) seedTenant(name string) historyTenant {
 	skill := e.scalar(`INSERT INTO skills (workspace_id, name, description, type, source, body) VALUES (?, 's', 'd', 'custom', 'manual', 'b') RETURNING id`, tn.ws)
 	e.exec(`INSERT INTO agent_skills (agent_id, skill_id) VALUES (?, ?)`, tn.agent, skill)
 	e.exec(`INSERT INTO settings (workspace_id, key, value) VALUES (?, 'workspace_name', '"x"')`, tn.ws)
-	inst := e.scalar(`INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'o/r', 'gha') RETURNING id`, tn.agent)
+	inst := e.scalar(`INSERT INTO ci_installations (agent_id, repo, target_type, provider) VALUES (?, 'o/r', 'gha', 'openrouter') RETURNING id`, tn.agent)
 	tn.evalCase = e.scalar(`INSERT INTO eval_cases (workspace_id, owner_kind, owner_id, name) VALUES (?, 'agent', ?, 'c') RETURNING id`, tn.ws, tn.agent)
 
 	multi := e.scalar(`INSERT INTO multi_agent_runs (workspace_id, pr_id) VALUES (?, ?) RETURNING id`, tn.ws, tn.pr1)

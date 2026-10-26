@@ -428,3 +428,28 @@ func TestLoadDBMaxOpenConns(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadExtraCAFile(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "unset", value: "", want: ""},
+		{name: "blank counts as unset", value: "  ", want: ""},
+		{name: "path", value: "/certs/ca.pem", want: "/certs/ca.pem"},
+		{name: "trimmed", value: " /certs/ca.pem ", want: "/certs/ca.pem"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := map[string]string{"DATABASE_URL": "postgres://db", "HOME": "/home/u", "DEVDIGEST_EXTRA_CA_FILE": tc.value}
+			got, err := config.Load(func(k string) string { return env[k] })
+			if err != nil {
+				t.Fatalf("Load(DEVDIGEST_EXTRA_CA_FILE=%q) error = %v", tc.value, err)
+			}
+			if got.ExtraCAFile != tc.want {
+				t.Errorf("Load(DEVDIGEST_EXTRA_CA_FILE=%q).ExtraCAFile = %q, want %q", tc.value, got.ExtraCAFile, tc.want)
+			}
+		})
+	}
+}

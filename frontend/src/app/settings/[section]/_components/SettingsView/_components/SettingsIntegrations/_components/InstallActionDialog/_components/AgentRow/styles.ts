@@ -20,5 +20,16 @@ export const s = {
   spinner: { animation: "ddspin 1s linear infinite", flexShrink: 0 } satisfies CSSProperties,
   ok: { color: "var(--ok)", fontWeight: 600 } satisfies CSSProperties,
   fail: { color: "var(--crit)", fontWeight: 600 } satisfies CSSProperties,
+  names: {
+    fontSize: 12,
+    color: "var(--text-secondary)",
+    marginTop: 4,
+    marginLeft: 26,
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+  } satisfies CSSProperties,
+  code: { fontFamily: "var(--font-mono, monospace)", fontSize: 11.5, wordBreak: "break-all" } satisfies CSSProperties,
   prLink: { color: "var(--accent)", fontWeight: 500 } satisfies CSSProperties,
 } as const;

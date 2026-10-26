@@ -34,13 +34,14 @@ var (
 	targets  = []string{"gha", "circle", "jenkins", "cli"}
 	actions  = []string{string(domain.ActionOpenPR), string(domain.ActionFiles)}
 	postAses = []string{string(domain.PostAsGitHubReview), string(domain.PostAsPRComment), string(domain.PostAsNone)}
+	runners  = []string{string(domain.RunnerGitHubHosted), string(domain.RunnerSelfHosted)}
 
 	uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 	jsNumber    = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
 )
 
 // parseExportBody validates a POST /agents/:id/export-ci body (CiExportBody): repo (non-empty
-// string), target, action and post_as (enums with defaults), triggers (array of strings, default
+// string), target, action, post_as and runner (enums with defaults), triggers (array of strings, default
 // all three), base (string, accepted and dropped: the repository's default branch is used) and
 // workflow (string up to 1,048,576 units, null or absent). Unknown keys are ignored. The default
 // triggers are applied here; the use case checks their values.
@@ -53,6 +54,7 @@ func parseExportBody(body []byte) (app.ExportRequest, []httpx.Issue) {
 		Target:   "gha",
 		Action:   domain.ActionOpenPR,
 		PostAs:   domain.PostAsGitHubReview,
+		Runner:   domain.RunnerGitHubHosted,
 		Triggers: []string{string(domain.TriggerOpened), string(domain.TriggerSynchronize), string(domain.TriggerReopened)},
 	}
 
@@ -75,6 +77,10 @@ func parseExportBody(body []byte) (app.ExportRequest, []httpx.Issue) {
 	if v, present, is := readEnum(obj, "post_as", postAses); present {
 		issues = append(issues, is...)
 		req.PostAs = domain.PostAs(v)
+	}
+	if v, present, is := readEnum(obj, "runner", runners); present {
+		issues = append(issues, is...)
+		req.Runner = domain.Runner(v)
 	}
 	if raw, ok := obj["triggers"]; ok {
 		list, is := readStringList(raw, "triggers")
@@ -331,6 +337,10 @@ type exportDTO struct {
 	Installation *installationDTO `json:"installation"`
 	Files        []fileDTO        `json:"files"`
 	PRURL        *string          `json:"pr_url"`
+	// RequiredSecrets and RequiredVariables are the repository secrets and variables the user
+	// must add (FR29); always arrays.
+	RequiredSecrets   []string `json:"required_secrets"`
+	RequiredVariables []string `json:"required_variables"`
 }
 
 type fileDTO struct {
@@ -426,7 +436,11 @@ type skippedDTO struct {
 }
 
 func toExport(e domain.Export) exportDTO {
-	out := exportDTO{Files: make([]fileDTO, len(e.Files)), PRURL: e.PRURL}
+	out := exportDTO{
+		Files: make([]fileDTO, len(e.Files)), PRURL: e.PRURL,
+		RequiredSecrets:   append([]string{}, e.RequiredSecrets...),
+		RequiredVariables: append([]string{}, e.RequiredVariables...),
+	}
 	for i, f := range e.Files {
 		out.Files[i] = fileDTO{Path: f.Path, Contents: f.Contents, Editable: f.Editable}
 	}

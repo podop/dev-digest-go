@@ -50,6 +50,7 @@ type installationRow struct {
 	InstalledAt     time.Time `gorm:"column:installed_at"`
 	Slug            *string   `gorm:"column:slug"`
 	ManifestVersion *int      `gorm:"column:manifest_version"`
+	Provider        string    `gorm:"column:provider"`
 }
 
 func (r installationRow) toDomain(last *domain.Run) domain.Installation {
@@ -61,6 +62,7 @@ func (r installationRow) toDomain(last *domain.Run) domain.Installation {
 		InstalledAt:     r.InstalledAt.UTC(),
 		Slug:            r.Slug,
 		ManifestVersion: r.ManifestVersion,
+		Provider:        r.Provider,
 		LastRun:         last,
 	}
 }
@@ -75,6 +77,7 @@ type installationInsertRow struct {
 	InstalledAt     time.Time `gorm:"column:installed_at;default:now()"`
 	Slug            string    `gorm:"column:slug"`
 	ManifestVersion int       `gorm:"column:manifest_version"`
+	Provider        string    `gorm:"column:provider"`
 }
 
 func (installationInsertRow) TableName() string { return "ci_installations" }

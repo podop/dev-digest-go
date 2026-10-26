@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 
 	"dev-digest-go/backend/internal/platform/keynames"
@@ -27,6 +29,11 @@ const (
 
 // FileName is the secrets file inside the data directory.
 const FileName = "secrets.json"
+
+// customPrefix starts the file key of a custom provider's secrets:
+// custom_providers.<workspace>/<id>. The value is an object, not a string, so
+// Get never returns it.
+const customPrefix = "custom_providers."
 
 // Store reads secrets from a JSON object file, falling back to the environment.
 // The file is read on every call, so a key saved through Set is visible to
@@ -66,22 +73,152 @@ func (s *Store) Get(name string) string {
 // the file atomically with mode 0600. A malformed existing file is replaced.
 // Errors never contain the value.
 func (s *Store) Set(name, value string) error {
+	_, err := s.update(name, func(map[string]any) any { return value })
+	return err
+}
+
+// update replaces the file entry key with fn's result (nil deletes it) and
+// returns the entry it replaced (nil when there was none). The read-modify-write
+// is serialized and the file is replaced atomically.
+func (s *Store) update(key string, fn func(data map[string]any) any) (prev any, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	data := s.readFile()
-	data[name] = value
+	prev = data[key]
+	if v := fn(data); v == nil {
+		delete(data, key)
+	} else {
+		data[key] = v
+	}
 	out, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode secrets: %w", err)
+		return nil, fmt.Errorf("encode secrets: %w", err)
 	}
 	out = append(out, '\n')
 
 	dir := filepath.Dir(s.path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create secrets dir: %w", err)
+		return nil, fmt.Errorf("create secrets dir: %w", err)
 	}
-	return writeAtomic(dir, s.path, out)
+	if err := writeAtomic(dir, s.path, out); err != nil {
+		return nil, err
+	}
+	return prev, nil
+}
+
+// CustomHeader is one extra request header of a custom provider; Value is the
+// secret.
+type CustomHeader struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+// CustomSecret is everything secret about one custom provider: its API key and
+// its extra-header values. The zero value means "nothing stored".
+type CustomSecret struct {
+	Key     string         `json:"key,omitempty"`
+	Headers []CustomHeader `json:"headers,omitempty"`
+}
+
+// IsZero reports whether nothing is stored: no key and no header.
+func (c CustomSecret) IsZero() bool { return c.Key == "" && len(c.Headers) == 0 }
+
+// ErrInvalidCustomRef is returned for an empty workspace or provider id, or one
+// holding "/" (the separator of the file key).
+var ErrInvalidCustomRef = errors.New("invalid custom provider secret reference")
+
+func customKey(ws, id string) (string, bool) {
+	if ws == "" || id == "" || strings.Contains(ws, "/") || strings.Contains(id, "/") {
+		return "", false
+	}
+	return customPrefix + ws + "/" + id, true
+}
+
+// Custom returns the stored secrets of custom provider id in workspace ws, or
+// the zero CustomSecret when none are stored, the reference is invalid or the
+// entry is malformed. There is no environment fallback (spec D22).
+func (s *Store) Custom(ws, id string) CustomSecret {
+	key, ok := customKey(ws, id)
+	if !ok {
+		return CustomSecret{}
+	}
+	return decodeCustom(s.readFile()[key])
+}
+
+// SetCustom stores sec for custom provider id in workspace ws, replacing what
+// was stored, and returns the previous value (zero when none) so a caller whose
+// database commit fails can put it back with RestoreCustom. A zero sec removes
+// the entry. Built-in names are untouched. Errors never contain a value.
+func (s *Store) SetCustom(ws, id string, sec CustomSecret) (prev CustomSecret, err error) {
+	key, ok := customKey(ws, id)
+	if !ok {
+		return CustomSecret{}, ErrInvalidCustomRef
+	}
+	old, err := s.update(key, func(map[string]any) any {
+		if sec.IsZero() {
+			return nil
+		}
+		return sec
+	})
+	if err != nil {
+		return CustomSecret{}, err
+	}
+	return decodeCustom(old), nil
+}
+
+// DeleteCustom removes the secrets of custom provider id in workspace ws and
+// returns what was stored (zero when none), for RestoreCustom.
+func (s *Store) DeleteCustom(ws, id string) (prev CustomSecret, err error) {
+	return s.SetCustom(ws, id, CustomSecret{})
+}
+
+// RestoreCustom puts prev, as returned by SetCustom or DeleteCustom, back; a
+// zero prev removes the entry again. It undoes a write whose database
+// transaction did not commit.
+func (s *Store) RestoreCustom(ws, id string, prev CustomSecret) error {
+	_, err := s.SetCustom(ws, id, prev)
+	return err
+}
+
+// CustomValues returns every non-empty custom-provider secret value (keys and
+// header values) of every workspace, sorted and without duplicates, for
+// redaction of logs, errors and responses.
+func (s *Store) CustomValues() []string {
+	var out []string
+	for name, raw := range s.readFile() {
+		if !strings.HasPrefix(name, customPrefix) {
+			continue
+		}
+		sec := decodeCustom(raw)
+		if sec.Key != "" {
+			out = append(out, sec.Key)
+		}
+		for _, h := range sec.Headers {
+			if h.Value != "" {
+				out = append(out, h.Value)
+			}
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// decodeCustom reads a file entry (decoded JSON or a CustomSecret); anything
+// else is the zero value.
+func decodeCustom(raw any) CustomSecret {
+	if raw == nil {
+		return CustomSecret{}
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return CustomSecret{}
+	}
+	var sec CustomSecret
+	if err := json.Unmarshal(b, &sec); err != nil {
+		return CustomSecret{}
+	}
+	return sec
 }
 
 // readFile returns the parsed file, or an empty map when it is missing,

@@ -40,6 +40,13 @@ func (m ModelInfo) MarshalJSON() ([]byte, error) {
 		Provider Provider `json:"provider"`
 	}
 	switch {
+	case m.Provider.IsCustom():
+		// A custom provider's entry carries what its manual model says: label and pricing when set.
+		return json.Marshal(struct {
+			head
+			Label   *string       `json:"label,omitempty"`
+			Pricing *ModelPricing `json:"pricing,omitempty"`
+		}{head{m.ID, m.Provider}, m.Label, m.Pricing})
 	case m.Mock || m.Provider == Anthropic:
 		return json.Marshal(struct {
 			head
@@ -60,9 +67,13 @@ func (m ModelInfo) MarshalJSON() ([]byte, error) {
 	}
 }
 
-// ListModels lists the provider's models: the key is read now, the request gets the provider's
-// listing timeout and retries (spec FR214). A missing key is a config error.
+// ListModels lists the built-in provider's models: the key is read now, the request gets the
+// provider's listing timeout and retries (spec FR214). A missing key is a config error. A custom
+// provider belongs to a workspace and is listed by ListModelsIn.
 func (c *Client) ListModels(ctx context.Context, p Provider) ([]ModelInfo, error) {
+	if p.IsCustom() {
+		return nil, customNotConfigured(p)
+	}
 	ad, err := c.adapter(p)
 	if err != nil {
 		return nil, err
@@ -71,27 +82,56 @@ func (c *Client) ListModels(ctx context.Context, p Provider) ([]ModelInfo, error
 	if err != nil {
 		return nil, err
 	}
+	return c.listModels(ctx, p, ad, key, nil)
+}
+
+// ListModelsIn is ListModels for a provider of workspace ws. A custom provider is resolved first
+// (an undefined one is the FR9 config error) and listed through its own adapter with the OpenAI
+// limits: 30 s per request, 3 retries (NFR4). The result is the live list only; merging a
+// provider's manual models is the caller's job.
+func (c *Client) ListModelsIn(ctx context.Context, ws string, p Provider) ([]ModelInfo, error) {
+	if !p.IsCustom() {
+		return c.ListModels(ctx, p)
+	}
+	call, err := c.resolveCustom(ctx, ws, p)
+	if err != nil {
+		return nil, err
+	}
+	return c.listModels(ctx, p, call.Adapter, "", &call)
+}
+
+func (c *Client) listModels(ctx context.Context, p Provider, ad Adapter, key string, cc *CustomCall) ([]ModelInfo, error) {
 	pol := ad.Policy()
 	opts := c.backoff
 	opts.Retries = pol.ListRetries
+	name := displayName(p, cc)
+	var secrets []string
+	if cc != nil {
+		secrets = cc.Secrets
+	}
+	trace := newTrace(cc, p, "list_models")
 	models, err := retry.Value(ctx, opts, func(ctx context.Context) ([]ModelInfo, error) {
+		rctx := ctx
 		if pol.ListTimeout > 0 {
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(ctx, pol.ListTimeout)
+			rctx, cancel = context.WithTimeout(ctx, pol.ListTimeout)
 			defer cancel()
 		}
-		out, err := ad.ListModels(ctx, key)
-		if err != nil && pol.ListTimeout > 0 && ctx.Err() == context.DeadlineExceeded {
+		start := time.Now()
+		out, err := ad.ListModels(rctx, key)
+		if err != nil && pol.ListTimeout > 0 && rctx.Err() == context.DeadlineExceeded {
 			// The listing's own deadline, not the caller's: a plain, non-retryable failure.
-			return nil, fmt.Errorf("%s model list timed out after %s", p.DisplayName(), pol.ListTimeout.Round(time.Millisecond))
+			err = fmt.Errorf("%s model list timed out after %s", name, pol.ListTimeout.Round(time.Millisecond))
+			out = nil
 		}
+		trace.log(ctx, c.log, err, time.Since(start))
 		return out, err
 	})
 	if err != nil {
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("%s model list was cancelled: %w", p.DisplayName(), ctx.Err())
+			return nil, fmt.Errorf("%s model list was cancelled: %w", name, ctx.Err())
 		}
-		return nil, apperr.ExternalService(c.scrub(err.Error(), key))
+		return nil, apperr.ExternalService(c.scrub(err.Error(), key, secrets))
 	}
 	return models, nil
 }

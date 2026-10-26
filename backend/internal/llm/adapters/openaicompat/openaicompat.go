@@ -5,6 +5,7 @@ package openaicompat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/http"
@@ -88,14 +89,14 @@ type chatMessage struct {
 }
 
 type chatRequest struct {
-	Model               string         `json:"model"`
-	Messages            []chatMessage  `json:"messages"`
-	ResponseFormat      responseFormat `json:"response_format"`
-	Temperature         *float64       `json:"temperature,omitempty"`
-	MaxTokens           int            `json:"max_tokens,omitempty"`
-	MaxCompletionTokens int            `json:"max_completion_tokens,omitempty"`
-	Usage               *usageRequest  `json:"usage,omitempty"`
-	SessionID           string         `json:"session_id,omitempty"`
+	Model               string          `json:"model"`
+	Messages            []chatMessage   `json:"messages"`
+	ResponseFormat      *responseFormat `json:"response_format,omitempty"`
+	Temperature         *float64        `json:"temperature,omitempty"`
+	MaxTokens           int             `json:"max_tokens,omitempty"`
+	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
+	Usage               *usageRequest   `json:"usage,omitempty"`
+	SessionID           string          `json:"session_id,omitempty"`
 }
 
 type usageRequest struct {
@@ -103,8 +104,8 @@ type usageRequest struct {
 }
 
 type responseFormat struct {
-	Type       string     `json:"type"`
-	JSONSchema jsonSchema `json:"json_schema"`
+	Type       string      `json:"type"`
+	JSONSchema *jsonSchema `json:"json_schema,omitempty"`
 }
 
 type jsonSchema struct {
@@ -120,9 +121,9 @@ type chatResponse struct {
 		} `json:"message"`
 	} `json:"choices"`
 	Usage *struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		Cost             any `json:"cost"`
+		PromptTokens     int             `json:"prompt_tokens"`
+		CompletionTokens int             `json:"completion_tokens"`
+		Cost             json.RawMessage `json:"cost"`
 	} `json:"usage"`
 	Error *struct {
 		Message string `json:"message"`
@@ -144,7 +145,10 @@ func supportsTemperature(model string) bool {
 	return !slices.ContainsFunc(noTemperature, func(re *regexp.Regexp) bool { return re.MatchString(name) })
 }
 
-func (a *Adapter) buildRequest(at llm.Attempt) chatRequest {
+func (a *Adapter) buildRequest(at llm.Attempt) chatRequest { return buildRequest(a.provider, at) }
+
+// buildRequest is the strict-mode request of provider p (OpenAI's shape unless p is OpenRouter).
+func buildRequest(p llm.Provider, at llm.Attempt) chatRequest {
 	msgs := make([]chatMessage, len(at.Messages))
 	for i, m := range at.Messages {
 		msgs[i] = chatMessage{Role: string(m.Role), Content: m.Content}
@@ -152,11 +156,11 @@ func (a *Adapter) buildRequest(at llm.Attempt) chatRequest {
 	req := chatRequest{
 		Model:    at.Model,
 		Messages: msgs,
-		ResponseFormat: responseFormat{Type: "json_schema", JSONSchema: jsonSchema{
+		ResponseFormat: &responseFormat{Type: "json_schema", JSONSchema: &jsonSchema{
 			Name: at.SchemaName, Schema: at.Schema, Strict: true,
 		}},
 	}
-	if a.provider == llm.OpenRouter {
+	if p == llm.OpenRouter {
 		req.Usage = &usageRequest{Include: true}
 		req.SessionID = at.SessionID
 		if at.Temperature != nil && supportsTemperature(at.Model) {
@@ -210,7 +214,7 @@ func (a *Adapter) attemptResult(resp chatResponse) llm.AttemptResult {
 	}
 	if u := resp.Usage; u != nil {
 		out.Usage = &llm.Usage{TokensIn: u.PromptTokens, TokensOut: u.CompletionTokens}
-		if cost, ok := u.Cost.(float64); ok && a.provider == llm.OpenRouter {
+		if cost, ok := wire.JSONNumber(u.Cost); ok && a.provider == llm.OpenRouter {
 			out.CostUSD = &cost
 		}
 	}

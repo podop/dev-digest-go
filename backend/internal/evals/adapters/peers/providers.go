@@ -14,8 +14,9 @@ import (
 
 // LLMClient is the part of *llm.Client the providers adapter uses.
 type LLMClient interface {
-	// Ready reports whether a call to the provider can be made now ("<KEY> is not configured").
-	Ready(p llm.Provider) error
+	// ReadyIn reports whether a call to the provider can be made now for the workspace
+	// ("<KEY> is not configured", "Custom provider custom:<slug> is not configured").
+	ReadyIn(ctx context.Context, workspaceID string, p llm.Provider) error
 	// Redact scrubs provider keys out of a text.
 	Redact(s string) string
 }
@@ -54,11 +55,12 @@ func NewProviders(c LLMClient, newCaller CallerFactory) *Providers {
 	return &Providers{c: c, newCaller: newCaller}
 }
 
-// Resolve checks that the provider can be called (its key is stored, or the mock override is on)
+// Resolve checks that the provider can be called (its key is stored, or the mock override is on,
+// or a custom provider is defined in the workspace)
 // and returns the engine's LLM port bound to the case. It makes no call.
-func (p *Providers) Resolve(_ context.Context, b executor.LLMBinding) (reviewerapp.LLM, error) {
+func (p *Providers) Resolve(ctx context.Context, b executor.LLMBinding) (reviewerapp.LLM, error) {
 	provider := llm.Provider(b.Provider)
-	if err := p.c.Ready(provider); err != nil {
+	if err := p.c.ReadyIn(ctx, b.WorkspaceID, provider); err != nil {
 		return nil, err
 	}
 	cfg := CallerConfig{

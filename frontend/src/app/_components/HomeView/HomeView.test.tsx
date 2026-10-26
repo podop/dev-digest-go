@@ -1,12 +1,13 @@
-/* HomeView — the first-run gate on `/` (AC18, FR27): the redirect for each missing prerequisite
-   and for a complete setup, the error state with Retry (no redirect), no home content before the
-   redirect, and the no-hard-coded-copy check (AC22). AppShell is a passthrough; fetch is stubbed
+/* HomeView — the first-run gate on `/` (AC18, FR27; AC26, FR21): the redirect for each missing
+   prerequisite and for a complete setup, a custom provider counting as a model provider, the error
+   state with Retry (no redirect), no home content before the redirect, and the no-hard-coded-copy
+   check (AC22). AppShell is a passthrough; fetch is stubbed
    and the real hooks run. */
 import type React from "react";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import type { Repo, SecretsStatus } from "@devdigest/shared";
+import type { CustomProvider, Repo, SecretsStatus } from "@devdigest/shared";
 import { renderWithProviders, screen, cleanup, waitFor, pseudoMessages } from "@/test/render";
-import { mockFetch, jsonResponse } from "@/test/fetch-mock";
+import { mockFetch, jsonResponse, type RouteHandler } from "@/test/fetch-mock";
 import { strayText } from "@/test/pseudo";
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
@@ -36,6 +37,24 @@ const repo = (id: string, full_name: string): Repo => ({
 });
 const REPOS = [repo("r1", "acme/api"), repo("r2", "acme/web")];
 
+const customProvider = (over: Partial<CustomProvider> = {}): CustomProvider => ({
+  id: "custom:synapse",
+  name: "Synapse",
+  protocol: "openai",
+  base_url: "https://gw.example.com/v1",
+  plain_http: false,
+  auth_mode: "bearer",
+  auth_header: null,
+  structured_output: "strict",
+  key_configured: false,
+  extra_headers: [],
+  models: [],
+  created_at: "2026-10-26T10:00:00Z",
+  updated_at: "2026-10-26T10:00:00Z",
+  ...over,
+});
+const CUSTOM = "GET /settings/custom-providers";
+
 const NONE: SecretsStatus = { openai: false, anthropic: false, openrouter: false, github: false };
 const secrets = (over: Partial<SecretsStatus>): SecretsStatus => ({ ...NONE, ...over });
 
@@ -49,7 +68,7 @@ describe("HomeView gate", () => {
     ["only an env-provided openrouter key and a token, with repos", secrets({ openrouter: true, github: true }), REPOS, "/repos/r1/pulls"],
     ["every prerequisite met", secrets({ openai: true, anthropic: true, openrouter: true, github: true }), REPOS, "/repos/r1/pulls"],
   ] as const)("%s → replaces the URL with %s", async (_name, status, repos, href) => {
-    mockFetch({ "GET /settings/secrets-status": status, "GET /repos": [...repos] });
+    mockFetch({ "GET /settings/secrets-status": status, "GET /repos": [...repos], [CUSTOM]: [] });
     renderWithProviders(<HomeView />);
     await waitFor(() => expect(nav.replace).toHaveBeenCalledWith(href));
     expect(nav.replace).toHaveBeenCalledTimes(1);
@@ -61,6 +80,7 @@ describe("HomeView gate", () => {
     mockFetch({
       "GET /settings/secrets-status": () => new Promise<Response>((resolve) => (release = resolve)),
       "GET /repos": [],
+      [CUSTOM]: [],
     });
     const { container } = renderWithProviders(<HomeView />);
     expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
@@ -74,22 +94,65 @@ describe("HomeView gate", () => {
   });
 
   it("offers the first repo while the redirect to its PR list happens", async () => {
-    mockFetch({ "GET /settings/secrets-status": secrets({ openai: true, github: true }), "GET /repos": REPOS });
+    mockFetch({ "GET /settings/secrets-status": secrets({ openai: true, github: true }), "GET /repos": REPOS, [CUSTOM]: [] });
     const { user } = renderWithProviders(<HomeView />);
     await user.click(await screen.findByRole("button", { name: "Open acme/api" }));
     expect(nav.push).toHaveBeenCalledWith("/repos/r1/pulls");
   });
 
+  // AC26 / D21: one defined custom provider counts as a model provider — keyed or not, tested or not.
   it.each([
-    ["secrets-status", "GET /settings/secrets-status", "GET /repos"],
-    ["repos", "GET /repos", "GET /settings/secrets-status"],
-  ])("shows an error with Retry and does not redirect when %s fails; Retry recovers", async (_name, failing, other) => {
-    let broken = true;
-    const ok = failing === "GET /repos" ? [REPOS[0]] : secrets({ openai: true, github: true });
-    const otherOk = other === "GET /repos" ? [REPOS[0]] : secrets({ openai: true, github: true });
+    ["without a key", customProvider({ key_configured: false })],
+    ["with a key", customProvider({ key_configured: true })],
+  ])("treats a custom provider %s as a connected model provider (AC26)", async (_name, provider) => {
+    mockFetch({ "GET /settings/secrets-status": secrets({ github: true }), "GET /repos": REPOS, [CUSTOM]: [provider] });
+    renderWithProviders(<HomeView />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/repos/r1/pulls"));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("with a custom provider the next unmet step is still reported (github, then repo) (AC26)", async () => {
+    mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": REPOS, [CUSTOM]: [customProvider()] });
+    renderWithProviders(<HomeView />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=github"));
+    cleanup();
+    nav.replace.mockReset();
+
+    mockFetch({ "GET /settings/secrets-status": secrets({ github: true }), "GET /repos": [], [CUSTOM]: [customProvider()] });
+    renderWithProviders(<HomeView />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=repo"));
+  });
+
+  it("waits for the custom providers before redirecting — no model step flashes for a workspace that has one", async () => {
+    let release: (r: Response) => void = () => {};
     mockFetch({
-      [failing]: () => (broken ? jsonResponse({ error: { code: "internal", message: "boom" } }, 500) : ok),
-      [other]: otherOk,
+      "GET /settings/secrets-status": secrets({ github: true }),
+      "GET /repos": REPOS,
+      [CUSTOM]: () => new Promise<Response>((resolve) => (release = resolve)),
+    });
+    const { container } = renderWithProviders(<HomeView />);
+    await waitFor(() => expect(container.querySelector("[aria-busy='true']")).not.toBeNull());
+    expect(nav.replace).not.toHaveBeenCalled();
+
+    release(jsonResponse([customProvider()]));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/repos/r1/pulls"));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["secrets-status", "GET /settings/secrets-status"],
+    ["repos", "GET /repos"],
+    ["custom providers", CUSTOM],
+  ])("shows an error with Retry and does not redirect when %s fails; Retry recovers", async (_name, failing) => {
+    let broken = true;
+    const ok: Record<string, RouteHandler> = {
+      "GET /settings/secrets-status": secrets({ github: true }),
+      "GET /repos": [REPOS[0]],
+      [CUSTOM]: [customProvider()],
+    };
+    mockFetch({
+      ...ok,
+      [failing]: () => (broken ? jsonResponse({ error: { code: "internal", message: "boom" } }, 500) : ok[failing] ?? null),
     });
     const { user } = renderWithProviders(<HomeView />);
     expect(await screen.findByText("Could not check your setup")).toBeInTheDocument();
@@ -102,13 +165,13 @@ describe("HomeView gate", () => {
   });
 
   it("renders no hard-coded copy in the error and redirecting states (AC22)", async () => {
-    mockFetch({ "GET /settings/secrets-status": jsonResponse({ error: { code: "x", message: "m" } }, 500), "GET /repos": [] });
+    mockFetch({ "GET /settings/secrets-status": jsonResponse({ error: { code: "x", message: "m" } }, 500), "GET /repos": [], [CUSTOM]: [] });
     const failed = renderWithProviders(<HomeView />, { messages: pseudoMessages() });
     await screen.findByRole("button", { name: "⟦home.error.retry⟧" });
     expect(strayText(failed.container)).toEqual([]);
     failed.unmount();
 
-    mockFetch({ "GET /settings/secrets-status": secrets({ openai: true, github: true }), "GET /repos": REPOS });
+    mockFetch({ "GET /settings/secrets-status": secrets({ openai: true, github: true }), "GET /repos": REPOS, [CUSTOM]: [] });
     const ready = renderWithProviders(<HomeView />, { messages: pseudoMessages() });
     await screen.findByRole("button", { name: "⟦home.openRepo⟧" });
     expect(strayText(ready.container)).toEqual([]);

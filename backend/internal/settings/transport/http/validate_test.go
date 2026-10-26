@@ -26,6 +26,15 @@ type fakeService struct {
 	gotWS      string
 	updates    int
 	result     *app.ConnTestResult // returned by TestConnection when set
+
+	defined      map[string]bool // custom provider ids CustomDefined reports as defined
+	definedAsked []string        // "<workspace>/<id>" of every CustomDefined call
+	customResult app.ConnTestResult
+	customErr    error
+	customCalls  int
+	gotCustomWS  string
+	gotCustomID  app.Provider
+	gotCustomKey string
 }
 
 func (f *fakeService) Get(context.Context, string) (app.Bag, error) { return app.Bag{}, nil }
@@ -44,6 +53,17 @@ func (f *fakeService) TestConnection(_ context.Context, ws string, p app.Provide
 		return *f.result
 	}
 	return app.ConnTestResult{Provider: p, OK: true, Message: "ok"}
+}
+
+func (f *fakeService) CustomDefined(_ context.Context, ws, id string) bool {
+	f.definedAsked = append(f.definedAsked, ws+"/"+id)
+	return f.defined[id]
+}
+
+func (f *fakeService) TestCustomConnection(_ context.Context, ws string, id app.Provider, key string) (app.ConnTestResult, error) {
+	f.customCalls++
+	f.gotCustomWS, f.gotCustomID, f.gotCustomKey = ws, id, key
+	return f.customResult, f.customErr
 }
 
 type fakeIdentities struct{ err error }

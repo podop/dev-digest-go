@@ -2,6 +2,7 @@
    Components import from "@/lib/hooks" only; the domain files (core, agents, skills,
    reviews, trace, repo-intel, conventions) are internal to this folder. */
 export * from "./core";
+export * from "./custom-providers";
 export * from "./agents";
 export * from "./skills";
 export * from "./reviews";

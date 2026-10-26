@@ -11,6 +11,7 @@ import (
 
 	"dev-digest-go/backend/internal/agents/domain"
 	"dev-digest-go/backend/internal/llm"
+	"dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/apperr"
 )
 
@@ -65,17 +66,53 @@ type modelLister interface {
 	ListModels(ctx context.Context, p llm.Provider) ([]llm.ModelInfo, error)
 }
 
+// customProviders is the workspace's catalog of custom model providers (the customproviders
+// context implements it). Ids are public ids, `custom:<slug>`.
+type customProviders interface {
+	// Defined reports whether the workspace defines the provider.
+	Defined(ctx context.Context, workspaceID, id string) (bool, error)
+	// LockDefined is Defined that also locks the provider row FOR SHARE until the transaction
+	// carried by ctx ends, so a concurrent delete of the provider waits for the agent write
+	// that references it instead of orphaning it. It must run inside txRunner.InTx.
+	LockDefined(ctx context.Context, workspaceID, id string) (bool, error)
+	// Models returns the provider's live and manual models (spec FR10). A failing live listing is
+	// not an error there; the manual list alone is returned.
+	Models(ctx context.Context, workspaceID, id string) ([]llm.ModelInfo, error)
+}
+
+// UndefinedProviderError means an agent write named a well-formed custom provider id that the
+// workspace does not define. The transport maps it to a 422 at the provider path.
+type UndefinedProviderError struct{ ID string }
+
+func (e *UndefinedProviderError) Error() string {
+	return "Custom provider " + e.ID + " is not configured"
+}
+
 // Service implements the agent use cases.
 type Service struct {
 	store  store
 	tx     txRunner
 	models modelLister
+	custom customProviders
 	log    *slog.Logger
 }
 
+// Option configures optional collaborators of a Service.
+type Option func(*Service)
+
+// WithCustomProviders enables custom provider ids on agents. Without it every custom id counts
+// as undefined: writes naming one are refused and its model list is empty.
+func WithCustomProviders(cp customProviders) Option {
+	return func(s *Service) { s.custom = cp }
+}
+
 // NewService builds a Service. log receives the warnings of failed model listings.
-func NewService(store store, tx txRunner, models modelLister, log *slog.Logger) *Service {
-	return &Service{store: store, tx: tx, models: models, log: log}
+func NewService(store store, tx txRunner, models modelLister, log *slog.Logger, opts ...Option) *Service {
+	s := &Service{store: store, tx: tx, models: models, log: log}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // List returns the workspace's agents, enabled or not.
@@ -97,6 +134,9 @@ func (s *Service) Get(ctx context.Context, workspaceID, id string) (domain.Agent
 func (s *Service) Create(ctx context.Context, workspaceID, userID string, in domain.CreateInput) (domain.Agent, error) {
 	var created domain.Agent
 	err := s.tx.InTx(ctx, func(ctx context.Context) error {
+		if err := s.requireDefined(ctx, workspaceID, in.Provider); err != nil {
+			return err
+		}
 		a, err := s.store.Insert(ctx, workspaceID, userID, domain.New(in))
 		if err != nil {
 			return fmt.Errorf("insert agent: %w", err)
@@ -121,6 +161,13 @@ func (s *Service) Update(ctx context.Context, workspaceID, id string, p domain.P
 		current, err := s.store.GetForUpdate(ctx, workspaceID, id)
 		if err != nil {
 			return agentErr(err, "lock agent")
+		}
+		// An unchanged provider is exempt: an agent may legally hold an undefined custom id
+		// (it fails at run time) and must stay editable by a client that sends the full object.
+		if p.Provider != nil && *p.Provider != current.Provider {
+			if err := s.requireDefined(ctx, workspaceID, *p.Provider); err != nil {
+				return err
+			}
 		}
 		next, changed := p.Apply(current)
 		if changed {
@@ -214,31 +261,76 @@ func (s *Service) AppendSkill(ctx context.Context, workspaceID, agentID, skillID
 	return err
 }
 
-// AgentModels lists the models of the agent's provider; it never fails for a listing problem.
+// AgentModels lists the models of the agent's provider; a listing problem gives an empty list.
 func (s *Service) AgentModels(ctx context.Context, workspaceID, id string) ([]llm.ModelInfo, error) {
 	a, err := s.Get(ctx, workspaceID, id)
 	if err != nil {
 		return nil, err
 	}
-	return s.ProviderModels(ctx, a.Provider), nil
+	return s.ProviderModels(ctx, workspaceID, a.Provider)
 }
 
-// ProviderModels lists a provider's models. A missing key, a provider error and a timeout give
-// an empty list; the cause is logged at warn (the llm errors carry no key).
-func (s *Service) ProviderModels(ctx context.Context, provider string) []llm.ModelInfo {
+// ProviderModels lists a provider's models. For a built-in provider a missing key, a provider
+// error and a timeout give an empty list; the cause is logged at warn (the llm errors carry no
+// key). A custom id answers from the workspace's catalog: the union of the live and the manual
+// models when defined, an empty list when not. Only a failed catalog lookup is an error.
+func (s *Service) ProviderModels(ctx context.Context, workspaceID, provider string) ([]llm.ModelInfo, error) {
+	if _, isCustom := custom.ParseID(provider); isCustom {
+		return s.customModels(ctx, workspaceID, provider)
+	}
 	p, ok := llm.ParseProvider(provider)
 	if !ok {
-		return []llm.ModelInfo{}
+		return []llm.ModelInfo{}, nil
 	}
 	models, err := s.models.ListModels(ctx, p)
 	if err != nil {
 		s.log.WarnContext(ctx, "model listing failed", "provider", provider, "error", err.Error())
-		return []llm.ModelInfo{}
+		return []llm.ModelInfo{}, nil
 	}
 	if models == nil {
-		return []llm.ModelInfo{}
+		return []llm.ModelInfo{}, nil
 	}
-	return models
+	return models, nil
+}
+
+func (s *Service) customModels(ctx context.Context, workspaceID, id string) ([]llm.ModelInfo, error) {
+	if s.custom == nil {
+		return []llm.ModelInfo{}, nil
+	}
+	defined, err := s.custom.Defined(ctx, workspaceID, id)
+	if err != nil {
+		return nil, fmt.Errorf("look up custom provider %s: %w", id, err)
+	}
+	if !defined {
+		return []llm.ModelInfo{}, nil
+	}
+	models, err := s.custom.Models(ctx, workspaceID, id)
+	if err != nil {
+		return nil, fmt.Errorf("list models of custom provider %s: %w", id, err)
+	}
+	if models == nil {
+		return []llm.ModelInfo{}, nil
+	}
+	return models, nil
+}
+
+// requireDefined refuses a custom provider id the workspace does not define. It locks the
+// provider row FOR SHARE for the rest of the transaction (A8). Built-in ids pass untouched.
+func (s *Service) requireDefined(ctx context.Context, workspaceID, provider string) error {
+	if _, isCustom := custom.ParseID(provider); !isCustom {
+		return nil
+	}
+	if s.custom == nil {
+		return &UndefinedProviderError{ID: provider}
+	}
+	defined, err := s.custom.LockDefined(ctx, workspaceID, provider)
+	if err != nil {
+		return fmt.Errorf("lock custom provider %s: %w", provider, err)
+	}
+	if !defined {
+		return &UndefinedProviderError{ID: provider}
+	}
+	return nil
 }
 
 // changeLinks is the shared body of the two link modes. Under a lock on the agent it computes

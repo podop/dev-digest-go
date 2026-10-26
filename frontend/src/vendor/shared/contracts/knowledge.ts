@@ -406,8 +406,24 @@ export type CreateConventionSkillResult = z.infer<typeof CreateConventionSkillRe
 // ---- Agents ----
 // 'openrouter' routes through the OpenAI-compatible API (OpenAIProvider with a
 // custom baseURL) — used by the CI runner for cheap models (DeepSeek/GLM/MiniMax).
-export const Provider = z.enum(PROVIDER_IDS);
+/** Id of a user-defined provider (Settings › API Keys › Custom providers): `custom:<slug>`. */
+export const CUSTOM_PROVIDER_ID_PATTERN = /^custom:[a-z0-9-]{1,32}$/;
+export type CustomProviderId = `custom:${string}`;
+export const CustomProviderId = z.custom<CustomProviderId>(
+  (v) => typeof v === 'string' && CUSTOM_PROVIDER_ID_PATTERN.test(v),
+  { message: 'Invalid provider id' },
+);
+
+/** A built-in provider id or a well-formed custom one. `PROVIDER_IDS` stays the built-in list. */
+export const Provider = z.union([z.enum(PROVIDER_IDS), CustomProviderId]);
 export type Provider = z.infer<typeof Provider>;
+
+/** USD per 1M input / output tokens. */
+export const ModelPricing = z.object({
+  promptPerM: z.number(),
+  completionPerM: z.number(),
+});
+export type ModelPricing = z.infer<typeof ModelPricing>;
 
 // Review execution strategy (matches @devdigest/reviewer-core's ReviewStrategy):
 //  - single-pass: send the WHOLE diff in ONE model call (default)

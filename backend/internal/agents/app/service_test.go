@@ -348,20 +348,20 @@ func TestService_Models(t *testing.T) {
 		t.Errorf("AgentModels() mismatch (-want +got):\n%s", diff)
 	}
 
-	if got := e.svc.ProviderModels(t.Context(), "openai"); got == nil || len(got) != 0 {
-		t.Errorf("ProviderModels(openai) with no models = %#v, want an empty non-nil list", got)
-	}
-	if got := e.svc.ProviderModels(t.Context(), "nope"); got == nil || len(got) != 0 {
-		t.Errorf("ProviderModels(nope) = %#v, want an empty non-nil list", got)
+	for _, provider := range []string{"openai", "nope"} {
+		got, err := e.svc.ProviderModels(t.Context(), ws, provider)
+		if err != nil || got == nil || len(got) != 0 {
+			t.Errorf("ProviderModels(%q) with no models = %#v, %v, want an empty non-nil list", provider, got, err)
+		}
 	}
 }
 
 func TestService_ModelsFailureIsEmptyAndLogged(t *testing.T) {
 	e := newEnv()
 	e.models.err = apperr.ExternalService("OpenAI model list failed: 500")
-	got := e.svc.ProviderModels(context.Background(), "openai")
-	if got == nil || len(got) != 0 {
-		t.Errorf("ProviderModels() on error = %#v, want an empty non-nil list", got)
+	got, err := e.svc.ProviderModels(context.Background(), ws, "openai")
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("ProviderModels() on error = %#v, %v, want an empty non-nil list", got, err)
 	}
 	out := e.logs.String()
 	if !strings.Contains(out, "level=WARN") || !strings.Contains(out, "model listing failed") || !strings.Contains(out, "provider=openai") {

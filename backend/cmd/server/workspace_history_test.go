@@ -86,7 +86,7 @@ func seedRunHistory(t testing.TB, s *stack) historyIDs {
 	id.finding = scalar[string](t, db, `INSERT INTO findings (review_id, file, start_line, end_line, severity, category, title, rationale, suggestion, confidence)
 		VALUES (?, ?, 1, 2, 'WARNING', 'bug', ?, ?, ?, 0.5) RETURNING id::text`, id.review, leakFindingFile, leakFindingTitle, leakFindingWhy, leakFindingFix)
 
-	inst := scalar[string](t, db, `INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'acme/payments-api', 'gha') RETURNING id::text`, id.agent)
+	inst := scalar[string](t, db, `INSERT INTO ci_installations (agent_id, repo, target_type, provider) VALUES (?, 'acme/payments-api', 'gha', 'openrouter') RETURNING id::text`, id.agent)
 	id.ciRun = scalar[string](t, db, `INSERT INTO ci_runs (ci_installation_id, agent_run_id, status) VALUES (?, ?, 'done') RETURNING id::text`, inst, ciAgentRun)
 	exec(`INSERT INTO ci_runs (ci_installation_id, status) VALUES (?, 'done')`, inst)
 

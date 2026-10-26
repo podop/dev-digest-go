@@ -1215,6 +1215,356 @@ INSERT INTO memory (workspace_id, scope, kind, content) VALUES ('` + ws1 + `', '
 	}
 }
 
+// TestMigration0009_CustomProviders: Up adds custom_providers and custom_provider_models with CHECKs
+// that mirror FR1 (slug, name, protocol, base URL shape, auth header, extra-header names, structured
+// output, manual model ids, labels and prices), widens agents_provider_chk to `custom:<slug>`, and adds
+// ci_installations.provider (existing rows get openrouter, then the default is dropped, FR37, EC35);
+// Down REFUSES while an agent uses a custom provider (A11), otherwise reverses everything and leaves
+// every installation, CI run and agent otherwise unchanged; Up again restores version 9 (AC48).
+func TestMigration0009_CustomProviders(t *testing.T) {
+	upTo8Names := []string{"0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes", "0005_cost_ledger", "0006_auto_review_records", "0007_pr_head_repo", "0008_plugin_ownership"}
+	upTo9Names := append(append([]string{}, upTo8Names...), "0009_custom_providers")
+
+	const ws1, ws2 = "00000000-0000-0000-0000-0000000000a1", "00000000-0000-0000-0000-0000000000a2"
+	const agent1, inst1, inst2, run1 = "00000000-0000-0000-0000-0000000000b1", "00000000-0000-0000-0000-0000000000c1", "00000000-0000-0000-0000-0000000000c2", "00000000-0000-0000-0000-0000000000d1"
+
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+	if _, err := newMigrator(t, db, embeddedFS(t, upTo8Names...)).Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-8 error = %v", err)
+	}
+	exec := func(q string) error {
+		_, err := db.ExecContext(t.Context(), q)
+		return err
+	}
+	// Version 8 data (AC48): two Phase 6 installations of an openai agent, one ingested CI run.
+	if err := exec(`
+INSERT INTO workspaces (id, name) VALUES ('` + ws1 + `', 'w1'), ('` + ws2 + `', 'w2');
+INSERT INTO agents (id, workspace_id, name, provider, model, system_prompt) VALUES ('` + agent1 + `', '` + ws1 + `', 'a1', 'openai', 'm', 's');
+INSERT INTO ci_installations (id, agent_id, repo, target_type, slug, manifest_version) VALUES
+  ('` + inst1 + `', '` + agent1 + `', 'acme/api', 'gha', 'a1', 1),
+  ('` + inst2 + `', '` + agent1 + `', 'acme/web', 'cli', NULL, NULL);
+INSERT INTO ci_runs (id, ci_installation_id, pr_number, status) VALUES ('` + run1 + `', '` + inst1 + `', 7, 'success');`); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	before := catalog(t, db)
+	const rowsQ = `SELECT (SELECT string_agg(i.id::text || ' ' || i.agent_id::text || ' ' || i.repo || ' ' || i.target_type || ' ' || coalesce(i.slug, '-'), ',' ORDER BY i.id) FROM ci_installations i)
+	  || ' | ' || (SELECT string_agg(r.id::text || ' ' || r.ci_installation_id::text || ' ' || r.pr_number::text || ' ' || r.status, ',' ORDER BY r.id) FROM ci_runs r)
+	  || ' | ' || (SELECT string_agg(a.id::text || ' ' || a.provider, ',' ORDER BY a.id) FROM agents a)`
+	rowsBefore := queryStrings(t, db, rowsQ)
+
+	upTo9 := embeddedFS(t, upTo9Names...)
+	all, err := migrate.Load(upTo9)
+	if err != nil {
+		t.Fatalf("Load(versions 1-9) error = %v", err)
+	}
+	if len(all) != 9 || all[8].Version != 9 || all[8].Name != "custom_providers" {
+		t.Fatalf("Load(versions 1-9) = %d migrations, last %+v, want 9 ending in version 9 custom_providers", len(all), all[len(all)-1])
+	}
+	m := newMigrator(t, db, upTo9)
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 9 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+
+	wantRemoved := []string{
+		"constraint agents agents_provider_chk c CHECK ((provider = ANY (ARRAY['openai'::text, 'anthropic'::text, 'openrouter'::text])))",
+	}
+	if diff := cmp.Diff(wantRemoved, onlyIn(before, afterUp)); diff != "" {
+		t.Errorf("objects removed by 0009 mismatch (-want +got):\n%s", diff)
+	}
+	wantAdded := []string{
+		"column ci_installations.provider #8 text NOT NULL default=<none> generated= identity=",
+		"column custom_provider_models.completion_per_m #6 numeric default=<none> generated= identity=",
+		"column custom_provider_models.label #4 text default=<none> generated= identity=",
+		"column custom_provider_models.model_id #3 text NOT NULL default=<none> generated= identity=",
+		"column custom_provider_models.position #7 integer NOT NULL default=<none> generated= identity=",
+		"column custom_provider_models.prompt_per_m #5 numeric default=<none> generated= identity=",
+		"column custom_provider_models.provider_id #2 text NOT NULL default=<none> generated= identity=",
+		"column custom_provider_models.workspace_id #1 uuid NOT NULL default=<none> generated= identity=",
+		"column custom_providers.auth_header #7 text default=<none> generated= identity=",
+		"column custom_providers.auth_mode #6 text NOT NULL default=<none> generated= identity=",
+		"column custom_providers.base_url #5 text NOT NULL default=<none> generated= identity=",
+		"column custom_providers.created_at #10 timestamp with time zone NOT NULL default=now() generated= identity=",
+		"column custom_providers.extra_header_names #8 text[] NOT NULL default='{}'::text[] generated= identity=",
+		"column custom_providers.id #2 text NOT NULL default=<none> generated= identity=",
+		"column custom_providers.name #3 text NOT NULL default=<none> generated= identity=",
+		"column custom_providers.protocol #4 text NOT NULL default=<none> generated= identity=",
+		"column custom_providers.structured_output #9 text NOT NULL default='strict'::text generated= identity=",
+		"column custom_providers.updated_at #11 timestamp with time zone NOT NULL default=now() generated= identity=",
+		"column custom_providers.workspace_id #1 uuid NOT NULL default=<none> generated= identity=",
+		"constraint agents agents_provider_chk c CHECK (((provider = ANY (ARRAY['openai'::text, 'anthropic'::text, 'openrouter'::text])) OR (provider ~ '^custom:[a-z0-9-]{1,32}$'::text)))",
+		"constraint ci_installations ci_installations_provider_chk c CHECK (((provider = ANY (ARRAY['openai'::text, 'anthropic'::text, 'openrouter'::text])) OR (provider ~ '^custom:[a-z0-9-]{1,32}$'::text)))",
+		"constraint custom_provider_models custom_provider_models_label_chk c CHECK (((label IS NULL) OR (char_length(label) <= 200)))",
+		"constraint custom_provider_models custom_provider_models_model_id_chk c CHECK (((char_length(model_id) >= 1) AND (char_length(model_id) <= 200)))",
+		"constraint custom_provider_models custom_provider_models_pkey p PRIMARY KEY (workspace_id, provider_id, model_id)",
+		"constraint custom_provider_models custom_provider_models_position_chk c CHECK (((\"position\" >= 0) AND (\"position\" < 200)))",
+		"constraint custom_provider_models custom_provider_models_pricing_chk c CHECK ((((prompt_per_m IS NULL) AND (completion_per_m IS NULL)) OR ((prompt_per_m IS NOT NULL) AND (completion_per_m IS NOT NULL) AND ((prompt_per_m >= (0)::numeric) AND (prompt_per_m <= (10000)::numeric)) AND ((completion_per_m >= (0)::numeric) AND (completion_per_m <= (10000)::numeric)) AND (prompt_per_m = round(prompt_per_m, 6)) AND (completion_per_m = round(completion_per_m, 6)))))",
+		"constraint custom_provider_models custom_provider_models_provider_fk f FOREIGN KEY (workspace_id, provider_id) REFERENCES custom_providers(workspace_id, id) ON DELETE CASCADE",
+		"constraint custom_providers custom_providers_auth_header_chk c CHECK ((((auth_mode = 'bearer'::text) AND (auth_header IS NULL)) OR ((auth_mode = 'header'::text) AND (auth_header IS NOT NULL) AND ((char_length(auth_header) >= 1) AND (char_length(auth_header) <= 64)) AND (auth_header ~ '^[!#$%&''*+.^_`|~0-9A-Za-z-]+$'::text))))",
+		"constraint custom_providers custom_providers_auth_mode_chk c CHECK ((auth_mode = ANY (ARRAY['bearer'::text, 'header'::text])))",
+		"constraint custom_providers custom_providers_base_url_chk c CHECK (((char_length(base_url) <= 2048) AND (base_url ~* '^https?://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'::text) AND (base_url !~ '/$'::text)))",
+		"constraint custom_providers custom_providers_extra_header_names_chk c CHECK (((cardinality(extra_header_names) <= 5) AND (array_position(extra_header_names, NULL::text) IS NULL)))",
+		"constraint custom_providers custom_providers_id_chk c CHECK ((id ~ '^[a-z0-9-]{1,32}$'::text))",
+		"constraint custom_providers custom_providers_json_object_protocol_chk c CHECK (((structured_output <> 'json_object'::text) OR (protocol = 'openai'::text)))",
+		"constraint custom_providers custom_providers_name_chk c CHECK ((((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 80)) AND (name !~ '[[:cntrl:]]'::text)))",
+		"constraint custom_providers custom_providers_pkey p PRIMARY KEY (workspace_id, id)",
+		"constraint custom_providers custom_providers_protocol_chk c CHECK ((protocol = ANY (ARRAY['openai'::text, 'anthropic'::text])))",
+		"constraint custom_providers custom_providers_structured_output_chk c CHECK ((structured_output = ANY (ARRAY['strict'::text, 'json_object'::text, 'prompt_only'::text])))",
+		"constraint custom_providers custom_providers_workspace_id_workspaces_id_fk f FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE",
+		"index custom_provider_models custom_provider_models_pkey CREATE UNIQUE INDEX custom_provider_models_pkey ON public.custom_provider_models USING btree (workspace_id, provider_id, model_id)",
+		"index custom_providers custom_providers_pkey CREATE UNIQUE INDEX custom_providers_pkey ON public.custom_providers USING btree (workspace_id, id)",
+		"table custom_provider_models",
+		"table custom_providers",
+	}
+	if diff := cmp.Diff(wantAdded, onlyIn(afterUp, before)); diff != "" {
+		t.Errorf("objects added by 0009 mismatch (-want +got):\n%s", diff)
+	}
+
+	// Existing installations get openrouter (EC35); nothing else about them, their runs or the agent changed.
+	if got := queryStrings(t, db, `SELECT string_agg(provider, ',' ORDER BY id) FROM ci_installations`); !cmp.Equal(got, []string{"openrouter,openrouter"}) {
+		t.Errorf("provider of the existing installations after Up = %v, want openrouter for both", got)
+	}
+	if diff := cmp.Diff(rowsBefore, queryStrings(t, db, rowsQ)); diff != "" {
+		t.Errorf("installations, runs and agents after Up mismatch (-before +got):\n%s", diff)
+	}
+
+	// The default is dropped: an insert must name the provider (FR37); it is a built-in id or a slug.
+	inst := func(provider string) string {
+		return `INSERT INTO ci_installations (agent_id, repo, target_type` + provider
+	}
+	if err := exec(inst(`) VALUES ('` + agent1 + `', 'acme/none', 'gha')`)); err == nil {
+		t.Errorf("installation without a provider accepted, want NOT NULL without default")
+	}
+	for i, p := range []string{"openrouter", "openai", "anthropic", "custom:synapse", "custom:a-b-1", "custom:" + strings.Repeat("a", 32)} {
+		if err := exec(inst(`, provider) VALUES ('` + agent1 + `', 'acme/ok` + string(rune('a'+i)) + `', 'gha', '` + p + `')`)); err != nil {
+			t.Errorf("installation with provider %q: %v", p, err)
+		}
+	}
+	for _, p := range []string{"", "custom:", "custom:Syn", "custom:a_b", "custom:" + strings.Repeat("a", 33), "gemini", "OpenAI", "custom:ab\n"} {
+		if err := exec(inst(`, provider) VALUES ('` + agent1 + `', 'acme/bad', 'gha', '` + p + `')`)); err == nil || !strings.Contains(err.Error(), "ci_installations_provider_chk") {
+			t.Errorf("installation with provider %q error = %v, want a violation of ci_installations_provider_chk", p, err)
+		}
+	}
+	if err := exec(`DELETE FROM ci_installations WHERE repo LIKE 'acme/ok%'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Agents: built-ins and a well-formed custom id are accepted, everything else is refused (FR7).
+	agent := func(provider string) string {
+		return `INSERT INTO agents (workspace_id, name, provider, model, system_prompt) VALUES ('` + ws1 + `', 'x', '` + provider + `', 'm', 's')`
+	}
+	for _, p := range []string{"openrouter", "openai", "anthropic", "custom:synapse", "custom:0", "custom:a-b-1", "custom:" + strings.Repeat("z", 32)} {
+		if err := exec(agent(p)); err != nil {
+			t.Errorf("agent with provider %q: %v", p, err)
+		}
+	}
+	for _, p := range []string{"", "custom:", "custom:Syn", "custom:a_b", "custom:" + strings.Repeat("a", 33), "synapse", "custom", "gemini", "xcustom:a", "custom:a:b", "custom:ab\n"} {
+		if err := exec(agent(p)); err == nil || !strings.Contains(err.Error(), "agents_provider_chk") {
+			t.Errorf("agent with provider %q error = %v, want a violation of agents_provider_chk", p, err)
+		}
+	}
+	if err := exec(`DELETE FROM agents WHERE name = 'x'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// custom_providers: a valid row, then one broken rule at a time (FR1, FR3, FR4).
+	valid := map[string]string{
+		"workspace_id": "'" + ws1 + "'", "id": "'synapse'", "name": "'Synapse'", "protocol": "'openai'",
+		"base_url": "'https://gw.example.com/v1'", "auth_mode": "'bearer'", "auth_header": "NULL",
+	}
+	provider := func(over map[string]string) string {
+		cols := map[string]string{}
+		for k, v := range valid {
+			cols[k] = v
+		}
+		for k, v := range over {
+			cols[k] = v
+		}
+		var names, vals []string
+		for k := range cols {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		for _, k := range names {
+			vals = append(vals, cols[k])
+		}
+		return `INSERT INTO custom_providers (` + strings.Join(names, ", ") + `) VALUES (` + strings.Join(vals, ", ") + `)`
+	}
+	if err := exec(provider(nil)); err != nil {
+		t.Fatalf("insert a custom provider: %v", err)
+	}
+	if got := queryStrings(t, db, `SELECT structured_output || ' ' || extra_header_names::text || ' ' || (created_at IS NOT NULL)::text || ' ' || (updated_at IS NOT NULL)::text FROM custom_providers`); !cmp.Equal(got, []string{"strict {} true true"}) {
+		t.Errorf("defaults of a custom provider = %v, want strict, no extra headers, both timestamps set", got)
+	}
+	for _, tc := range []struct {
+		name string
+		over map[string]string
+		want string // violated constraint
+	}{
+		{"same id twice in a workspace", nil, "custom_providers_pkey"},
+		{"unknown workspace", map[string]string{"workspace_id": "'" + "00000000-0000-0000-0000-0000000000ff" + "'", "id": "'other'"}, "custom_providers_workspace_id_workspaces_id_fk"},
+		{"upper-case id", map[string]string{"id": "'Syn'"}, "custom_providers_id_chk"},
+		{"empty id", map[string]string{"id": "''"}, "custom_providers_id_chk"},
+		{"id with underscore", map[string]string{"id": "'a_b'"}, "custom_providers_id_chk"},
+		{"id with the custom: prefix", map[string]string{"id": "'custom:a'"}, "custom_providers_id_chk"},
+		{"33-character id", map[string]string{"id": "'" + strings.Repeat("a", 33) + "'"}, "custom_providers_id_chk"},
+		{"empty name", map[string]string{"id": "'n1'", "name": "''"}, "custom_providers_name_chk"},
+		{"blank name", map[string]string{"id": "'n2'", "name": "'   '"}, "custom_providers_name_chk"},
+		{"81-character name", map[string]string{"id": "'n3'", "name": "'" + strings.Repeat("n", 81) + "'"}, "custom_providers_name_chk"},
+		{"control character in the name", map[string]string{"id": "'n4'", "name": "E'a\\tb'"}, "custom_providers_name_chk"},
+		{"unknown protocol", map[string]string{"id": "'p1'", "protocol": "'gemini'"}, "custom_providers_protocol_chk"},
+		{"ftp base url", map[string]string{"id": "'u1'", "base_url": "'ftp://x'"}, "custom_providers_base_url_chk"},
+		{"base url without host", map[string]string{"id": "'u2'", "base_url": "'https:///v1'"}, "custom_providers_base_url_chk"},
+		{"base url with userinfo", map[string]string{"id": "'u3'", "base_url": "'https://u:p@x/v1'"}, "custom_providers_base_url_chk"},
+		{"base url with query", map[string]string{"id": "'u4'", "base_url": "'https://x/v1?k=1'"}, "custom_providers_base_url_chk"},
+		{"base url with fragment", map[string]string{"id": "'u5'", "base_url": "'https://x/v1#f'"}, "custom_providers_base_url_chk"},
+		{"base url with a trailing slash", map[string]string{"id": "'u6'", "base_url": "'https://x/v1/'"}, "custom_providers_base_url_chk"},
+		{"base url with a space", map[string]string{"id": "'u7'", "base_url": "'https://x/v 1'"}, "custom_providers_base_url_chk"},
+		{"base url of 2049 characters", map[string]string{"id": "'u8'", "base_url": "'https://x/" + strings.Repeat("a", 2039) + "'"}, "custom_providers_base_url_chk"},
+		// Also violates the header-name rule; PostgreSQL reports the first constraint by name.
+		{"unknown auth mode", map[string]string{"id": "'m1'", "auth_mode": "'basic'"}, "custom_providers_auth_"},
+		{"bearer with a header name", map[string]string{"id": "'m2'", "auth_header": "'x-api-key'"}, "custom_providers_auth_header_chk"},
+		{"header mode without a header name", map[string]string{"id": "'m3'", "auth_mode": "'header'"}, "custom_providers_auth_header_chk"},
+		{"header name that is not a token", map[string]string{"id": "'m4'", "auth_mode": "'header'", "auth_header": "'x api key'"}, "custom_providers_auth_header_chk"},
+		{"65-character header name", map[string]string{"id": "'m5'", "auth_mode": "'header'", "auth_header": "'" + strings.Repeat("h", 65) + "'"}, "custom_providers_auth_header_chk"},
+		{"six extra header names", map[string]string{"id": "'h1'", "extra_header_names": "ARRAY['a','b','c','d','e','f']"}, "custom_providers_extra_header_names_chk"},
+		{"null extra header name", map[string]string{"id": "'h2'", "extra_header_names": "ARRAY['a',NULL]"}, "custom_providers_extra_header_names_chk"},
+		{"unknown structured output", map[string]string{"id": "'s1'", "structured_output": "'loose'"}, "custom_providers_structured_output_chk"},
+		{"json_object with the anthropic protocol", map[string]string{"id": "'s2'", "protocol": "'anthropic'", "structured_output": "'json_object'"}, "custom_providers_json_object_protocol_chk"},
+	} {
+		if err := exec(provider(tc.over)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error = %v, want a violation of %s", tc.name, err, tc.want)
+		}
+	}
+	for name, over := range map[string]map[string]string{
+		"32-character id":              {"id": "'" + strings.Repeat("a", 32) + "'"},
+		"id of digits and dashes":      {"id": "'0-9'"},
+		"same id in another workspace": {"workspace_id": "'" + ws2 + "'"},
+		"80-character name, padded":    {"id": "'n1'", "name": "' " + strings.Repeat("n", 80) + " '"},
+		"http loopback with a port":    {"id": "'l1'", "base_url": "'http://localhost:11434/v1'"},
+		"ipv6 literal":                 {"id": "'l2'", "base_url": "'http://[::1]:8080'"},
+		"base url with @ in the path":  {"id": "'l3'", "base_url": "'https://x/a@b'"},
+		"base url of 2048 characters":  {"id": "'l4'", "base_url": "'https://x/" + strings.Repeat("a", 2038) + "'"},
+		"header mode":                  {"id": "'a1'", "auth_mode": "'header'", "auth_header": "'X-Api_Key.1'"},
+		"anthropic with prompt_only":   {"id": "'a2'", "protocol": "'anthropic'", "structured_output": "'prompt_only'"},
+		"openai with json_object":      {"id": "'a3'", "structured_output": "'json_object'"},
+		"five extra header names":      {"id": "'a4'", "extra_header_names": "ARRAY['a','b','c','d','e']"},
+	} {
+		if err := exec(provider(over)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if err := exec(`DELETE FROM custom_providers WHERE id <> 'synapse' OR workspace_id <> '` + ws1 + `'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// custom_provider_models: unique id per provider, optional label, prices both or neither (FR1).
+	model := func(provider, id, label, prompt, completion, position string) string {
+		return `INSERT INTO custom_provider_models (workspace_id, provider_id, model_id, label, prompt_per_m, completion_per_m, "position")
+		  VALUES ('` + ws1 + `', '` + provider + `', '` + id + `', ` + label + `, ` + prompt + `, ` + completion + `, ` + position + `)`
+	}
+	for _, q := range []string{
+		model("synapse", "llama-3", "NULL", "NULL", "NULL", "0"),
+		model("synapse", "llama-3-priced", "'Llama 3'", "0", "10000", "1"),
+		model("synapse", "llama-3-cents", "NULL", "0.000001", "9999.999999", "199"),
+		model("synapse", strings.Repeat("m", 200), "'"+strings.Repeat("l", 200)+"'", "NULL", "NULL", "2"),
+	} {
+		if err := exec(q); err != nil {
+			t.Errorf("valid manual model: %v\n%s", err, q)
+		}
+	}
+	for _, tc := range []struct {
+		name, q, want string
+	}{
+		{"model id twice", model("synapse", "llama-3", "NULL", "NULL", "NULL", "5"), "custom_provider_models_pkey"},
+		{"unknown provider", model("ghost", "m", "NULL", "NULL", "NULL", "0"), "custom_provider_models_provider_fk"},
+		{"empty model id", model("synapse", "", "NULL", "NULL", "NULL", "0"), "custom_provider_models_model_id_chk"},
+		{"201-character model id", model("synapse", strings.Repeat("m", 201), "NULL", "NULL", "NULL", "0"), "custom_provider_models_model_id_chk"},
+		{"201-character label", model("synapse", "m1", "'"+strings.Repeat("l", 201)+"'", "NULL", "NULL", "0"), "custom_provider_models_label_chk"},
+		{"position 200", model("synapse", "m2", "NULL", "NULL", "NULL", "200"), "custom_provider_models_position_chk"},
+		{"negative position", model("synapse", "m3", "NULL", "NULL", "NULL", "-1"), "custom_provider_models_position_chk"},
+		{"only the prompt price", model("synapse", "m4", "NULL", "1", "NULL", "0"), "custom_provider_models_pricing_chk"},
+		{"only the completion price", model("synapse", "m5", "NULL", "NULL", "1", "0"), "custom_provider_models_pricing_chk"},
+		{"negative price", model("synapse", "m6", "NULL", "-0.000001", "1", "0"), "custom_provider_models_pricing_chk"},
+		{"price above 10000", model("synapse", "m7", "NULL", "1", "10000.000001", "0"), "custom_provider_models_pricing_chk"},
+		{"seven decimals", model("synapse", "m8", "NULL", "0.0000001", "1", "0"), "custom_provider_models_pricing_chk"},
+	} {
+		if err := exec(tc.q); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error = %v, want a violation of %s", tc.name, err, tc.want)
+		}
+	}
+	// The same model id under another provider is fine; deleting a provider deletes its models;
+	// deleting a workspace deletes its providers (and so their models).
+	if err := exec(provider(map[string]string{"id": "'second'"}) + `; ` + model("second", "llama-3", "NULL", "NULL", "NULL", "0")); err != nil {
+		t.Errorf("same model id under another provider: %v", err)
+	}
+	if err := exec(`DELETE FROM custom_providers WHERE id = 'second'`); err != nil {
+		t.Fatal(err)
+	}
+	if got := queryStrings(t, db, `SELECT count(*)::text FROM custom_provider_models WHERE provider_id = 'second'`); !cmp.Equal(got, []string{"0"}) {
+		t.Errorf("models of a deleted provider = %v, want none", got)
+	}
+	if err := exec(`INSERT INTO custom_providers (workspace_id, id, name, protocol, base_url, auth_mode) VALUES ('` + ws2 + `', 'gone', 'G', 'openai', 'http://x', 'bearer');
+	  INSERT INTO custom_provider_models (workspace_id, provider_id, model_id, "position") VALUES ('` + ws2 + `', 'gone', 'm', 0);
+	  DELETE FROM workspaces WHERE id = '` + ws2 + `'`); err != nil {
+		t.Fatalf("delete a workspace with a provider: %v", err)
+	}
+	if got := queryStrings(t, db, `SELECT (SELECT count(*) FROM custom_providers WHERE workspace_id = '`+ws2+`')::text || ' ' || (SELECT count(*) FROM custom_provider_models WHERE workspace_id = '`+ws2+`')::text`); !cmp.Equal(got, []string{"0 0"}) {
+		t.Errorf("providers and models of a deleted workspace = %v, want none", got)
+	}
+	if err := exec(`INSERT INTO workspaces (id, name) VALUES ('` + ws2 + `', 'w2')`); err != nil {
+		t.Fatal(err)
+	}
+
+	// Down refuses while an agent uses a custom provider (A11): the error names the agent, the
+	// transaction rolled back, the schema and the version are unchanged.
+	if err := exec(`INSERT INTO agents (id, workspace_id, name, provider, model, system_prompt) VALUES ('00000000-0000-0000-0000-0000000000b2', '` + ws1 + `', 'custom-agent', 'custom:synapse', 'm', 's')`); err != nil {
+		t.Fatalf("insert an agent on a custom provider: %v", err)
+	}
+	if _, _, err := m.Down(t.Context()); err == nil || !strings.Contains(err.Error(), "cannot revert 0009_custom_providers: 1 agent(s) use a custom provider") || !strings.Contains(err.Error(), "00000000-0000-0000-0000-0000000000b2 (custom:synapse)") {
+		t.Fatalf("Down() with a custom agent error = %v, want the refusal naming the agent", err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after a refused Down differs from version 9 (-v9 +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, `SELECT count(*)::text FROM custom_providers`); !cmp.Equal(got, []string{"1"}) {
+		t.Errorf("custom providers after a refused Down = %v, want the provider kept", got)
+	}
+	if st, err := m.Status(t.Context()); err != nil || len(st) != 9 || !st[8].Applied {
+		t.Errorf("Status() after a refused Down = %+v, %v, want version 9 still applied", st, err)
+	}
+
+	// A built-in agent does not block Down. With the custom agent gone, Down reverses everything.
+	if err := exec(`DELETE FROM agents WHERE name = 'custom-agent'; UPDATE ci_installations SET provider = 'custom:synapse' WHERE id = '` + inst2 + `'`); err != nil {
+		t.Fatal(err)
+	}
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 9 {
+		t.Fatalf("Down() = %d, %v, %v, want 9, true, nil", v, ok, err)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0009 differs from version 8 (-v8 +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(rowsBefore, queryStrings(t, db, rowsQ)); diff != "" {
+		t.Errorf("installations, runs and agents after Down mismatch (-before +got):\n%s", diff)
+	}
+	if err := exec(agent("custom:synapse")); err == nil || !strings.Contains(err.Error(), "agents_provider_chk") {
+		t.Errorf("agent on a custom provider after Down error = %v, want the old rule", err)
+	}
+
+	// Up again: the same schema; the installations are given openrouter again.
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, `SELECT string_agg(provider, ',' ORDER BY id) FROM ci_installations`); !cmp.Equal(got, []string{"openrouter,openrouter"}) {
+		t.Errorf("provider of the installations after Down->Up = %v, want openrouter for both", got)
+	}
+}
+
 // onlyIn returns the entries of a that are not in b (both sorted).
 func onlyIn(a, b []string) []string {
 	have := make(map[string]bool, len(b))

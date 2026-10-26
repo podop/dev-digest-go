@@ -681,7 +681,7 @@ func TestCiExport_FilesActionReturnsTheSevenFiles(t *testing.T) { // AC6028, EC6
 	if resp.Status != http.StatusOK {
 		t.Fatalf("export files = %d %s, want 200", resp.Status, resp.Body)
 	}
-	if diff := cmp.Diff([]string{"installation", "files", "pr_url"}, ciKeyOrder(t, resp.Body)); diff != "" {
+	if diff := cmp.Diff([]string{"installation", "files", "pr_url", "required_secrets", "required_variables"}, ciKeyOrder(t, resp.Body)); diff != "" {
 		t.Errorf("CiExport key order mismatch (-want +got):\n%s", diff)
 	}
 	var out ciExportResult
@@ -727,6 +727,12 @@ func TestCiExport_RefusalsAnswerBeforeAnyGitHubCall(t *testing.T) { // AC6029, E
 	orAgent := ciCreateAgent(t, s, "CI Reviewer", "openrouter")
 	openAI := ciCreateAgent(t, s, "OpenAI Reviewer", "openai")
 	other := ciCreateAgent(t, s, "Other Reviewer", "openrouter")
+	// The API refuses an undefined custom provider on an agent, so the row is set directly: a
+	// provider deleted behind the agent's back, or a bundle installed before the provider existed.
+	ghost := ciCreateAgent(t, s, "Ghost Reviewer", "openrouter")
+	if err := s.db.DB.Exec(`UPDATE agents SET provider = 'custom:ghost' WHERE id = ?`, ghost).Error; err != nil {
+		t.Fatal(err)
+	}
 	skillAgent := ciCreateAgent(t, s, "Skill Clash Reviewer", "openrouter")
 	a, b := ciCreateSkill(t, s, "first-skill", "one", true), ciCreateSkill(t, s, "second-skill", "two", true)
 	ciLinkSkills(t, s, skillAgent, a, b)
@@ -750,8 +756,8 @@ func TestCiExport_RefusalsAnswerBeforeAnyGitHubCall(t *testing.T) { // AC6029, E
 		wantDetail any
 		before     func()
 	}{
-		{"openai agent", openAI, ciExportBody(ciRepoFull, "files", nil), 422, "unsupported_provider",
-			"Only agents on the openrouter provider can be exported to CI", nil, nil},
+		{"agent on an undefined custom provider", ghost, ciExportBody(ciRepoFull, "files", nil), 422, "provider_not_configured",
+			"Custom provider custom:ghost is not configured", nil, nil},
 		{"openai agent and a circle target", openAI, ciExportBody("nowhere/none", "files", map[string]any{"target": "circle"}), 422, "unsupported_target",
 			"Only GitHub Actions can be exported", nil, nil},
 		{"empty triggers", orAgent, ciExportBody(ciRepoFull, "files", map[string]any{"triggers": []string{}}), 422, "invalid_triggers",
@@ -824,7 +830,10 @@ func TestCiExport_WithoutTheRunnerBundle(t *testing.T) { // AC6029 (last case), 
 	sp.runner = nil
 	s, _ := ciStack(t, sp)
 	agent := ciCreateAgent(t, s, "CI Reviewer", "openrouter")
-	openAI := ciCreateAgent(t, s, "OpenAI Reviewer", "openai")
+	ghost := ciCreateAgent(t, s, "Ghost Reviewer", "openrouter")
+	if err := s.db.DB.Exec(`UPDATE agents SET provider = 'custom:ghost' WHERE id = ?`, ghost).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	const msg = "The runner binary is missing: rebuild the backend image (docker compose build backend)"
 	for _, action := range []string{"files", "open_pr"} {
@@ -833,8 +842,8 @@ func TestCiExport_WithoutTheRunnerBundle(t *testing.T) { // AC6029 (last case), 
 			t.Errorf("%s without a runner = %d %s %q, want 500 runner_bundle_missing %q", action, resp.Status, e.Code, e.Message, msg)
 		}
 	}
-	if resp := s.post("/agents/"+openAI+"/export-ci", ciExportBody(ciRepoFull, "files", nil)); resp.Status != 422 || ciErr(t, resp).Code != "unsupported_provider" {
-		t.Errorf("openai agent without a runner = %d %s, want the validation error first", resp.Status, resp.Body)
+	if resp := s.post("/agents/"+ghost+"/export-ci", ciExportBody(ciRepoFull, "files", nil)); resp.Status != 422 || ciErr(t, resp).Code != "provider_not_configured" {
+		t.Errorf("undefined custom provider without a runner = %d %s, want the validation error first", resp.Status, resp.Body)
 	}
 	if got := s.gh.requests(); len(got) != 0 {
 		t.Errorf("GitHub requests = %v, want none", ciSeq(got))
@@ -1185,8 +1194,8 @@ func ciAsyncPost(s *stack, path string, body any) <-chan response {
 
 func ciInstall(t testing.TB, s *stack, agent, repo, slug string, version int, at time.Time) string {
 	t.Helper()
-	return scalar[string](t, s.db.DB, `INSERT INTO ci_installations (agent_id, repo, target_type, installed_at, slug, manifest_version)
-		VALUES (?, ?, 'gha', ?, ?, ?) RETURNING id::text`, agent, repo, at, slug, version)
+	return scalar[string](t, s.db.DB, `INSERT INTO ci_installations (agent_id, repo, target_type, installed_at, slug, manifest_version, provider)
+		VALUES (?, ?, 'gha', ?, ?, ?, 'openrouter') RETURNING id::text`, agent, repo, at, slug, version)
 }
 
 // ciRunRow is a ci_runs row with its agent_runs row.

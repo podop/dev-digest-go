@@ -16,8 +16,8 @@ var defaultFeatureModels = map[string]struct {
 
 // ResolveFeatureModel returns the provider and model a feature uses right now, in this order:
 // the stored choice feature_models.<feature>, the workspace default_model, the registry default.
-// A stored value only counts when it is a valid {provider, model} choice (known provider,
-// non-empty model); an invalid one is skipped, not an error. bag is the settings bag
+// A stored value only counts when it is a valid {provider, model} choice (known provider or a
+// well-formed custom id, non-empty model); an invalid one is skipped, not an error. bag is the settings bag
 // (settings.Bag); an unknown feature without any valid stored value yields ("", "").
 func ResolveFeatureModel(bag map[string]json.RawMessage, feature string) (Provider, string) {
 	if raw, ok := bag["feature_models"]; ok {
@@ -46,6 +46,12 @@ func parseChoice(raw json.RawMessage) (Provider, string, bool) {
 		return "", "", false
 	}
 	p, ok := ParseProvider(choice.Provider)
+	if !ok {
+		// A well-formed custom id counts even when no provider of that id is defined: whether it is
+		// callable is decided per call (FR9), not by the registry.
+		p = Provider(choice.Provider)
+		ok = p.IsCustom()
+	}
 	if !ok || choice.Model == "" {
 		return "", "", false
 	}

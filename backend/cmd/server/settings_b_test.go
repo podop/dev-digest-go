@@ -560,7 +560,7 @@ func (e *sbEnv) seedHistory(t *testing.T) (agent string) {
 	agent = e.agent(t, "a", true, 0)
 	skill := e.skill(t, "s", "manual")
 	e.exec(t, `INSERT INTO agent_skills (agent_id, skill_id) VALUES (?, ?)`, agent, skill)
-	inst := e.id(t, `INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'o/r', 'gha') RETURNING id::text`, agent)
+	inst := e.id(t, `INSERT INTO ci_installations (agent_id, repo, target_type, provider) VALUES (?, 'o/r', 'gha', 'openrouter') RETURNING id::text`, agent)
 	evalCase := e.id(t, `INSERT INTO eval_cases (workspace_id, owner_kind, owner_id, name) VALUES (?, 'agent', ?, 'c') RETURNING id::text`, e.ws, agent)
 
 	multi := e.id(t, `INSERT INTO multi_agent_runs (workspace_id, pr_id) VALUES (?, ?) RETURNING id::text`, e.ws, pr1)

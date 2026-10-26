@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/apperr"
 )
 
@@ -18,17 +19,28 @@ type ModelCallError struct {
 	// Class is "cancelled", "timeout", "not_configured", "schema_failure", "http <status>", "provider_error" or
 	// "error".
 	Class string
+	// Hint is a fixed sentence that follows the class (the strict-mode hint of FR33); it holds
+	// nothing the model or the provider said.
+	Hint  string
 	cause error
 }
 
-func (e *ModelCallError) Error() string { return "the model call failed (" + e.Class + ")" }
+func (e *ModelCallError) Error() string {
+	msg := "the model call failed (" + e.Class + ")"
+	if e.Hint != "" {
+		msg += ". " + e.Hint
+	}
+	return msg
+}
 
 // Unwrap returns the model layer's own error.
 func (e *ModelCallError) Unwrap() error { return e.cause }
 
 // providerStatus matches "<provider> <operation> returned <status>" at the start of an error
-// text, before any provider-supplied part (which follows the first colon).
-var providerStatus = regexp.MustCompile(`^[^:]*\breturned (\d{3})\b`)
+// text, before any provider-supplied part (which follows the first ": "). The provider name is a
+// built-in display name or a custom provider id, whose own colon ("custom:<slug>") is part of the
+// name; any other colon ends the part that is trusted.
+var providerStatus = regexp.MustCompile(`^(?:custom:[a-z0-9-]+)?[^:]*\breturned (\d{3})\b`)
 
 // modelCallClass names what went wrong without quoting anything the model or the provider said.
 func modelCallClass(err error) string {
@@ -59,4 +71,19 @@ func modelCallClass(err error) string {
 		return "provider_error"
 	}
 	return "error"
+}
+
+// strictModeHint is the FR33 hint for a custom provider in strict mode whose gateway answered a
+// generation with HTTP 400 or 422 (class "http 400" / "http 422"): it names the provider id
+// (SCR4) and the modes the protocol offers. Empty for every other failure.
+func strictModeHint(m Manifest, class string) string {
+	cp := m.CustomProvider
+	if cp == nil || cp.StructuredOutput != custom.ModeStrict || (class != "http 400" && class != "http 422") {
+		return ""
+	}
+	alternatives := "JSON object or Prompt only"
+	if cp.Protocol == custom.ProtocolAnthropic {
+		alternatives = "Prompt only"
+	}
+	return "If this gateway does not support strict structured output, set Structured output of " + m.Provider + " to " + alternatives + "."
 }

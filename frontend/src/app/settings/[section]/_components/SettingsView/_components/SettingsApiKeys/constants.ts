@@ -1,8 +1,9 @@
-import type { ConnTestProvider } from "@/lib/types";
+import type { BuiltInProviderId } from "@/lib/providers/custom";
 
 /** One configurable provider key row in the API Keys section (FR2). */
 export interface KeyRowSpec {
-  provider: Exclude<ConnTestProvider, "github">;
+  /** A built-in provider: its key lives in the secrets status; custom providers have their own block. */
+  provider: BuiltInProviderId;
   /** Message keys in the `apiKeys` namespace. */
   labelKey: string;
   hintKey: string;

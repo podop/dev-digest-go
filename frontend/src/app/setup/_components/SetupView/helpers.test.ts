@@ -32,6 +32,8 @@ describe("stepsDone", () => {
     expect(stepsDone({ ...NONE, anthropic: true, github: true }, 2, [])).toEqual(ALL);
     // A passing test stores the key before the secrets-status refetch lands.
     expect(stepsDone(NONE, 0, ["openai", "github"])).toEqual({ model: true, github: true, repo: false });
+    // A custom provider completes the model step with no key at all (FR21, D21).
+    expect(stepsDone(NONE, 0, [], 1)).toEqual({ model: true, github: false, repo: false });
   });
 });
 

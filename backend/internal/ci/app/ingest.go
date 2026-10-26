@@ -1,6 +1,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -217,7 +218,7 @@ func (r *refresh) installation(ctx context.Context, inst domain.Installation, sl
 			r.skipped(ctx, inst, res, run, out.skip)
 			continue
 		}
-		inserted, err := r.record(ctx, out.run)
+		inserted, err := r.record(ctx, out.run, inst.Provider)
 		if errors.Is(err, ErrNotStorable) {
 			r.skipped(ctx, inst, res, run, domain.SkipInvalid)
 			continue
@@ -235,8 +236,10 @@ func (r *refresh) installation(ctx context.Context, inst domain.Installation, sl
 // record stores the run. A run built from an artifact with the ledger on is stored together with
 // its ledger entry in one transaction, so a ledger failure leaves no CI run behind and the next
 // refresh retries it; a run without an artifact appends no entry (spec D9). It reports whether
-// this call stored the run.
-func (r *refresh) record(ctx context.Context, run domain.NewRun) (bool, error) {
+// this call stored the run. The ledger entry carries the provider the store saved the run with
+// (the installation's stored export-time provider, FR37), else instProvider, the provider of the
+// installation as listed.
+func (r *refresh) record(ctx context.Context, run domain.NewRun, instProvider string) (bool, error) {
 	if r.s.d.Ledger == nil || !run.FromArtifact {
 		rec, err := r.s.d.Store.RecordRun(ctx, run)
 		return rec.Stored, err
@@ -251,7 +254,7 @@ func (r *refresh) record(ctx context.Context, run domain.NewRun) (bool, error) {
 		if !rec.Stored {
 			return nil
 		}
-		if err := r.s.d.Ledger.RecordCIRun(ctx, ciRunOf(run, rec)); err != nil {
+		if err := r.s.d.Ledger.RecordCIRun(ctx, ciRunOf(run, rec, instProvider)); err != nil {
 			return fmt.Errorf("record ci run in ledger: %w", err)
 		}
 		stored = true
@@ -263,14 +266,18 @@ func (r *refresh) record(ctx context.Context, run domain.NewRun) (bool, error) {
 	return stored, nil
 }
 
-func ciRunOf(run domain.NewRun, rec Recorded) CIRun {
+// ciRunOf is the ledger entry of a stored run (SCR5): its provider is the one stored with the run,
+// never a fixed one. An installation that reports none (a row from before FR37 read through a
+// store that does not fill it) is an openrouter one, the only provider Phase 6 could export.
+func ciRunOf(run domain.NewRun, rec Recorded, instProvider string) CIRun {
+	provider := cmp.Or(rec.Provider, instProvider, domain.ProviderOpenRouter)
 	return CIRun{
 		WorkspaceID: run.WorkspaceID,
 		AgentRunID:  rec.AgentRunID,
 		GithubRunID: run.GithubRunID,
 		Attempt:     run.RunAttempt,
 		OccurredAt:  run.RanAt,
-		Provider:    domain.ProviderOpenRouter,
+		Provider:    provider,
 		Model:       run.Model,
 		CostUSD:     run.CostUSD,
 	}

@@ -1,5 +1,5 @@
-/* HomeView — root screen and first-run gate (FR27): once secrets-status and repos have
-   loaded it replaces the URL with the first unmet setup step, or with the first repo's PR
+/* HomeView — root screen and first-run gate (FR27, custom-provider FR21): once secrets-status, repos
+   and the custom providers have loaded it replaces the URL with the first unmet setup step, or with the first repo's PR
    list. While loading or redirecting it shows only the skeleton, so no home content flashes. */
 "use client";
 
@@ -7,7 +7,7 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { EmptyState, Button, Skeleton } from "@devdigest/ui";
-import { useRepos, useSecretsStatus } from "@/lib/hooks";
+import { useCustomProviders, useRepos, useSecretsStatus } from "@/lib/hooks";
 import { AppShell } from "@/components/app-shell";
 import { PageContainer } from "@/components/page-shell";
 import { destinationHref, homeDestination } from "./helpers";
@@ -18,10 +18,12 @@ export function HomeView() {
   const router = useRouter();
   const secrets = useSecretsStatus();
   const repos = useRepos();
+  const custom = useCustomProviders();
 
-  const destination = secrets.data && repos.data ? homeDestination(secrets.data, repos.data) : null;
+  const destination =
+    secrets.data && repos.data && custom.data ? homeDestination(secrets.data, repos.data, custom.data) : null;
   const href = destination ? destinationHref(destination) : null;
-  const hasError = secrets.isError || repos.isError;
+  const hasError = secrets.isError || repos.isError || custom.isError;
 
   React.useEffect(() => {
     if (href) router.replace(href);
@@ -39,6 +41,7 @@ export function HomeView() {
             onCta={() => {
               if (secrets.isError) void secrets.refetch();
               if (repos.isError) void repos.refetch();
+              if (custom.isError) void custom.refetch();
             }}
           />
         ) : href && destination?.kind === "pulls" ? (

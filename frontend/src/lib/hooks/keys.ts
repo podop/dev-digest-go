@@ -27,6 +27,12 @@ export const providerKeys = {
   models: (provider: Id) => [...providerKeys.all, provider, "models"] as const,
 };
 
+/** GET /settings/custom-providers — the workspace's custom model providers. */
+export const customProviderKeys = {
+  all: ["custom-providers"] as const,
+  list: () => [...customProviderKeys.all, "list"] as const,
+};
+
 export const repoKeys = {
   all: ["repos"] as const,
   list: () => [...repoKeys.all, "list"] as const,
@@ -175,8 +181,8 @@ export const ciKeys = {
   /** GET /ci/installations — installations grouped by repository (Settings › Integrations). */
   repoInstallations: () => [...ciKeys.all, "repo-installations"] as const,
   /** POST /agents/:id/export-ci { action: "files" } — the wizard's Preview. */
-  exportFiles: (agentId: Id, repo: Id, triggers: readonly string[], postAs: Id) =>
-    [...ciKeys.all, "export-files", agentId, repo, [...triggers].sort().join(","), postAs] as const,
+  exportFiles: (agentId: Id, repo: Id, triggers: readonly string[], postAs: Id, runner?: Id) =>
+    [...ciKeys.all, "export-files", agentId, repo, [...triggers].sort().join(","), postAs, runner] as const,
 };
 
 /** Agent performance (specs/2026-10-16-agent-performance.md §7). `period` is the URL period

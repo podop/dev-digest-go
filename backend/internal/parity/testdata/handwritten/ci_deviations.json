@@ -1,12 +1,30 @@
 {
   "handWritten": true,
-  "note": "Known differences between the Node CI domain (goldens/ci.json) and the Go one that are decisions, not bugs: ingest hardening of the artifact integers and cost (NFR6003/NFR6004, security note of the W1 contract notes) and the zip integrity check. TestCIArtifactParity and TestCIZipParity fail when a listed case starts to agree, when an unlisted case disagrees and when a listed value changes. Consumer: ci_test.go.",
+  "note": "Known differences between the Node CI domain (goldens/ci.json) and the Go one that are decisions, not bugs: ingest hardening of the artifact integers and cost (NFR6003/NFR6004, security note of the W1 contract notes) the zip integrity check, and (key prefix export/) the retirement of the export's unsupported_provider answer (FR24, D26). TestCIArtifactParity and TestCIZipParity fail when a listed case starts to agree, when an unlisted case disagrees and when a listed value changes. Consumers: ci_test.go and, for the export/ keys (listed Node and Go answers of golden steps, checked in both directions), ci/app/export_test.go TestExportGolden.",
   "spec": [
     "AC6046",
     "FR6056",
-    "NFR6001"
+    "NFR6001",
+    "FR24",
+    "D26"
   ],
   "deviations": [
+    {
+      "key": "export/checks run in a fixed order/unsupported_provider",
+      "category": "provider support",
+      "node": {
+        "name": "ValidationError",
+        "kind": "validation",
+        "code": "unsupported_provider",
+        "message": "Only agents on the openrouter provider can be exported to CI"
+      },
+      "go": {
+        "kind": "validation",
+        "code": "invalid_triggers",
+        "message": "Select at least one valid pull_request trigger"
+      },
+      "reason": "FR24, D26: an agent on openai (or anthropic, or a defined custom provider) is exportable, so the provider step passes and the step with `triggers: []` is refused one check later as invalid_triggers; no request answers unsupported_provider any more. Node refuses every non-openrouter agent at the provider step. The calls and logs of the step are unchanged (none)."
+    },
     {
       "key": "artifacts/counts 1e21 are integers",
       "category": "ingest hardening",

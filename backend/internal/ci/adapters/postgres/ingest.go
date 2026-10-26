@@ -83,11 +83,19 @@ func (s *Store) RecordRun(ctx context.Context, run domain.NewRun) (app.Recorded,
 		if run.Status == domain.RunFailed {
 			agentStatus = "failed"
 		}
+		// FR37: the run carries the installation's stored export-time provider, never the
+		// agent's current one. Read in this transaction, so a re-export that commits first is
+		// seen by every run stored after it (EC33).
+		var provider string
+		if err := tx.Table("ci_installations").Select("provider").
+			Where("id = ?", run.InstallationID).Take(&provider).Error; err != nil {
+			return fmt.Errorf("select installation provider: %w", err)
+		}
 		agentRun := agentRunInsertRow{
 			WorkspaceID:   run.WorkspaceID,
 			AgentID:       run.AgentID,
 			RanAt:         run.RanAt,
-			Provider:      domain.ProviderOpenRouter,
+			Provider:      provider,
 			Model:         run.Model,
 			DurationMS:    run.DurationMS,
 			Status:        agentStatus,
@@ -104,7 +112,7 @@ func (s *Store) RecordRun(ctx context.Context, run domain.NewRun) (app.Recorded,
 		if link.Error != nil {
 			return fmt.Errorf("link ci run to agent run: %w", link.Error)
 		}
-		rec = app.Recorded{AgentRunID: agentRun.ID, Stored: true}
+		rec = app.Recorded{AgentRunID: agentRun.ID, Stored: true, Provider: provider}
 		return nil
 	})
 	if err != nil {
@@ -178,7 +186,20 @@ func checkInstallation(in domain.NewInstallation) error {
 			return err
 		}
 	}
+	if !exportableProvider(in.Provider) {
+		return fmt.Errorf("provider is not an exportable provider: %w", app.ErrNotStorable)
+	}
 	return checkInt32("manifest version", in.ManifestVersion)
+}
+
+// exportableProvider reports whether provider fits ci_installations_provider_chk: a built-in id or
+// a well-formed custom:<slug>.
+func exportableProvider(provider string) bool {
+	switch provider {
+	case domain.ProviderOpenRouter, domain.ProviderOpenAI, domain.ProviderAnthropic:
+		return true
+	}
+	return domain.IsCustomProvider(provider)
 }
 
 func checkInt32(name string, v int) error {

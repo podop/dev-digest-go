@@ -47,18 +47,40 @@ func (m fakeModels) ListModels(_ context.Context, p llm.Provider) ([]llm.ModelIn
 	return m.byProvider[p], nil
 }
 
-type env struct {
-	e      *echo.Echo
-	db     *gorm.DB
+// fakeCatalog is the custom provider port: custom:synapse is defined in the "default"
+// workspace only, with the models in listed; locks records the FOR SHARE checks.
+type fakeCatalog struct {
 	ws     string
-	other  string
-	models *fakeModels
+	listed []llm.ModelInfo
+	locks  []string
+}
+
+func (c *fakeCatalog) Defined(_ context.Context, ws, id string) (bool, error) {
+	return ws == c.ws && id == "custom:synapse", nil
+}
+
+func (c *fakeCatalog) LockDefined(ctx context.Context, ws, id string) (bool, error) {
+	c.locks = append(c.locks, id)
+	return c.Defined(ctx, ws, id)
+}
+
+func (c *fakeCatalog) Models(_ context.Context, _, id string) ([]llm.ModelInfo, error) {
+	return c.listed, nil
+}
+
+type env struct {
+	e       *echo.Echo
+	db      *gorm.DB
+	ws      string
+	other   string
+	models  *fakeModels
+	catalog *fakeCatalog
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	d := pgtest.Migrated(t)
-	v := &env{db: d.DB, models: &fakeModels{}}
+	v := &env{db: d.DB, models: &fakeModels{}, catalog: &fakeCatalog{}}
 	for _, q := range []struct {
 		dst   *string
 		query string
@@ -74,7 +96,8 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	log := slog.New(slog.DiscardHandler)
-	svc := app.NewService(agentsdb.NewStore(d.DB), pg.NewTx(d.DB), modelsProxy{v}, log)
+	v.catalog.ws = v.ws
+	svc := app.NewService(agentsdb.NewStore(d.DB), pg.NewTx(d.DB), modelsProxy{v}, log, app.WithCustomProviders(v.catalog))
 	v.e = httpx.New(httpx.Options{Log: log, CORSOrigins: []string{uiOrigin}})
 	httpapi.AddRoutes(v.e, svc, tenancy.NewResolver(tenancypg.NewStore(d.DB)))
 	return v
@@ -665,5 +688,125 @@ func TestRoutesAreRegistered(t *testing.T) {
 	}
 	if len(got) != len(want) {
 		t.Errorf("registered routes = %d, want %d: %v", len(got), len(want), got)
+	}
+}
+
+func TestCustomProvider_AgentWrites(t *testing.T) {
+	v := newEnv(t)
+	created := v.createAgent(t, `{"name":"A","provider":"custom:synapse","model":"m","system_prompt":"p"}`)
+	if created["provider"] != "custom:synapse" {
+		t.Errorf("POST /agents provider = %v, want custom:synapse unchanged", created["provider"])
+	}
+	id := created["id"].(string)
+	got := decode[map[string]any](t, v.do(t, http.MethodGet, "/agents/"+id, ""))
+	if got["provider"] != "custom:synapse" {
+		t.Errorf("GET /agents/:id provider = %v, want custom:synapse", got["provider"])
+	}
+	if diff := cmp.Diff([]string{"custom:synapse"}, v.catalog.locks); diff != "" {
+		t.Errorf("provider lock checks after create mismatch (-want +got):\n%s", diff)
+	}
+
+	plain := v.createAgent(t, minimal)["id"].(string)
+	r := v.do(t, http.MethodPut, "/agents/"+plain, `{"provider":"custom:synapse"}`)
+	if r.status != 200 || decode[map[string]any](t, r)["provider"] != "custom:synapse" || decode[map[string]any](t, r)["version"] != float64(2) {
+		t.Errorf("PUT /agents/:id provider custom:synapse = %d %s, want 200 on version 2", r.status, r.body)
+	}
+
+	// Undefined and malformed ids: 422 at the provider path, nothing stored or changed.
+	ghost := "Custom provider custom:ghost is not configured"
+	for _, tc := range []struct {
+		name, method, path, body string
+		want                     string
+	}{
+		{"create undefined", http.MethodPost, "/agents", `{"name":"A","provider":"custom:ghost","model":"m","system_prompt":"p"}`, "/provider: " + ghost},
+		{"update undefined", http.MethodPut, "/agents/" + plain, `{"provider":"custom:ghost"}`, "/provider: " + ghost},
+		{"create malformed", http.MethodPost, "/agents", `{"name":"A","provider":"custom:Bad","model":"m","system_prompt":"p"}`,
+			"/provider: Invalid enum value. Expected 'openai' | 'anthropic' | 'openrouter', received 'custom:Bad'"},
+		{"update malformed", http.MethodPut, "/agents/" + plain, `{"provider":"custom:"}`,
+			"/provider: Invalid enum value. Expected 'openai' | 'anthropic' | 'openrouter', received 'custom:'"},
+	} {
+		got := issues(t, v.do(t, tc.method, tc.path, tc.body))
+		if diff := cmp.Diff([]string{tc.want}, got); diff != "" {
+			t.Errorf("%s issues mismatch (-want +got):\n%s", tc.name, diff)
+		}
+	}
+	if n := len(decode[[]map[string]any](t, v.do(t, http.MethodGet, "/agents", ""))); n != 2 {
+		t.Errorf("agents after refused writes = %d, want 2", n)
+	}
+	if got := decode[map[string]any](t, v.do(t, http.MethodGet, "/agents/"+plain, "")); got["provider"] != "custom:synapse" {
+		t.Errorf("agent provider after a refused update = %v, want it untouched", got["provider"])
+	}
+
+	// A custom provider of another workspace is not defined here.
+	v.catalog.ws = v.other
+	wantErr := issues(t, v.do(t, http.MethodPost, "/agents", `{"name":"A","provider":"custom:synapse","model":"m","system_prompt":"p"}`))
+	if diff := cmp.Diff([]string{"/provider: Custom provider custom:synapse is not configured"}, wantErr); diff != "" {
+		t.Errorf("create with another workspace's provider mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestCustomProvider_Models(t *testing.T) {
+	v := newEnv(t)
+	v.catalog.listed = []llm.ModelInfo{
+		{ID: "a", Provider: "custom:synapse"}, {ID: "b", Provider: "custom:synapse"},
+	}
+	ids := func(r response) []string {
+		t.Helper()
+		var out []string
+		for _, m := range decode[[]map[string]any](t, r) {
+			if m["provider"] != "custom:synapse" {
+				t.Errorf("model %v has provider %v, want custom:synapse", m["id"], m["provider"])
+			}
+			out = append(out, m["id"].(string))
+		}
+		return out
+	}
+
+	// EC14: the decoded and the encoded colon address the same provider.
+	for _, path := range []string{"/providers/custom:synapse/models", "/providers/custom%3Asynapse/models", "/providers/custom%3asynapse/models"} {
+		r := v.do(t, http.MethodGet, path, "")
+		if r.status != 200 {
+			t.Errorf("GET %s = %d (%s), want 200", path, r.status, r.body)
+			continue
+		}
+		if diff := cmp.Diff([]string{"a", "b"}, ids(r)); diff != "" {
+			t.Errorf("GET %s ids mismatch (-want +got):\n%s", path, diff)
+		}
+	}
+
+	agent := v.createAgent(t, `{"name":"A","provider":"custom:synapse","model":"m","system_prompt":"p"}`)
+	r := v.do(t, http.MethodGet, "/agents/"+agent["id"].(string)+"/models", "")
+	if diff := cmp.Diff([]string{"a", "b"}, ids(r)); r.status != 200 || diff != "" {
+		t.Errorf("GET /agents/:id/models for a custom agent = %d, ids mismatch (-want +got):\n%s", r.status, diff)
+	}
+
+	// SCR3: well-formed but undefined -> 200 []; malformed -> 422, as is a double-encoded colon.
+	for _, path := range []string{"/providers/custom:ghost/models", "/providers/custom%3Aghost/models"} {
+		if r := v.do(t, http.MethodGet, path, ""); r.status != 200 || r.body != "[]" {
+			t.Errorf("GET %s = %d %s, want 200 []", path, r.status, r.body)
+		}
+	}
+	for _, path := range []string{"/providers/custom:Bad/models", "/providers/custom:/models", "/providers/custom%253Asynapse/models", "/providers/synapse/models"} {
+		if r := v.do(t, http.MethodGet, path, ""); r.status != http.StatusUnprocessableEntity {
+			t.Errorf("GET %s = %d (%s), want 422", path, r.status, r.body)
+		}
+	}
+}
+
+func TestCustomProvider_UnchangedUndefinedProviderStaysEditable(t *testing.T) {
+	v := newEnv(t)
+	var id string
+	err := v.db.Raw(`INSERT INTO agents (workspace_id, name, provider, model, system_prompt)
+		VALUES (?, 'A', 'custom:ghost', 'm', 'p') RETURNING id`, v.ws).Scan(&id).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := v.do(t, http.MethodPut, "/agents/"+id, `{"provider":"custom:ghost","name":"Renamed"}`)
+	if got := decode[map[string]any](t, r); r.status != 200 || got["name"] != "Renamed" || got["provider"] != "custom:ghost" {
+		t.Errorf("PUT same undefined provider + new name = %d %s, want 200 renamed", r.status, r.body)
+	}
+	got := issues(t, v.do(t, http.MethodPut, "/agents/"+id, `{"provider":"custom:other"}`))
+	if diff := cmp.Diff([]string{"/provider: Custom provider custom:other is not configured"}, got); diff != "" {
+		t.Errorf("PUT changing to another undefined provider mismatch (-want +got):\n%s", diff)
 	}
 }

@@ -1,0 +1,11 @@
+{
+  "builtIn": {
+    "openrouter": "OpenRouter",
+    "openai": "OpenAI",
+    "anthropic": "Anthropic"
+  },
+  "notConfigured": "{id} · Not configured",
+  "blockedHint": "This provider is not configured. Pick another provider to save.",
+  "loadFailed": "Custom providers could not be loaded.",
+  "retry": "Retry"
+}

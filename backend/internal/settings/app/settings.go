@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"dev-digest-go/backend/internal/llm/custom"
+	"dev-digest-go/backend/internal/platform/apperr"
 	"dev-digest-go/backend/internal/platform/github"
 	"dev-digest-go/backend/internal/platform/logging"
 	"dev-digest-go/backend/internal/platform/secrets"
@@ -27,6 +29,13 @@ const (
 	OpenRouter Provider = "openrouter"
 	GitHub     Provider = "github"
 )
+
+// IsCustom reports whether p is a well-formed custom provider id (`custom:<slug>`). Such a
+// provider is not one of Providers: it is tested through the custom providers port.
+func (p Provider) IsCustom() bool {
+	_, ok := custom.ParseID(string(p))
+	return ok
+}
 
 // Providers lists every connection-test provider, in the order of SecretsStatus.
 var Providers = []Provider{OpenAI, Anthropic, OpenRouter, GitHub}
@@ -80,8 +89,12 @@ type ConnTestResult struct {
 	// Model is the checked model id; nil when none could be chosen (an LLM provider that listed
 	// no model and has no default).
 	Model *string
-	// ModelReachable says whether Model is in the provider's full model list.
+	// ModelReachable says whether Model is in the provider's full model list. A custom provider
+	// whose gateway has no model list leaves it nil.
 	ModelReachable *bool
+	// Warning is set only by a custom provider test that passed without checking the key (a
+	// gateway that answered 404 or 405 to the model list).
+	Warning *string
 	// Login is the owner of the GitHub token.
 	Login *string
 	// Scopes is the X-OAuth-Scopes list of the token: empty when the header was empty, nil
@@ -120,13 +133,29 @@ type modelLister interface {
 	ListModels(ctx context.Context, provider Provider, key string) (ModelList, error)
 }
 
-// Deps are the ports a Service needs. Clock and Logger are optional: the clock defaults to
+// customProviders is the settings view of the custom providers context; cmd binds it to
+// customproviders/app.Service. The settings use cases never import that context.
+type customProviders interface {
+	// Defined reports whether the workspace defines the custom provider id (`custom:<slug>`). A
+	// store failure counts as not defined: the caller answers a validation error and nothing is
+	// written on a guess.
+	Defined(ctx context.Context, workspaceID, id string) bool
+	// TestConnection runs the connection test of a defined custom provider: it saves key first when
+	// given, lists the models once and never completes. It returns an apperr NotFound with code
+	// custom_provider_not_found for an undefined id (nothing saved); any other failure of the
+	// check is data (OK false, scrubbed message), not an error. The result's Provider is id.
+	TestConnection(ctx context.Context, workspaceID, id, key string) (ConnTestResult, error)
+}
+
+// Deps are the ports a Service needs. Custom, Clock and Logger are optional: a nil Custom means
+// the workspace has no custom providers (every custom id is undefined), the clock defaults to
 // time.Now and a missing logger discards its output.
 type Deps struct {
 	Store     store
 	Secrets   secretStore
 	GitHub    githubClient
 	Providers modelLister
+	Custom    customProviders
 	Clock     func() time.Time
 	Logger    *slog.Logger
 }
@@ -194,6 +223,48 @@ func (s *Service) Update(ctx context.Context, workspaceID, userID string, entrie
 func (s *Service) SecretsStatus() SecretsStatus {
 	has := func(p Provider) bool { return s.d.Secrets.Get(p.SecretName()) != "" }
 	return SecretsStatus{OpenAI: has(OpenAI), Anthropic: has(Anthropic), OpenRouter: has(OpenRouter), GitHub: has(GitHub)}
+}
+
+// CustomDefined reports whether the workspace defines the custom provider id; it is the check
+// behind PUT /settings (FR7). Without a custom providers port nothing is defined.
+func (s *Service) CustomDefined(ctx context.Context, workspaceID, id string) bool {
+	if s.d.Custom == nil || workspaceID == "" {
+		return false
+	}
+	if _, ok := custom.ParseID(id); !ok {
+		return false
+	}
+	return s.d.Custom.Defined(ctx, workspaceID, id)
+}
+
+// TestCustomConnection tests the custom provider id through the custom providers port (FR11): the
+// key (when given) is saved by the port, the check is one model-list call. An undefined or
+// malformed id is a 404 custom_provider_not_found error and nothing is saved; the check's own
+// failures come back as ok=false data. Each test logs one INFO line with provider, ok and
+// latency; the key never reaches a log line.
+func (s *Service) TestCustomConnection(ctx context.Context, workspaceID string, id Provider, key string) (ConnTestResult, error) {
+	notFound := func() error {
+		return apperr.NotFound("Custom provider " + string(id) + " is not configured").WithCode("custom_provider_not_found")
+	}
+	if s.d.Custom == nil || workspaceID == "" || !id.IsCustom() {
+		return ConnTestResult{}, notFound()
+	}
+	start := s.d.Clock()
+	res, err := s.d.Custom.TestConnection(ctx, workspaceID, string(id), key)
+	if err != nil {
+		return ConnTestResult{}, err
+	}
+	res.Provider = id
+	res.Message = scrub(res.Message, key)
+	if res.Warning != nil {
+		w := scrub(*res.Warning, key)
+		res.Warning = &w
+	}
+	s.d.Logger.InfoContext(ctx, "settings test connection",
+		slog.String("provider", string(id)),
+		slog.Bool("ok", res.OK),
+		slog.Int64("latency_ms", s.d.Clock().Sub(start).Milliseconds()))
+	return res, nil
 }
 
 // TestConnection saves key (when given) under the provider's secret name, then checks the

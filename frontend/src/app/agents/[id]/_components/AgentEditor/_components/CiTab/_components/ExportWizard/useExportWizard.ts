@@ -1,29 +1,50 @@
 /* useExportWizard — state of the Export wizard: step, repository, options, the workflow the
    user edited, and the two ways to finish (open the PR / download the zip). The preview is
    a query keyed by the options, so changing an option regenerates the workflow; once the
-   workflow is edited the options are locked (the edit would otherwise be lost). Also
+   workflow is edited the options are locked (the edit would otherwise be lost). The Runner
+   defaults by the agent's provider (self-hosted for a custom one) until the user chooses. Also
    useDialogFocus (re-exported from @/lib/dialog-focus): Escape, the Tab trap and focus return. */
 "use client";
 
 import React from "react";
 import type { CiFile } from "@devdigest/shared";
-import { useCiExportFiles, useOpenCiPr, useRepos, type CiExportOptions } from "@/lib/hooks";
+import { useCiExportFiles, useCustomProviders, useOpenCiPr, useRepos, type CiExportOptions } from "@/lib/hooks";
 import { useDialogFocus } from "@/lib/dialog-focus";
 import { useActiveRepo } from "@/lib/repo-context";
+import { hostOf } from "@/lib/providers/custom";
 import {
   DEFAULT_POST_AS,
   DEFAULT_TRIGGERS,
   LAST_STEP,
   type InstallMethod,
   type PostAs,
+  type Runner,
   type Trigger,
   type TriggerState,
 } from "./constants";
-import { findWorkflow, slugFromFiles, triggersToList, withEditedWorkflow, zipFileName } from "./helpers";
+import {
+  defaultRunner,
+  findWorkflow,
+  slugFromFiles,
+  triggersToList,
+  withEditedWorkflow,
+  zipFileName,
+  type CustomInfo,
+} from "./helpers";
 import { buildZip, downloadBlob } from "./zip";
 
-export function useExportWizard({ agentId, initialRepo }: { agentId: string; initialRepo?: string }) {
+export function useExportWizard({
+  agentId,
+  provider,
+  initialRepo,
+}: {
+  agentId: string;
+  /** The agent's provider id: decides the default Runner and which custom provider the notes describe. */
+  provider: string;
+  initialRepo?: string;
+}) {
   const repos = useRepos();
+  const customProviders = useCustomProviders();
   const { activeRepo } = useActiveRepo();
   const openPr = useOpenCiPr(agentId);
 
@@ -31,6 +52,7 @@ export function useExportWizard({ agentId, initialRepo }: { agentId: string; ini
   const [chosenRepo, setChosenRepo] = React.useState<string | null>(null);
   const [triggers, setTriggers] = React.useState<TriggerState>(DEFAULT_TRIGGERS);
   const [postAs, setPostAs] = React.useState<PostAs>(DEFAULT_POST_AS);
+  const [chosenRunner, setChosenRunner] = React.useState<Runner | null>(null);
   const [edited, setEdited] = React.useState<string | null>(null);
   const [selectedPath, setSelectedPath] = React.useState<string | null>(null);
   const [method, setMethod] = React.useState<InstallMethod>("pr");
@@ -40,9 +62,16 @@ export function useExportWizard({ agentId, initialRepo }: { agentId: string; ini
   // The chosen repo, else the one "Update" came from, else the active repo — only if still imported.
   const repo = [chosenRepo, initialRepo, activeRepo?.full_name].find((r) => r != null && repoNames.includes(r)) ?? null;
   const triggerList = triggersToList(triggers);
+  const runner = chosenRunner ?? defaultRunner(provider);
+  const found = customProviders.data?.find((p) => p.id === provider);
+  const custom: CustomInfo | null = found
+    ? { name: found.name, baseUrl: found.base_url, host: hostOf(found.base_url) }
+    : null;
 
   const options: CiExportOptions | null =
-    step >= 1 && repo && triggerList.length > 0 ? { repo, triggers: triggerList, post_as: postAs } : null;
+    step >= 1 && repo && triggerList.length > 0
+      ? { repo, triggers: triggerList, post_as: postAs, runner }
+      : null;
   const preview = useCiExportFiles(agentId, options);
 
   const generated: CiFile[] | undefined = preview.data?.files;
@@ -69,7 +98,7 @@ export function useExportWizard({ agentId, initialRepo }: { agentId: string; ini
       setZipName(name);
       return;
     }
-    openPr.mutate({ repo, triggers: triggerList, post_as: postAs, workflow: edited });
+    openPr.mutate({ repo, triggers: triggerList, post_as: postAs, runner, workflow: edited });
   };
 
   return {
@@ -85,6 +114,9 @@ export function useExportWizard({ agentId, initialRepo }: { agentId: string; ini
     toggleTrigger,
     postAs,
     setPostAs,
+    runner,
+    setRunner: setChosenRunner,
+    custom,
     edited,
     setEdited,
     resetEdited: () => setEdited(null),

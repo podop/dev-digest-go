@@ -124,6 +124,35 @@ func (f fakeRepos) FindByFullName(_ context.Context, _, fullName string) (domain
 	return r, ok, nil
 }
 
+// fakeCustom is an in-memory CustomProviders: the defined providers by public id.
+type fakeCustom struct {
+	defined map[string]app.CustomExport
+	err     error
+	// asked records "<workspace> <id> <model>" of every lookup.
+	asked *[]string
+}
+
+func (f fakeCustom) ForExport(_ context.Context, ws, id, model string) (app.CustomExport, bool, error) {
+	if f.asked != nil {
+		*f.asked = append(*f.asked, ws+" "+id+" "+model)
+	}
+	if f.err != nil {
+		return app.CustomExport{}, false, f.err
+	}
+	ce, ok := f.defined[id]
+	return ce, ok, nil
+}
+
+// fakePrices is a ModelPrices over a mutable table keyed "<provider>/<model>".
+type fakePrices struct {
+	table map[string]domain.Pricing
+}
+
+func (f fakePrices) PerM(provider, model string) (domain.Pricing, bool) {
+	p, ok := f.table[provider+"/"+model]
+	return p, ok
+}
+
 // fakeRunner is a RunnerBundle.
 type fakeRunner struct {
 	artifact app.RunnerArtifact
@@ -150,6 +179,7 @@ type fakeStore struct {
 	vanish      bool // FindInstallation finds nothing after the upsert
 	saved       *domain.Installation
 	listResults []domain.Installation
+	upserts     []domain.NewInstallation // every UpsertInstallation input, in order
 
 	// ingest
 	installs    []domain.Installation
@@ -159,6 +189,8 @@ type fakeStore struct {
 	recordErr   error
 	recorded    []domain.NewRun
 	runs        []domain.Run
+	// recordProvider is the provider RecordRun reports as stored ("" = a store that reports none).
+	recordProvider string
 }
 
 var installedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -204,11 +236,12 @@ func (f *fakeStore) UpsertInstallation(_ context.Context, in domain.NewInstallat
 	if f.upsertErr != nil {
 		return f.upsertErr
 	}
+	f.upserts = append(f.upserts, in)
 	if !f.vanish {
 		slug, version := in.Slug, in.ManifestVersion
 		f.saved = &domain.Installation{
 			ID: "inst-new", AgentID: in.AgentID, Repo: in.Repo, TargetType: domain.TargetGHA,
-			InstalledAt: installedAt, Slug: &slug, ManifestVersion: &version,
+			InstalledAt: installedAt, Slug: &slug, ManifestVersion: &version, Provider: in.Provider,
 		}
 	}
 	return nil
@@ -244,7 +277,7 @@ func (f *fakeStore) RecordRun(_ context.Context, run domain.NewRun) (app.Recorde
 	}
 	f.stored[key] = true
 	f.recorded = append(f.recorded, run)
-	return app.Recorded{AgentRunID: "agent-run-" + keyName(key), Stored: true}, nil
+	return app.Recorded{AgentRunID: "agent-run-" + keyName(key), Stored: true, Provider: f.recordProvider}, nil
 }
 
 func (f *fakeStore) ListRuns(_ context.Context, _ string, flt app.RunFilter) ([]domain.Run, error) {

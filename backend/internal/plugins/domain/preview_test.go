@@ -3,6 +3,8 @@ package domain_test
 import (
 	"encoding/json"
 	"errors"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -189,6 +191,71 @@ func TestLastExport(t *testing.T) {
 	for _, bad := range []string{``, `null`, `[]`, `"x"`, `{}`, `{"file_name":5}`, `{`} {
 		if _, ok := domain.DecodeLastExport(json.RawMessage(bad)); ok {
 			t.Errorf("DecodeLastExport(%q) ok = true, want none", bad)
+		}
+	}
+}
+
+// customProviderJSON has three agents: custom:ghost twice and custom:synapse (EC16).
+const customProviderJSON = `{"manifest":{"name":"acme","version":"1.0.0","format":"devdigest-plugin/v1"},` +
+	`"agents":[` +
+	`{"name":"A","provider":"custom:ghost","model":"m","system_prompt":"p"},` +
+	`{"name":"B","provider":"custom:synapse","model":"m","system_prompt":"p"},` +
+	`{"name":"C","provider":"custom:ghost","model":"m","system_prompt":"p"},` +
+	`{"name":"D","provider":"openai","model":"m","system_prompt":"p"}],` +
+	`"skills":[],"eval_cases":[],"conventions":[]}`
+
+func TestPrepared_CustomProviders(t *testing.T) {
+	p, err := domain.Prepare(parseOK(t, customProviderJSON), "")
+	if err != nil {
+		t.Fatalf("Prepare() = %v, want nil", err)
+	}
+	if diff := cmp.Diff([]string{"custom:ghost", "custom:synapse"}, p.CustomProviders()); diff != "" {
+		t.Errorf("CustomProviders() mismatch (-want +got):\n%s", diff)
+	}
+	plan := p.Plan.Agents
+	if plan[0].Provider != "custom:ghost" || plan[1].Provider != "custom:synapse" || plan[3].Provider != "openai" {
+		t.Errorf("Plan.Agents providers = %q %q %q, want the bundle strings kept", plan[0].Provider, plan[1].Provider, plan[3].Provider)
+	}
+
+	none, err := domain.Prepare(parseOK(t, minimalJSON), "")
+	if err != nil {
+		t.Fatalf("Prepare(minimal) = %v, want nil", err)
+	}
+	if got := none.CustomProviders(); len(got) != 0 {
+		t.Errorf("CustomProviders() of a bundle without agents = %v, want none", got)
+	}
+}
+
+func TestPreviewDoc_WithUndefinedProviders(t *testing.T) {
+	p, err := domain.Prepare(parseOK(t, customProviderJSON), "")
+	if err != nil {
+		t.Fatalf("Prepare() = %v, want nil", err)
+	}
+	base := p.Preview(domain.Conflicts{})
+	doc := base.WithUndefinedProviders([]string{"custom:ghost"})
+	if diff := cmp.Diff([]string{"Provider custom:ghost is not configured here"}, doc.Warnings); diff != "" {
+		t.Errorf("WithUndefinedProviders() warnings mismatch (-want +got):\n%s", diff)
+	}
+	if len(base.Warnings) != 0 {
+		t.Errorf("the receiver's warnings = %v, want them untouched", base.Warnings)
+	}
+	if got := base.WithUndefinedProviders(nil).Warnings; len(got) != 0 || got == nil {
+		t.Errorf("WithUndefinedProviders(nil).Warnings = %#v, want an empty non-nil list", got)
+	}
+}
+
+// TestIsCustomProvider_MatchesTheCheckPattern pins the domain's copy of the id rule to the
+// pattern of the agents_provider_chk constraint.
+func TestIsCustomProvider_MatchesTheCheckPattern(t *testing.T) {
+	pattern := regexp.MustCompile(`^custom:[a-z0-9-]{1,32}$`)
+	for _, s := range []string{
+		"custom:a", "custom:synapse", "custom:-", "custom:0", "custom:" + strings.Repeat("a", 32), "custom:" + strings.Repeat("a", 33),
+		"custom:", "custom:A", "custom:a_b", "custom:a b", "custom:é", "Custom:a", "custom", "openai", "", " custom:a", "custom:a\n",
+	} {
+		// Go's `$` without (?m) matches only at the end of the text, like Postgres' ~ on the
+		// whole string, so the two agree on a trailing newline too.
+		if got, want := domain.IsCustomProvider(s), pattern.MatchString(s); got != want {
+			t.Errorf("IsCustomProvider(%q) = %v, the CHECK pattern says %v", s, got, want)
 		}
 	}
 }

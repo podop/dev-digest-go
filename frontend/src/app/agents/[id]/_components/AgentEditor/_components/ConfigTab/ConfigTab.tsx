@@ -4,11 +4,12 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { FormField, TextInput, Textarea, Toggle, Button } from "@devdigest/ui";
 import type { Agent } from "@devdigest/shared";
+import { ProviderSelect, useProviderUndefined } from "@/components/provider-select";
 import { Select } from "@/components/select";
 import { useUpdateAgent } from "@/lib/hooks";
 import { useToast } from "@/lib/toast";
 import { ModelSelectField } from "@/app/agents/_components/ModelSelectField";
-import { CI_FAIL_ON_VALUES, PROVIDER_OPTIONS, STRATEGY_VALUES } from "./constants";
+import { CI_FAIL_ON_VALUES, STRATEGY_VALUES } from "./constants";
 import { s } from "./styles";
 
 /** Fields the Config form edits (the PUT patch is a subset of these). */
@@ -26,6 +27,7 @@ type ConfigDraft = Partial<
  *  keys this component by agent id, which resets the draft on agent switch. */
 export function ConfigTab({ agent }: { agent: Agent }) {
   const t = useTranslations("agents");
+  const tp = useTranslations("providerSelect");
   const toast = useToast();
   const update = useUpdateAgent();
   const [draft, setDraft] = React.useState<ConfigDraft>({});
@@ -36,6 +38,8 @@ export function ConfigTab({ agent }: { agent: Agent }) {
   const systemPrompt = form.system_prompt;
   const ciFailOn = form.ci_fail_on;
   const repoIntel = form.repo_intel;
+  // A stored custom provider that no longer exists: Save stays off until another one is picked (FR19, EC23).
+  const providerUndefined = useProviderUndefined(provider);
 
   // Friendly labels for the strategy select (values come from constants).
   const strategyOptions = STRATEGY_VALUES.map((v) => ({ value: v, label: t(`config.strategyOptions.${v}`) }));
@@ -70,13 +74,8 @@ export function ConfigTab({ agent }: { agent: Agent }) {
       <FormField label={t("config.description")}>
         <TextInput value={description} onChange={edit("description")} />
       </FormField>
-      <FormField label={t("config.provider")}>
-        <Select
-          value={provider}
-          onChange={edit("provider")}
-          options={[...PROVIDER_OPTIONS]}
-          aria-label={t("config.provider")}
-        />
+      <FormField label={t("config.provider")} hint={providerUndefined ? tp("blockedHint") : undefined}>
+        <ProviderSelect value={provider} onChange={edit("provider")} aria-label={t("config.provider")} />
       </FormField>
       <ModelSelectField provider={provider} value={model} onChange={edit("model")} />
       <FormField label={t("config.strategy")} hint={t("config.strategyHint")}>
@@ -111,7 +110,7 @@ export function ConfigTab({ agent }: { agent: Agent }) {
         />
       </FormField>
       <div style={s.actions}>
-        <Button kind="primary" icon="Check" onClick={save} disabled={update.isPending || Object.keys(draft).length === 0}>
+        <Button kind="primary" icon="Check" onClick={save} disabled={update.isPending || providerUndefined || Object.keys(draft).length === 0}>
           {update.isPending ? t("config.saving") : t("config.save")}
         </Button>
         {update.isSuccess && (

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -68,7 +69,13 @@ func (f fixture) agent(t *testing.T, ws, name string) string {
 // install exports agent to repo with slug and returns the installation id.
 func (f fixture) install(t *testing.T, agentID, repo, slug string, version int) string {
 	t.Helper()
-	err := f.store.UpsertInstallation(t.Context(), domain.NewInstallation{AgentID: agentID, Repo: repo, Slug: slug, ManifestVersion: version})
+	return f.installOn(t, domain.ProviderOpenRouter, agentID, repo, slug, version)
+}
+
+// installOn is install with the agent's export-time provider.
+func (f fixture) installOn(t *testing.T, provider, agentID, repo, slug string, version int) string {
+	t.Helper()
+	err := f.store.UpsertInstallation(t.Context(), domain.NewInstallation{AgentID: agentID, Repo: repo, Slug: slug, ManifestVersion: version, Provider: provider})
 	if err != nil {
 		t.Fatalf("UpsertInstallation(%s, %s) = %v, want nil", agentID, repo, err)
 	}
@@ -105,14 +112,14 @@ func TestUpsertInstallation(t *testing.T) {
 	}
 
 	// A second export of the same (agent, repo) updates slug and version in place.
-	if err := f.store.UpsertInstallation(ctx, domain.NewInstallation{AgentID: f.agentA, Repo: "acme/api", Slug: "alpha-2", ManifestVersion: 2}); err != nil {
+	if err := f.store.UpsertInstallation(ctx, domain.NewInstallation{AgentID: f.agentA, Repo: "acme/api", Slug: "alpha-2", ManifestVersion: 2, Provider: domain.ProviderOpenRouter}); err != nil {
 		t.Fatalf("UpsertInstallation(update) = %v, want nil", err)
 	}
 	got, ok, err := f.store.FindInstallation(ctx, f.ws, f.agentA, "acme/api")
 	if err != nil || !ok {
 		t.Fatalf("FindInstallation() = _, %v, %v, want found", ok, err)
 	}
-	want := domain.Installation{ID: id, AgentID: f.agentA, Repo: "acme/api", TargetType: "gha", InstalledAt: first.UTC(), Slug: ptr("alpha-2"), ManifestVersion: ptr(2)}
+	want := domain.Installation{ID: id, AgentID: f.agentA, Repo: "acme/api", TargetType: "gha", InstalledAt: first.UTC(), Slug: ptr("alpha-2"), ManifestVersion: ptr(2), Provider: domain.ProviderOpenRouter}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindInstallation() mismatch (-want +got):\n%s", diff)
 	}
@@ -135,7 +142,7 @@ func TestUpsertInstallation(t *testing.T) {
 func TestUpsertInstallation_SlugTaken(t *testing.T) {
 	f := newFixture(t)
 	f.install(t, f.agentA, "acme/api", "shared", 1)
-	in := domain.NewInstallation{AgentID: f.agentB, Repo: "acme/api", Slug: "shared", ManifestVersion: 1}
+	in := domain.NewInstallation{AgentID: f.agentB, Repo: "acme/api", Slug: "shared", ManifestVersion: 1, Provider: domain.ProviderOpenRouter}
 
 	if err := f.store.UpsertInstallation(t.Context(), in); !errors.Is(err, app.ErrSlugTaken) {
 		t.Fatalf("UpsertInstallation(taken slug) = %v, want ErrSlugTaken", err)
@@ -348,10 +355,15 @@ func TestRecordRun_NotStorable(t *testing.T) {
 
 func TestUpsertInstallation_NotStorable(t *testing.T) {
 	f := newFixture(t)
+	const ok = domain.ProviderOpenRouter
 	for name, in := range map[string]domain.NewInstallation{
-		"version above int32": {AgentID: f.agentA, Repo: "acme/api", Slug: "a", ManifestVersion: math.MaxInt32 + 1},
-		"slug with NUL":       {AgentID: f.agentA, Repo: "acme/api", Slug: "a\x00", ManifestVersion: 1},
-		"repo invalid UTF-8":  {AgentID: f.agentA, Repo: "acme/\xff", Slug: "a", ManifestVersion: 1},
+		"version above int32": {AgentID: f.agentA, Repo: "acme/api", Slug: "a", ManifestVersion: math.MaxInt32 + 1, Provider: ok},
+		"slug with NUL":       {AgentID: f.agentA, Repo: "acme/api", Slug: "a\x00", ManifestVersion: 1, Provider: ok},
+		"repo invalid UTF-8":  {AgentID: f.agentA, Repo: "acme/\xff", Slug: "a", ManifestVersion: 1, Provider: ok},
+		"provider missing":    {AgentID: f.agentA, Repo: "acme/api", Slug: "a", ManifestVersion: 1},
+		"provider unknown":    {AgentID: f.agentA, Repo: "acme/api", Slug: "a", ManifestVersion: 1, Provider: "mistral"},
+		"custom slug upper":   {AgentID: f.agentA, Repo: "acme/api", Slug: "a", ManifestVersion: 1, Provider: "custom:Synapse"},
+		"custom slug long":    {AgentID: f.agentA, Repo: "acme/api", Slug: "a", ManifestVersion: 1, Provider: "custom:" + strings.Repeat("a", 33)},
 	} {
 		if err := f.store.UpsertInstallation(t.Context(), in); !errors.Is(err, app.ErrNotStorable) {
 			t.Errorf("UpsertInstallation(%s) = %v, want ErrNotStorable", name, err)
@@ -468,7 +480,7 @@ func TestListInstallations(t *testing.T) {
 		}
 	}
 	// A non-gha installation never shows.
-	f.scan(t, `INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'acme/api', 'cli') RETURNING id`, f.agentA)
+	f.scan(t, `INSERT INTO ci_installations (agent_id, repo, target_type, provider) VALUES (?, 'acme/api', 'cli', 'openrouter') RETURNING id`, f.agentA)
 
 	for _, r := range []domain.NewRun{
 		newRun(f, older, f.agentA, 1, 1, t0),
@@ -625,7 +637,7 @@ func TestListRepoInstallations(t *testing.T) {
 	apiAlpha := f.install(t, f.agentA, "acme/api", "alpha", 1)
 	upper := f.install(t, f.agentA, "Acme/zzz", "alpha-z", 1)
 	// Not gha, and not of this workspace: never listed.
-	f.scan(t, `INSERT INTO ci_installations (agent_id, repo, target_type) VALUES (?, 'acme/api', 'cli') RETURNING id`, f.agentA)
+	f.scan(t, `INSERT INTO ci_installations (agent_id, repo, target_type, provider) VALUES (?, 'acme/api', 'cli', 'openrouter') RETURNING id`, f.agentA)
 	foreign := f.install(t, f.agentO, "acme/api", "outsider", 1)
 	for id, d := range map[string]time.Duration{apiBeta: 0, apiAlpha: time.Hour} {
 		if err := f.db.Exec(`UPDATE ci_installations SET installed_at = ? WHERE id = ?`, t0.Add(d), id).Error; err != nil {
@@ -727,5 +739,119 @@ func TestListRepoInstallations_UndatedRunComesLast(t *testing.T) {
 	}
 	if r := got[0].NewestRun; r == nil || r.RanAt == nil || *r.GithubURL != "https://github.com/acme/api/actions/runs/1" {
 		t.Errorf("newest run = %+v, want the dated run 1", r)
+	}
+}
+
+// providerOf reads the stored provider of an installation.
+func (f fixture) providerOf(t *testing.T, inst string) string {
+	t.Helper()
+	return f.scan(t, `SELECT provider FROM ci_installations WHERE id = ?`, inst)
+}
+
+// TestUpsertInstallation_WritesProvider (FR37): every export provider is stored, a re-export
+// overwrites it with the agent's provider at that time, and the other columns keep their rules.
+func TestUpsertInstallation_WritesProvider(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	for i, provider := range []string{"openrouter", "openai", "anthropic", "custom:synapse", "custom:a-1"} {
+		repo := fmt.Sprintf("acme/r%d", i)
+		inst := f.installOn(t, provider, f.agentA, repo, "alpha", 1)
+		if got := f.providerOf(t, inst); got != provider {
+			t.Errorf("stored provider after export on %q = %q, want it", provider, got)
+		}
+		got, ok, err := f.store.FindInstallation(ctx, f.ws, f.agentA, repo)
+		if err != nil || !ok || got.Provider != provider {
+			t.Errorf("FindInstallation(%q).Provider = %q, %v, %v, want it", provider, got.Provider, ok, err)
+		}
+	}
+
+	// Re-export: same (agent, repo) row, provider replaced, installed_at kept.
+	inst := f.installOn(t, "openai", f.agentB, "acme/api", "beta", 1)
+	var first time.Time
+	if err := f.db.Raw(`SELECT installed_at FROM ci_installations WHERE id = ?`, inst).Scan(&first).Error; err != nil {
+		t.Fatal(err)
+	}
+	if again := f.installOn(t, "custom:synapse", f.agentB, "acme/api", "beta", 2); again != inst {
+		t.Fatalf("re-export created installation %s, want the same %s", again, inst)
+	}
+	if got := f.providerOf(t, inst); got != "custom:synapse" {
+		t.Errorf("provider after re-export = %q, want custom:synapse", got)
+	}
+	var kept time.Time
+	if err := f.db.Raw(`SELECT installed_at FROM ci_installations WHERE id = ?`, inst).Scan(&kept).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !kept.Equal(first) {
+		t.Errorf("installed_at after re-export = %v, want the first export's %v", kept, first)
+	}
+	listed, err := f.store.ListInstallations(ctx, f.ws, app.InstallationFilter{AgentID: f.agentB})
+	if err != nil || len(listed) != 1 || listed[0].Provider != "custom:synapse" {
+		t.Errorf("ListInstallations(agentB) = %+v, %v, want one installation on custom:synapse", listed, err)
+	}
+}
+
+// TestUpsertInstallation_SlugTakenKeepsProvider: a failed upsert leaves the old provider (spec
+// section 7 data flow).
+func TestUpsertInstallation_SlugTakenKeepsProvider(t *testing.T) {
+	f := newFixture(t)
+	f.installOn(t, "openai", f.agentA, "acme/api", "shared", 1)
+	inst := f.installOn(t, "openai", f.agentB, "acme/api", "beta", 1)
+	err := f.store.UpsertInstallation(t.Context(), domain.NewInstallation{AgentID: f.agentB, Repo: "acme/api", Slug: "shared", ManifestVersion: 2, Provider: "anthropic"})
+	if !errors.Is(err, app.ErrSlugTaken) {
+		t.Fatalf("UpsertInstallation(taken slug) = %v, want ErrSlugTaken", err)
+	}
+	if got := f.providerOf(t, inst); got != "openai" {
+		t.Errorf("provider after the failed upsert = %q, want the old openai", got)
+	}
+}
+
+// TestRecordRun_UsesInstallationProvider (FR37, EC33, AC47): the agent_runs row carries the
+// installation's stored provider, not the agent's current one, and a re-export changes the
+// provider of the runs stored after it only.
+func TestRecordRun_UsesInstallationProvider(t *testing.T) {
+	f := newFixture(t)
+	ctx := t.Context()
+	custom := f.agent(t, f.ws, "gamma")
+	instA := f.installOn(t, "openai", f.agentA, "acme/api", "alpha", 1)
+	instB := f.installOn(t, "custom:synapse", custom, "acme/web", "gamma", 1)
+	instC := f.installOn(t, "openrouter", f.agentB, "acme/lib", "beta", 1)
+	// The studio switches the first agent to anthropic without a re-export.
+	mustExec(t, f.db, `UPDATE agents SET provider = 'anthropic' WHERE id = '`+f.agentA+`'`)
+
+	store := func(inst, agent string, runID int64) string {
+		t.Helper()
+		rec, err := f.store.RecordRun(ctx, newRun(f, inst, agent, runID, 1, t0))
+		if err != nil || !rec.Stored {
+			t.Fatalf("RecordRun(%d) = %+v, %v, want Stored, nil", runID, rec, err)
+		}
+		got := f.scan(t, `SELECT provider FROM agent_runs WHERE id = ?`, rec.AgentRunID)
+		// The ledger entry reads the same provider from the result, so both rows agree.
+		if rec.Provider != got {
+			t.Errorf("RecordRun(%d).Provider = %q, want the stored agent_runs.provider %q", runID, rec.Provider, got)
+		}
+		return got
+	}
+	for _, c := range []struct {
+		inst, agent string
+		id          int64
+		want        string
+	}{{instA, f.agentA, 1, "openai"}, {instB, custom, 2, "custom:synapse"}, {instC, f.agentB, 3, "openrouter"}} {
+		if got := store(c.inst, c.agent, c.id); got != c.want {
+			t.Errorf("agent_runs.provider of run %d = %q, want %q", c.id, got, c.want)
+		}
+	}
+
+	// A files export changes nothing (no upsert); the second run still carries openai.
+	if got := store(instA, f.agentA, 4); got != "openai" {
+		t.Errorf("agent_runs.provider of run 4 = %q, want openai", got)
+	}
+	// open_pr again: the next run carries anthropic, the earlier rows keep openai.
+	f.installOn(t, "anthropic", f.agentA, "acme/api", "alpha", 2)
+	if got := store(instA, f.agentA, 5); got != "anthropic" {
+		t.Errorf("agent_runs.provider of run 5 = %q, want anthropic", got)
+	}
+	var old int
+	if err := f.db.Raw(`SELECT count(*) FROM agent_runs WHERE agent_id = ? AND provider = 'openai'`, f.agentA).Scan(&old).Error; err != nil || old != 2 {
+		t.Errorf("agent_runs of the agent on openai = %d, %v, want 2", old, err)
 	}
 }

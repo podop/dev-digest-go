@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Dropdown, ErrorState, Skeleton, Icon, Badge } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
+import { ProviderName } from "@/components/provider-name";
 import { useAgent, useAgentCardMetrics, useAgents, useUpdateAgent } from "@/lib/hooks";
 import { ApiError } from "@/lib/api";
 import type { StatsPeriod } from "@/lib/stats-period";
@@ -89,7 +90,7 @@ export function AgentEditorView({ id, tab, period }: { id: string; tab: string; 
               <Icon.Cpu size={18} style={s.mainIcon} />
               <h1 style={s.mainTitle}>{agent.name}</h1>
               <Badge color="var(--text-secondary)" mono>
-                {agent.provider}/{agent.model}
+                <ProviderName id={agent.provider} />/{agent.model}
               </Badge>
               {!agent.enabled && <Badge color="var(--text-muted)">{t("editor.disabled")}</Badge>}
               <div style={s.mainActions}>

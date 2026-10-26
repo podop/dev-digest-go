@@ -85,7 +85,7 @@
     "installCardTitle": "Open a PR with these files",
     "installCardBody": "DevDigest opens a PR in {repo} titled “Add DevDigest CI review” with the {count} generated files.",
     "ownerRepo": "owner/repo",
-    "secretNote": "Add {key} to the repo's Actions secrets before the workflow runs.",
+    "secretNote": "Add the secrets and variables below to the repo's Actions settings before the workflow runs.",
     "close": "Close",
     "targetLabel": "Target",
     "connectRepoFirst": "Connect a repository first",
@@ -99,10 +99,22 @@
     "triggerRequired": "Select at least one trigger",
     "optionsLockedNotice": "The workflow was edited, so these options are locked. Use “Reset to generated” in Preview to change them.",
     "secretsTitle": "Secrets expected",
-    "secrets": {
-      "OPENROUTER_API_KEY": "Add it to the repo's Actions secrets",
-      "GITHUB_TOKEN": "Provided by Actions"
+    "secretHint": "Add it to the repo's Actions secrets",
+    "githubTokenHint": "Provided by Actions",
+    "variablesTitle": "Variables expected",
+    "variableHint": "Add it to the repo's Actions variables, set to:",
+    "copyValue": "Copy",
+    "copyValueAria": "Copy the value of {name}",
+    "copied": "Copied",
+    "copyFailed": "Could not copy to the clipboard",
+    "loopbackWarning": "{baseUrl} points to this machine; set {variable} to an address the CI runner can reach.",
+    "loopbackWarningNoVariable": "{baseUrl} points to this machine; set the base URL variable to an address the CI runner can reach.",
+    "runnerLabel": "Runner",
+    "runner": {
+      "githubHosted": "GitHub-hosted",
+      "selfHosted": "Self-hosted (linux x64)"
     },
+    "selfHostedNote": "This agent uses {name} at {host}. GitHub-hosted runners reach only public addresses; if {host} is on a private network, use a self-hosted runner that can reach it.",
     "checkName": "DevDigest Review · {slug}",
     "requiredCheckNote": "Blocking merges needs “Fail CI on” on the agent plus a required status check named {check} in the repository's branch protection.",
     "installMethodLabel": "Install method",
@@ -112,7 +124,7 @@
     "successTitle": "Pull request ready",
     "viewPr": "View pull request",
     "nextStepsTitle": "Next steps",
-    "nextAddSecret": "Add {key} to the repository's Actions secrets first — the check on the new pull request fails until it exists.",
+    "nextAddSecrets": "Add the secrets and variables below to the repository's Actions settings first — the check on the new pull request fails until they exist.",
     "nextMerge": "Merge the pull request.",
     "nextRequiredCheck": "To block merges, set the required status check {check}."
   },

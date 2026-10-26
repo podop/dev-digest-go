@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { Provider } from './contracts/knowledge.js';
 import type {
   PrMeta,
   PrDetail,
@@ -15,7 +16,7 @@ import type {
 // ---------- LLM ----------
 export const ModelInfo = z.object({
   id: z.string(),
-  provider: z.enum(['openai', 'anthropic', 'openrouter']),
+  provider: Provider,
   label: z.string().nullish(),
   created: z.number().int().nullish(),
   /** Pricing in USD per 1M tokens (when the provider exposes it, e.g. OpenRouter). */

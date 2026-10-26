@@ -23,19 +23,21 @@ const defaultWorkspaceName = "default"
 // Clock returns the current time. The service reads it for the export instant and file name.
 type Clock func() time.Time
 
-// Deps are the ports and settings of Service. Every port is required. Clock defaults to time.Now
-// and Log to a logger that discards; Version is the server build version written to the manifest
-// of an export ("dev" when empty).
+// Deps are the ports and settings of Service. Every port is required except CustomProviders: nil
+// means the workspace is not asked, and the dry run adds no "not configured here" warning. Clock
+// defaults to time.Now and Log to a logger that discards; Version is the server build version
+// written to the manifest of an export ("dev" when empty).
 type Deps struct {
-	Reader         ExportReader
-	Names          Names
-	Installer      Installer
-	Plugins        Plugins
-	LastExports    LastExports
-	WorkspaceNames WorkspaceName
-	Clock          Clock
-	Log            *slog.Logger
-	Version        string
+	Reader          ExportReader
+	Names           Names
+	Installer       Installer
+	CustomProviders CustomProviders
+	Plugins         Plugins
+	LastExports     LastExports
+	WorkspaceNames  WorkspaceName
+	Clock           Clock
+	Log             *slog.Logger
+	Version         string
 }
 
 // Service implements API.

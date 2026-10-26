@@ -36,6 +36,27 @@ func (f *fakeNames) Conflicts(_ context.Context, _, pluginName string, skillName
 	return f.found, f.err
 }
 
+// fakeCustom defines the custom providers in defined and records what it was asked about.
+type fakeCustom struct {
+	defined []string
+	err     error
+	asked   [][]string
+}
+
+func (f *fakeCustom) CustomDefined(_ context.Context, _ string, ids []string) ([]string, error) {
+	f.asked = append(f.asked, slices.Clone(ids))
+	if f.err != nil {
+		return nil, f.err
+	}
+	var out []string
+	for _, id := range ids {
+		if slices.Contains(f.defined, id) {
+			out = append(out, id)
+		}
+	}
+	return out, nil
+}
+
 // fakeInstaller records the plans it installs; err (when set) is returned instead, e.g. the
 // *domain.ConflictError of a lost race.
 type fakeInstaller struct {

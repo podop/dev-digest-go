@@ -40,17 +40,18 @@ func (l lastExports) SetLastExport(ctx context.Context, workspaceID, userID stri
 
 // newPluginsService builds the plugins use cases. One store implements the four database ports;
 // the workspace display name is the same Settings row the workspace context reads (workspaceNames).
-func newPluginsService(db *gorm.DB, settings settingsRW, now func() time.Time, log *slog.Logger, version string) *pluginsapp.Service {
+func newPluginsService(db *gorm.DB, settings settingsRW, custom pluginsapp.CustomProviders, now func() time.Time, log *slog.Logger, version string) *pluginsapp.Service {
 	store := pluginspg.NewStore(db)
 	return pluginsapp.NewService(pluginsapp.Deps{
-		Reader:         store,
-		Names:          store,
-		Installer:      store,
-		Plugins:        store,
-		LastExports:    lastExports{settings: settings},
-		WorkspaceNames: workspaceNames{settings: settings},
-		Clock:          pluginsapp.Clock(now),
-		Log:            log,
-		Version:        version,
+		Reader:          store,
+		Names:           store,
+		Installer:       store,
+		Plugins:         store,
+		CustomProviders: custom,
+		LastExports:     lastExports{settings: settings},
+		WorkspaceNames:  workspaceNames{settings: settings},
+		Clock:           pluginsapp.Clock(now),
+		Log:             log,
+		Version:         version,
 	})
 }

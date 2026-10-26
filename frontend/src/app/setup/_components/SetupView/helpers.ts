@@ -6,14 +6,16 @@ export type StepDone = Record<SetupStep, boolean>;
 export const isSetupStep = (v: string | undefined): v is SetupStep => SETUP_STEPS.some((s) => s === v);
 
 /** Which steps are complete. `tested` holds providers whose test passed in this view: a passing
- *  test stores the key, but the secrets-status refetch may not have landed yet. */
+ *  test stores the key, but the secrets-status refetch may not have landed yet. A defined custom
+ *  provider completes the model step, keyed or not (FR21, D21) — the same rule as the home gate. */
 export function stepsDone(
   secrets: SecretsStatus,
   repoCount: number,
   tested: readonly ConnTestProvider[],
+  customCount = 0,
 ): StepDone {
   return {
-    model: MODEL_PROVIDERS.some((p) => secrets[p] || tested.includes(p)),
+    model: customCount > 0 || MODEL_PROVIDERS.some((p) => secrets[p] || tested.includes(p)),
     github: secrets.github || tested.includes("github"),
     repo: repoCount > 0,
   };

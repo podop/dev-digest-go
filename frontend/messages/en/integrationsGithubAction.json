@@ -33,9 +33,15 @@
     "agentsLoading": "Loading agents",
     "agentsError": "Could not load the agents",
     "noAgents": "No agent can be installed.",
+    "runner": {
+      "legend": "Runner",
+      "github_hosted": "GitHub-hosted",
+      "self_hosted": "Self-hosted (linux x64)"
+    },
     "retry": "Retry",
     "reason": {
-      "provider_not_supported": "Only OpenRouter agents can run in GitHub Actions.",
+      "provider_not_supported": "This agent's provider cannot run in GitHub Actions.",
+      "custom_not_configured": "Custom provider {provider} is not configured",
       "plugin_disabled": "The plugin of this agent is disabled."
     },
     "progress": {
@@ -45,7 +51,9 @@
       "doneNoLink": "Installed",
       "viewPr": "View pull request",
       "failed": "Failed: {message}",
-      "failedUnknown": "Failed: the request did not complete"
+      "failedUnknown": "Failed: the request did not complete",
+      "secrets": "Secrets to add:",
+      "variables": "Variables to add:"
     },
     "actions": {
       "install": "Install",

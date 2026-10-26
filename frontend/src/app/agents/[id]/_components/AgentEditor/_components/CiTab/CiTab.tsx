@@ -122,6 +122,7 @@ export function CiTab({ agent }: { agent: Agent }) {
         <ExportWizard
           agentId={agent.id}
           agentName={agent.name}
+          provider={agent.provider}
           initialRepo={wizard.repo}
           onClose={() => setWizard(null)}
         />

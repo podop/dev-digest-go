@@ -206,3 +206,44 @@ func (m *fakeModels) ListModels(_ context.Context, p llm.Provider) ([]llm.ModelI
 }
 
 var errBoom = errors.New("boom")
+
+// fakeCustom is the customProviders port: the ids it defines, the models it lists, and a record
+// of the calls. LockDefined must run inside a transaction; calls outside one are recorded.
+type fakeCustom struct {
+	tx       *fakeTx
+	defined  map[string]bool
+	models   map[string][]llm.ModelInfo
+	err      error
+	modelErr error
+
+	askedDefined []string // ids asked with Defined
+	locked       []string // ids asked with LockDefined
+	lockedOut    []string // ids asked with LockDefined outside a transaction
+	listed       []string // ids asked with Models
+}
+
+func newFakeCustom(tx *fakeTx, ids ...string) *fakeCustom {
+	c := &fakeCustom{tx: tx, defined: map[string]bool{}, models: map[string][]llm.ModelInfo{}}
+	for _, id := range ids {
+		c.defined[id] = true
+	}
+	return c
+}
+
+func (c *fakeCustom) Defined(_ context.Context, _, id string) (bool, error) {
+	c.askedDefined = append(c.askedDefined, id)
+	return c.defined[id], c.err
+}
+
+func (c *fakeCustom) LockDefined(_ context.Context, _, id string) (bool, error) {
+	c.locked = append(c.locked, id)
+	if c.tx.depth == 0 {
+		c.lockedOut = append(c.lockedOut, id)
+	}
+	return c.defined[id], c.err
+}
+
+func (c *fakeCustom) Models(_ context.Context, _, id string) ([]llm.ModelInfo, error) {
+	c.listed = append(c.listed, id)
+	return c.models[id], c.modelErr
+}

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"dev-digest-go/backend/internal/agents/domain"
+	"dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/httpx"
 )
 
@@ -50,7 +51,7 @@ func parseCreate(body []byte) (domain.CreateInput, []httpx.Issue) {
 	issues = append(issues, is...)
 	in.Description, is = obj.optStr("description", httpx.StringRule{})
 	issues = append(issues, is...)
-	in.Provider, _, is = obj.enum("provider", true, domain.Providers())
+	in.Provider, _, is = obj.provider(true)
 	issues = append(issues, is...)
 	in.Model, _, is = obj.str("model", true, nonEmpty)
 	issues = append(issues, is...)
@@ -87,7 +88,7 @@ func parsePatch(body []byte) (domain.Patch, []httpx.Issue) {
 	issues = append(issues, is...)
 	p.Description, is = obj.optStr("description", httpx.StringRule{})
 	issues = append(issues, is...)
-	p.Provider, is = obj.optEnum("provider", domain.Providers())
+	p.Provider, is = obj.optProvider()
 	issues = append(issues, is...)
 	p.Model, is = obj.optStr("model", nonEmpty)
 	issues = append(issues, is...)
@@ -265,6 +266,40 @@ func (o object) enum(key string, required bool, allowed []string) (value string,
 		return "", true, []httpx.Issue{httpx.EnumIssue(allowed, s, key)}
 	}
 	return s, true, nil
+}
+
+// provider reads the provider field: a built-in id or a well-formed custom id (`custom:<slug>`).
+// Whether a custom id is defined in the workspace is the use case's decision, not the parser's.
+// Anything else is the enum issue over the built-in ids.
+func (o object) provider(required bool) (value string, present bool, issues []httpx.Issue) {
+	raw, ok := o["provider"]
+	if !ok {
+		if required {
+			return "", false, []httpx.Issue{httpx.RequiredIssue("provider")}
+		}
+		return "", false, nil
+	}
+	s, ok := decodeString(raw)
+	switch {
+	case !ok:
+		return "", true, []httpx.Issue{httpx.TypeIssue("string", jsonType(raw), "provider")}
+	case !slices.Contains(domain.Providers(), s) && !isCustomID(s):
+		return "", true, []httpx.Issue{httpx.EnumIssue(domain.Providers(), s, "provider")}
+	}
+	return s, true, nil
+}
+
+func (o object) optProvider() (*string, []httpx.Issue) {
+	v, present, issues := o.provider(false)
+	if !present || issues != nil {
+		return nil, issues
+	}
+	return &v, nil
+}
+
+func isCustomID(s string) bool {
+	_, ok := custom.ParseID(s)
+	return ok
 }
 
 func (o object) optEnum(key string, allowed []string) (*string, []httpx.Issue) {

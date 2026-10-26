@@ -22,6 +22,21 @@ var forbidden = []string{
 	"dev-digest-go/backend/internal/platform/secrets",
 	"dev-digest-go/backend/internal/platform/postgres",
 	"dev-digest-go/backend/internal/repointel",
+	// The custom-provider server side: the runner links the custom-provider rules and adapters
+	// (llm/custom, the adapters, platform/egress), never the store, the service or their transport.
+	"dev-digest-go/backend/internal/customproviders",
+	"dev-digest-go/backend/internal/settings",
+	"dev-digest-go/backend/internal/agents",
+}
+
+// required lists the packages the runner must link now: the review engine, the three LLM adapters
+// the manifests can name, the custom-provider rules and the guarded outbound client.
+var required = []string{
+	"dev-digest-go/backend/internal/reviewer/app",
+	"dev-digest-go/backend/internal/llm/adapters/openaicompat",
+	"dev-digest-go/backend/internal/llm/adapters/anthropic",
+	"dev-digest-go/backend/internal/llm/custom",
+	"dev-digest-go/backend/internal/platform/egress",
 }
 
 func goTool(t *testing.T) string {
@@ -48,7 +63,7 @@ func TestRunnerClosure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("go list -deps . = %v\n%s", err, out)
 	}
-	var sawEngine, sawLLM bool
+	seen := map[string]bool{}
 	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		f := strings.Split(line, "\t")
 		if len(f) != 3 {
@@ -63,11 +78,12 @@ func TestRunnerClosure(t *testing.T) {
 		if cgo && !std {
 			t.Errorf("runner closure contains cgo package %s", path)
 		}
-		sawEngine = sawEngine || path == "dev-digest-go/backend/internal/reviewer/app"
-		sawLLM = sawLLM || path == "dev-digest-go/backend/internal/llm/adapters/openaicompat"
+		seen[path] = true
 	}
-	if !sawEngine || !sawLLM {
-		t.Errorf("runner closure lacks the review engine (%v) or the OpenRouter adapter (%v)", sawEngine, sawLLM)
+	for _, want := range required {
+		if !seen[want] {
+			t.Errorf("runner closure lacks %s", want)
+		}
 	}
 }
 

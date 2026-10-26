@@ -118,11 +118,15 @@ func TestProviders_RedactScrubsStoredKeys(t *testing.T) {
 // fakeLLMClient shows Resolve binds the case's identity into the request.
 type fakeLLMClient struct {
 	readyErr error
+	readyWS  string
 	req      llm.Request
 }
 
-func (f *fakeLLMClient) Ready(llm.Provider) error { return f.readyErr }
-func (f *fakeLLMClient) Redact(s string) string   { return "R(" + s + ")" }
+func (f *fakeLLMClient) ReadyIn(_ context.Context, ws string, _ llm.Provider) error {
+	f.readyWS = ws
+	return f.readyErr
+}
+func (f *fakeLLMClient) Redact(s string) string { return "R(" + s + ")" }
 func (f *fakeLLMClient) Structured(_ context.Context, r llm.Request) (llm.Result, error) {
 	f.req = r
 	return llm.Result{Data: json.RawMessage(`{"verdict":"approve","summary":"","score":100,"findings":[]}`)}, nil
@@ -136,6 +140,9 @@ func TestProviders_BindsTheCaseIntoTheRequest(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("Resolve() error = %v", err)
+	}
+	if f.readyWS != "ws-1" { // a custom provider is checked in the case's workspace (P4)
+		t.Errorf("ReadyIn() workspace = %q, want ws-1", f.readyWS)
 	}
 	if _, err := port.Review(t.Context(), reviewerapp.Call{Chunk: reviewer.ChunkRef{Index: 1, Total: 4}}); err != nil {
 		t.Fatalf("Review() error = %v", err)

@@ -78,23 +78,26 @@ type toolChoice struct {
 }
 
 type messagesRequest struct {
-	Model       string     `json:"model"`
-	System      string     `json:"system,omitempty"`
-	Messages    []message  `json:"messages"`
-	MaxTokens   int        `json:"max_tokens"`
-	Temperature float64    `json:"temperature"`
-	Tools       []tool     `json:"tools"`
-	ToolChoice  toolChoice `json:"tool_choice"`
+	Model       string      `json:"model"`
+	System      string      `json:"system,omitempty"`
+	Messages    []message   `json:"messages"`
+	MaxTokens   int         `json:"max_tokens"`
+	Temperature float64     `json:"temperature"`
+	Tools       []tool      `json:"tools,omitempty"`
+	ToolChoice  *toolChoice `json:"tool_choice,omitempty"`
 }
 
 type messagesResponse struct {
 	Content []struct {
 		Type  string          `json:"type"`
+		Text  string          `json:"text"`
 		Input json.RawMessage `json:"input"`
 	} `json:"content"`
 	Usage *struct {
 		InputTokens  int `json:"input_tokens"`
 		OutputTokens int `json:"output_tokens"`
+		// Cost is read only by custom providers (a gateway's usage.cost).
+		Cost json.RawMessage `json:"cost"`
 	} `json:"usage"`
 }
 
@@ -123,7 +126,7 @@ func buildRequest(at llm.Attempt) messagesRequest {
 		Tools: []tool{{
 			Name: name, Description: "Return the result as " + at.SchemaName + ".", InputSchema: at.Schema,
 		}},
-		ToolChoice: toolChoice{Type: "tool", Name: name},
+		ToolChoice: &toolChoice{Type: "tool", Name: name},
 	}
 	if at.MaxTokens > 0 {
 		req.MaxTokens = at.MaxTokens

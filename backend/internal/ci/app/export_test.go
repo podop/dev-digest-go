@@ -25,6 +25,8 @@ type exportRig struct {
 	gh    *fakeGitHub
 	logs  *logCapture
 	rec   *calls
+	// agents is the map behind the AgentDirectory: a test changes an agent between exports.
+	agents map[string]domain.ExportAgent
 }
 
 type rigOpts struct {
@@ -33,6 +35,8 @@ type rigOpts struct {
 	runner     bool
 	configured bool
 	openPR     string // URL of an open pull request; "" = none
+	custom     app.CustomProviders
+	prices     app.ModelPrices
 }
 
 func defaultAgent() domain.ExportAgent {
@@ -66,9 +70,11 @@ func newExportRig(t *testing.T, o rigOpts) *exportRig {
 		Store:  store,
 		Runner: fakeRunner{artifact: testRunner, ok: o.runner},
 		GitHub: gh,
+		Custom: o.custom,
+		Prices: o.prices,
 		Log:    logs.logger(),
 	})
-	return &exportRig{svc: svc, store: store, gh: gh, logs: logs, rec: rec}
+	return &exportRig{svc: svc, store: store, gh: gh, logs: logs, rec: rec, agents: agents.agents}
 }
 
 func okRig(t *testing.T) *exportRig {
@@ -95,18 +101,67 @@ func wantError(t *testing.T, err error, kind apperr.Kind, code, message string) 
 	return ae
 }
 
+const deviationsPath = "../../parity/testdata/handwritten/ci_deviations.json"
+
+// exportDeviations are the listed differences between the Node answer of a golden export step and
+// the Go one (ci_deviations.json, keys "export/<scenario>/<node error code>"). A listed step must
+// still show the listed Node answer in the golden and the listed Go answer here, and must be hit.
+type exportDeviations struct {
+	listed map[string]obj
+	hit    map[string]bool
+}
+
+func loadExportDeviations(t testing.TB) *exportDeviations {
+	t.Helper()
+	d := &exportDeviations{listed: map[string]obj{}, hit: map[string]bool{}}
+	for _, x := range asList(readJSONFile(t, deviationsPath)["deviations"]) {
+		if key := asStr(asObj(x)["key"]); strings.HasPrefix(key, "export/") {
+			d.listed[key] = asObj(x)
+		}
+	}
+	return d
+}
+
+// want is the error the Go service must answer for a golden error step: the golden's, unless the
+// step is listed, then the listed Go answer (after checking the listed Node answer is the golden's).
+func (d *exportDeviations) want(t testing.TB, scenario string, golden obj) obj {
+	t.Helper()
+	key := "export/" + scenario + "/" + asStr(golden["code"])
+	dev, listed := d.listed[key]
+	if !listed {
+		return golden
+	}
+	d.hit[key] = true
+	if diff := cmp.Diff(dev["node"], any(golden)); diff != "" {
+		t.Errorf("%s: the listed Node answer is out of date (-listed +golden):\n%s", key, diff)
+	}
+	return asObj(dev["go"])
+}
+
+func (d *exportDeviations) finish(t testing.TB) {
+	t.Helper()
+	for key := range d.listed {
+		if !d.hit[key] {
+			t.Errorf("deviation %q was never hit: it names no golden step", key)
+		}
+	}
+}
+
 // TestExportGolden runs the 20 export scenarios of the Node golden.
 func TestExportGolden(t *testing.T) {
 	spec, corpus, golden := scenarios(t, "export")
+	dev := loadExportDeviations(t)
 	for i := range golden {
-		t.Run(asStr(golden[i]["name"]), func(t *testing.T) {
+		name := asStr(golden[i]["name"])
+		t.Run(name, func(t *testing.T) {
 			world := asObj(corpus[i]["world"])
 			goldSteps, corpusSteps := asList(golden[i]["steps"]), asList(corpus[i]["steps"])
 			for j := range goldSteps {
-				runExportStep(t, spec, world, asObj(goldSteps[j]), asObj(corpusSteps[j]))
+				runExportStep(t, spec, world, asObj(goldSteps[j]), asObj(corpusSteps[j]), func(g obj) obj { return dev.want(t, name, g) })
 			}
 		})
 	}
+	dev.finish(t)
 }
 
 func exportWorld(t *testing.T, spec, world obj) *exportRig {
@@ -183,7 +238,7 @@ var kinds = map[string]apperr.Kind{
 	"internal": apperr.KindInternal, "external_service": apperr.KindExternalService, "config": apperr.KindConfig,
 }
 
-func runExportStep(t *testing.T, spec, world, gold, corpusStep obj) {
+func runExportStep(t *testing.T, spec, world, gold, corpusStep obj, expectedError func(golden obj) obj) {
 	t.Helper()
 	if _, schema := gold["parse"]; schema { // request schema: transport's job
 		return
@@ -234,7 +289,7 @@ func runExportStep(t *testing.T, spec, world, gold, corpusStep obj) {
 		label = label[:120]
 	}
 	if gerr, failed := gold["error"].(obj); failed {
-		checkGoldenError(t, label, err, gerr)
+		checkGoldenError(t, label, err, expectedError(gerr))
 	} else if err != nil {
 		t.Errorf("%s: error %v, want success", label, err)
 	} else if gold["op"] == "export" {

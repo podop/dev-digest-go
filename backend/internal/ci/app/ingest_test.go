@@ -368,6 +368,29 @@ func TestIngestLedger(t *testing.T) {
 		}
 	})
 
+	t.Run("entry carries the installation's stored provider (SCR5)", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, listed, stored, want string
+		}{
+			{"listed custom provider, store reports none", "custom:synapse", "", "custom:synapse"},
+			{"listed openai provider, store reports none", "openai", "", "openai"},
+			{"the store's value wins over the listed one", "openai", "anthropic", "anthropic"},
+			{"no provider anywhere is an openrouter installation", "", "", "openrouter"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				rig, ledger, _ := ledgerRig(t, resultZip(t, marshal(t, baseResult())))
+				for i := range rig.store.installs {
+					rig.store.installs[i].Provider = tc.listed
+				}
+				rig.store.recordProvider = tc.stored
+				refresh(t, rig)
+				if len(ledger.runs) != 1 || ledger.runs[0].Provider != tc.want {
+					t.Errorf("ledger entries = %+v, want one with provider %q", ledger.runs, tc.want)
+				}
+			})
+		}
+	})
+
 	t.Run("null cost appends an entry with unknown cost", func(t *testing.T) {
 		rig, ledger, _ := ledgerRig(t, resultZip(t, marshal(t, with(baseResult(), obj{"cost_usd": nil}))))
 		refresh(t, rig)

@@ -11,7 +11,12 @@ const NOT_SET = "Not set — features use their built-in defaults";
 const SECRETS = { openai: true, anthropic: true, openrouter: false, github: false };
 
 function mockModels(
-  over: { settings?: Record<string, unknown>; secrets?: Record<string, unknown>; models?: Record<string, unknown> } = {},
+  over: {
+    settings?: Record<string, unknown>;
+    secrets?: Record<string, unknown>;
+    models?: Record<string, unknown>;
+    custom?: unknown[];
+  } = {},
 ) {
   const models = over.models ?? {
     openrouter: [
@@ -23,10 +28,13 @@ function mockModels(
   return mockFetch({
     "GET /settings": over.settings ?? { default_model: null },
     "GET /settings/secrets-status": over.secrets ?? SECRETS,
+    "GET /settings/custom-providers": over.custom ?? [],
     "GET /providers/:provider/models": (req) => models[req.params.provider!] ?? [],
     "PUT /settings": (req) => req.body as Record<string, unknown>,
   });
 }
+
+const CUSTOM = (slug: string, name: string) => ({ id: `custom:${slug}`, name });
 
 const providerBox = () => screen.getByRole("combobox", { name: "Default model provider" });
 
@@ -109,5 +117,57 @@ describe("DefaultModelField", () => {
     await screen.findByText(/settingsBudget\.defaultModel\.noKey/);
     // the picker trigger shows the saved model id, which is data
     expect(strayText(container, ["z-ai/glm-5"])).toEqual([]);
+  });
+
+  it("lists custom providers after the built-ins, loads a custom model list and saves a custom default (AC24)", async () => {
+    const api = mockModels({
+      custom: [CUSTOM("synapse", "Synapse"), CUSTOM("lab", "Lab")],
+      models: { "custom:synapse": [{ id: "syn-large", provider: "custom:synapse" }] },
+    });
+    const { user } = renderWithProviders(<DefaultModelField />);
+
+    await waitFor(() => expect(api.requests("GET", "/settings/custom-providers")).toHaveLength(1));
+    await user.click(await screen.findByRole("combobox", { name: "Default model provider" }));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(5));
+    expect(screen.getAllByRole("option").map((o) => o.textContent)).toEqual([
+      "OpenRouter",
+      "OpenAI",
+      "Anthropic",
+      "Lab",
+      "Synapse",
+    ]);
+    await user.click(screen.getByRole("option", { name: "Synapse" }));
+
+    await waitFor(() => expect(api.requests("GET", "/providers/custom%3Asynapse/models")).toHaveLength(1));
+    // a custom provider has no key warning (its key is not part of the secrets status)
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    await user.click(await screen.findByText(NOT_SET));
+    await user.click(await screen.findByText("syn-large"));
+    await waitFor(() => expect(api.requests("PUT", "/settings")).toHaveLength(1));
+    expect(api.requests("PUT", "/settings")[0]!.body).toEqual({
+      default_model: { provider: "custom:synapse", model: "syn-large" },
+    });
+  });
+
+  it("shows an undefined custom default as Not configured and saves nothing until another provider is picked (EC23)", async () => {
+    const api = mockModels({
+      settings: { default_model: { provider: "custom:ghost", model: "m1" } },
+      custom: [CUSTOM("synapse", "Synapse")],
+      models: {},
+    });
+    const { user } = renderWithProviders(<DefaultModelField />);
+
+    expect(await screen.findByText("custom:ghost · Not configured")).toBeInTheDocument();
+    expect(await screen.findByRole("note")).toHaveTextContent("Pick another provider to save.");
+    // the list of an undefined custom provider is empty: the free-text field is offered, but Save stays off
+    const box = await screen.findByRole("textbox", { name: "Default model" });
+    await user.type(box, "x");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    await user.type(box, "{Enter}");
+    expect(api.requests("PUT", "/settings")).toHaveLength(0);
+
+    await pickOption(user, providerBox(), "OpenAI");
+    expect(screen.queryByText("custom:ghost · Not configured")).not.toBeInTheDocument();
+    expect(screen.queryByText("Pick another provider to save.")).not.toBeInTheDocument();
   });
 });
