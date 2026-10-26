@@ -1081,6 +1081,15 @@ change ships with the matching backend change; every new or changed shape gets a
   `null` (unpriced); `openrouter` keeps the Phase 6 behaviour byte-identical (provider-reported cost, no `pricing` key
   in its manifest) (FR35, FR36, NFR11, EC36, EC37, AC45, AC46, AC49, AC50) (user, 2026-10-24).
 
+- D30 — Planner defaults accepted (user pre-approval, 2026-10-26; plan `docs/plans/2026-10-26-custom-model-providers.md`):
+  SCR1 FR13/FR22 are already shipped by the cost ledger, AC27 is checked against the ledger's hint; SCR2 FR15's rule for
+  imported `default_model`/`feature_models` does not apply (Settings D never installs bundle settings); SCR3 a malformed
+  provider id in `GET /providers/:id/models` keeps 422, a well-formed undefined custom id answers 200 `[]`; SCR4 the
+  runner's FR33 hint names the provider id; SCR5 the stored export-time provider is also used for the ledger's `ci_run`
+  entry; SCR6 one picker order everywhere (OpenRouter, OpenAI, Anthropic, custom by name); SCR7 estimated (unreported)
+  tokens are never priced. Q13 and Q14 keep this spec's defaults. Custom-provider calls do not use HTTP(S)_PROXY (A3).
+  The migration number is 0009.
+
 ## 17. Open questions
 Q1–Q10 were answered by the user on 2026-10-24 (D15–D24), Q11–Q12 on 2026-10-24 (D28, D29). Two non-blocking
 questions raised by applying D28/D29 remain:
