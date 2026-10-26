@@ -71,6 +71,10 @@ func TestValidate_Rules(t *testing.T) {
 		{"prompt 50000 emoji is 100000 units", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = strings.Repeat(emoji, 50_000) }, ""},
 		{"prompt 50001 emoji", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = strings.Repeat(emoji, 50_001) }, "agents[0].system_prompt"},
 		{"prompt empty", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = "" }, "agents[0].system_prompt must be 1 to 100000"},
+		{"prompt of zero-width characters only", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = "\u200B\u202E\uFEFF" }, "agents[0].system_prompt has no visible text after hidden text is removed (HTML comments, zero-width or bidi characters)"},
+		{"prompt of a comment and blanks", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = " <!-- hi -->\n" }, "agents[0].system_prompt has no visible text after hidden text is removed"},
+		{"prompt with a comment and text", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = "<!-- hi -->p" }, ""},
+		{"prompt of blanks only keeps its old rule", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = "  " }, ""},
 		{"prompt with NUL", func(b *domain.Bundle) { b.Agents[0].SystemPrompt = "a\x00" }, "agents[0].system_prompt must not contain U+0000"},
 		{"agent description with NUL", func(b *domain.Bundle) { b.Agents[0].Description = "\x00" }, "agents[0].description must not contain U+0000"},
 		{"provider unknown", func(b *domain.Bundle) { b.Agents[0].Provider = "gemini" }, `agents[0].provider must be one of openai, anthropic, openrouter (found "gemini")`},
@@ -80,6 +84,8 @@ func TestValidate_Rules(t *testing.T) {
 		{"ci_fail_on unknown", func(b *domain.Bundle) { b.Agents[0].CIFailOn = "major" }, "agents[0].ci_fail_on must be one of"},
 		{"output schema scalar is allowed (agent create takes any JSON)", func(b *domain.Bundle) { b.Agents[0].OutputSchema = raw(`"x"`) }, ""},
 		{"output schema invalid JSON", func(b *domain.Bundle) { b.Agents[0].OutputSchema = raw(`{`) }, "agents[0].output_schema is not valid JSON"},
+		{"output schema with a lone surrogate", func(b *domain.Bundle) { b.Agents[0].OutputSchema = raw(`{"a":"\ud800"}`) }, "agents[0].output_schema must not contain an unpaired surrogate escape"},
+		{"output schema with a surrogate pair", func(b *domain.Bundle) { b.Agents[0].OutputSchema = raw(`{"a":"\ud83d\ude00"}`) }, ""},
 		{"output schema with NUL", func(b *domain.Bundle) { b.Agents[0].OutputSchema = raw(`{"a":"\u0000"}`) }, "agents[0].output_schema must not contain U+0000"},
 		{"agent links an unknown skill", func(b *domain.Bundle) { b.Agents[0].Skills = []string{"style", "ghost"} }, `agents[0].skills[1] names the skill "ghost", which is not in the bundle`},
 		{"agent links a skill twice", func(b *domain.Bundle) { b.Agents[0].Skills = []string{"style", "style"} }, `agents[0].skills lists "style" twice`},
@@ -101,6 +107,10 @@ func TestValidate_Rules(t *testing.T) {
 		{"skill body 10000 emoji", func(b *domain.Bundle) { b.Skills[0].Body = strings.Repeat(emoji, 10_000) }, ""},
 		{"skill body 10001 emoji", func(b *domain.Bundle) { b.Skills[0].Body = strings.Repeat(emoji, 10_001) }, "skills[0].body"},
 		{"skill body empty", func(b *domain.Bundle) { b.Skills[0].Body = "" }, "skills[0].body must be 1 to 20000"},
+		{"skill body of a comment only", func(b *domain.Bundle) { b.Skills[0].Body = "<!-- only a comment -->" }, "skills[0].body has no visible text after hidden text is removed (HTML comments, zero-width or bidi characters)"},
+		{"skill body of an unclosed comment", func(b *domain.Bundle) { b.Skills[0].Body = "<!-- never closed" }, "skills[0].body has no visible text"},
+		{"skill body with a comment and text", func(b *domain.Bundle) { b.Skills[0].Body = "a<!-- x -->" }, ""},
+		{"skill body over the limit is a length issue", func(b *domain.Bundle) { b.Skills[0].Body = strings.Repeat("\u200B", 20_001) }, "skills[0].body must be 1 to 20000"},
 		{"skill body with NUL", func(b *domain.Bundle) { b.Skills[0].Body = "a\x00b" }, "skills[0].body must not contain U+0000"},
 		{"skill type unknown", func(b *domain.Bundle) { b.Skills[0].Type = "tool" }, "skills[0].type must be one of rubric, convention, security, custom"},
 		{"skill source unknown", func(b *domain.Bundle) { b.Skills[0].Source = "plugin" }, "skills[0].source must be one of"},
@@ -274,4 +284,57 @@ func TestValidate_NoNULAnywhereInTheJSONPath(t *testing.T) {
 			t.Errorf("issues = %v, want both the skill description and the agent name", ie.Issues)
 		}
 	}
+}
+
+// TestPreviewAndInstallRefuseAnUnpairedSurrogate is the L1 regression: json.Valid accepts "\ud800",
+// Postgres jsonb does not, so the gate both the dry run and the install share (ParseUpload, then
+// Validate) must answer invalid_plugin instead of letting the install fail with a 500.
+func TestPreviewAndInstallRefuseAnUnpairedSurrogate(t *testing.T) {
+	tests := []struct {
+		name  string
+		field string
+		value string
+		want  string
+	}{
+		{"agent output_schema", "agents.0.output_schema", `{"x":"\ud800"}`, "agents[0].output_schema must not contain an unpaired surrogate"},
+		{"case input_files", "eval_cases.0.input_files", `[{"p":"\udfff"}]`, "eval_cases[0].input_files must not contain an unpaired surrogate"},
+		{"case input_meta", "eval_cases.0.input_meta", `{"k":"a\ud800b"}`, "eval_cases[0].input_meta must not contain an unpaired surrogate"},
+		{"case expected_output", "eval_cases.0.expected_output", `{"\ud800":1}`, "eval_cases[0].expected_output must not contain an unpaired surrogate"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var doc map[string]json.RawMessage
+			if err := json.Unmarshal([]byte(fullJSON), &doc); err != nil {
+				t.Fatalf("decode fullJSON: %v", err)
+			}
+			text := setJSONField(t, doc, tc.field, tc.value)
+			up, err := domain.ParseUpload("application/json", []byte(text))
+			if err != nil {
+				t.Fatalf("ParseUpload() = %v, want the bundle to decode (the problem is for Validate)", err)
+			}
+			wantInvalid(t, domain.Validate(up.Bundle), tc.want)
+		})
+	}
+}
+
+// setJSONField returns doc with the raw value at path (section.index.field) replaced; the value
+// text is spliced in unchanged, which a decode and re-encode of an escape would not keep.
+func setJSONField(t testing.TB, doc map[string]json.RawMessage, path, value string) string {
+	t.Helper()
+	parts := strings.Split(path, ".")
+	var list []map[string]json.RawMessage
+	if err := json.Unmarshal(doc[parts[0]], &list); err != nil {
+		t.Fatalf("decode %s: %v", parts[0], err)
+	}
+	list[0][parts[2]] = json.RawMessage(value)
+	section, err := json.Marshal(list)
+	if err != nil {
+		t.Fatalf("encode %s: %v", parts[0], err)
+	}
+	doc[parts[0]] = section
+	out, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	return string(out)
 }

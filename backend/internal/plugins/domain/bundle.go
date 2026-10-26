@@ -52,6 +52,28 @@ const (
 	// MaxIssues is the most issues a rejected bundle lists.
 	MaxIssues = 20
 
+	// Limits of the sections an import never installs and of the nested lists. The workspace
+	// export (Slice B) has no limit of its own on these, so they are generous multiples of what a
+	// workspace holds; they exist so that a decode never materialises an unbounded list (security
+	// review r1, M1). A workspace over one of them cannot be imported whole, like one over
+	// MaxAgents.
+	MaxConventions   = 20_000
+	MaxContextFiles  = 20_000
+	MaxSkillVersions = 500   // per skill
+	MaxEvidenceFiles = 1_000 // per skill
+	// MaxObjectKeys is the most keys of the top object, the manifest, the settings or one list item.
+	// A legal item has about a dozen and a workspace export 9 settings; unknown keys are listed as
+	// ignored, so this stays roomy. It also bounds the per-item maps of the decoder.
+	MaxObjectKeys = 100
+
+	// MaxJSONValues is the most JSON values (scalars, arrays, objects and object keys) a bundle
+	// may hold, anywhere, and MaxJSONDepth the deepest nesting. A bundle with every list and every
+	// nested list at its limit holds about 1.4 million (TestParseUpload_MaximalLegalBundleStillParses
+	// measures it); the nesting of a legal bundle is about ten levels and a JSON schema in
+	// output_schema rarely goes past 20.
+	MaxJSONValues = 2_000_000
+	MaxJSONDepth  = 100
+
 	PluginNameMax      = 80
 	PluginVersionMax   = 64
 	FileNameMax        = 255

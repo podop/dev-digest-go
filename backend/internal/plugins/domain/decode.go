@@ -52,13 +52,13 @@ var (
 
 // manifestWire is the part of the manifest an import reads; counts are recomputed.
 type manifestWire struct {
-	Name        string  `json:"name"`
-	Version     string  `json:"version"`
-	Format      string  `json:"format"`
-	Kind        string  `json:"kind"`
-	ExportedAt  string  `json:"exported_at"`
-	Description *string `json:"description"`
-	Counts      any     `json:"counts"`
+	Name        string          `json:"name"`
+	Version     string          `json:"version"`
+	Format      string          `json:"format"`
+	Kind        string          `json:"kind"`
+	ExportedAt  string          `json:"exported_at"`
+	Description *string         `json:"description"`
+	Counts      json.RawMessage `json:"counts"` // never read: counts are recomputed; raw so it is not decoded
 }
 
 // isNull reports an absent or JSON null value.
@@ -134,8 +134,12 @@ func (l *ignores) unknown(prefix string, obj map[string]json.RawMessage, known m
 
 // decodeBundle reads the JSON text of a bundle. Missing sections are empty lists, absent item
 // fields take their defaults (A3), unknown keys are ignored and listed (A7). A wrong type or a
-// list over its limit is the first broken rule.
+// list over its limit is the first broken rule. checkBudget runs first, so no list or object is
+// built that is over its limit (M1).
 func decodeBundle(text []byte) (Bundle, []Ignored, error) {
+	if err := checkBudget(text); err != nil {
+		return Bundle{}, nil, err
+	}
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(text, &top); err != nil {
 		var se *json.SyntaxError
@@ -182,10 +186,10 @@ func decodeBundle(text []byte) (Bundle, []Ignored, error) {
 	if b.Learnings, err = decodeList("learnings", top["learnings"], MaxLearnings, learningKeys, &ign, learningDefaults); err != nil {
 		return Bundle{}, nil, err
 	}
-	if b.Conventions, err = rawList("conventions", top["conventions"]); err != nil {
+	if b.Conventions, err = rawList("conventions", top["conventions"], MaxConventions); err != nil {
 		return Bundle{}, nil, err
 	}
-	if b.ContextFiles, err = rawList("context_files", top["context_files"]); err != nil {
+	if b.ContextFiles, err = rawList("context_files", top["context_files"], MaxContextFiles); err != nil {
 		return Bundle{}, nil, err
 	}
 	if len(b.ContextFiles) == 0 {
@@ -202,13 +206,16 @@ func decodeBundle(text []byte) (Bundle, []Ignored, error) {
 }
 
 // rawList reads a list whose items are never installed.
-func rawList(section string, raw json.RawMessage) ([]json.RawMessage, error) {
+func rawList(section string, raw json.RawMessage, limit int) ([]json.RawMessage, error) {
 	if isNull(raw) {
 		return []json.RawMessage{}, nil
 	}
 	var items []json.RawMessage
 	if err := json.Unmarshal(raw, &items); err != nil {
 		return nil, invalid("%s must be an array", section)
+	}
+	if len(items) > limit {
+		return nil, invalid("%s has %d entries; the limit is %d", section, len(items), limit)
 	}
 	return items, nil
 }

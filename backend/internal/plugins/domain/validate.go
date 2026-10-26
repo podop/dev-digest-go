@@ -44,6 +44,19 @@ func (c *issues) text(path, s string, minLen, maxLen int) {
 }
 
 // oneOf checks an enum field.
+// visibleText is text for a body or prompt that an install stores without hidden text: besides
+// the length rules on the raw value, something must stay once the hidden text is removed (L2).
+func (c *issues) visibleText(path, s string, minLen, maxLen int) {
+	before := len(c.list)
+	c.text(path, s, minLen, maxLen)
+	if len(c.list) != before {
+		return
+	}
+	if cleaned, h := stripHidden(s); h.any() && strings.TrimSpace(cleaned) == "" {
+		c.add("%s has no visible text after hidden text is removed (HTML comments, zero-width or bidi characters)", path)
+	}
+}
+
 func (c *issues) oneOf(path, value string, allowed []string) {
 	if !slices.Contains(allowed, value) {
 		c.add("%s must be one of %s (found %s)", path, quoteList(allowed), quoteShort(value))
@@ -84,7 +97,69 @@ func jsonHasNUL(raw []byte) bool {
 	return false
 }
 
-// jsonField checks a null | object | array JSON field (A12) that holds no U+0000.
+// hex4 reads the four hex digits at raw[i:i+4].
+func hex4(raw []byte, i int) (rune, bool) {
+	if i+4 > len(raw) {
+		return 0, false
+	}
+	var r rune
+	for _, c := range raw[i : i+4] {
+		switch {
+		case c >= '0' && c <= '9':
+			r = r<<4 | rune(c-'0')
+		case c >= 'a' && c <= 'f':
+			r = r<<4 | rune(c-'a'+10)
+		case c >= 'A' && c <= 'F':
+			r = r<<4 | rune(c-'A'+10)
+		default:
+			return 0, false
+		}
+	}
+	return r, true
+}
+
+// jsonHasLoneSurrogate reports whether JSON text holds, in a string or key, a \uD800-\uDBFF escape
+// that no \uDC00-\uDFFF escape follows, or a \uDC00-\uDFFF escape that no high one precedes.
+// json.Valid accepts them and the decoder turns them into U+FFFD, but a jsonb column refuses
+// them (SQLSTATE 22P02), which would answer an install of a previewed bundle with a 500
+// (security review r1, L1). The text is valid JSON; escapes are scanned in context.
+func jsonHasLoneSurrogate(raw []byte) bool {
+	inString := false
+	for i := 0; i < len(raw); i++ {
+		switch c := raw[i]; {
+		case !inString:
+			inString = c == '"'
+		case c == '"':
+			inString = false
+		case c == '\\' && i+1 < len(raw):
+			if raw[i+1] != 'u' {
+				i++ // skip the escaped character
+				continue
+			}
+			r, ok := hex4(raw, i+2)
+			switch {
+			case !ok:
+				i++
+			case r >= 0xD800 && r <= 0xDBFF:
+				if i+11 >= len(raw) || raw[i+6] != '\\' || raw[i+7] != 'u' {
+					return true
+				}
+				if lo, ok := hex4(raw, i+8); !ok || lo < 0xDC00 || lo > 0xDFFF {
+					return true
+				}
+				i += 11 // the pair
+			case r >= 0xDC00 && r <= 0xDFFF:
+				return true
+			default:
+				i += 5 // \uXXXX
+			}
+		}
+	}
+	return false
+}
+
+// jsonField checks a null | object | array JSON field (A12) that holds no U+0000 and no unpaired
+// surrogate escape.
 func (c *issues) jsonField(path string, raw json.RawMessage, objectOrArrayOnly bool) {
 	if len(raw) == 0 {
 		return
@@ -95,6 +170,10 @@ func (c *issues) jsonField(path string, raw json.RawMessage, objectOrArrayOnly b
 	}
 	if jsonHasNUL(raw) {
 		c.add("%s must not contain U+0000", path)
+		return
+	}
+	if jsonHasLoneSurrogate(raw) {
+		c.add("%s must not contain an unpaired surrogate escape (\\uD800 to \\uDFFF)", path)
 		return
 	}
 	if objectOrArrayOnly {
@@ -120,8 +199,8 @@ func firstByte(raw []byte) byte {
 // Validate checks a bundle against the rules of spec section 7 plus the enums, defaults and
 // bounds of A2, A3 and SCR4. It returns nil or an *InvalidError whose Issues list the broken rules
 // in order, at most MaxIssues; the first one is the message. Strings must not contain U+0000
-// (Postgres refuses it). Conventions, context files, settings and skill versions are never
-// installed and are not checked.
+// (Postgres refuses it) and the JSON fields no unpaired surrogate escape. Conventions, context
+// files, settings and skill versions are never installed; only their counts are checked.
 func Validate(b Bundle) error {
 	var c issues
 
@@ -170,10 +249,19 @@ func Validate(b Bundle) error {
 		}
 		skillNames[s.Name] = struct{}{}
 		c.text(p+".description", s.Description, 0, SkillDescriptionMax)
-		c.text(p+".body", s.Body, 1, SkillBodyMax)
+		c.visibleText(p+".body", s.Body, 1, SkillBodyMax)
 		c.oneOf(p+".type", s.Type, skillTypes)
 		c.oneOf(p+".source", s.Source, skillSources)
+		if len(s.EvidenceFiles) > MaxEvidenceFiles {
+			c.add("%s.evidence_files has %d entries; the limit is %d", p, len(s.EvidenceFiles), MaxEvidenceFiles)
+		}
+		if len(s.Versions) > MaxSkillVersions {
+			c.add("%s.versions has %d entries; the limit is %d", p, len(s.Versions), MaxSkillVersions)
+		}
 		for j, f := range s.EvidenceFiles {
+			if j >= MaxEvidenceFiles || c.full() {
+				break
+			}
 			c.text(fmt.Sprintf("%s.evidence_files[%d]", p, j), f, 0, -1)
 		}
 	}
@@ -192,10 +280,14 @@ func Validate(b Bundle) error {
 		c.text(p+".description", a.Description, 0, -1)
 		c.oneOf(p+".provider", a.Provider, agentProviders)
 		c.text(p+".model", a.Model, 1, AgentModelMax)
-		c.text(p+".system_prompt", a.SystemPrompt, 1, AgentPromptMax)
+		c.visibleText(p+".system_prompt", a.SystemPrompt, 1, AgentPromptMax)
 		c.oneOf(p+".strategy", a.Strategy, agentStrategies)
 		c.oneOf(p+".ci_fail_on", a.CIFailOn, agentCIFailOns)
 		c.jsonField(p+".output_schema", a.OutputSchema, false)
+		if len(a.Skills) > MaxSkills {
+			c.add("%s.skills has %d entries; the limit is %d", p, len(a.Skills), MaxSkills)
+			continue
+		}
 		linked := make(map[string]struct{}, len(a.Skills))
 		for j, name := range a.Skills {
 			if _, ok := skillNames[name]; !ok {

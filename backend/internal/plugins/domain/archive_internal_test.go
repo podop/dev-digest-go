@@ -112,6 +112,40 @@ func TestJSONHasNUL(t *testing.T) {
 	}
 }
 
+func TestJSONHasLoneSurrogate(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want bool
+	}{
+		{"lone high", `{"x":"\ud800"}`, true},
+		{"lone high upper case", `{"x":"\uDBFF"}`, true},
+		{"lone low", `{"x":"\udc00"}`, true},
+		{"low before high", `{"x":"\udc00\ud800"}`, true},
+		{"high then text", `{"x":"\ud800abc"}`, true},
+		{"high then other escape", `{"x":"\ud800\u0041"}`, true},
+		{"high at the end of the text", `"\ud800`, true},
+		{"high in a key", `{"\ud800":1}`, true},
+		{"high in an array", `["a","\ud83d"]`, true},
+		{"valid pair", `{"x":"\ud83d\ude00"}`, false},
+		{"valid pair upper case", `{"x":"\uD83D\uDE00"}`, false},
+		{"two pairs", `{"x":"\ud83d\ude00\ud83d\ude00"}`, false},
+		{"high, pair", `{"x":"\ud83d\ud83d\ude00"}`, true},
+		{"escaped backslash then text", `{"x":"\\ud800"}`, false},
+		{"escaped backslash then escape", `{"x":"\\\ud800"}`, true},
+		{"ordinary escapes", `{"x":"\u00e9\u20ac\n\"\ud7ff\ue000"}`, false},
+		{"outside a string", `{"a":1}`, false},
+		{"truncated escape", `"\ud80`, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := jsonHasLoneSurrogate([]byte(tc.raw)); got != tc.want {
+				t.Errorf("jsonHasLoneSurrogate(%s) = %v, want %v", tc.raw, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCheckEntryName(t *testing.T) {
 	tests := []struct {
 		name    string

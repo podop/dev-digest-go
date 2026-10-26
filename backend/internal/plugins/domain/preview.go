@@ -119,6 +119,7 @@ func Preview(up Upload, found Conflicts) PreviewDoc {
 	if withRepo > 0 {
 		doc.Warnings = append(doc.Warnings, fmt.Sprintf("%d learning(s) name a repository; they are installed without one", withRepo))
 	}
+	doc.Warnings = append(doc.Warnings, sanitizeTexts(b).warnings...)
 	return doc
 }
 
@@ -197,7 +198,8 @@ type InstallLearning struct {
 }
 
 // PlanInstall builds the install plan of a bundle that passed Validate. source is the upload's
-// file name ("" when none). The plugin name is the trimmed manifest name.
+// file name ("" when none). The plugin name is the trimmed manifest name. Skill bodies and agent
+// system prompts are stored without hidden text (SanitizeHiddenText); Preview warns about it.
 func PlanInstall(b Bundle, source string) Install {
 	name, _ := NormalizeName(b.Manifest.Name)
 	in := Install{
@@ -207,17 +209,18 @@ func PlanInstall(b Bundle, source string) Install {
 		EvalCases: make([]InstallCase, len(b.EvalCases)),
 		Learnings: make([]InstallLearning, len(b.Learnings)),
 	}
+	texts := sanitizeTexts(b)
 	for i, a := range b.Agents {
 		in.Agents[i] = InstallAgent{
 			Name: a.Name, Description: a.Description, Provider: a.Provider, Model: a.Model,
-			SystemPrompt: a.SystemPrompt, OutputSchema: a.OutputSchema, Enabled: a.Enabled,
+			SystemPrompt: texts.agentPrompts[i], OutputSchema: a.OutputSchema, Enabled: a.Enabled,
 			Strategy: a.Strategy, CIFailOn: a.CIFailOn, RepoIntel: a.RepoIntel, Skills: slices.Clone(a.Skills),
 		}
 	}
 	for i, s := range b.Skills {
 		in.Skills[i] = InstallSkill{
 			Name: s.Name, Description: s.Description, Type: s.Type, Source: InstalledSkillSource,
-			SourceRef: SkillSourceRef(name), Body: s.Body, Enabled: s.Enabled,
+			SourceRef: SkillSourceRef(name), Body: texts.skillBodies[i], Enabled: s.Enabled,
 			EvidenceFiles: slices.Clone(s.EvidenceFiles), VersionNote: SkillVersionNote(name),
 		}
 	}
