@@ -26,6 +26,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Codebase Patterns
 <!-- conventions and architectural decisions not obvious from the code -->
+- 2026-10-26 — src/lib/dialog-focus useDialogFocus: a shared hook already gives vendored-Modal dialogs Escape-to-close, a focus trap and focus return, and honours e.defaultPrevented so an open Select closes first (used by RemoveRepoDialog and the Settings › Integrations dialogs) → reuse it instead of a new document keydown listener per dialog
 - 2026-10-25 — useAutomaticReviewsStatus (lib/hooks/core.ts): data is undefined both while the first fetch loads and after it failed, so '{data && <Pill/>}' hides a misleading ON/OFF in both cases, while a later failed refetch keeps the last known state (PullsView Auto-review pill tests) → gate status-derived UI on data, not on isLoading/isError
 - 2026-10-25 — src/vendor/ui/AutoTriggerStatus.tsx carries a local additive onClick prop + type=button (0722f1a, Settings C D18) used by PullsView's Auto-review pill; frontend/AGENTS.md lists it as an exception to 'vendor/ui is not edited' → re-apply it on any re-sync of vendor/ui from dev-digest
 - 2026-10-25 — src/lib/api.ts api.get<T> only CASTS the payload (no zod parse), so a strict contract type such as RetentionDays (30|60|90|180|365|null) hides an out-of-range stored value like 45 → read such settings as unknown at runtime when the UI must show an 'invalid stored value' state (RetentionField helpers toSelectValue)
@@ -60,6 +61,8 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-26 — theme in UI checks: data-theme comes from localStorage key dd-theme (default dark), so Playwright colorScheme: "light" does not switch the app → set localStorage dd-theme=light before load for light screenshots (Settings D S26 ac25-light.js)
+- 2026-10-26 — next-intl ICU: a message containing <word> (e.g. the placeholder "devdigest-<workspace>") throws INVALID_MESSAGE: UNCLOSED_TAG because <…> is parsed as a rich-text tag → keep angle brackets out of message text (PluginExportDialog)
 - 2026-10-25 — lint: the repo-wide pnpm lint (biome lint --error-on-warnings .) carries ~158 pre-existing infos and 'pnpm exec next lint' opens an interactive ESLint setup prompt (no ESLint here) → gate a change with pnpm exec biome lint --error-on-warnings <changed dir>
 - 2026-10-25 — next-intl: t('providers.x') inside a component that uses a nested namespace key resolves from the namespace root, and a missing key only LOGS MISSING_MESSAGE (no throw), so tests pass until a text assertion fails → address nested keys with their full path (e.g. defaultModel.providers.x)
 - 2026-10-25 — vendored @devdigest/ui Button spreads props onto <button> without a default type, so a Cancel button inside a <form> submits it (AddRepoForm) → always pass type="button" for non-submit buttons inside forms
@@ -95,6 +98,8 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Recurring Errors & Fixes
 <!-- error message → cause → fix -->
+- 2026-10-26 — src/test pseudoMessages + strayText: a hard-coded separator character between two message spans (e.g. " · " in JSX) is reported as stray text → put such separators inside the message string (PluginImportCard, PluginExportCard last-export line)
+- 2026-10-26 — src/test/fetch-mock.ts mockFetch parses only string bodies, so a raw File/Blob upload shows no body in api.requests() → assert raw uploads on http.fetch.mock.calls[i][1] (init.body is the same File; read headers with new Headers(init.headers)) (lib/hooks/plugins/plugins.test.tsx, PluginImportCard.test.tsx)
 - 2026-10-21 — `ECONNRESET` / `ETIMEDOUT` from pnpm install inside docker build (frontend/Dockerfile deps stage hung 20+ min) on WSL2 → cause: many parallel registry downloads get reset on the default bridge network (single downloads work) → fix: build with network: host (docker-compose.yml build.network) — already configured, keep it
 - 2026-10-15 — 2026-10-15 — src/components/eval-cases/EvalCasesSection/EvalCasesSection.test.tsx 'disables New eval case … at 200 cases': timed out at the 5 s default once when client:test ran concurrently with server:integration (gates.sh --integration) and the dev servers, passed alone (4/4) and on a quiet re-run of the full suite (verified 2026-10-15) → treat a lone timeout there as load flake: re-run before debugging; a fix would be a per-test timeout or a smaller fixture
 - 2026-10-15 — src/components/diff-viewer/styles.ts highlightFor: adds backgroundImage on top of the row's background shorthand, so when highlighting toggles live (eval case editor preview) React logs 'Removing backgroundImage … don't mix shorthand and non-shorthand' and the Next dev overlay shows '1 Issue'; static highlights (PR deep links) never trigger it → fix by giving the row backgroundColor instead of background; until then treat that console error as pre-existing, not a regression. Rows expose data-highlighted for asserting highlighted ranges

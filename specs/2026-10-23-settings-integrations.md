@@ -1,5 +1,5 @@
 # Settings — Integrations (GitHub Action card, plugin export and import)
-Spec: Settings Integrations (Slice D) · Status: ready-for-planning · Date: 2026-10-23
+Spec: Settings Integrations (Slice D) · Status: implemented (2026-10-26, ebaceb5..4a31756; D19–D22: vanished-agent runs end done, learnings scope kept, remove-dialog history line, security hardening of plugin import) · Date: 2026-10-23
 Areas: api, ui, db
 Design sources: `docs/design/2026-10-23-settings-first-run.md` §4 Slice D, §5, §7 (P6), §8 (Q5); prototype
 "DevDigest — App prototype" `screen_settings.jsx` §3.5 Integrations (decoded extraction, read-only) and the screenshot
@@ -457,6 +457,19 @@ Changed existing routes: `POST /pulls/:id/review`, `POST /agents/:id/eval-runs`,
   entry points, each tested (user, 2026-10-25).
 - D18 — Planner defaults SCR1–SCR8 and A0–A14 accepted; the migration number is 0008 (Slice C took 0007 for D13)
   (user pre-approval, 2026-10-25).
+- D19 — AC14/EC7: a review run whose agent is deleted mid-run (plugin Remove or `DELETE /agents/:id`) stores its
+  review with a null agent and ends `done`; findings that cite a deleted skill keep the skill name with a null skill.
+  This also changes ordinary agent deletion mid-run, which failed before (accepted Node-parity difference in that race)
+  (user, 2026-10-26).
+- D20 — Imported learnings keep the bundle's `scope` with no repository, including `repo`; they are not remapped to the
+  workspace (user, 2026-10-26).
+- D21 — The remove dialog also says that past runs and reviews of the plugin's agents stay in the history (EC7)
+  (user, 2026-10-26).
+- D22 — Security L2/N2: at install, plugin skill bodies, skill descriptions and agent system prompts get the hidden-text
+  rules of skill import (HTML comments, zero-width and bidi characters); the preview warns per item, and a body or
+  prompt with no visible text left is refused with 422 `invalid_plugin`. The bundle JSON is checked against a value,
+  depth and item budget before it is decoded (security M1), and unpaired surrogate escapes are refused (L1)
+  (user, 2026-10-26).
 
 ## 17. Open questions
 None — Q5 was resolved by D4; Q1–Q4 and Q6–Q10 were resolved on 2026-10-23 by accepting their defaults (D6–D14).

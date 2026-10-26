@@ -1,5 +1,5 @@
 # Development Plan: Settings D — Integrations
-Plan: Settings D · Status: approved (user 2026-10-25: CR1–CR3 accepted, spec D15–D18; migration 0008; starts after slice C) · Spec: specs/2026-10-23-settings-integrations.md · Base: feat/go-backend-phase-1@d653f2c + C W4 (S0)
+Plan: Settings D · Status: done (2026-10-26; ebaceb5, 00c0ecd, fix rounds fd90f3d, 4a31756; gate arch r2, security r3, plan-verify r2 PASS) · Earlier: approved (user 2026-10-25: CR1–CR3 accepted, spec D15–D18; migration 0008) · Spec: specs/2026-10-23-settings-integrations.md · Base: feat/go-backend-phase-1@d653f2c + C W4 (S0)
 Packages: backend, frontend · Context pack: docs/plans/2026-10-25-settings-d-integrations.context.md ([A], [C1]–[C5], [D])
 Execution: multi-agent, parallel lanes (default, A0)
 

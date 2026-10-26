@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-25 21:40 (see ▶ Resume here; Settings C done, D next — user starts it) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-26 (see ▶ Resume here; Settings D done) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -15,25 +15,40 @@ plan `docs/plans/2026-10-22-go-backend-phase-5.md` (+ `.context.md`, S1–S38, W
 parallel lanes by the user). Backend gate after Phase 6: `make backend-check` exit 0, 128 packages;
 frontend contract test 148/148.
 
-## ▶ Resume here (2026-10-25 21:40)
+## ▶ Resume here (2026-10-26)
 Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user's standing orders:
 - run features autonomously in multi-agent waves and lanes;
 - approve plans by default and escalate only CRITICAL items (spec contradictions that change behaviour, destructive or irreversible choices, security, an NFR failure that needs a spec change);
-- the order is **slice D next** (then custom model providers / GitLab A–C, specs from the user's other session, not yet planned).
-- **The user said (2026-10-25 night): do NOT start slice D until they come back** — they start it themselves.
+- next: custom model providers / GitLab A–C (specs `specs/2026-10-24-*.md`, committed 4819a47, not yet planned; they extend Slice D's provider list, plan A14).
 
 | Feature | State |
 |---|---|
-| PR Leaderboard, Settings A, B, Cost ledger, **Settings C** | done and committed (specs `implemented`, plans `done`); the stand runs all of them (rebuilt from `0722f1a`, migrations up to 0007) |
-| **Settings D** (integrations / plugins) | plan approved `f1832de` (spec D15–D18, migration **0008**); implementation NOT started |
+| PR Leaderboard, Settings A, B, Cost ledger, Settings C | done and committed (specs `implemented`, plans `done`) |
+| **Settings D** (integrations / plugins) | **done** — `ebaceb5` (W1–W3), `00c0ecd` (W4 + D19/D21), `fd90f3d` (fix r1), `4a31756` (fix r2); spec `implemented` (D19–D22), plan `done`; the stand runs it (rebuilt, migrations up to **0008**) |
 
-**To start slice D:** plan `docs/plans/2026-10-25-settings-d-integrations.md` (+ `.context.md`).
-- S0: re-read C's committed files (autoreview, pulls poller D17, settings object); the migration is 0008.
-- Then W1–W5 multi-agent (lane rules: copy `.sdd/orchestration/lane-common-c.md` → `lane-common-d.md`, fix its stale carry-over path), the gate, closing, the stand.
+**Settings D gate** (reports in `.sdd/review/2026-10-25-settings-d-integrations/`, git-ignored):
+| Reviewer | r1 (`a179d4e..00c0ecd`) | r2 | r3 |
+|---|---|---|---|
+| Architecture | **PASS**, 0 findings | **PASS** (fix r1 + r2), 0 findings | — |
+| Security | **PASS**; M1 decode ~1.5 GB from a 21 KB zip, L1 lone surrogate → 500, L2 hidden text in plugin bodies/prompts → fixed (fix r1); L3 follow-up | **PASS**; M1/L1/L2 closed; N1 sanitize regexp ~20 s CPU, N2 skill descriptions → fixed (fix r2); N3 follow-up | **PASS** (`4a31756`): N1, N2 closed; INFO I1–I3 only |
+| Plan verification | 73 PASS / 0 FAIL / 5 pending | **PASS** 84 / 0 / 0 (AC23, AC25 from S26) | — |
+- `make check` green on every commit (149 backend packages; frontend 223 files / 1355 tests).
+- S26 manual (throwaway projects `devdigest-go-sd{,2}`, removed): AC23 export p95 570 ms (≤ 3 s), 5 MiB dry-run p95 663 ms (≤ 2 s); AC25 UI export → import into an empty DB → enable → review done; 0 bundle-text hits in the logs.
+- User decisions 2026-10-26 (spec D19–D22): review persist keeps runs of a vanished agent (also ordinary agent delete mid-run); learnings keep scope with no repo; remove dialog says history is kept; fix security L2 (hidden-text cleanup + budgeted decode).
+
+**Settings D follow-ups (not fixed):**
+- Security L3: plugin names may contain C1 / zero-width / bidi characters (look-alike plugins; needs a spec note, D5).
+- Security N3: both hidden-text rule sets (skill import and plugins) miss Unicode tag characters U+E0000–E007F ("ASCII smuggling"), variation selectors, U+2061–2064, U+00AD, U+180E (needs a spec note; changes skill import).
+- Learnings of a disabled plugin are not gated (no run reads `memory` today; any future retrieval must add the gate). CI workflows already pushed keep a removed plugin's prompt.
+- Optional: a concurrency cap (semaphore) on `POST /plugins/import`; odd message for confidence `1e999` ("must be a number (found number)").
+- `GET /skills` always returns `evidence_files: null` (pre-existing, skills store).
+- Security r3 INFO: the overflow warning says "N more item(s)" but counts fields; the 3 s wall-clock preview test could flake on a busy CI host (measures ~0.2 s).
+- arch r1 optional: one-line comment for Raw/Exec in `plugins/adapters/postgres/remove.go`.
+- `make backend-check` can hit the 10 m default package timeout for `cmd/server` under load (INSIGHTS).
 
 **Orchestration notes** (git-ignored): `.sdd/orchestration/`:
-- lane rules `lane-common-{b,c,ledger}.md`;
-- carry-over notes `{b,c,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
+- lane rules `lane-common-{b,c,d,ledger}.md`;
+- carry-over notes `{b,c,d,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
 Reports for each feature: `.sdd/review/<date>-<slug>/`.
 
 Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D.
