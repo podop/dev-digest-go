@@ -125,7 +125,7 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   polled, one evaluation at a time per process, and starts reviews through `reviewsapp.AutoStarter`
   (`StartAuto`, runs with source `auto`). `cmd/server/autoreview.go` holds the adapters (settings, clamped
   interval, starter that turns a 402 into `ErrCapReached`, budget = spend `Admit` with `auto_review_start`,
-  caps = spend `Status().Reached()` without logging, GitHub-token check). At most once: the store claims
+  caps = spend `Status().Reached()` without logging, token facts = GitHub token + GitLab repos and connection tokens). At most once: the store claims
   `(pr_id, head_sha)` in `auto_review_records` (unique key, `INSERT … ON CONFLICT DO NOTHING`) BEFORE the
   start and settles it after, so two evaluations or processes never review one head twice; the table has no
   FK to `agent_runs` (B's reset deletes runs but keeps the records). Rate limits: ≤ 5 starts per evaluation
@@ -177,8 +177,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
     link-local and unspecified addresses, loopback and private ones are allowed) serves every custom adapter.
     `DEVDIGEST_EXTRA_CA_FILE` is read once by `serve` (`egress.LoadExtraCA`; a bad file → one ERROR naming the
     variable and the path, then exit) and added by `extraCAClient`/`egress.WithRootCAs` to the GitHub clients, the
-    built-in LLM adapters, the providers listing, the skill URL import and the custom adapters; `git clone` over
-    HTTPS is not covered. A client a test injects through `options` keeps its own TLS roots.
+    built-in LLM adapters, the providers listing, the skill URL import, the custom adapters and the GitLab client;
+    git gets it through a bundle (see GitLab below). A client a test injects through `options` keeps its own TLS roots.
   - Secrets: `secrets.Store.Custom/SetCustom/DeleteCustom/RestoreCustom`, keyed by workspace and public id, no
     environment fallback, never in a response, error or log; written inside the DB transaction and restored when
     it does not commit (A7); `CustomCall.Secrets` feeds the redaction of every error and log line of the call.
@@ -192,6 +192,42 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
     `llm.Client.PerM`), a custom one gets `custom_provider` and manual pricing in the manifest, and an undefined
     one answers 422 `provider_not_configured`. The runner reads `DEVDIGEST_LLM_*` from the workflow env.
   - References: `customproviders/adapters/postgres/references.go` `Find` reads the agents and settings tables directly; a new table that stores a provider id must be added there, or delete-in-use misses it.
+- GitLab (GitLab A, `gitlabconn` context, migration 0010, spec D36-D37): read-only access to GitLab projects next to
+  GitHub repos. Connections are installation-wide (no workspace, max 20): `GET/POST /settings/gitlab-connections`,
+  `PUT/DELETE /settings/gitlab-connections/:id` (`gitlabconnhttp.AddRoutes`, no tenant resolver); a connection is
+  `{id, name, base_url (https://host[:port][/prefix], no /api/v4), host key}`, the host key (`codehost.HostKey`: lower
+  case, `:port` unless 443) is what repos bind to at READ time (no FK: repos/leaderboard SQL LEFT JOINs
+  `gitlab_connections` on `host`, so deleting a connection disconnects its repos, it never deletes them). The token
+  is `secrets.Store.GitLab/SetGitLab/DeleteGitLab/RestoreGitLab` (`gitlab_connections.<id>`, no environment fallback),
+  written inside the DB transaction and restored when it does not commit. `repos` gains `provider`, `host`,
+  `project_id`, `web_url` (uniques `(workspace, host, full_name)` and, for GitLab, `(workspace, host, project_id)`:
+  the project id is the identity, the path is refreshed by `UpdatePath` on the poll and the sync).
+  - Wiring is `cmd/server/gitlab.go`: `gitlabconnapp.Service` is bound to repos (`reposConnections`:
+    `Connections.Resolve/HostKeysByName`, `JobsOptions.Connections/CAFile`, `WithGitLab`), pulls (`pullsResolver`,
+    `pullsapp.WithGitLab`, and `PollerDeps.GitLab`, a `glClient.WithRetry(retry.Options{})` copy so a repo poll stays
+    within its request bound), settings (`settingsGitLab`: connection test, `provider: "gitlab"` + `connection_id`),
+    auto reviews (`autoTokens`: GitLab repos + the connection tokens decide `no_code_host_token`) and repo-intel
+    (`intelGit`, below). CI export, comments and posting stay GitHub only (`422 unsupported_host`).
+  - Outbound: `platform/gitlab.Client` over `egress.Client{Guard: custom.ForbiddenAddr, RootCAs}` (no proxy, SCR2; no
+    redirects; the token goes only to the connection's own address). git (`gitcli.Options.AddrGuard =
+    custom.ForbiddenAddr`) drops the proxy and SSL environment, resolves the host once, checks the address and pins
+    it (`http.curloptResolve`), sends the token as a Basic `oauth2` header scoped to the connection prefix
+    (`GIT_CONFIG_*`, never argv or `.git/config`) and never follows redirects.
+  - Clones live under the clone key `codehost.CloneKey` = `@gitlab/<host key, ':'→'_'>/<project id>` (the path is not part
+    of it, so a rename keeps the clone). EVERY reader of a clone passes the key (`repointel.Repo.CloneKey()`, the
+    `ReviewRepo`/`FindRepo` peers); the GitHub methods refuse a GitLab key and the `*Remote` methods refuse a GitHub one.
+    The clone key holds no project path, so `intelGit` (repo-intel's git port) reads it from the repository rows
+    (`pullsStore.ListPollTargets`) when it resyncs: `DefaultBranchRemote`/`SyncRemote` with a `Remote` built from the
+    connection; a host without a connection is a `*reposapp.NotConnectedError`.
+  - `DEVDIGEST_EXTRA_CA_FILE` + git: git replaces its trust store with `http.sslCAInfo`, so `serve` (`prepareGitCA`)
+    writes `<DataDir>/git-ca-bundle.pem` = system bundle (`SSL_CERT_FILE` or the usual distro paths) + the extra CA
+    through `gitcli.WriteCABundle` and passes the path to the repos jobs and `intelGit`. No system bundle
+    (`gitcli.ErrNoSystemBundle`) with the variable set refuses to start (SCR5); without the variable git keeps its
+    default roots and no file is written.
+  - Redaction: `llm.Options.ExtraRedactions` = custom values + `secrets.Store.GitLabValues` (`extraRedactions`), read at
+    every call; gitcli scrubs the token (and its Basic encoding) from git stderr; the onboarding redactor knows the 12
+    GitLab token prefixes. Auto reviews: a merge request from a fork (`source_project_id` ≠ `target_project_id`, or
+    missing) is `skipped_fork` (SCR1). The poller keeps one rate-limit pause per host (`pulls/domain.HostPauses`).
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

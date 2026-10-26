@@ -13,7 +13,10 @@ import (
 	autoreviewapp "dev-digest-go/backend/internal/autoreview/app"
 	autoreviewdomain "dev-digest-go/backend/internal/autoreview/domain"
 	"dev-digest-go/backend/internal/config"
+	gitlabconnapp "dev-digest-go/backend/internal/gitlabconn/app"
 	"dev-digest-go/backend/internal/platform/apperr"
+	"dev-digest-go/backend/internal/platform/codehost"
+	reposdomain "dev-digest-go/backend/internal/repos/domain"
 	reviewsapp "dev-digest-go/backend/internal/reviews/app"
 	settingsapp "dev-digest-go/backend/internal/settings/app"
 	spendapp "dev-digest-go/backend/internal/spend/app"
@@ -192,15 +195,77 @@ func TestAutoCaps_ReadsTheStatusWithoutAdmit(t *testing.T) {
 	}
 }
 
-func TestAutoTokens_ReportsAStoredToken(t *testing.T) {
-	for _, tc := range []struct {
-		token string
-		want  bool
-	}{{"", false}, {"ghp_x", true}} {
-		got, err := autoTokens{token: func() string { return tc.token }}.HasGitHubToken(t.Context(), "ws")
-		if err != nil || got != tc.want {
-			t.Errorf("HasGitHubToken(token %q) = %v, %v, want %v, nil", tc.token, got, err, tc.want)
-		}
+// fakeRepoList serves a fixed repository list (and an error) to autoTokens.
+type fakeRepoList struct {
+	repos []reposdomain.Repo
+	err   error
+}
+
+func (f fakeRepoList) List(context.Context, string) ([]reposdomain.Repo, error) {
+	return f.repos, f.err
+}
+
+// fakeConnTokens serves connections by host key.
+type fakeConnTokens struct {
+	byHost map[string]gitlabconnapp.Conn
+	err    error
+}
+
+func (f fakeConnTokens) Resolve(_ context.Context, host string) (gitlabconnapp.Conn, bool, error) {
+	c, ok := f.byHost[host]
+	return c, ok, f.err
+}
+
+func TestAutoTokens_CodeHostAccess(t *testing.T) {
+	ghRepo := reposdomain.Repo{Provider: codehost.GitHub, Host: "github.com"}
+	legacy := reposdomain.Repo{} // a row from before the provider column reads as GitHub
+	glRepo := func(host string) reposdomain.Repo { return reposdomain.Repo{Provider: codehost.GitLab, Host: host} }
+	conns := fakeConnTokens{byHost: map[string]gitlabconnapp.Conn{
+		"gl.example":    {Host: "gl.example", Token: "glpat-x"},
+		"nokey.example": {Host: "nokey.example"},
+	}}
+	tests := []struct {
+		name    string
+		token   string
+		repos   fakeRepoList
+		conns   fakeConnTokens
+		want    autoreviewdomain.CodeHostAccess
+		wantErr bool
+	}{
+		{name: "nothing stored, no repos"},
+		{name: "a GitHub token and no repos", token: "ghp_x",
+			want: autoreviewdomain.CodeHostAccess{GitHubToken: true}},
+		{name: "a GitHub repo with the token", token: "ghp_x", repos: fakeRepoList{repos: []reposdomain.Repo{ghRepo}},
+			want: autoreviewdomain.CodeHostAccess{GitHubToken: true, RepoWithToken: true}},
+		{name: "a legacy repo counts as GitHub", token: "ghp_x", repos: fakeRepoList{repos: []reposdomain.Repo{legacy}},
+			want: autoreviewdomain.CodeHostAccess{GitHubToken: true, RepoWithToken: true}},
+		{name: "a GitHub repo without the token", repos: fakeRepoList{repos: []reposdomain.Repo{ghRepo}}},
+		{name: "a GitLab repo with a connection token", conns: conns, repos: fakeRepoList{repos: []reposdomain.Repo{glRepo("gl.example")}},
+			want: autoreviewdomain.CodeHostAccess{GitLabRepos: true, RepoWithToken: true}},
+		{name: "a GitLab repo whose connection has no token", conns: conns, repos: fakeRepoList{repos: []reposdomain.Repo{glRepo("nokey.example")}},
+			want: autoreviewdomain.CodeHostAccess{GitLabRepos: true}},
+		{name: "a GitLab repo without a connection", conns: conns, repos: fakeRepoList{repos: []reposdomain.Repo{glRepo("gone.example")}},
+			want: autoreviewdomain.CodeHostAccess{GitLabRepos: true}},
+		{name: "a GitHub token does not cover a GitLab repo", token: "ghp_x", conns: conns, repos: fakeRepoList{repos: []reposdomain.Repo{glRepo("gone.example")}},
+			want: autoreviewdomain.CodeHostAccess{GitLabRepos: true, GitHubToken: true}},
+		{name: "one repo with a token among several is enough", conns: conns,
+			repos: fakeRepoList{repos: []reposdomain.Repo{glRepo("gone.example"), glRepo("gl.example"), glRepo("nokey.example")}},
+			want:  autoreviewdomain.CodeHostAccess{GitLabRepos: true, RepoWithToken: true}},
+		{name: "the repo list fails", repos: fakeRepoList{err: errors.New("db down")}, wantErr: true},
+		{name: "the connection lookup fails", conns: fakeConnTokens{err: errors.New("db down")},
+			repos: fakeRepoList{repos: []reposdomain.Repo{glRepo("gl.example")}}, wantErr: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tokens := autoTokens{token: func() string { return tc.token }, repos: tc.repos, conns: tc.conns}
+			got, err := tokens.CodeHostAccess(t.Context(), "ws")
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("CodeHostAccess() error = %v, want error %v", err, tc.wantErr)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("CodeHostAccess() mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

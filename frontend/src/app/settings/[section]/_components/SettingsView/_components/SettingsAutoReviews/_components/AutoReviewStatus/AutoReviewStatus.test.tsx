@@ -75,6 +75,16 @@ describe("AutoReviewStatus", () => {
     expect(screen.queryByText(/last poll/)).not.toBeInTheDocument();
   });
 
+  it("no_code_host_token (FR28) pauses with copy and links to both the GitHub and the GitLab section", async () => {
+    mockFetch({ [ROUTE]: status({ state: "no_code_host_token" }) });
+    renderWithProviders(<AutoReviewStatus />);
+
+    expect(await screen.findByText("Paused — no code host token: connect GitHub or GitLab")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "GitHub Integration" })).toHaveAttribute("href", "/settings/github");
+    expect(screen.getByRole("link", { name: "GitLab Integration" })).toHaveAttribute("href", "/settings/gitlab");
+    expect(screen.queryByText(/last poll/)).not.toBeInTheDocument();
+  });
+
   it("shows 'Status unavailable' with Retry when the request fails, and recovers on Retry", async () => {
     let fail = true;
     const api = mockFetch({
@@ -117,6 +127,16 @@ describe("AutoReviewStatus", () => {
 
     expect(await screen.findByText("⟦autoReviewStatus.states.no_github_token⟧")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "⟦autoReviewStatus.links.github⟧" })).toBeInTheDocument();
+    expect(strayText(container)).toEqual([]);
+  });
+
+  it("marks the no_code_host_token copy and both links as messages", async () => {
+    mockFetch({ [ROUTE]: status({ state: "no_code_host_token" }) });
+    const { container } = renderWithProviders(<AutoReviewStatus />, { messages: pseudoMessages() });
+
+    expect(await screen.findByText("⟦autoReviewStatus.states.no_code_host_token⟧")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "⟦autoReviewStatus.links.github⟧" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "⟦autoReviewStatus.links.gitlab⟧" })).toBeInTheDocument();
     expect(strayText(container)).toEqual([]);
   });
 

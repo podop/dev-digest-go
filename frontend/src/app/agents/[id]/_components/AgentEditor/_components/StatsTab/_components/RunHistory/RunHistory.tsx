@@ -8,12 +8,20 @@ import React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { RunHistoryItem } from "@devdigest/shared";
+import { prRef, type CodeHostRepo } from "@/lib/code-host";
 import { RunTraceDrawer } from "@/components/run-trace-drawer";
 import { CostText } from "@/components/cost-text";
 import { formatRunTime, formatTokenCount } from "../../helpers";
 import { s } from "./styles";
 
-export function RunHistory({ runs, agentName }: { runs: readonly RunHistoryItem[]; agentName: string }) {
+interface RunHistoryProps {
+  runs: readonly RunHistoryItem[];
+  agentName: string;
+  /** The workspace repositories: a GitLab run's PR reads `!n`, a missing repository reads as GitHub (FR43). */
+  repos?: readonly (CodeHostRepo & { id: string })[];
+}
+
+export function RunHistory({ runs, agentName, repos }: RunHistoryProps) {
   const t = useTranslations("agentPerformance.statsTab.history");
   const [open, setOpen] = React.useState<RunHistoryItem | null>(null);
   const dash = <span style={s.muted}>{t("noValue")}</span>;
@@ -43,7 +51,7 @@ export function RunHistory({ runs, agentName }: { runs: readonly RunHistoryItem[
                 <td className="mono tnum" style={s.td}>
                   {run.pr ? (
                     <Link href={`/repos/${encodeURIComponent(run.pr.repo_id)}/pulls/${run.pr.number}`} style={s.link}>
-                      #{run.pr.number}
+                      {prRef(repos?.find((r) => r.id === run.pr?.repo_id), run.pr.number)}
                     </Link>
                   ) : (
                     dash

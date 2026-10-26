@@ -90,7 +90,7 @@ type IndexReader interface {
 }
 
 // Git is the part of *gitcli.Client the indexer and the resync job use. owner and name locate
-// the clone under the git root.
+// the clone under the git root: Repo.CloneKey (for a GitLab repo ("@gitlab/<host dir>", "<project id>")).
 type Git interface {
 	// Head returns the clone's HEAD sha.
 	Head(ctx context.Context, owner, name string) (string, error)

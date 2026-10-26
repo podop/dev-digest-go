@@ -1,6 +1,7 @@
 {
   "title": "Automatic Reviews",
   "body": "Poll GitHub for new PRs and run agents without manual triggering.",
+  "bodyCodeHosts": "Poll your code hosts for new PRs and run agents without manual triggering.",
   "loading": "Loading automatic reviews…",
   "loadError": "Could not load the automatic review settings.",
   "agentsLoading": "Loading agents…",

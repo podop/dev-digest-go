@@ -11,7 +11,7 @@ import (
 
 func TestStateOf(t *testing.T) {
 	ok := func() domain.Facts {
-		return domain.Facts{Enabled: true, PollEnabled: true, HasGitHubToken: true, EffectiveAgents: 1, OnNewPR: true, OnNewCommits: true}
+		return domain.Facts{Enabled: true, PollEnabled: true, CodeHost: domain.CodeHostAccess{GitHubToken: true}, EffectiveAgents: 1, OnNewPR: true, OnNewCommits: true}
 	}
 	tests := []struct {
 		name string
@@ -21,13 +21,35 @@ func TestStateOf(t *testing.T) {
 		{"active", func(*domain.Facts) {}, domain.StateActive},
 		{"off", func(f *domain.Facts) { f.Enabled = false }, domain.StateOff},
 		{"poll disabled", func(f *domain.Facts) { f.PollEnabled = false }, domain.StatePollDisabled},
-		{"no token", func(f *domain.Facts) { f.HasGitHubToken = false }, domain.StateNoGitHubToken},
+		{"no token", func(f *domain.Facts) { f.CodeHost.GitHubToken = false }, domain.StateNoGitHubToken},
+		// FR28: with a GitLab repository no_github_token is never answered.
+		{"gitlab repo, no repo has a token", func(f *domain.Facts) {
+			f.CodeHost = domain.CodeHostAccess{GitLabRepos: true}
+		}, domain.StateNoCodeHostToken},
+		{"gitlab repo, github token alone does not make a gitlab repo pollable", func(f *domain.Facts) {
+			f.CodeHost = domain.CodeHostAccess{GitLabRepos: true, GitHubToken: true}
+		}, domain.StateNoCodeHostToken},
+		{"gitlab repo, one repo with a token", func(f *domain.Facts) {
+			f.CodeHost = domain.CodeHostAccess{GitLabRepos: true, RepoWithToken: true}
+		}, domain.StateActive},
+		{"gitlab repo, one repo with a token but no github token", func(f *domain.Facts) {
+			f.CodeHost = domain.CodeHostAccess{GitLabRepos: true, GitHubToken: false, RepoWithToken: true}
+		}, domain.StateActive},
+		{"no gitlab repo ignores RepoWithToken", func(f *domain.Facts) {
+			f.CodeHost = domain.CodeHostAccess{RepoWithToken: true}
+		}, domain.StateNoGitHubToken},
+		{"no code host token wins over agents, triggers, cap", func(f *domain.Facts) {
+			*f = domain.Facts{Enabled: true, PollEnabled: true, CodeHost: domain.CodeHostAccess{GitLabRepos: true}, CapReached: true}
+		}, domain.StateNoCodeHostToken},
+		{"poll disabled wins over no code host token", func(f *domain.Facts) {
+			*f = domain.Facts{Enabled: true, CodeHost: domain.CodeHostAccess{GitLabRepos: true}}
+		}, domain.StatePollDisabled},
 		{"no agents", func(f *domain.Facts) { f.EffectiveAgents = 0 }, domain.StateNoAgents},
 		{"one trigger is enough", func(f *domain.Facts) { f.OnNewCommits = false }, domain.StateActive},
 		{"no triggers", func(f *domain.Facts) { f.OnNewPR, f.OnNewCommits = false, false }, domain.StateNoTriggers},
 		{"cap reached", func(f *domain.Facts) { f.CapReached = true }, domain.StatePausedCap},
 		{"legacy true: enabled, nothing selected (EC16)", func(f *domain.Facts) { f.EffectiveAgents = 0 }, domain.StateNoAgents},
-		// precedence: off > poll_disabled > no_github_token > no_agents > no_triggers > paused_spend_cap
+		// precedence: off > poll_disabled > no_github_token (no_code_host_token) > no_agents > no_triggers > paused_spend_cap
 		{"off wins over everything", func(f *domain.Facts) {
 			*f = domain.Facts{CapReached: true}
 		}, domain.StateOff},
@@ -38,7 +60,7 @@ func TestStateOf(t *testing.T) {
 			*f = domain.Facts{Enabled: true, PollEnabled: true, CapReached: true}
 		}, domain.StateNoGitHubToken},
 		{"no agents wins over triggers and cap", func(f *domain.Facts) {
-			*f = domain.Facts{Enabled: true, PollEnabled: true, HasGitHubToken: true, CapReached: true}
+			*f = domain.Facts{Enabled: true, PollEnabled: true, CodeHost: domain.CodeHostAccess{GitHubToken: true}, CapReached: true}
 		}, domain.StateNoAgents},
 		{"no triggers wins over cap", func(f *domain.Facts) {
 			f.OnNewPR, f.OnNewCommits, f.CapReached = false, false, true

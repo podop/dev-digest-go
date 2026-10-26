@@ -9,6 +9,7 @@ import (
 
 	"dev-digest-go/backend/internal/intent/app"
 	"dev-digest-go/backend/internal/intent/domain"
+	"dev-digest-go/backend/internal/platform/codehost"
 	"dev-digest-go/backend/internal/platform/gitcli"
 	repointel "dev-digest-go/backend/internal/repointel/domain"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
@@ -50,7 +51,8 @@ var headSHA = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 // a cap checked before reading: a doc over it fails with its size and GitHub is not asked; any
 // other clone failure (no clone, no such commit or path, a bad head SHA) falls back to GitHub,
 // where absent, not a file, over the cap or any error all read as "not found". Text longer than
-// the cap in UTF-16 units is cut and marked truncated.
+// the cap in UTF-16 units is cut and marked truncated. The clone of a GitLab repository is found
+// by its clone key (codehost.CloneKey) and is the only source: there is no API fallback (FR29).
 func (d *Docs) Read(ctx context.Context, repo domain.Repo, sha, path string) app.DocRead {
 	if !domain.HasDocExtension(path) {
 		return failed("unsupported file type '" + path + "'")
@@ -59,7 +61,8 @@ func (d *Docs) Read(ctx context.Context, repo domain.Repo, sha, path string) app
 		return failed("unsafe path")
 	}
 	if headSHA.MatchString(sha) {
-		raw, err := d.git.BlobAt(ctx, repo.Owner, repo.Name, sha, path, domain.DocFetchMaxBytes)
+		owner, name := codehost.CloneKey(repo.Provider, repo.Host, repo.ProjectID, repo.Owner, repo.Name)
+		raw, err := d.git.BlobAt(ctx, owner, name, sha, path, domain.DocFetchMaxBytes)
 		if err == nil {
 			return read(raw)
 		}
@@ -72,7 +75,7 @@ func (d *Docs) Read(ctx context.Context, repo domain.Repo, sha, path string) app
 			return failed("File '" + path + "' at " + sha + " is too large")
 		}
 	}
-	if ctx.Err() != nil {
+	if ctx.Err() != nil || repo.IsGitLab() {
 		return failed("not found")
 	}
 	raw, found, err := d.gh.GetContent(ctx, repo.Owner, repo.Name, path, sha, domain.DocFetchMaxBytes)

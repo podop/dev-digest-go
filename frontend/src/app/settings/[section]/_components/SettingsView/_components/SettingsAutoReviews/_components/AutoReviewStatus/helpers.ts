@@ -22,8 +22,12 @@ export function toneOf(state: State): Tone {
   return state === "off" ? "muted" : "warn";
 }
 
-/** The Settings section a paused state sends the user to, if any (§9). */
-export function fixSectionOf(state: State): "github" | "api-keys" | null {
-  if (state === "no_github_token") return "github";
-  return state === "paused_spend_cap" ? "api-keys" : null;
+export type FixSection = "github" | "gitlab" | "api-keys";
+
+/** The Settings sections a paused state sends the user to (§9); no_code_host_token (FR28) names both code hosts,
+ *  because the workspace has GitLab repositories and none of its hosts has a token. */
+export function fixSectionsOf(state: State): readonly FixSection[] {
+  if (state === "no_github_token") return ["github"];
+  if (state === "no_code_host_token") return ["github", "gitlab"];
+  return state === "paused_spend_cap" ? ["api-keys"] : [];
 }

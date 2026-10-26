@@ -94,11 +94,12 @@ func (a *Documents) ForAgent(ctx context.Context, in app.DocumentsInput) ([]doma
 	}
 	res, err := a.pc.ResolveForRun(ctx, reviewsapp.ProjectContextInput{
 		WorkspaceID: in.WorkspaceID,
-		Repo:        reviewsdomain.ReviewRepo{ID: in.Pull.RepoID, Owner: in.Pull.Owner, Name: in.Pull.Name},
-		Base:        in.Pull.Base,
-		HeadSHA:     in.Pull.HeadSHA,
-		AgentID:     in.AgentID,
-		Skills:      skills,
+		Repo: reviewsdomain.ReviewRepo{ID: in.Pull.RepoID, Owner: in.Pull.Owner, Name: in.Pull.Name,
+			Provider: in.Pull.Provider, Host: in.Pull.Host, ProjectID: in.Pull.ProjectID},
+		Base:    in.Pull.Base,
+		HeadSHA: in.Pull.HeadSHA,
+		AgentID: in.AgentID,
+		Skills:  skills,
 	})
 	if err != nil {
 		return nil, err

@@ -441,6 +441,52 @@ func TestLeaderboard_WireShape(t *testing.T) {
 	}
 }
 
+// TestLeaderboard_RepoCodeHost: a GitLab repository carries provider, host and web_url (FR46),
+// a GitHub one none of them (its response is the one it always was), and the row and hot file
+// `repo` stays the short repository name (SCR6), told apart by repo_id.
+func TestLeaderboard_RepoCodeHost(t *testing.T) {
+	api := &fakeAPI{lb: domain.Leaderboard{
+		Window: domain.Window{Key: domain.Period30d, Location: time.UTC, From: time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC), Days: 30},
+		Repos: []domain.RepoRef{
+			{ID: "r1", FullName: "acme/api"},
+			{ID: "r2", FullName: "grp/sub/api", Provider: "gitlab", Host: "gitlab.example.com", WebURL: "https://gitlab.example.com/grp/sub/api"},
+			{ID: "r3", FullName: "grp/sub/api", Provider: "gitlab", Host: "git.other.org:8443", WebURL: "https://git.other.org:8443/grp/sub/api"},
+		},
+		HotFiles: []domain.HotFile{
+			{Path: "a.go", RepoID: "r2", Repo: "api", Findings: 1, PRs: []int{1}},
+			{Path: "a.go", RepoID: "r3", Repo: "api", Findings: 1, PRs: []int{1}},
+		},
+		Activity: domain.ActivityChart{Granularity: domain.GranularityWeek},
+	}}
+	r := get(t, newServer(t, api), "/leaderboard?period=30d&tz=UTC")
+	if r.Status != http.StatusOK {
+		t.Fatalf("GET /leaderboard = %d %s, want 200", r.Status, r.Body)
+	}
+	var got struct {
+		Repos    []map[string]any `json:"repos"`
+		HotFiles []map[string]any `json:"hot_files"`
+	}
+	if err := json.Unmarshal([]byte(r.Body), &got); err != nil {
+		t.Fatalf("decode %q: %v", r.Body, err)
+	}
+	wantRepos := []map[string]any{
+		{"id": "r1", "full_name": "acme/api", "last_polled_at": nil},
+		{"id": "r2", "full_name": "grp/sub/api", "last_polled_at": nil, "provider": "gitlab", "host": "gitlab.example.com", "web_url": "https://gitlab.example.com/grp/sub/api"},
+		{"id": "r3", "full_name": "grp/sub/api", "last_polled_at": nil, "provider": "gitlab", "host": "git.other.org:8443", "web_url": "https://git.other.org:8443/grp/sub/api"},
+	}
+	if diff := cmp.Diff(wantRepos, got.Repos); diff != "" {
+		t.Errorf("GET /leaderboard repos mismatch (-want +got):\n%s", diff)
+	}
+	for _, f := range got.HotFiles {
+		if f["repo"] != "api" {
+			t.Errorf("GET /leaderboard hot file repo = %v, want the short name api", f["repo"])
+		}
+	}
+	if len(got.HotFiles) != 2 || got.HotFiles[0]["repo_id"] == got.HotFiles[1]["repo_id"] {
+		t.Errorf("GET /leaderboard hot files = %v, want two entries of different repo_id", got.HotFiles)
+	}
+}
+
 // TestLeaderboard_WireShape30d: a window without a previous one has null previous bounds and a
 // null previous summary, and its activity is weekly with clipped Monday-started weeks.
 func TestLeaderboard_WireShape30d(t *testing.T) {

@@ -302,7 +302,7 @@ func (t *txStore) EnsureRepo(ctx context.Context, r seed.Repo) (string, bool, er
 		return row.ID, true, nil
 	}
 	var existing repoRow
-	if err := db.Where("workspace_id = ? AND full_name = ?", r.WorkspaceID, r.FullName).Take(&existing).Error; err != nil {
+	if err := db.Where("workspace_id = ? AND host = ? AND full_name = ?", r.WorkspaceID, "github.com", r.FullName).Take(&existing).Error; err != nil {
 		return "", false, fmt.Errorf("find repo: %w", err)
 	}
 	return existing.ID, false, nil

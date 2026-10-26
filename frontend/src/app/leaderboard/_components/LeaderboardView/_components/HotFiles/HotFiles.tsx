@@ -1,4 +1,4 @@
-/* HotFiles — the leaderboard's "Hot files" card (FR22, mockup): mono path, repo and #numbers (links to the PR, FR26) on the
+/* HotFiles — the leaderboard's "Hot files" card (FR22, mockup): mono path, repo (with its host on GitLab) and #numbers (!numbers on GitLab) (links to the PR, FR26) on the
    left, "N findings" and a red "N critical" on the right; rows with criticals get a reddish background. */
 "use client";
 
@@ -8,13 +8,17 @@ import { useTranslations } from "next-intl";
 import type { LeaderboardHotFile } from "@devdigest/shared";
 import { Card } from "@devdigest/ui";
 import { prDetailPath } from "@/lib/pr-urls";
+import { prRef } from "@/lib/code-host";
+import { NO_REPOS, repoNameLabel, type RepoLookup } from "../../helpers";
 import { s } from "./styles";
 
 export interface HotFilesProps {
   files: readonly LeaderboardHotFile[];
+  /** The response's repositories by id (GitLab references and host labels). */
+  repos?: RepoLookup;
 }
 
-export function HotFiles({ files }: HotFilesProps) {
+export function HotFiles({ files, repos = NO_REPOS }: HotFilesProps) {
   const t = useTranslations("leaderboardPanels.hotFiles");
   return (
     <Card style={s.card}>
@@ -41,12 +45,12 @@ export function HotFiles({ files }: HotFilesProps) {
                   {f.path}
                 </span>
                 <span style={s.location}>
-                  {t("location", { repo: f.repo })}{" "}
+                  {t("location", { repo: repoNameLabel(repos, f.repo_id, f.repo) })}{" "}
                   {f.prs.map((n, i) => (
                     <React.Fragment key={n}>
                       {i > 0 && ", "}
                       {t.rich("prLink", {
-                        number: String(n),
+                        ref: prRef(repos.get(f.repo_id), n),
                         link: (chunks) => (
                           <Link href={prDetailPath(encodeURIComponent(f.repo_id), n)} style={s.prLink}>
                             {chunks}

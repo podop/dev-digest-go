@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PrStatus } from './platform.js';
+import { PrStatus, RepoProvider } from './platform.js';
 
 /**
  * PR Leaderboard contract (specs/2026-10-23-pr-leaderboard.md §7, D17).
@@ -35,11 +35,18 @@ export const LeaderboardPeriod = z.object({
 });
 export type LeaderboardPeriod = z.infer<typeof LeaderboardPeriod>;
 
-/** A repository inside the filter; `last_polled_at` is null until first polled. */
+/**
+ * A repository inside the filter; `last_polled_at` is null until first polled. `provider`, `host` and `web_url`
+ * (GitLab A FR46) let the page apply the host-aware links, `!n` references and host labels by `repo_id`; the server
+ * always sends them, they are optional here only so pre-GitLab payloads and fixtures stay valid.
+ */
 export const LeaderboardRepo = z.object({
   id: z.string(),
   full_name: z.string(),
   last_polled_at: z.string().nullable(),
+  provider: RepoProvider.optional(),
+  host: z.string().optional(),
+  web_url: z.string().optional(),
 });
 export type LeaderboardRepo = z.infer<typeof LeaderboardRepo>;
 
@@ -100,7 +107,9 @@ export type LeaderboardTopFinding = z.infer<typeof LeaderboardTopFinding>;
 export const LeaderboardRow = z.object({
   pr_id: z.string(),
   repo_id: z.string(),
+  /** The repository NAME (not the full name); the page looks `repo_id` up in `repos` for the label, host and links. */
   repo: z.string(),
+  /** The PR number; for GitLab the merge request iid (shown as `!n`). */
   number: z.number().int(),
   title: z.string(),
   author: z.string(),

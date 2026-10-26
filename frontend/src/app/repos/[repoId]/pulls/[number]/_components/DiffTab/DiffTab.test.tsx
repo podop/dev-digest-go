@@ -7,8 +7,13 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderWithProviders, screen, cleanup, waitFor, within } from "@/test/render";
 import { mockFetch, type RouteHandler } from "@/test/fetch-mock";
 import type { FindingRecord, PrFile, ReviewRecord, SmartDiffResponse } from "@devdigest/shared";
+vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/pulls/12" }));
+
 import { DiffTab } from "./DiffTab";
 import type { DiffOrder } from "./constants";
+import { GITHUB_REPO, GITLAB_REPO } from "@/test/code-host-repo";
+import { pseudoMessages } from "@/test/render";
+import { RepoProvider } from "@/lib/repo-context";
 
 afterEach(cleanup);
 
@@ -400,3 +405,40 @@ describe("DiffTab — deep-link focus (?file/?line)", () => {
   });
 });
 
+describe("DiffTab — GitLab PR: no posting (FR45; AC34)", () => {
+  function renderOn(repo: typeof GITLAB_REPO, options?: Parameters<typeof renderWithProviders>[1]) {
+    routes({ "GET /repos": [repo] });
+    return renderWithProviders(
+      <RepoProvider>
+        <Wrapper initialOrder="original" />
+      </RepoProvider>,
+      options,
+    );
+  }
+
+  it("offers neither 'Post to PR' nor an inline composer, and says comments are not shown yet", async () => {
+    const { user } = renderOn(GITLAB_REPO);
+
+    expect(await screen.findByText("Comments from GitLab are not shown yet.")).toBeInTheDocument();
+    expect(await screen.findByText("Hardcoded secret")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Posted on GitHub/ })).not.toBeInTheDocument();
+
+    await user.hover(screen.getByText("added line"));
+    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
+  });
+
+  it("a GitHub PR keeps the button and the composer and has no GitLab note", async () => {
+    const { user } = renderOn(GITHUB_REPO);
+
+    expect(await screen.findByRole("button", { name: "Post to PR" })).toBeInTheDocument();
+    expect(screen.queryByText("Comments from GitLab are not shown yet.")).not.toBeInTheDocument();
+    await user.hover(screen.getByText("added line"));
+    expect(await screen.findByRole("button", { name: "Add a comment on this line" })).toBeInTheDocument();
+  });
+
+  it("the note comes from the message files (pseudo messages)", async () => {
+    renderOn(GITLAB_REPO, { messages: pseudoMessages() });
+    expect(await screen.findByText("⟦prPosting.gitlabCommentsNotShown⟧")).toBeInTheDocument();
+  });
+});

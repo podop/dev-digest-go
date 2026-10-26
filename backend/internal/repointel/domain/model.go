@@ -1,5 +1,5 @@
 // Package domain holds the repo-intel rows, constants and pure rules. It imports nothing outside
-// the standard library; the parser, the database and the clone on disk sit behind the ports of
+// the standard library and platform/codehost (clone-key naming, itself standard-library only); the parser, the database and the clone on disk sit behind the ports of
 // package app (and SourceFS and TokenCounter below).
 package domain
 
@@ -9,6 +9,8 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"dev-digest-go/backend/internal/platform/codehost"
 )
 
 // Limits and versions of the indexer (spec section 7.1).
@@ -135,10 +137,21 @@ type Repo struct {
 	WorkspaceID string
 	Owner       string
 	Name        string
+	// Provider is "github" or "gitlab" ("" reads as github); Host is the host key and ProjectID
+	// the numeric GitLab project id (0 = none). They locate the clone (CloneKey).
+	Provider  string
+	Host      string
+	ProjectID int64
 	// DefaultBranch is the stored branch name.
 	DefaultBranch string
 	// ClonePath is the clone directory; "" when the repo is not cloned.
 	ClonePath string
+}
+
+// CloneKey returns the (owner, name) pair the git client locates the clone under: (Owner, Name)
+// for GitHub, ("@gitlab/<host dir>", "<project id>") for GitLab (codehost.CloneKey).
+func (r Repo) CloneKey() (owner, name string) {
+	return codehost.CloneKey(r.Provider, r.Host, r.ProjectID, r.Owner, r.Name)
 }
 
 // Symbol is a top-level declaration extracted from one file (section 7.4).

@@ -34,6 +34,20 @@ describe("RunHistory", () => {
     expect(within(ci!).queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("references a GitLab run's PR as !n and a GitHub one as #n (FR43)", () => {
+    const runs = [
+      makeRun("g1", "local", { pr: { id: "pr-g", repo_id: "repo-gl", number: 12 } }),
+      makeRun("h1", "local", { pr: { id: "pr-h", repo_id: "repo-1", number: 7 } }),
+    ];
+    const repos = [
+      { id: "repo-gl", provider: "gitlab" as const, host: "gitlab.com", full_name: "acme/platform/payments" },
+      { id: "repo-1", provider: "github" as const, full_name: "acme/api" },
+    ];
+    renderWithProviders(<RunHistory runs={runs} agentName="Reviewer" repos={repos} />);
+    expect(screen.getByRole("link", { name: "!12" })).toHaveAttribute("href", "/repos/repo-gl/pulls/12");
+    expect(screen.getByRole("link", { name: "#7" })).toHaveAttribute("href", "/repos/repo-1/pulls/7");
+  });
+
   it("keeps the failed status next to an auto run and has no hard-coded copy", () => {
     const runs = [...RUNS, makeRun("r4", "auto", { status: "failed", cost_usd: null })];
     const { container } = renderWithProviders(<RunHistory runs={runs} agentName="Reviewer" />, {
@@ -41,7 +55,7 @@ describe("RunHistory", () => {
     });
     expect(screen.getAllByText("⟦agentPerformance.statsTab.history.source.auto⟧")).toHaveLength(2);
     expect(screen.getByText("⟦agentPerformance.statsTab.history.status.failed⟧")).toBeInTheDocument();
-    // data: the time, the PR "#" and number, tokens, cost ("—" / "$…") and the findings count
-    expect(strayText(container, [/\d{1,2}[:.]\d{2}/, "#", /^\d+$/, /^[\d.,\sk]+$/, /^[—$<]/])).toEqual([]);
+    // data: the time, the PR reference (#n), tokens, cost ("—" / "$…") and the findings count
+    expect(strayText(container, [/\d{1,2}[:.]\d{2}/, /^[#!]\d+$/, /^\d+$/, /^[\d.,\sk]+$/, /^[—$<]/])).toEqual([]);
   });
 });

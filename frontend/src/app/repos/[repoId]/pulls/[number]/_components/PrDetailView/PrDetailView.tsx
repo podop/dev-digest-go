@@ -4,7 +4,7 @@
    survive reload and can be shared. */
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { ErrorState } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
@@ -13,7 +13,8 @@ import { usePullDetail, usePulls } from "@/lib/hooks";
 import { usePrActiveRuns, usePrReviews } from "@/lib/hooks/reviews";
 import { useActiveRepo, useRepoNotFound } from "@/lib/repo-context";
 import { ApiError } from "@/lib/api";
-import { githubPrUrl } from "@/lib/github-urls";
+import { isNotConnected, prRef } from "@/lib/code-host";
+import { NotConnectedBanner } from "@/components/not-connected-banner";
 import { prDiffHref } from "@/lib/pr-urls";
 import { PrDetailHeader } from "../PrDetailHeader";
 import { PrDetailSkeleton } from "../PrDetailSkeleton";
@@ -21,7 +22,7 @@ import { OverviewTab } from "../OverviewTab";
 import { FindingsTab } from "../FindingsTab";
 import { DiffTab } from "../DiffTab";
 import { RunTraceDrawer } from "@/components/run-trace-drawer";
-import { countFindings, findPrId } from "./helpers";
+import { countFindings, findPrId, withPrRef } from "./helpers";
 import { usePrDetailSearch } from "./usePrDetailSearch";
 import { s } from "./styles";
 
@@ -33,7 +34,7 @@ interface PrDetailViewProps {
 export function PrDetailView({ repoId, number }: PrDetailViewProps) {
   const t = useTranslations("prReview");
   const tc = useTranslations("common");
-  const { activeRepo } = useActiveRepo();
+  const { activeRepo, repos } = useActiveRepo();
   const repoNotFound = useRepoNotFound(repoId);
   const { data: pulls, isLoading: pullsLoading } = usePulls(repoId);
   const prId = findPrId(pulls, number);
@@ -45,14 +46,23 @@ export function PrDetailView({ repoId, number }: PrDetailViewProps) {
     number,
   );
 
-  // The real "owner/repo" (null until the repo is loaded) — for github.com deep-links.
+  // The PR's repository (null until the repos list has loaded): host, `!n` / `#n` and the web link.
+  const repo = repos.find((r) => r.id === repoId) ?? null;
+  // The real "owner/repo" (null until the repo is loaded) — for host deep-links.
   const repoFullName = activeRepo?.full_name ?? null;
+  const ref = prRef(repo, number);
   const pullsHref = `/repos/${repoId}/pulls`;
   const crumb = [
     { label: repoFullName ?? repoId, mono: true, href: pullsHref },
     { label: t("detail.crumbPulls"), href: pullsHref },
-    { label: t("detail.crumbNumber", { number }), mono: true },
+    { label: ref, mono: true },
   ];
+
+  // The route's metadata is rendered on the server, which does not know the host: a GitLab merge request
+  // swaps its `#n` for `!n` once the repository is known (FR43).
+  useEffect(() => {
+    document.title = withPrRef(document.title, number, ref);
+  }, [number, ref]);
 
   const isLoading = pullsLoading || (prId != null && detailLoading);
   const traceReview = traceRunId ? reviews?.find((r) => r.run_id === traceRunId) : undefined;
@@ -71,7 +81,7 @@ export function PrDetailView({ repoId, number }: PrDetailViewProps) {
       <ErrorState
         fullScreen
         title={t("detail.errorTitle")}
-        body={error instanceof ApiError ? error.message : t("detail.errorBody", { number })}
+        body={error instanceof ApiError ? error.message : t("detail.errorBody", { ref })}
         onRetry={() => refetch()} retryLabel={tc("actions.retry")}
       />
     );
@@ -83,10 +93,11 @@ export function PrDetailView({ repoId, number }: PrDetailViewProps) {
           prId={prId}
           tab={tab}
           findingsCount={countFindings(reviews)}
-          githubUrl={repoFullName ? githubPrUrl(repoFullName, pr.number) : null}
+          repo={repo}
           onSetTab={setTab}
           onRunStart={() => setTab("findings")}
         />
+        {isNotConnected(repo) && <NotConnectedBanner host={repo?.host ?? ""} />}
         <div style={s.body}>
           {tab === "overview" && (
             <OverviewTab

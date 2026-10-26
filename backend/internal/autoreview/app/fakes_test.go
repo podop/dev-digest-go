@@ -43,11 +43,14 @@ type fakes struct {
 	// onStart runs inside StartAuto, before it answers.
 	onStart func(ctx context.Context)
 
-	capReached bool
-	capErr     error
-	hasToken   bool
-	pollOff    bool // PR_POLL_ENABLED=false
-	facts      app.PollFacts
+	capReached  bool
+	capErr      error
+	hasToken    bool // a GitHub token is stored
+	gitlabRepos bool // the workspace has a GitLab repository
+	repoToken   bool // some repository of the workspace has a token for its host
+	tokensErr   error
+	pollOff     bool // PR_POLL_ENABLED=false
+	facts       app.PollFacts
 
 	// candidatesGate, when set, is waited on inside Candidates (honouring ctx).
 	candidatesGate chan struct{}
@@ -261,11 +264,11 @@ func (f *fakeCaps) CapReached(context.Context, string) (bool, error) {
 
 type fakeTokens struct{ *fakes }
 
-func (f *fakeTokens) HasGitHubToken(context.Context, string) (bool, error) {
+func (f *fakeTokens) CodeHostAccess(context.Context, string) (domain.CodeHostAccess, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.called("token")
-	return f.hasToken, nil
+	return domain.CodeHostAccess{GitLabRepos: f.gitlabRepos, GitHubToken: f.hasToken, RepoWithToken: f.repoToken}, f.tokensErr
 }
 
 // logBuf is a concurrency-safe log sink.

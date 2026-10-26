@@ -1,8 +1,8 @@
 /* BlastRadiusCard helpers — the stat row (counting what the server returned),
-   the client-built GitHub deep-link of a caller, how a caller is labelled and the message key of a
+   the client-built code-host deep-link of a caller, how a caller is labelled and the message key of a
    degraded reason. Types only from @devdigest/shared (client/INSIGHTS.md). */
 import type { BlastCaller, BlastDegradedReason, BlastRadius } from "@devdigest/shared";
-import { githubBlobUrl } from "@/lib/github-urls";
+import { blobUrl, type CodeHostRepo } from "@/lib/code-host";
 
 export interface BlastStats {
   symbols: number;
@@ -43,10 +43,10 @@ export function callerNodeLabel(caller: BlastCaller): string {
   return callerSymbolLabel(caller) ?? baseName(caller.file);
 }
 
-/** The caller's exact line on GitHub at the PR head; undefined without a repo name or sha (render plain text). */
-export function callerHref(repoFullName: string | null, headSha: string | null, caller: BlastCaller): string | undefined {
-  if (!repoFullName || !headSha) return undefined;
-  return githubBlobUrl(repoFullName, headSha, caller.file, caller.line);
+/** The caller's exact line on the code host at the PR head; undefined without a repository or sha (render plain text). */
+export function callerHref(repo: CodeHostRepo | null, headSha: string | null, caller: BlastCaller): string | undefined {
+  if (!headSha) return undefined;
+  return blobUrl(repo, headSha, caller.file, caller.line) ?? undefined;
 }
 
 const KNOWN_REASONS: readonly BlastDegradedReason[] = ["flag_off", "index_failed", "index_partial", "repo_too_large", "no_data"];

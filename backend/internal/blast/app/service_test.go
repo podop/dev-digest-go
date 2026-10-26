@@ -300,6 +300,19 @@ func TestHistory_NoFilesMakesNoGitHubCall(t *testing.T) {
 	}
 }
 
+func TestHistory_GitLabPullMakesNoGitHubCall(t *testing.T) { // FR29, AC22
+	r := newRig("a.go")
+	r.store.pull.Provider = "gitlab"
+	r.gh.merged = []domain.MergedPR{{Number: 1, Files: []string{"a.go"}}}
+	got, err := r.svc.History(t.Context(), ws, pr)
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("History(GitLab pull) = %#v, %v, want a non-nil empty list", got, err)
+	}
+	if len(r.gh.calls) != 0 {
+		t.Errorf("GitHub calls = %v, want none", r.gh.calls)
+	}
+}
+
 func TestHistory_GitHubFailureIsAnEmptyListAndOneWarning(t *testing.T) {
 	for _, tc := range []struct{ name, msg, wantErr string }{
 		{"server error", "GitHub answered 500", "GitHub answered 500"},

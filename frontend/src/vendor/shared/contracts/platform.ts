@@ -89,12 +89,14 @@ export const AutomaticReviewsInput = z.union([
 export type AutomaticReviewsInput = z.infer<typeof AutomaticReviewsInput>;
 
 /** GET /settings/automatic-reviews-status — state precedence off > poll_disabled > no_github_token >
- *  no_agents > no_triggers > paused_spend_cap > active. */
+ *  no_agents > no_triggers > paused_spend_cap > active; `no_code_host_token` takes the place of
+ *  `no_github_token` when the workspace has a GitLab repository (GitLab A FR28). */
 export const AutomaticReviewsStatus = z.object({
   state: z.enum([
     'off',
     'poll_disabled',
     'no_github_token',
+    'no_code_host_token',
     'no_agents',
     'no_triggers',
     'paused_spend_cap',
@@ -149,15 +151,94 @@ export const SettingsUpdate = Settings.partial().extend({
 });
 export type SettingsUpdate = z.infer<typeof SettingsUpdate>;
 
+// ---- GitLab connections (specs/2026-10-24-gitlab-a-connection-sync.md §7) ----
+/** Limits of a connection (FR1, FR2, FR4). */
+export const GITLAB_CONNECTION_LIMITS = {
+  maxConnections: 20,
+  nameMax: 80,
+  baseUrlMax: 2048,
+  tokenMin: 1,
+  tokenMax: 4096,
+} as const;
+
+/** The `ConnTestResult.token_access` verdict (FR11). */
+export const GitLabTokenAccess = z.enum(['full', 'read_only']);
+export type GitLabTokenAccess = z.infer<typeof GitLabTokenAccess>;
+
+/** Warning codes of a GitLab test, in the order the server lists them (FR11). */
+export const GITLAB_TEST_WARNING_CODES = [
+  'read_only_token',
+  'no_repository_scope',
+  'token_expiring',
+  'version_unsupported',
+  'scopes_unknown',
+  'version_unknown',
+] as const;
+export const GitLabTestWarningCode = z.enum(GITLAB_TEST_WARNING_CODES);
+export type GitLabTestWarningCode = z.infer<typeof GitLabTestWarningCode>;
+
+export const GitLabTestWarning = z.object({ code: GitLabTestWarningCode, message: z.string() });
+export type GitLabTestWarning = z.infer<typeof GitLabTestWarning>;
+
+/** GET/POST/PUT `/settings/gitlab-connections` response item. The token is write-only: never returned. */
+export const GitLabConnection = z.object({
+  /** Server-generated UUID. */
+  id: z.string(),
+  name: z.string(),
+  /** Normalised instance URL (FR2): https, no trailing slash, no `/api/v4`. */
+  base_url: z.string(),
+  /** Host key: lower-cased host name, plus `:<port>` when the port is not 443. */
+  host: z.string(),
+  token_configured: z.boolean(),
+  /** Repositories of all workspaces bound to this host key. */
+  repo_count: z.number().int().nonnegative(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+export type GitLabConnection = z.infer<typeof GitLabConnection>;
+
+const gitLabToken = z
+  .string()
+  .min(GITLAB_CONNECTION_LIMITS.tokenMin)
+  .max(GITLAB_CONNECTION_LIMITS.tokenMax)
+  .refine((t) => !/[\s\p{Cc}]/u.test(t), { message: 'No whitespace or control characters' });
+
+/**
+ * POST `/settings/gitlab-connections` body. `name` empty or omitted → the host key. `token` is
+ * write-only (on PUT: omitted = keep, `null` = remove, a string = replace).
+ */
+export const GitLabConnectionInput = z.object({
+  name: z.string().trim().max(GITLAB_CONNECTION_LIMITS.nameMax).optional(),
+  base_url: z.string().min(1).max(GITLAB_CONNECTION_LIMITS.baseUrlMax),
+  token: gitLabToken.nullish(),
+});
+export type GitLabConnectionInput = z.infer<typeof GitLabConnectionInput>;
+
+/** PUT `/settings/gitlab-connections/:id` body: the POST fields, all optional (`base_url` only with the same host key). */
+export const GitLabConnectionUpdate = GitLabConnectionInput.partial();
+export type GitLabConnectionUpdate = z.infer<typeof GitLabConnectionUpdate>;
+
+/** DELETE `/settings/gitlab-connections/:id` → 200; its repositories become "not connected" (FR7, FR48). */
+export const GitLabConnectionDeleted = z.object({
+  deleted: z.string(),
+  disconnected_repos: z.number().int().nonnegative(),
+});
+export type GitLabConnectionDeleted = z.infer<typeof GitLabConnectionDeleted>;
+
 // ---- Connection test ----
-/** A built-in provider, GitHub, or a custom provider id (`custom:<slug>`). */
-export const ConnTestProvider = z.union([z.enum(['openai', 'anthropic', 'openrouter', 'github']), CustomProviderId]);
+/** A built-in provider, GitHub, GitLab (a connection, see `connection_id`), or a custom provider id (`custom:<slug>`). */
+export const ConnTestProvider = z.union([
+  z.enum(['openai', 'anthropic', 'openrouter', 'github', 'gitlab']),
+  CustomProviderId,
+]);
 export type ConnTestProvider = z.infer<typeof ConnTestProvider>;
 
 export const ConnTestRequest = z.object({
   provider: ConnTestProvider,
   /** Optional API key/PAT to persist and then test (BYO key from the UI). */
   key: z.string().min(1).optional(),
+  /** Required for `gitlab` (missing → 422 at `["connection_id"]`, unknown → 404 `gitlab_connection_not_found`); ignored otherwise. */
+  connection_id: z.string().min(1).optional(),
 });
 export type ConnTestRequest = z.infer<typeof ConnTestRequest>;
 
@@ -176,8 +257,32 @@ export const ConnTestResult = z.object({
   scopes: z.array(z.string()).nullish(),
   /** Custom providers: an ok answer that did not verify the key (e.g. "Model list not available; key not verified"). */
   warning: z.string().nullish(),
+  /** GitLab only (the spec sends every key, null when not known; GitHub and LLM answers omit them): */
+  /** the token's expiry as `YYYY-MM-DD`; null = no expiry or not reported. */
+  expires_at: z.string().nullish(),
+  /** The instance version (e.g. `17.5.1-ee`); null = not reported. */
+  instance_version: z.string().nullish(),
+  /** `full` when the scopes contain `api`, `read_only` for `read_api` only, null when the scopes are unknown. */
+  token_access: GitLabTokenAccess.nullish(),
+  /** In the order of `GITLAB_TEST_WARNING_CODES`; `[]` when none. */
+  warnings: z.array(GitLabTestWarning).optional(),
 });
 export type ConnTestResult = z.infer<typeof ConnTestResult>;
+
+/** The `ConnTestResult` of a GitLab test with every key present (null when `ok` is false). */
+export const GitLabConnTestResult = z.object({
+  provider: z.literal('gitlab'),
+  ok: z.boolean(),
+  message: z.string(),
+  latency_ms: z.number().int().nullable(),
+  login: z.string().nullable(),
+  scopes: z.array(z.string()).nullable(),
+  expires_at: z.string().nullable(),
+  instance_version: z.string().nullable(),
+  token_access: GitLabTokenAccess.nullable(),
+  warnings: z.array(GitLabTestWarning),
+});
+export type GitLabConnTestResult = z.infer<typeof GitLabConnTestResult>;
 
 // ---- Monthly spend (GET /settings/spend) ----
 /** Month-to-date spend against the optional cap; money rounded to 6 decimals. */
@@ -339,38 +444,97 @@ export const CustomProviderInUseDetails = z.object({
 export type CustomProviderInUseDetails = z.infer<typeof CustomProviderInUseDetails>;
 
 // ---- Repos ----
-/**
- * Anchored GitHub repo URL: `https://github.com/<owner>/<repo>(.git)(/)` or
- * `git@github.com:<owner>/<repo>(.git)`. Owner/repo are restricted to
- * `[A-Za-z0-9_.-]` — the parsed values become clone-path segments on disk.
- */
-const GITHUB_REPO_URL_REGEX =
-  /^(?:https:\/\/github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?|git@github\.com:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?)$/;
+/** The code host of a repository. */
+export const RepoProvider = z.enum(['github', 'gitlab']);
+export type RepoProvider = z.infer<typeof RepoProvider>;
+
+/** Message of a rejected repository URL (422 `validation_error` at `["url"]`, FR12). */
+export const REPO_URL_INVALID_MESSAGE =
+  'Must be a GitHub or GitLab repository URL, e.g. https://github.com/owner/repo or https://gitlab.com/group/project';
+
+/** A GitLab repository path has 2 to 21 `/`-separated segments (FR12). */
+export const GITLAB_PATH_SEGMENTS = { min: 2, max: 21 } as const;
+
+/** A path segment: `[A-Za-z0-9_.-]+`, not `.`/`..`/`.git`, no leading `-` (the parsed values become clone-path inputs). */
+const REPO_SEGMENT_REGEX = /^[A-Za-z0-9_.-]+$/;
 
 /** A path segment that is safe as a directory name: not `.`/`..`/`.git`, no leading `-`. */
 function isSafeRepoSegment(s: string): boolean {
-  return s !== '.' && s !== '..' && s.toLowerCase() !== '.git' && !s.startsWith('-');
+  return REPO_SEGMENT_REGEX.test(s) && s !== '.' && s !== '..' && s.toLowerCase() !== '.git' && !s.startsWith('-');
 }
 
-/** Parse `owner`/`name` from a GitHub repo URL; `null` when it isn't one (or is unsafe). */
-export function parseGitHubRepoUrl(url: string): { owner: string; name: string } | null {
-  const m = GITHUB_REPO_URL_REGEX.exec(url);
-  const owner = m?.[1] ?? m?.[3];
-  const name = m?.[2] ?? m?.[4];
-  if (!owner || !name || !isSafeRepoSegment(owner) || !isSafeRepoSegment(name)) return null;
-  return { owner, name };
+/** `https://<host>[:<port>]/<path>` — host labels, optional port. */
+const HTTPS_REPO_URL_REGEX = /^https:\/\/([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)(?::([0-9]{1,5}))?\/(.+)$/;
+/** `git@<host>:<path>` — host name only. */
+const SSH_REPO_URL_REGEX = /^git@([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?):(.+)$/;
+
+/** A parsed repository URL. */
+export interface ParsedRepoUrl {
+  provider: RepoProvider;
+  /** Host key: lower-cased host name, plus `:<port>` for an HTTPS URL with a port other than 443. */
+  host: string;
+  /** The full path (`owner/name`, or `group/sub/project`) without `.git` and a trailing `/`. */
+  path: string;
+  /** GitHub: the owner. GitLab: the namespace (every segment but the last). */
+  owner: string;
+  /** The last path segment. */
+  name: string;
+}
+
+/**
+ * Parse a GitHub or GitLab repository URL (GitLab A FR12): `https://<host>[:<port>]/<path>` or
+ * `git@<host>:<path>`, each with an optional `.git` (and, for HTTPS, a trailing `/`). `github.com` takes exactly
+ * `owner/repo`; any other host takes 2 to 21 segments. `null` when the text is not such a URL, a segment is unsafe,
+ * or it has a query, fragment or userinfo. Host binding to a connection (FR13) is the server's job.
+ */
+export function parseRepoUrl(url: string): ParsedRepoUrl | null {
+  const text = url.trim();
+  let host: string;
+  let rest: string;
+  const https = HTTPS_REPO_URL_REGEX.exec(text);
+  if (https) {
+    const port = https[2];
+    if (port !== undefined && (Number(port) < 1 || Number(port) > 65535)) return null;
+    host = https[1]!.toLowerCase() + (port !== undefined && Number(port) !== 443 ? `:${Number(port)}` : '');
+    rest = https[3]!;
+    if (rest.endsWith('/')) rest = rest.slice(0, -1);
+  } else {
+    const m = SSH_REPO_URL_REGEX.exec(text);
+    if (!m) return null;
+    host = m[1]!.toLowerCase();
+    rest = m[2]!;
+  }
+  if (rest.endsWith('.git')) rest = rest.slice(0, -4);
+  const segments = rest.split('/');
+  if (!segments.every(isSafeRepoSegment)) return null;
+  const github = host === 'github.com';
+  if (github ? segments.length !== 2 : segments.length < GITLAB_PATH_SEGMENTS.min || segments.length > GITLAB_PATH_SEGMENTS.max) {
+    return null;
+  }
+  const name = segments[segments.length - 1]!;
+  return {
+    provider: github ? 'github' : 'gitlab',
+    host,
+    path: segments.join('/'),
+    owner: segments.slice(0, -1).join('/'),
+    name,
+  };
 }
 
 export const RepoInput = z.object({
   url: z
     .string()
     .trim()
-    .refine((u) => parseGitHubRepoUrl(u) !== null, {
-      message: 'Must be a GitHub repository URL, e.g. https://github.com/owner/repo',
-    }),
+    .refine((u) => parseRepoUrl(u) !== null, { message: REPO_URL_INVALID_MESSAGE }),
 });
 export type RepoInput = z.infer<typeof RepoInput>;
 
+/**
+ * A tracked repository. `provider`, `host`, `web_url` and `connection_id` are always sent by the server (GitLab A
+ * FR16); they are optional here only so pre-GitLab payloads and fixtures stay valid — read them through
+ * `@/lib/code-host`, which treats a missing provider as GitHub. For GitLab, `owner` is the namespace full path (may
+ * contain `/`) and `owner`, `name`, `full_name` and `web_url` follow the project's current path.
+ */
 export const Repo = z.object({
   id: z.string(),
   workspace_id: z.string(),
@@ -381,6 +545,13 @@ export const Repo = z.object({
   clone_path: z.string().nullable(),
   last_polled_at: z.string().nullable(),
   created_by: z.string().nullable(),
+  provider: RepoProvider.optional(),
+  /** Host key, e.g. `github.com`, `gitlab.com`, `git.corp.example:8443`. */
+  host: z.string().optional(),
+  /** `https://github.com/<full_name>`, or `<base_url>/<full_name>` of a GitLab repository. Links are built from it only. */
+  web_url: z.string().optional(),
+  /** The connection bound to the repository's host key; null for GitHub and for a not-connected GitLab repository. */
+  connection_id: z.string().nullable().optional(),
 });
 export type Repo = z.infer<typeof Repo>;
 

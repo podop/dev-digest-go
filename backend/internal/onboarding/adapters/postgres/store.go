@@ -16,6 +16,7 @@ import (
 
 	"dev-digest-go/backend/internal/onboarding/app"
 	"dev-digest-go/backend/internal/onboarding/domain"
+	"dev-digest-go/backend/internal/platform/codehost"
 	platformpg "dev-digest-go/backend/internal/platform/postgres"
 )
 
@@ -42,6 +43,9 @@ type repoRow struct {
 	Name          string `gorm:"column:name"`
 	FullName      string `gorm:"column:full_name"`
 	DefaultBranch string `gorm:"column:default_branch"`
+	Provider      string `gorm:"column:provider"`
+	Host          string `gorm:"column:host"`
+	ProjectID     *int64 `gorm:"column:project_id"`
 }
 
 func (repoRow) TableName() string { return "repos" }
@@ -91,10 +95,16 @@ func (s *Store) FindRepo(ctx context.Context, workspaceID, repoID string) (domai
 	if err != nil {
 		return domain.Repo{}, fmt.Errorf("select repo: %w", err)
 	}
-	return domain.Repo{
+	out := domain.Repo{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, Owner: row.Owner, Name: row.Name,
-		FullName: row.FullName, DefaultBranch: row.DefaultBranch,
-	}, nil
+		FullName: row.FullName, DefaultBranch: row.DefaultBranch, Provider: row.Provider, Host: row.Host,
+	}
+	if row.ProjectID != nil {
+		out.ProjectID = *row.ProjectID
+	}
+	// The use case hands Owner and Name to the blob reader as the clone location.
+	out.Owner, out.Name = codehost.CloneKey(out.Provider, out.Host, out.ProjectID, row.Owner, row.Name)
+	return out, nil
 }
 
 // Tour implements app.Store. A document that does not satisfy the contract reads as absent.

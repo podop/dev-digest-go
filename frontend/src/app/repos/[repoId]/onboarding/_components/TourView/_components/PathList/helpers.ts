@@ -1,6 +1,7 @@
-import { githubBlobUrl } from "@/lib/github-urls";
+import { blobUrl, type CodeHostRepo } from "@/lib/code-host";
 
-/** Opens the file on GitHub at the tour's commit in a new tab. */
-export function openPathOnGithub(repoFullName: string, sha: string, path: string): void {
-  window.open(githubBlobUrl(repoFullName, sha, path), "_blank", "noopener");
+/** Opens the file on the repository's code host at the tour's commit in a new tab; nothing without a usable web root. */
+export function openPathOnHost(repo: CodeHostRepo | null, sha: string, path: string): void {
+  const url = blobUrl(repo, sha, path);
+  if (url) window.open(url, "_blank", "noopener");
 }

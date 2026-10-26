@@ -107,10 +107,18 @@ const (
 type Repo struct {
 	ID          string
 	WorkspaceID string
+	// Owner and Name are the repository's clone location, the pair the git readers take: for a
+	// GitHub repository its owner and name, for a GitLab one the clone key (codehost.CloneKey) —
+	// the store sets them, so the use case forwards them unchanged.
 	Owner, Name string
-	// FullName is "<owner>/<name>" as stored.
+	// FullName is "<owner>/<name>" as stored (GitLab: the project path).
 	FullName      string
 	DefaultBranch string
+	// Provider ("github" | "gitlab"; "" reads as github), Host (the host key) and ProjectID (the
+	// GitLab project id; 0 = none).
+	Provider  string
+	Host      string
+	ProjectID int64
 }
 
 // IndexState is what a generation needs of the repository's index state. A repo without a state

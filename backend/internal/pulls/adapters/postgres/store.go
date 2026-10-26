@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"dev-digest-go/backend/internal/platform/postgres"
 	"dev-digest-go/backend/internal/pulls/domain"
 )
 
@@ -21,7 +23,21 @@ type repoRow struct {
 	WorkspaceID string     `gorm:"column:workspace_id"`
 	Owner       string     `gorm:"column:owner"`
 	Name        string     `gorm:"column:name"`
+	FullName    string     `gorm:"column:full_name"`
+	Provider    string     `gorm:"column:provider"`
+	Host        string     `gorm:"column:host"`
+	ProjectID   *int64     `gorm:"column:project_id"`
+	WebURL      *string    `gorm:"column:web_url"`
 	LastPolled  *time.Time `gorm:"column:last_polled_at"`
+}
+
+// toDomain is the code-host address of the row: GitHub by (owner, name), GitLab by project id.
+func (r repoRow) toDomain() domain.Repo {
+	repo := domain.Repo{ID: r.ID, Owner: r.Owner, Name: r.Name, Provider: r.Provider, Host: r.Host}
+	if r.ProjectID != nil {
+		repo.ProjectID = *r.ProjectID
+	}
+	return repo
 }
 
 func (repoRow) TableName() string { return "repos" }
@@ -111,28 +127,124 @@ func (agentRunRow) TableName() string { return "agent_runs" }
 
 // Store reads and writes pull requests in Postgres.
 type Store struct {
-	db *gorm.DB
+	db  *gorm.DB
+	log *slog.Logger
+}
+
+// Option configures a Store.
+type Option func(*Store)
+
+// WithLogger sets the logger of the store's WARN lines (a skipped repository path update); the
+// default discards them.
+func WithLogger(log *slog.Logger) Option {
+	return func(s *Store) {
+		if log != nil {
+			s.log = log
+		}
+	}
 }
 
 // NewStore builds a Store on a GORM handle.
-func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
+func NewStore(db *gorm.DB, opts ...Option) *Store {
+	s := &Store{db: db, log: slog.New(slog.DiscardHandler)}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
 
-// FindRepo returns the GitHub address of a repo of the workspace, or domain.ErrRepoNotFound.
+// conn is the handle every statement uses: the open transaction when ctx came from InTx.
+func (s *Store) conn(ctx context.Context) *gorm.DB { return postgres.Conn(ctx, s.db) }
+
+// FindRepo returns the code-host address (provider, host, project id) of a repo of the workspace, or domain.ErrRepoNotFound.
 func (s *Store) FindRepo(ctx context.Context, workspaceID, repoID string) (domain.Repo, error) {
 	var row repoRow
-	err := s.db.WithContext(ctx).Where("workspace_id = ? AND id = ?", workspaceID, repoID).Take(&row).Error
+	err := s.conn(ctx).Where("workspace_id = ? AND id = ?", workspaceID, repoID).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.Repo{}, domain.ErrRepoNotFound
 	}
 	if err != nil {
 		return domain.Repo{}, fmt.Errorf("find repo: %w", err)
 	}
-	return domain.Repo{ID: row.ID, Owner: row.Owner, Name: row.Name}, nil
+	return row.toDomain(), nil
+}
+
+// uniqueViolation is SQLSTATE 23505.
+const uniqueViolation = "23505"
+
+// UpdateRepoPath sets full_name, owner, name and web_url of a GitLab repository of the workspace
+// to the project's current path (spec FR47). It returns false and changes nothing when another
+// repository of the same workspace and host already stores the new full_name
+// (repos_ws_host_fullname_uq); an unknown repository, a GitHub one, or one of another project is
+// domain.ErrRepoNotFound. The statement runs in a savepoint, so a lost race on the unique index
+// does not abort the caller's transaction.
+func (s *Store) UpdateRepoPath(ctx context.Context, workspaceID, repoID string, p domain.GitLabProject) (bool, error) {
+	if p.ID <= 0 || p.FullName == "" || p.Owner == "" || p.Name == "" || p.WebURL == "" {
+		return false, fmt.Errorf("update repo path: incomplete project %+v", p)
+	}
+	var updated bool
+	err := s.conn(ctx).Transaction(func(tx *gorm.DB) error {
+		res := tx.Exec(`UPDATE repos SET full_name = ?, owner = ?, name = ?, web_url = ?
+			WHERE workspace_id = ? AND id = ? AND provider = ? AND project_id = ?
+			AND NOT EXISTS (
+				SELECT 1 FROM repos o
+				WHERE o.workspace_id = repos.workspace_id AND o.host = repos.host
+				AND o.full_name = ? AND o.id <> repos.id
+			)`,
+			p.FullName, p.Owner, p.Name, p.WebURL,
+			workspaceID, repoID, domain.ProviderGitLab, p.ID,
+			p.FullName)
+		if res.Error != nil {
+			return res.Error
+		}
+		updated = res.RowsAffected > 0
+		return nil
+	})
+	if err != nil && !isUniqueViolation(err) {
+		return false, fmt.Errorf("update repo path: %w", err)
+	}
+	if updated {
+		return true, nil
+	}
+	// Nothing changed: the new path is taken, or the repository is not this workspace's GitLab project.
+	var row repoRow
+	err = s.conn(ctx).
+		Where("workspace_id = ? AND id = ? AND provider = ? AND project_id = ?", workspaceID, repoID, domain.ProviderGitLab, p.ID).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, domain.ErrRepoNotFound
+	}
+	if err != nil {
+		return false, fmt.Errorf("update repo path: %w", err)
+	}
+	s.warnPathTaken(ctx, row, p.FullName)
+	return false, nil
+}
+
+// warnPathTaken logs the skipped path update with the ids of both repositories (FR47). It names no
+// path and no URL.
+func (s *Store) warnPathTaken(ctx context.Context, row repoRow, fullName string) {
+	var holder []string
+	err := s.conn(ctx).Model(&repoRow{}).
+		Where("workspace_id = ? AND host = ? AND full_name = ? AND id <> ?", row.WorkspaceID, row.Host, fullName, row.ID).
+		Limit(1).Pluck("id", &holder).Error
+	if err != nil || len(holder) == 0 {
+		s.log.WarnContext(ctx, "gitlab project path update skipped: the new path is taken in the workspace", "repo_id", row.ID)
+		return
+	}
+	s.log.WarnContext(ctx, "gitlab project path update skipped: the new path is taken in the workspace",
+		"repo_id", row.ID, "other_repo_id", holder[0])
+}
+
+// isUniqueViolation reports whether err carries SQLSTATE 23505, without importing the driver.
+func isUniqueViolation(err error) bool {
+	var coded interface{ SQLState() string }
+	return errors.As(err, &coded) && coded.SQLState() == uniqueViolation
 }
 
 // MarkPolled sets the repo's last_polled_at.
 func (s *Store) MarkPolled(ctx context.Context, workspaceID, repoID string, at time.Time) error {
-	res := s.db.WithContext(ctx).Model(&repoRow{}).
+	res := s.conn(ctx).Model(&repoRow{}).
 		Where("workspace_id = ? AND id = ?", workspaceID, repoID).
 		Update("last_polled_at", at)
 	if res.Error != nil {
@@ -148,8 +260,8 @@ func (s *Store) MarkPolled(ctx context.Context, workspaceID, repoID string, at t
 // workspace and ordered by full name inside it.
 func (s *Store) ListPollTargets(ctx context.Context) ([]domain.PollTarget, error) {
 	var rows []repoRow
-	err := s.db.WithContext(ctx).
-		Select("id", "workspace_id", "owner", "name").
+	err := s.conn(ctx).
+		Select("id", "workspace_id", "owner", "name", "provider", "host", "project_id").
 		Order("workspace_id, full_name, id").
 		Find(&rows).Error
 	if err != nil {
@@ -157,7 +269,7 @@ func (s *Store) ListPollTargets(ctx context.Context) ([]domain.PollTarget, error
 	}
 	out := make([]domain.PollTarget, len(rows))
 	for i, r := range rows {
-		out[i] = domain.PollTarget{WorkspaceID: r.WorkspaceID, Repo: domain.Repo{ID: r.ID, Owner: r.Owner, Name: r.Name}}
+		out[i] = domain.PollTarget{WorkspaceID: r.WorkspaceID, Repo: r.toDomain()}
 	}
 	return out, nil
 }
@@ -165,7 +277,7 @@ func (s *Store) ListPollTargets(ctx context.Context) ([]domain.PollTarget, error
 // FindPull returns a PR of the workspace, or domain.ErrPullNotFound.
 func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.Pull, error) {
 	var row pullRow
-	err := s.db.WithContext(ctx).Where("workspace_id = ? AND id = ?", workspaceID, prID).Take(&row).Error
+	err := s.conn(ctx).Where("workspace_id = ? AND id = ?", workspaceID, prID).Take(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return domain.Pull{}, domain.ErrPullNotFound
 	}
@@ -179,7 +291,7 @@ func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.
 // times last), then by number descending.
 func (s *Store) ListPulls(ctx context.Context, workspaceID, repoID string) ([]domain.Pull, error) {
 	var rows []pullRow
-	err := s.db.WithContext(ctx).
+	err := s.conn(ctx).
 		Where("workspace_id = ? AND repo_id = ?", workspaceID, repoID).
 		Order("updated_at DESC NULLS LAST, number DESC").
 		Find(&rows).Error
@@ -217,7 +329,7 @@ func (s *Store) UpsertListed(ctx context.Context, workspaceID, repoID string, li
 			MergedAt: l.MergedAt, ClosedAt: l.ClosedAt, Draft: l.Draft, HeadIsFork: &l.HeadIsFork,
 		})
 	}
-	err := s.db.WithContext(ctx).
+	err := s.conn(ctx).
 		Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "repo_id"}, {Name: "number"}},
 			DoUpdates: clause.AssignmentColumns([]string{"title", "head_sha", "status", "updated_at", "merged_at", "closed_at", "draft", "head_is_fork"}),
@@ -237,7 +349,7 @@ func (s *Store) ListWithoutDiffStats(ctx context.Context, workspaceID, repoID st
 		return nil, nil
 	}
 	var rows []pullRow
-	err := s.db.WithContext(ctx).
+	err := s.conn(ctx).
 		Select("id", "number").
 		Where("workspace_id = ? AND repo_id = ?", workspaceID, repoID).
 		Where("updated_at >= ?", updatedSince).
@@ -257,7 +369,7 @@ func (s *Store) ListWithoutDiffStats(ctx context.Context, workspaceID, repoID st
 
 // SetDiffStats writes the diff stats of one PR.
 func (s *Store) SetDiffStats(ctx context.Context, prID string, stats domain.DiffStats) error {
-	err := s.db.WithContext(ctx).Model(&pullRow{}).Where("id = ?", prID).
+	err := s.conn(ctx).Model(&pullRow{}).Where("id = ?", prID).
 		Updates(map[string]any{
 			"additions": stats.Additions, "deletions": stats.Deletions, "files_count": stats.FilesCount,
 		}).Error
@@ -270,7 +382,7 @@ func (s *Store) SetDiffStats(ctx context.Context, prID string, stats domain.Diff
 // ReplaceDetail writes the body and stats of a PR and replaces its files and commits, all in one
 // transaction: rows absent from the mirror are deleted, the others are upserted by path or sha.
 func (s *Store) ReplaceDetail(ctx context.Context, prID string, m domain.DetailMirror) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return s.conn(ctx).Transaction(func(tx *gorm.DB) error {
 		err := tx.Model(&pullRow{}).Where("id = ?", prID).Updates(map[string]any{
 			"body": m.Body, "additions": m.Additions, "deletions": m.Deletions, "files_count": m.FilesCount,
 		}).Error
@@ -345,7 +457,7 @@ func replaceCommits(tx *gorm.DB, prID string, commits []domain.Commit) error {
 // ListFiles returns the stored files of a PR in path order.
 func (s *Store) ListFiles(ctx context.Context, prID string) ([]domain.File, error) {
 	var rows []fileRow
-	if err := s.db.WithContext(ctx).Where("pr_id = ?", prID).Order("path").Find(&rows).Error; err != nil {
+	if err := s.conn(ctx).Where("pr_id = ?", prID).Order("path").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("list files: %w", err)
 	}
 	out := make([]domain.File, len(rows))
@@ -359,7 +471,7 @@ func (s *Store) ListFiles(ctx context.Context, prID string) ([]domain.File, erro
 // last), then by sha.
 func (s *Store) ListCommits(ctx context.Context, prID string) ([]domain.Commit, error) {
 	var rows []commitRow
-	err := s.db.WithContext(ctx).Where("pr_id = ?", prID).Order("committed_at ASC NULLS LAST, sha").Find(&rows).Error
+	err := s.conn(ctx).Where("pr_id = ?", prID).Order("committed_at ASC NULLS LAST, sha").Find(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("list commits: %w", err)
 	}
@@ -377,7 +489,7 @@ func (s *Store) Rollups(ctx context.Context, workspaceID string, prIDs []string)
 	if len(prIDs) == 0 {
 		return out, nil
 	}
-	db := s.db.WithContext(ctx)
+	db := s.conn(ctx)
 
 	var reviews []reviewRow
 	err := db.Where("workspace_id = ? AND kind = 'review' AND pr_id IN ?", workspaceID, prIDs).Find(&reviews).Error

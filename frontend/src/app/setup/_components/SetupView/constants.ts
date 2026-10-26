@@ -1,7 +1,17 @@
 import type { ConnTestProvider } from "@/lib/types";
 
-export const SETUP_STEPS = ["model", "github", "repo"] as const;
+export const SETUP_STEPS = ["model", "code-host", "repo"] as const;
 export type SetupStep = (typeof SETUP_STEPS)[number];
+
+/** The old id of the code-host step, still accepted in `?step=` (FR38); the view replaces it by `code-host`. */
+export const LEGACY_CODE_HOST_STEP = "github";
+
+/** Hosts offered in the code-host step, GitHub first (FR38). */
+export const CODE_HOSTS = ["github", "gitlab"] as const;
+export type CodeHost = (typeof CODE_HOSTS)[number];
+
+/** Base URL the GitLab form opens with (FR38). */
+export const DEFAULT_GITLAB_URL = "https://gitlab.com";
 
 /** Providers offered in step 1, OpenRouter first and preselected (FR23, Q1). */
 export const MODEL_PROVIDERS = ["openrouter", "openai", "anthropic"] as const satisfies readonly ConnTestProvider[];

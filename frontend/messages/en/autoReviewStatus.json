@@ -6,12 +6,14 @@
     "off": "Off — PRs are reviewed only when you start a review",
     "poll_disabled": "Paused — background poll is off for this server (PR_POLL_ENABLED)",
     "no_github_token": "Paused — no GitHub token",
+    "no_code_host_token": "Paused — no code host token: connect GitHub or GitLab",
     "no_agents": "Paused — no enabled agent selected",
     "no_triggers": "Paused — no trigger condition selected",
     "paused_spend_cap": "Paused — spend cap reached"
   },
   "links": {
     "github": "GitHub Integration",
+    "gitlab": "GitLab Integration",
     "apiKeys": "API Keys"
   },
   "lastPoll": {

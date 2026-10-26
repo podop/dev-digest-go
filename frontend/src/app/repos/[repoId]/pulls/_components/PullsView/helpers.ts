@@ -53,13 +53,15 @@ const COMPARE: Record<PullsSort, (a: PrMeta, b: PrMeta) => number> = {
   largest: byDesc((p) => p.additions + p.deletions),
 };
 
-/** PRs matching the status filter and the free-text query (title or #number), sorted by `sort`
+/** PRs matching the status filter and the free-text query (title or #number / !number), sorted by `sort`
  *  (ties fall back to newest first). */
 export function filterPulls(pulls: readonly PrMeta[], { status, sort }: PullsSearch, query: string): PrMeta[] {
   const q = query.trim().toLowerCase();
+  // "#12" (GitHub) and "!12" (GitLab) both find PR 12.
+  const qNumber = q.replace(/^[#!]/, "");
   return pulls
     .filter((p) => status === "all" || p.status === status)
-    .filter((p) => !q || p.title.toLowerCase().includes(q) || String(p.number).includes(q))
+    .filter((p) => !q || p.title.toLowerCase().includes(q) || String(p.number).includes(qNumber))
     .sort((a, b) => COMPARE[sort](a, b) || newestFirst(a, b));
 }
 

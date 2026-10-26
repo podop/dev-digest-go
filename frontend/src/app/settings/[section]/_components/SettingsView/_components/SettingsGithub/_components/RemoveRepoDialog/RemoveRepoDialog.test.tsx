@@ -21,6 +21,18 @@ const REPO: Repo = {
   created_by: null,
 };
 
+const GL_REPO: Repo = {
+  ...REPO,
+  id: "r9",
+  owner: "group/sub",
+  name: "proj",
+  full_name: "group/sub/proj",
+  provider: "gitlab",
+  host: "gitlab.com",
+  web_url: "https://gitlab.com/group/sub/proj",
+  connection_id: null,
+};
+
 describe("RemoveRepoDialog", () => {
   it("names the repo, traps focus, and Cancel closes without sending anything", async () => {
     const api = mockFetch({});
@@ -86,6 +98,24 @@ describe("RemoveRepoDialog", () => {
   });
 });
 
+describe("RemoveRepoDialog for a GitLab repository (FR37, AC29)", () => {
+  it("names path and host, says nothing changes on GitLab, and deletes a not-connected repository by id", async () => {
+    const api = mockFetch({ "DELETE /repos/:id": (req) => ({ deleted: req.params.id }) });
+    const onClose = vi.fn();
+    const { user } = renderWithProviders(<RemoveRepoDialog repo={GL_REPO} onClose={onClose} />);
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Remove group/sub/proj · gitlab.com?")).toBeInTheDocument();
+    expect(within(dialog).getByText("DevDigest stops tracking this repository. Nothing changes on GitLab.")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/GitHub/)).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(api.requests("DELETE")).toHaveLength(1);
+    expect(api.requests("DELETE")[0]!.path).toBe("/repos/r9");
+  });
+});
+
 describe("RemoveRepoDialog messages (AC22)", () => {
   it("takes every visible string from the message files (pseudo bundle), error state included", async () => {
     mockFetch({
@@ -105,5 +135,13 @@ describe("RemoveRepoDialog messages (AC22)", () => {
     // The message of an ApiError (here the client's own "cannot reach" text) is API data, not copy.
     const alert = await screen.findByRole("alert");
     expect(strayText(document.body, [alert.textContent?.trim() ?? ""])).toEqual([]);
+  });
+
+  it("takes the GitLab body and the path · host title from the message files too", () => {
+    mockFetch({});
+    renderWithProviders(<RemoveRepoDialog repo={GL_REPO} onClose={() => {}} />, { messages: pseudoMessages() });
+    expect(screen.getByText("⟦githubIntegration.removeDialog.title⟧")).toBeInTheDocument();
+    expect(screen.getByText(/⟦githubIntegration.removeDialog.bodyGitlab⟧/)).toBeInTheDocument();
+    expect(strayText(document.body)).toEqual([]);
   });
 });

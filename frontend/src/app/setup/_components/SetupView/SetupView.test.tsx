@@ -1,8 +1,8 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { CustomProvider, Repo, SecretsStatus } from "@/lib/types";
+import type { CustomProvider, GitLabConnection, Repo, SecretsStatus } from "@/lib/types";
 import { renderWithProviders, screen, cleanup, waitFor, within, pseudoMessages } from "@/test/render";
-import { mockFetch, jsonResponse } from "@/test/fetch-mock";
+import { mockFetch as rawMockFetch, jsonResponse, type RouteHandler } from "@/test/fetch-mock";
 import { strayText } from "@/test/pseudo";
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
@@ -17,6 +17,20 @@ afterEach(() => {
 });
 
 const CUSTOM = "GET /settings/custom-providers";
+const GITLAB = "GET /settings/gitlab-connections";
+const connection = (over: Partial<GitLabConnection> = {}): GitLabConnection => ({
+  id: "c1",
+  name: "gitlab.com",
+  base_url: "https://gitlab.com",
+  host: "gitlab.com",
+  token_configured: true,
+  repo_count: 0,
+  created_at: "2026-10-26T10:00:00Z",
+  updated_at: "2026-10-26T10:00:00Z",
+  ...over,
+});
+/** The view loads four requests; unless a test says otherwise there is no GitLab connection. */
+const mockFetch = (routes: Record<string, RouteHandler>) => rawMockFetch({ [GITLAB]: [], ...routes });
 const customProvider = (over: Partial<CustomProvider> = {}): CustomProvider => ({
   id: "custom:synapse",
   name: "Synapse",
@@ -66,9 +80,9 @@ describe("SetupView step resolution (FR22)", () => {
       [CUSTOM]: [], "GET /repos": [],
     });
     renderWithProviders(<Host initial="repo" />);
-    // Model key is there, the token is not: ?step=repo shows step github.
-    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
-    expect(current()).toHaveTextContent("GitHub token");
+    // Model key is there, no code host: ?step=repo shows the code-host step.
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
+    expect(current()).toHaveTextContent("Code host");
     expect(screen.getByText("Step 2 of 3 · You can change keys later in Settings")).toBeInTheDocument();
     expect(steps()[0]).toHaveTextContent("completed");
   });
@@ -101,9 +115,9 @@ describe("SetupView ?step contract", () => {
     expect(nav.replace).not.toHaveBeenCalled();
     first.unmount();
 
-    // github and repo are honoured as requested; an absent step is replaced by the resolved one.
-    renderWithProviders(<Host initial="github" />);
-    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
+    // code-host and repo are honoured as requested; an absent step is replaced by the resolved one.
+    renderWithProviders(<Host initial="code-host" />);
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
     cleanup();
     renderWithProviders(<Host initial="repo" />);
     expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
@@ -125,7 +139,7 @@ describe("SetupView ?step contract", () => {
 });
 
 describe("SetupView navigation (FR26, AC19, AC20)", () => {
-  it("walks model → github → repo with Continue and returns with Back, updating the URL each time", async () => {
+  it("walks model → code host → repo with Continue and returns with Back, updating the URL each time", async () => {
     let secrets = NONE;
     mockFetch({
       "GET /settings/secrets-status": () => secrets,
@@ -151,16 +165,16 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     await waitFor(() => expect(cont()).toBeEnabled());
     await user.click(cont());
-    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=github");
+    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=code-host");
 
     // Step 2 → Back → step 1 again (stored key: "Already connected") → Continue → step 2.
-    await screen.findByRole("heading", { name: "Connect GitHub" });
+    await screen.findByRole("heading", { name: "Connect a code host" });
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=model");
     await screen.findByRole("heading", { name: "Connect a model provider" });
     expect(await screen.findByText("Already connected")).toBeInTheDocument();
     await user.click(cont());
-    await screen.findByRole("heading", { name: "Connect GitHub" });
+    await screen.findByRole("heading", { name: "Connect a code host" });
 
     await user.type(screen.getByRole("textbox", { name: "Personal access token" }), "ghp_abcdefgh1234");
     await user.click(screen.getByRole("button", { name: "Test connection" }));
@@ -182,29 +196,125 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     await waitFor(() => expect(cont()).toBeEnabled());
     await user.click(cont());
-    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
+  });
+});
+
+describe("SetupView code host (FR38, AC30)", () => {
+  it("replaces the old ?step=github by code-host in the URL and reads Code host in the stepper (AC30)", async () => {
+    mockFetch({ "GET /settings/secrets-status": { ...NONE, openrouter: true }, [CUSTOM]: [], "GET /repos": [] });
+    renderWithProviders(<Host initial="github" />);
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
+    expect(current()).toHaveTextContent("Code host");
+    expect(steps()[1]).not.toHaveTextContent("GitHub token");
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=code-host"));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
+    // Resolved once: the view stays where it is.
+    expect(screen.getByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
+  });
+
+  it("a GitLab connection with a token completes the step: it stays put when asked for, and does not pull ?step=repo back (AC30)", async () => {
+    mockFetch({
+      "GET /settings/secrets-status": { ...NONE, openrouter: true },
+      [CUSTOM]: [],
+      "GET /repos": [],
+      [GITLAB]: [connection()],
+    });
+    const first = renderWithProviders(<Host initial="code-host" />);
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "GitLab" })).toBeChecked();
+    expect(screen.getByText("Already connected")).toBeInTheDocument();
+    expect(cont()).toBeEnabled();
+    expect(nav.replace).not.toHaveBeenCalled();
+    first.unmount();
+
+    renderWithProviders(<Host initial="repo" />);
+    expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
+    expect(steps()[1]).toHaveTextContent("completed");
+    expect(nav.replace).not.toHaveBeenCalled();
+  });
+
+  it("a connection without a token does not complete it", async () => {
+    mockFetch({
+      "GET /settings/secrets-status": { ...NONE, openrouter: true },
+      [CUSTOM]: [],
+      "GET /repos": [],
+      [GITLAB]: [connection({ token_configured: false })],
+    });
+    renderWithProviders(<Host initial="repo" />);
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
+    expect(current()).toHaveTextContent("Code host");
+    expect(screen.queryByText("Already connected")).toBeNull();
+    expect(cont()).toBeDisabled();
+    expect(nav.replace).toHaveBeenCalledWith("/setup?step=code-host");
+  });
+
+  it("Save and test with GitLab creates and tests the connection; Continue then moves on to the repository", async () => {
+    let connections: GitLabConnection[] = [];
+    const api = mockFetch({
+      "GET /settings/secrets-status": { ...NONE, openrouter: true },
+      [CUSTOM]: [],
+      "GET /repos": [],
+      [GITLAB]: () => connections,
+      "POST /settings/gitlab-connections": () => {
+        connections = [connection({ id: "c9" })];
+        return connections[0];
+      },
+      "POST /settings/test-connection": { provider: "gitlab", ok: true, message: "Connected as @ann", login: "ann", scopes: ["api"] },
+    });
+    const { user } = renderWithProviders(<Host initial="code-host" />);
+    await screen.findByRole("heading", { name: "Connect a code host" });
+    expect(cont()).toBeDisabled();
+
+    await user.click(screen.getByRole("radio", { name: "GitLab" }));
+    await user.type(screen.getByRole("textbox", { name: "Personal access token" }), "glpat-abcdefghij1234567890");
+    await user.click(screen.getByRole("button", { name: "Save and test" }));
+    expect(await screen.findByText("Connected as @ann")).toBeInTheDocument();
+    expect(api.requests("POST", "/settings/gitlab-connections")).toHaveLength(1);
+    expect(api.requests("POST", "/settings/test-connection")[0]!.body).toEqual({ provider: "gitlab", connection_id: "c9" });
+
+    await waitFor(() => expect(cont()).toBeEnabled());
+    await user.click(cont());
+    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=repo");
+    expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
+  });
+
+  it("shows the error with Retry when only the GitLab connections fail to load", async () => {
+    let fail = true;
+    mockFetch({
+      "GET /settings/secrets-status": { ...NONE, openrouter: true, github: true },
+      "GET /repos": [],
+      [CUSTOM]: [],
+      [GITLAB]: () => (fail ? jsonResponse({ error: { code: "boom", message: "x" } }, 500) : []),
+    });
+    const { user } = renderWithProviders(<Host />);
+    expect(await screen.findByText("Could not load setup")).toBeInTheDocument();
+    expect(nav.replace).not.toHaveBeenCalled();
+    fail = false;
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
   });
 });
 
 describe("SetupView with a custom provider (FR21, D21, AC26)", () => {
-  it("stays on the github step when Home sends a workspace with a custom provider and no token there (no bounce to model)", async () => {
+  it("stays on the code-host step when Home sends a workspace with a custom provider and no code host there (no bounce to model)", async () => {
     mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": [], [CUSTOM]: [customProvider()] });
-    renderWithProviders(<Host initial="github" />);
-    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
-    expect(current()).toHaveTextContent("GitHub token");
+    renderWithProviders(<Host initial="code-host" />);
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
+    expect(current()).toHaveTextContent("Code host");
     expect(steps()[0]).toHaveTextContent("completed");
     expect(nav.replace).not.toHaveBeenCalled();
   });
 
-  it("Continue works on the model step without a key and moves on to github", async () => {
+  it("Continue works on the model step without a key and moves on to the code host", async () => {
     mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": [], [CUSTOM]: [customProvider()] });
     const { user } = renderWithProviders(<Host initial="model" />);
     expect(await screen.findByRole("heading", { name: "Connect a model provider" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Use a custom provider" })).toHaveAttribute("href", "/settings/api-keys");
     expect(cont()).toBeEnabled();
     await user.click(cont());
-    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=github");
-    expect(await screen.findByRole("heading", { name: "Connect GitHub" })).toBeInTheDocument();
+    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=code-host");
+    expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
   });
 });
 
@@ -261,10 +371,10 @@ describe("SetupView messages (AC22)", () => {
     expect(screen.getByText("⟦setup.alreadyConnected⟧")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "⟦setup.actions.continue⟧" }));
 
-    // Token step: a classic token without `repo` shows the warning, still Continue.
-    await screen.findByRole("heading", { name: "⟦setup.github.title⟧" });
+    // Code-host step: a classic token without `repo` shows the warning, still Continue.
+    await screen.findByRole("heading", { name: "⟦setup.codeHost.title⟧" });
     await user.click(screen.getByRole("button", { name: "⟦keyField.test⟧" }));
-    expect(await screen.findByText("⟦setup.github.missingRepo⟧")).toBeInTheDocument();
+    expect(await screen.findByText("⟦setup.codeHost.github.missingRepo⟧")).toBeInTheDocument();
     expect(strayText(container, allowed)).toEqual([]);
     await user.click(screen.getByRole("button", { name: "⟦setup.actions.continue⟧" }));
 

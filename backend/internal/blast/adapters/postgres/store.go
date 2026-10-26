@@ -33,6 +33,8 @@ type pullRow struct {
 	Number int    `gorm:"column:number"`
 	Owner  string `gorm:"column:owner"`
 	Name   string `gorm:"column:name"`
+	// Provider is repos.provider ("github" | "gitlab").
+	Provider string `gorm:"column:provider"`
 }
 
 type pathRow struct {
@@ -46,7 +48,7 @@ func (pathRow) TableName() string { return "pr_files" }
 func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.Pull, error) {
 	var row pullRow
 	err := s.conn(ctx).Table("pull_requests AS p").
-		Select("p.id, p.repo_id, p.number, r.owner, r.name").
+		Select("p.id, p.repo_id, p.number, r.owner, r.name, r.provider").
 		Joins("JOIN repos r ON r.id = p.repo_id").
 		Where("p.workspace_id = ? AND p.id = ?", workspaceID, prID).
 		Take(&row).Error
@@ -56,7 +58,7 @@ func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.
 	if err != nil {
 		return domain.Pull{}, fmt.Errorf("select pull request: %w", err)
 	}
-	return domain.Pull{ID: row.ID, RepoID: row.RepoID, Number: row.Number, Owner: row.Owner, Name: row.Name}, nil
+	return domain.Pull{ID: row.ID, RepoID: row.RepoID, Number: row.Number, Owner: row.Owner, Name: row.Name, Provider: row.Provider}, nil
 }
 
 // ChangedPaths returns the distinct paths of the pull request's stored files in byte order.

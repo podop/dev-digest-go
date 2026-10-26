@@ -161,6 +161,8 @@
     "errorBody": "The engine returned an error.",
     "emptyTitle": "No pull requests",
     "emptyAllBody": "No open PRs found for this repo yet. Refresh to sync from GitHub.",
+    "emptyAllBodyGitlab": "No open PRs found for this repo yet. Refresh to sync from GitLab.",
+    "emptyAllBodyNotConnected": "No PRs are stored for this repo yet.",
     "emptyStatusBody": "No PRs with status “{status}”.",
     "filterCount": "{label} · {count}",
     "lastReviewTitle": "Latest review: {date}"
@@ -176,15 +178,19 @@
   "detail": {
     "metaTitle": "PR #{number}",
     "crumbPulls": "Pull Requests",
-    "crumbNumber": "#{number}",
     "loading": "Loading pull request…",
     "errorTitle": "Couldn’t load this pull request",
-    "errorBody": "PR #{number} could not be loaded.",
+    "errorBody": "PR {ref} could not be loaded.",
     "boundaryTitle": "Something went wrong on this pull request",
     "boundaryBody": "An unexpected error interrupted this page. Retry to load it again."
   },
+  "notConnected": {
+    "body": "Not connected — add a GitLab connection for {host}.",
+    "link": "GitLab Integration"
+  },
   "header": {
     "viewOnGithub": "View on GitHub",
+    "viewOnGitlab": "View on GitLab",
     "staleBanner": "This PR is already {status} — running a review is informational and won’t affect the merged code.",
     "tabs": {
       "overview": "Overview",

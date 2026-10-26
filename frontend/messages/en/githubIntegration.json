@@ -37,6 +37,7 @@
   "removeDialog": {
     "title": "Remove {repo}?",
     "body": "DevDigest stops tracking this repository. Nothing changes on GitHub.",
+    "bodyGitlab": "DevDigest stops tracking this repository. Nothing changes on GitLab.",
     "confirm": "Remove",
     "removing": "Removing…",
     "cancel": "Cancel",

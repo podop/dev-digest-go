@@ -1,4 +1,5 @@
 import { LEADERBOARD_PERIODS, type LeaderboardPeriod, type LeaderboardPeriodKey } from "@devdigest/shared";
+import { prRef, repoLabel, type CodeHostRepo } from "@/lib/code-host";
 import { ALL_REPOS, DEFAULT_PERIOD, HEALTH_OK_MIN, HEALTH_WARN_MIN, REPO_ID_PATTERN } from "./constants";
 
 type RawParam = string | string[] | undefined;
@@ -30,6 +31,30 @@ export function resolveRepoFilter(repo: string, repos: readonly { id: string }[]
 /** Leaderboard URL for a period and a repo filter. */
 export function leaderboardHref(period: LeaderboardPeriodKey, repo: string): string {
   return `/leaderboard?period=${period}&repo=${encodeURIComponent(repo)}`;
+}
+
+/** The repositories of a leaderboard response by id: rows, awards and panels carry only `repo_id` and the repository name (SCR6), so the host-aware parts are looked up here (FR43, FR44). */
+export type RepoLookup = ReadonlyMap<string, CodeHostRepo>;
+
+/** An empty lookup: every repository reads as GitHub. */
+export const NO_REPOS: RepoLookup = new Map();
+
+/** Index repositories (anything carrying an id and the host fields) by id. */
+export function repoLookup(repos: readonly (CodeHostRepo & { id: string })[]): RepoLookup {
+  return new Map(repos.map((r) => [r.id, r]));
+}
+
+/** The PR reference of a row: "api#41" on GitHub, "payments!12 · gitlab.com" on GitLab (name = the row's `repo`, the host keeps same-named projects apart; FR43, FR44). */
+export function prLabel(repos: RepoLookup, repoId: string, name: string, number: number): string {
+  const repo = repos.get(repoId);
+  const ref = `${name}${prRef(repo, number)}`;
+  return repo?.provider === "gitlab" && repo.host ? `${ref} · ${repo.host}` : ref;
+}
+
+/** The repository name of a row with its host for GitLab ("payments · gitlab.com"), as is for GitHub (FR44). */
+export function repoNameLabel(repos: RepoLookup, repoId: string, name: string): string {
+  const repo = repos.get(repoId);
+  return repoLabel({ provider: repo?.provider, host: repo?.host, full_name: name });
 }
 
 /** Colour token of a health score: ≥ 85 ok, ≥ 60 warn, else crit (FR21). */

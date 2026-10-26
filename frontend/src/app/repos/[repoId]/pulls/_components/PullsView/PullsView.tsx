@@ -9,6 +9,8 @@ import { useTranslations } from "next-intl";
 import { Skeleton, EmptyState, ErrorState, AutoTriggerStatus } from "@devdigest/ui";
 import { AppShell } from "@/components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
+import { NotConnectedBanner } from "@/components/not-connected-banner";
+import { isGitLab, isNotConnected } from "@/lib/code-host";
 import { useAutomaticReviewsStatus, usePulls, useRefreshRepo } from "@/lib/hooks";
 import { useActiveRepo, useRepoNotFound } from "@/lib/repo-context";
 import { ApiError } from "@/lib/api";
@@ -23,7 +25,7 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
   const t = useTranslations("prReview");
   const tc = useTranslations("common");
   const router = useRouter();
-  const { activeRepo } = useActiveRepo();
+  const { activeRepo, repos } = useActiveRepo();
   const repoNotFound = useRepoNotFound(repoId);
   const { data: pulls, isLoading, isError, error, refetch } = usePulls(repoId);
   const refresh = useRefreshRepo();
@@ -41,6 +43,12 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
   );
   const counts = countPulls(pulls ?? []);
   const chipCounts = React.useMemo(() => (pulls ? statusCounts(pulls) : undefined), [pulls]);
+  const repo = repos.find((r) => r.id === repoId) ?? null;
+  // FR49: a GitLab repository without a connection keeps its stored PRs, but cannot sync.
+  const notConnected = isNotConnected(repo);
+  const emptyAllBody = notConnected
+    ? t("list.emptyAllBodyNotConnected")
+    : t(isGitLab(repo) ? "list.emptyAllBodyGitlab" : "list.emptyAllBody");
   const crumb = [{ label: activeRepo?.full_name ?? repoId, mono: true }, { label: t("list.breadcrumb") }];
 
   // Stale/unknown :repoId → friendly empty state instead of a 404 error.
@@ -77,6 +85,7 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
       </div>
 
       <div style={s.tableCard}>
+        {notConnected && <NotConnectedBanner host={repo?.host ?? ""} />}
         <FilterBar
           active={status}
           counts={chipCounts}
@@ -87,6 +96,7 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
           onSort={(next) => navigate({ sort: next as PullsSort })}
           onRefresh={() => refresh.mutate(repoId)}
           refreshing={refresh.isPending}
+          refreshDisabled={notConnected}
         />
         <div style={s.headRow}>
           {COLUMN_KEYS.map((key, i) => (
@@ -112,7 +122,7 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
           <EmptyState
             icon="GitPullRequest"
             title={t("list.emptyTitle")}
-            body={status === "all" ? t("list.emptyAllBody") : t("list.emptyStatusBody", { status })}
+            body={status === "all" ? emptyAllBody : t("list.emptyStatusBody", { status })}
           />
         ) : (
           filtered.map((pr, i) => (
@@ -120,6 +130,7 @@ export function PullsView({ repoId, status, sort }: { repoId: string } & PullsSe
               key={pr.number}
               pr={pr}
               repoId={repoId}
+              repo={repo}
               popoverUp={filtered.length > 3 && i >= filtered.length - 2}
             />
           ))

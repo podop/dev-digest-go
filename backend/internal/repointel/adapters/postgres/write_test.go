@@ -94,6 +94,19 @@ func (e *env) addRepo(t *testing.T, owner, name, clonePath string) string {
 	return id
 }
 
+// addGitLabRepo inserts a cloned GitLab project under the clone path of its clone key.
+func (e *env) addGitLabRepo(t *testing.T, host string, projectID int64, owner, name, clonePath string) string {
+	t.Helper()
+	var id string
+	err := e.db.Raw(`INSERT INTO repos (workspace_id, owner, name, full_name, default_branch, clone_path, provider, host, project_id, web_url)
+		VALUES (?, ?, ?, ?, 'trunk', ?, 'gitlab', ?, ?, ?) RETURNING id`,
+		e.ws, owner, name, owner+"/"+name, clonePath, host, projectID, "https://"+host+"/"+owner+"/"+name).Scan(&id).Error
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 const unknownRepo = "00000000-0000-4000-8000-000000000000"
 
 func count(t *testing.T, e *env, table, repo string) int64 {

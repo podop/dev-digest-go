@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { LeaderboardPeriod } from "@devdigest/shared";
-import { leaderboardHref, resolvePeriod, resolveRepoFilter, resolveRepoParam, syncedAgo, windowRanges } from "./helpers";
+import { leaderboardHref, NO_REPOS, prLabel, repoLookup, repoNameLabel, resolvePeriod, resolveRepoFilter, resolveRepoParam, syncedAgo, windowRanges } from "./helpers";
 
 const REPO = "3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b";
 
@@ -92,5 +92,27 @@ describe("syncedAgo (FR23)", () => {
   it("is null when the repository was never polled or the time is not a date", () => {
     expect(syncedAgo(null, now)).toBeNull();
     expect(syncedAgo("garbage", now)).toBeNull();
+  });
+});
+
+describe("GitLab references and labels (FR43, FR44)", () => {
+  const repos = repoLookup([
+    { id: "gl", full_name: "acme/platform/payments", provider: "gitlab", host: "gitlab.com" },
+    { id: "gh", full_name: "acme/api" },
+  ]);
+
+  it("references a GitLab MR as name!n · host and a GitHub PR as name#n", () => {
+    expect(prLabel(repos, "gl", "payments", 12)).toBe("payments!12 · gitlab.com");
+    expect(prLabel(repos, "gh", "acme/api", 12)).toBe("acme/api#12");
+  });
+
+  it("reads a repository that is not in the lookup as GitHub", () => {
+    expect(prLabel(repos, "gone", "acme/api", 3)).toBe("acme/api#3");
+    expect(prLabel(NO_REPOS, "gl", "payments", 3)).toBe("payments#3");
+  });
+
+  it("adds the host to a GitLab repository name only", () => {
+    expect(repoNameLabel(repos, "gl", "payments")).toBe("payments · gitlab.com");
+    expect(repoNameLabel(repos, "gh", "acme/api")).toBe("acme/api");
   });
 });

@@ -78,7 +78,7 @@ func TestFindRepo_scopedToWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindRepo() error = %v", err)
 	}
-	if want := (domain.Repo{ID: f.repoID, Owner: "acme", Name: "payments-api"}); got != want {
+	if want := (domain.Repo{ID: f.repoID, Owner: "acme", Name: "payments-api", Provider: "github", Host: "github.com"}); got != want {
 		t.Errorf("FindRepo() = %+v, want %+v", got, want)
 	}
 
@@ -537,12 +537,12 @@ func TestListPollTargets_everyRepoOfEveryWorkspace(t *testing.T) {
 		switch tg.Repo.ID {
 		case f.repoID:
 			sawSeeded = true
-			if want := (domain.PollTarget{WorkspaceID: f.wsID, Repo: domain.Repo{ID: f.repoID, Owner: "acme", Name: "payments-api"}}); tg != want {
+			if want := (domain.PollTarget{WorkspaceID: f.wsID, Repo: domain.Repo{ID: f.repoID, Owner: "acme", Name: "payments-api", Provider: "github", Host: "github.com"}}); tg != want {
 				t.Errorf("ListPollTargets() seeded target = %+v, want %+v", tg, want)
 			}
 		case otherRepo:
 			sawOther = true
-			if want := (domain.PollTarget{WorkspaceID: otherWS, Repo: domain.Repo{ID: otherRepo, Owner: "zed", Name: "tool"}}); tg != want {
+			if want := (domain.PollTarget{WorkspaceID: otherWS, Repo: domain.Repo{ID: otherRepo, Owner: "zed", Name: "tool", Provider: "github", Host: "github.com"}}); tg != want {
 				t.Errorf("ListPollTargets() other target = %+v, want %+v", tg, want)
 			}
 		}

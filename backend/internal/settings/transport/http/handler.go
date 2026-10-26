@@ -32,6 +32,7 @@ type service interface {
 	TestConnection(ctx context.Context, workspaceID string, provider app.Provider, key string) app.ConnTestResult
 	CustomDefined(ctx context.Context, workspaceID, id string) bool
 	TestCustomConnection(ctx context.Context, workspaceID string, id app.Provider, key string) (app.ConnTestResult, error)
+	TestGitLabConnection(ctx context.Context, connectionID, key string) (app.ConnTestResult, error)
 }
 
 // identities resolves the single-tenant context (*tenancy.Resolver).
@@ -128,6 +129,14 @@ func (h *Handler) testConnection(c *echo.Context) error {
 		return httpx.NewValidationError(issues...)
 	}
 	ctx := c.Request().Context()
+	if req.Provider == app.GitLab {
+		// A GitLab connection is global (no workspace); an unknown id is a 404 from the use case.
+		res, err := h.svc.TestGitLabConnection(ctx, req.ConnectionID, req.Key)
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, connTestResponse(res))
+	}
 	if req.Provider.IsCustom() {
 		// A custom provider belongs to a workspace: no workspace, no provider (404 from the use case).
 		id, err := h.ids.Resolve(ctx)
@@ -173,9 +182,37 @@ type githubConnTest struct {
 	Scopes    []string     `json:"scopes"`
 }
 
+// gitlabConnTest is the test-connection answer for gitlab. Every key is present, null when the
+// test failed or the value is not known; warnings is [] when there are none.
+type gitlabConnTest struct {
+	Provider        app.Provider        `json:"provider"`
+	OK              bool                `json:"ok"`
+	Message         string              `json:"message"`
+	LatencyMS       *int                `json:"latency_ms"`
+	Login           *string             `json:"login"`
+	Scopes          []string            `json:"scopes"`
+	ExpiresAt       *string             `json:"expires_at"`
+	InstanceVersion *string             `json:"instance_version"`
+	TokenAccess     *string             `json:"token_access"`
+	Warnings        []gitlabTestWarning `json:"warnings"`
+}
+
+type gitlabTestWarning struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // connTestResponse picks the DTO of the result's provider, so a field that does not belong to
 // it is absent rather than null.
 func connTestResponse(r app.ConnTestResult) any {
+	if r.Provider == app.GitLab {
+		warnings := make([]gitlabTestWarning, len(r.Warnings))
+		for i, w := range r.Warnings {
+			warnings[i] = gitlabTestWarning{Code: w.Code, Message: w.Message}
+		}
+		return gitlabConnTest{Provider: r.Provider, OK: r.OK, Message: r.Message, LatencyMS: r.LatencyMS, Login: r.Login, Scopes: r.Scopes,
+			ExpiresAt: r.ExpiresAt, InstanceVersion: r.InstanceVersion, TokenAccess: r.TokenAccess, Warnings: warnings}
+	}
 	if r.Provider == app.GitHub {
 		return githubConnTest{Provider: r.Provider, OK: r.OK, Message: r.Message, LatencyMS: r.LatencyMS, Login: r.Login, Scopes: r.Scopes}
 	}

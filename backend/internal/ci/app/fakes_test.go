@@ -117,9 +117,14 @@ func (f fakeAgents) Exists(_ context.Context, _, id string) (bool, error) {
 // fakeRepos is an in-memory RepoDirectory.
 type fakeRepos struct {
 	repos map[string]domain.ImportedRepo
+	// otherHost lists names only a repository of another host carries (ErrUnsupportedHost).
+	otherHost map[string]bool
 }
 
 func (f fakeRepos) FindByFullName(_ context.Context, _, fullName string) (domain.ImportedRepo, bool, error) {
+	if f.otherHost[fullName] {
+		return domain.ImportedRepo{}, false, app.ErrUnsupportedHost
+	}
 	r, ok := f.repos[fullName]
 	return r, ok, nil
 }

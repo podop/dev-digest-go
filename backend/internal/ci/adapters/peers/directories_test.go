@@ -9,6 +9,7 @@ import (
 
 	agentsdomain "dev-digest-go/backend/internal/agents/domain"
 	"dev-digest-go/backend/internal/ci/adapters/peers"
+	"dev-digest-go/backend/internal/ci/app"
 	"dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/platform/apperr"
 	reposdomain "dev-digest-go/backend/internal/repos/domain"
@@ -186,5 +187,42 @@ func TestAgents_Get_PluginGating(t *testing.T) {
 	want := []domain.ExportSkill{{Name: "Of enabled plugin"}, {Name: "Own"}}
 	if diff := cmp.Diff(want, plain.Skills); diff != "" {
 		t.Errorf("Get(plain).Skills mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestRepos_FindByFullName_HostIsolation(t *testing.T) {
+	github := reposdomain.Repo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "main", Provider: "github", Host: "github.com"}
+	legacy := reposdomain.Repo{Owner: "acme", Name: "old", FullName: "acme/old", DefaultBranch: "main"}
+	gitlab := reposdomain.Repo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "trunk", Provider: "gitlab", Host: "gitlab.com"}
+	tests := []struct {
+		name    string
+		repos   []reposdomain.Repo
+		find    string
+		want    domain.ImportedRepo
+		found   bool
+		wantErr error
+	}{
+		{name: "only gitlab", repos: []reposdomain.Repo{gitlab}, find: "acme/web", wantErr: app.ErrUnsupportedHost},
+		{name: "both, gitlab first", repos: []reposdomain.Repo{gitlab, github}, find: "acme/web",
+			want: domain.ImportedRepo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "main"}, found: true},
+		{name: "both, github first", repos: []reposdomain.Repo{github, gitlab}, find: "acme/web",
+			want: domain.ImportedRepo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "main"}, found: true},
+		{name: "empty provider is github", repos: []reposdomain.Repo{legacy}, find: "acme/old",
+			want: domain.ImportedRepo{Owner: "acme", Name: "old", FullName: "acme/old", DefaultBranch: "main"}, found: true},
+		{name: "gitlab elsewhere does not match another name", repos: []reposdomain.Repo{gitlab}, find: "acme/other"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok, err := peers.NewRepos(fakeRepoService{repos: tc.repos}).FindByFullName(t.Context(), "w", tc.find)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("FindByFullName(%s) error = %v, want %v", tc.find, err, tc.wantErr)
+			}
+			if ok != tc.found {
+				t.Errorf("FindByFullName(%s) found = %v, want %v", tc.find, ok, tc.found)
+			}
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("FindByFullName(%s) mismatch (-want +got):\n%s", tc.find, diff)
+			}
+		})
 	}
 }

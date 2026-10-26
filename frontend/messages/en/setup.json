@@ -10,7 +10,7 @@
   "stepper": {
     "label": "Setup steps",
     "model": "Model provider",
-    "github": "GitHub token",
+    "code-host": "Code host",
     "repo": "Repository",
     "done": "completed"
   },
@@ -33,15 +33,44 @@
     "keyLabel": "{provider} API key",
     "customLink": "Use a custom provider"
   },
-  "github": {
-    "title": "Connect GitHub",
-    "sub": "DevDigest reads pull requests and posts review comments with your personal access token.",
-    "label": "Personal access token",
+  "codeHost": {
+    "title": "Connect a code host",
+    "sub": "DevDigest reads pull requests and merge requests and posts review comments with your own token. Connect GitHub or a GitLab instance.",
+    "hostLegend": "Host",
+    "hosts": {
+      "github": "GitHub",
+      "gitlab": "GitLab"
+    },
     "connectedAs": "Connected as @{login}",
-    "scopes": "Scopes: {scopes}",
-    "scopesNone": "Scopes: none",
-    "scopesNotReported": "Fine-grained token — scopes are not reported by GitHub",
-    "missingRepo": "This token has no repo scope, so DevDigest may not be able to read private repositories or post comments. You can continue anyway."
+    "github": {
+      "label": "Personal access token",
+      "scopes": "Scopes: {scopes}",
+      "scopesNone": "Scopes: none",
+      "scopesNotReported": "Fine-grained token — scopes are not reported by GitHub",
+      "missingRepo": "This token has no repo scope, so DevDigest may not be able to read private repositories or post comments. You can continue anyway."
+    },
+    "gitlab": {
+      "baseUrlLabel": "GitLab base URL",
+      "baseUrlHint": "Instance URL, including a relative URL root such as https://git.example.com/gitlab",
+      "tokenLabel": "Personal access token",
+      "tokenEmpty": "Paste your token",
+      "tokenSaved": "Token saved — paste a new token to replace it",
+      "reveal": "Show token",
+      "createToken": "Create a token",
+      "scopesHint": "Scopes: api and read_repository. A read_api + read_repository token can sync but cannot post.",
+      "saveAndTest": "Save and test",
+      "saving": "Saving…",
+      "urlRequired": "Enter the GitLab base URL",
+      "tokenRequired": "Paste a personal access token",
+      "saveFailed": "Could not save the connection",
+      "testFailed": "Test failed",
+      "scopes": "Scopes: {scopes}",
+      "scopesNotReported": "Scopes not reported",
+      "expires": "Expires {date}",
+      "noExpiry": "No expiry date",
+      "version": "GitLab {version}",
+      "versionUnknown": "Version unknown"
+    }
   },
   "repo": {
     "title": "Add your first repository",

@@ -21,6 +21,7 @@ const (
 	codeProviderNotConfigured = "provider_not_configured"
 	codeInvalidTriggers       = "invalid_triggers"
 	codeRepoNotFound          = "repo_not_found"
+	codeUnsupportedHost       = "unsupported_host"
 	codeSlugConflict          = "ci_slug_conflict"
 	codeSkillSlugConflict     = "skill_slug_conflict"
 	codeWorkflowInsecure      = "workflow_insecure"
@@ -32,6 +33,8 @@ const (
 
 	msgRunnerMissing = "The runner binary is missing: rebuild the backend image (docker compose build backend)"
 	msgNoToken       = "GITHUB_TOKEN is not configured"
+	// msgUnsupportedHost is the 422 text for a GitLab repository (FR29); GitLab CI is slice C.
+	msgUnsupportedHost = "GitLab CI export is not available yet"
 )
 
 // ExportDeps are the ports of ExportService; every field except Log is required.
@@ -98,6 +101,10 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 		return domain.Export{}, apperr.Validation("Select at least one valid pull_request trigger").WithCode(codeInvalidTriggers)
 	}
 	repo, ok, err := s.d.Repos.FindByFullName(ctx, workspaceID, req.Repo)
+	if errors.Is(err, ErrUnsupportedHost) {
+		// Before any GitHub call: a GitLab repository never causes a GitHub request (FR29).
+		return domain.Export{}, apperr.Validation(msgUnsupportedHost).WithCode(codeUnsupportedHost)
+	}
 	if err != nil {
 		return domain.Export{}, fmt.Errorf("find repository: %w", err)
 	}

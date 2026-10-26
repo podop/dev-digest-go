@@ -1,24 +1,32 @@
 [
   {
     "clone_path": null,
+    "connection_id": null,
     "created_by": "00000000-0000-4000-8000-000000000007",
     "default_branch": "main",
     "full_name": "acme/payments-api",
+    "host": "github.com",
     "id": "00000000-0000-4000-8000-000000000008",
     "last_polled_at": null,
     "name": "payments-api",
     "owner": "acme",
+    "provider": "github",
+    "web_url": "https://github.com/acme/payments-api",
     "workspace_id": "00000000-0000-4000-8000-000000000006"
   },
   {
     "clone_path": "/data/workspace/o/r",
+    "connection_id": null,
     "created_by": "00000000-0000-4000-8000-000000000007",
     "default_branch": "main",
     "full_name": "o/r",
+    "host": "github.com",
     "id": "00000000-0000-4000-8000-000000000005",
     "last_polled_at": "2026-01-01T00:00:00.000Z",
     "name": "r",
     "owner": "o",
+    "provider": "github",
+    "web_url": "https://github.com/o/r",
     "workspace_id": "00000000-0000-4000-8000-000000000006"
   }
 ]

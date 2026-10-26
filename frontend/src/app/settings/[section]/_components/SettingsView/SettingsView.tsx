@@ -11,6 +11,7 @@ import { SettingsAbout } from "./_components/SettingsAbout";
 import { SettingsApiKeys } from "./_components/SettingsApiKeys";
 import { SettingsAutoReviews } from "./_components/SettingsAutoReviews";
 import { SettingsGithub } from "./_components/SettingsGithub";
+import { SettingsGitlab } from "./_components/SettingsGitlab";
 import { SettingsIntegrations } from "./_components/SettingsIntegrations";
 import { SettingsModels } from "./_components/SettingsModels";
 import { SettingsWorkspace } from "./_components/SettingsWorkspace";
@@ -21,6 +22,7 @@ import { s } from "./styles";
 const PANELS: Partial<Record<SettingsSectionKey, React.ComponentType>> = {
   "api-keys": SettingsApiKeys,
   github: SettingsGithub,
+  gitlab: SettingsGitlab,
   workspace: SettingsWorkspace,
   "automatic-reviews": SettingsAutoReviews,
   integrations: SettingsIntegrations,

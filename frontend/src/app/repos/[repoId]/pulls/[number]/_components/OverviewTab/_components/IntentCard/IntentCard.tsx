@@ -11,6 +11,7 @@ import { Badge, Button, EmptyState, ErrorState, Icon, Skeleton } from "@devdiges
 import { ApiError } from "@/lib/api";
 import { usePrIntent, useRefreshIntent } from "@/lib/hooks/intent";
 import { formatUsd } from "@/lib/format-usage";
+import { useLinkRepo } from "@/lib/link-repo";
 import { confidenceColor, isSourceOk, sourceHref, sourceIcon } from "./helpers";
 import { s } from "./styles";
 
@@ -27,6 +28,7 @@ export function IntentCard({ prId, repoFullName, headSha, children }: IntentCard
   const tc = useTranslations("common");
   const { data, isLoading, isError, error, refetch } = usePrIntent(prId);
   const refresh = useRefreshIntent(prId);
+  const repo = useLinkRepo(repoFullName);
 
   if (isLoading) return <Skeleton height={140} />;
 
@@ -104,7 +106,7 @@ export function IntentCard({ prId, repoFullName, headSha, children }: IntentCard
           <ul style={s.sourceList}>
             {intent.sources.map((src, i) => {
               const SourceIcon = Icon[sourceIcon(src.kind)];
-              const href = repoFullName ? sourceHref(src, repoFullName, headSha) : undefined;
+              const href = sourceHref(src, repo, headSha);
               const ok = isSourceOk(src.status);
               return (
                 // biome-ignore lint/suspicious/noArrayIndexKey: sources have no stable id

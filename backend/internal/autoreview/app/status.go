@@ -28,9 +28,9 @@ func (s *Service) Status(ctx context.Context, workspaceID string) (domain.Status
 	if err != nil {
 		return domain.Status{}, fmt.Errorf("status: read poll facts: %w", err)
 	}
-	hasToken, err := d.Tokens.HasGitHubToken(ctx, workspaceID)
+	access, err := d.Tokens.CodeHostAccess(ctx, workspaceID)
 	if err != nil {
-		return domain.Status{}, fmt.Errorf("status: read github token: %w", err)
+		return domain.Status{}, fmt.Errorf("status: read code host tokens: %w", err)
 	}
 	agents := 0
 	if len(setting.AgentIDs) > 0 {
@@ -43,7 +43,7 @@ func (s *Service) Status(ctx context.Context, workspaceID string) (domain.Status
 	state := domain.StateOf(domain.Facts{
 		Enabled:         setting.Enabled,
 		PollEnabled:     d.PollEnabled,
-		HasGitHubToken:  hasToken,
+		CodeHost:        access,
 		EffectiveAgents: agents,
 		OnNewPR:         setting.OnNewPR,
 		OnNewCommits:    setting.OnNewCommits,

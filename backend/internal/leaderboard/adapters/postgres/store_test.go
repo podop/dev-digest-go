@@ -292,6 +292,71 @@ func TestRepoScope(t *testing.T) {
 	})
 }
 
+// TestRepoScope_CodeHost: a GitLab repository carries provider, host and web_url, a GitHub one
+// none of them (FR46); same-named repositories of two hosts stay two repositories, their pull
+// requests and hot files told apart by repo id, and `repo` is the short name (SCR6).
+func TestRepoScope_CodeHost(t *testing.T) {
+	w := newWorld(t)
+	ctx := t.Context()
+	gl := func(host string, project int, webURL string) string {
+		return w.insert(t, `INSERT INTO repos (workspace_id, owner, name, full_name, provider, host, project_id, web_url)
+			VALUES (?, 'grp/sub', 'api', 'grp/sub/api', 'gitlab', ?, ?, ?) RETURNING id`, w.ws, host, project, webURL)
+	}
+	one := gl("gitlab.example.com", 1, "https://gitlab.example.com/grp/sub/api")
+	two := gl("git.other.org:8443", 2, "https://git.other.org:8443/grp/sub/api")
+
+	t.Run("fields", func(t *testing.T) {
+		got, err := w.store.RepoScope(ctx, w.ws, domain.RepoAll)
+		if err != nil {
+			t.Fatalf("RepoScope(all) error = %v", err)
+		}
+		byID := map[string]domain.RepoRef{}
+		for _, r := range got {
+			byID[r.ID] = r
+		}
+		for id, want := range map[string]domain.RepoRef{
+			w.repoA: {Provider: "", Host: "", WebURL: ""},
+			one:     {Provider: "gitlab", Host: "gitlab.example.com", WebURL: "https://gitlab.example.com/grp/sub/api"},
+			two:     {Provider: "gitlab", Host: "git.other.org:8443", WebURL: "https://git.other.org:8443/grp/sub/api"},
+		} {
+			r := byID[id]
+			if r.Provider != want.Provider || r.Host != want.Host || r.WebURL != want.WebURL {
+				t.Errorf("RepoScope(all) repo %s = {%q %q %q}, want {%q %q %q}", id, r.Provider, r.Host, r.WebURL, want.Provider, want.Host, want.WebURL)
+			}
+		}
+		single, err := w.store.RepoScope(ctx, w.ws, two)
+		if err != nil || len(single) != 1 || single[0].Host != "git.other.org:8443" || single[0].Name != "api" {
+			t.Errorf("RepoScope(one) = %+v, %v, want the repo of host git.other.org:8443", single, err)
+		}
+	})
+	t.Run("same name on two hosts stays distinct", func(t *testing.T) {
+		for i, id := range []string{one, two} {
+			pr := w.pull(t, id, 1, "open", pullSpec{})
+			w.review(t, "gl"+itoa(i), pr, &w.alpha, "review", from.Add(day), ptr(50), fnd("CRITICAL", "finding", "pending", "same.go"))
+		}
+		got, err := w.store.WindowFacts(ctx, w.ws, []string{one, two}, win(from, to))
+		if err != nil {
+			t.Fatalf("WindowFacts() error = %v", err)
+		}
+		repoIDs := map[string]string{}
+		for _, p := range got.Pulls {
+			repoIDs[p.RepoID] = p.Repo
+		}
+		if diff := cmp.Diff(map[string]string{one: "api", two: "api"}, repoIDs); diff != "" {
+			t.Errorf("WindowFacts() pull repos mismatch (-want +got):\n%s", diff)
+		}
+		hot := map[string]int{}
+		for _, f := range got.HotFiles {
+			if f.Path == "same.go" && f.Repo == "api" {
+				hot[f.RepoID] = f.Findings
+			}
+		}
+		if diff := cmp.Diff(map[string]int{one: 1, two: 1}, hot); diff != "" {
+			t.Errorf("WindowFacts() hot files per repo id mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
 func TestWindowFacts_Membership(t *testing.T) {
 	w := newWorld(t)
 	got, err := w.store.WindowFacts(t.Context(), w.ws, []string{w.repoA}, win(from, to))

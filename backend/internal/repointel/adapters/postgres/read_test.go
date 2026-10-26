@@ -16,7 +16,7 @@ func TestGetRepo(t *testing.T) {
 	uncloned := e.addRepo(t, "o", "bare", "")
 
 	got, err := e.store.GetRepo(t.Context(), e.repo)
-	want := domain.Repo{ID: e.repo, WorkspaceID: e.ws, Owner: "o", Name: "r", DefaultBranch: "trunk", ClonePath: "/clones/o/r"}
+	want := domain.Repo{ID: e.repo, WorkspaceID: e.ws, Owner: "o", Name: "r", Provider: "github", Host: "github.com", DefaultBranch: "trunk", ClonePath: "/clones/o/r"}
 	if err != nil {
 		t.Fatalf("GetRepo(cloned) error = %v", err)
 	}
@@ -28,6 +28,26 @@ func TestGetRepo(t *testing.T) {
 	}
 	if _, err := e.store.GetRepo(t.Context(), unknownRepo); !errors.Is(err, domain.ErrRepoNotFound) {
 		t.Errorf("GetRepo(unknown) error = %v, want ErrRepoNotFound", err)
+	}
+}
+
+func TestGetRepo_GitLab(t *testing.T) {
+	e := newEnv(t)
+	id := e.addGitLabRepo(t, "gitlab.example.com:8443", 42, "grp/sub", "web", "/clones/@gitlab/gitlab.example.com_8443/42")
+
+	got, err := e.store.GetRepo(t.Context(), id)
+	if err != nil {
+		t.Fatalf("GetRepo(gitlab) error = %v", err)
+	}
+	want := domain.Repo{
+		ID: id, WorkspaceID: e.ws, Owner: "grp/sub", Name: "web", Provider: "gitlab", Host: "gitlab.example.com:8443", ProjectID: 42,
+		DefaultBranch: "trunk", ClonePath: "/clones/@gitlab/gitlab.example.com_8443/42",
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("GetRepo(gitlab) mismatch (-want +got):\n%s", diff)
+	}
+	if owner, name := got.CloneKey(); owner != "@gitlab/gitlab.example.com_8443" || name != "42" {
+		t.Errorf("CloneKey() = (%q, %q), want (@gitlab/gitlab.example.com_8443, 42)", owner, name)
 	}
 }
 
@@ -85,6 +105,26 @@ func TestListBackfill(t *testing.T) {
 			t.Errorf("ListBackfill() repo = %+v, want clone path, owner and workspace filled", r)
 		}
 	}
+}
+
+func TestListBackfill_GitLabRepoCarriesItsCloneKey(t *testing.T) {
+	e := newEnv(t)
+	id := e.addGitLabRepo(t, "gitlab.example.com", 7, "grp", "web", "/clones/@gitlab/gitlab.example.com/7")
+
+	got, err := e.store.ListBackfill(t.Context())
+	if err != nil {
+		t.Fatalf("ListBackfill() error = %v", err)
+	}
+	for _, r := range got {
+		if r.ID != id {
+			continue
+		}
+		if owner, name := r.CloneKey(); owner != "@gitlab/gitlab.example.com" || name != "7" {
+			t.Errorf("ListBackfill() gitlab repo CloneKey() = (%q, %q), want (@gitlab/gitlab.example.com, 7)", owner, name)
+		}
+		return
+	}
+	t.Errorf("ListBackfill() = %+v, want the gitlab repo %s listed", got, id)
 }
 
 func TestMapCandidates_OrderAndFilter(t *testing.T) {

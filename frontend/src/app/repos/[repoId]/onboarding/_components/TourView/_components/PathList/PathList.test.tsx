@@ -2,6 +2,12 @@
    path is truncated (ellipsis + tooltip). Reading path is numbered; empty → "Not enough information". */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderWithProviders, screen, cleanup, within } from "@/test/render";
+import { mockFetch } from "@/test/fetch-mock";
+import { GITLAB_REPO } from "@/test/code-host-repo";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/onboarding" }));
+
+import { RepoProvider } from "@/lib/repo-context";
 import { PathList } from "./PathList";
 
 afterEach(() => {
@@ -55,5 +61,26 @@ describe("PathList", () => {
   it("shows the empty state", () => {
     renderWithProviders(<PathList items={[]} variant="critical" repoFullName="a/b" indexedSha="s" />);
     expect(screen.getByText("Not enough information")).toBeInTheDocument();
+  });
+});
+
+describe("PathList — GitLab repository (FR41, FR42; AC32)", () => {
+  it("Open says 'on GitLab' and opens the file under web_url at the indexed commit", async () => {
+    mockFetch({ "GET /repos": [GITLAB_REPO] });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const { user } = renderWithProviders(
+      <RepoProvider>
+        <PathList items={[{ path: "src/a b.ts", reason: "r" }]} variant="critical" repoFullName="" indexedSha="abc123" />
+      </RepoProvider>,
+    );
+
+    // The label turns to GitLab once the repository list has loaded.
+    await user.click(await screen.findByRole("button", { name: "Open src/a b.ts on GitLab" }));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(
+      "https://git.corp.example/gitlab/acme/platform/payments/-/blob/abc123/src/a%20b.ts",
+      "_blank",
+      "noopener",
+    );
   });
 });

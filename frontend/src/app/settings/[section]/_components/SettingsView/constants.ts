@@ -2,6 +2,7 @@
 export const SETTINGS_SECTION_KEYS = [
   "api-keys",
   "github",
+  "gitlab",
   "workspace",
   "automatic-reviews",
   "integrations",

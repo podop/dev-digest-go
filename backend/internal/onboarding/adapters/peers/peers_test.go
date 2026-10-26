@@ -14,6 +14,7 @@ import (
 
 	"dev-digest-go/backend/internal/onboarding/adapters/peers"
 	"dev-digest-go/backend/internal/onboarding/domain"
+	"dev-digest-go/backend/internal/platform/codehost"
 	"dev-digest-go/backend/internal/platform/gitcli"
 	repointel "dev-digest-go/backend/internal/repointel/domain"
 )
@@ -195,6 +196,51 @@ func TestBlobs_ReadFromARealClone(t *testing.T) {
 	}
 	if _, ok := b.Read(t.Context(), "acme", "shop", "not-a-sha", "README.md", 500); ok {
 		t.Error("Read at a non-hex commit = ok, want absent")
+	}
+}
+
+// TestBlobs_ReadFromAGitLabClone reads a blob through the clone key the store puts in
+// Repo.Owner/Repo.Name for a GitLab repository, from the directory codehost.CloneKey names.
+func TestBlobs_ReadFromAGitLabClone(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	first, second := codehost.CloneKey(codehost.GitLab, "git.corp.example:8443", 4242, "grp/sub", "web")
+	root := t.TempDir()
+	repo := filepath.Join(root, filepath.FromSlash(first), second)
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("# Web\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.CommandContext(t.Context(), "git", append([]string{"-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	git("init", "-q")
+	git("add", ".")
+	git("commit", "-q", "-m", "init")
+	sha := git("rev-parse", "HEAD")
+
+	client, err := gitcli.New(gitcli.Options{CloneRoot: root})
+	if err != nil {
+		t.Fatalf("gitcli.New: %v", err)
+	}
+	b := peers.NewBlobs(client)
+	if got, ok := b.Read(t.Context(), first, second, sha, "README.md", 500); !ok || string(got) != "# Web\n" {
+		t.Errorf("Read(%q, %q) = %q, %v, want the file", first, second, got, ok)
+	}
+	// The project path is not a clone location: GitHub-style (owner, name) finds nothing.
+	if _, ok := b.Read(t.Context(), "grp/sub", "web", sha, "README.md", 500); ok {
+		t.Error("Read(project path) = ok, want absent")
 	}
 }
 

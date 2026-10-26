@@ -7,7 +7,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { isCustomId } from "../providers/custom";
-import { aboutKeys, customProviderKeys, providerKeys, repoKeys, prKeys, settingsKeys } from "./keys";
+import { aboutKeys, customProviderKeys, gitlabConnectionKeys, providerKeys, repoKeys, prKeys, settingsKeys } from "./keys";
 import type {
   Settings,
   SettingsUpdate,
@@ -47,7 +47,8 @@ export function useUpdateSettings() {
 export function useTestConnection() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: ConnTestProvider | { provider: ConnTestProvider; key?: string }) => {
+    // `connection_id` is required for `gitlab` (the connection to test) and ignored otherwise.
+    mutationFn: (input: ConnTestProvider | { provider: ConnTestProvider; key?: string; connection_id?: string }) => {
       const body = typeof input === "string" ? { provider: input } : input;
       return api.post<ConnTestResult>("/settings/test-connection", body);
     },
@@ -55,6 +56,12 @@ export function useTestConnection() {
     // cached (possibly empty) model lists so the agent picker refetches, and
     // refresh the "Configured / Not set" key-status badges.
     onSuccess: (res) => {
+      // A GitLab key is saved as the connection's token before the test (even when it fails): the list's
+      // `token_configured` changes. It touches no LLM provider, so nothing else is refetched.
+      if (res.provider === "gitlab") {
+        qc.invalidateQueries({ queryKey: gitlabConnectionKeys.all });
+        return;
+      }
       if (res.ok) {
         qc.invalidateQueries({ queryKey: providerKeys.all });
         qc.invalidateQueries({ queryKey: settingsKeys.secretsStatus() });
@@ -117,6 +124,9 @@ export function useAddRepo() {
   return useMutation({
     mutationFn: (url: string) => api.post<Repo>("/repos", { url }),
     onSuccess: () => qc.invalidateQueries({ queryKey: repoKeys.list() }),
+    // The add form shows every add error itself (bad URL, no connection, project not found, conflict, …),
+    // once — no extra toast (GitLab A FR40).
+    meta: { quietErrorCodes: ["*"] },
   });
 }
 

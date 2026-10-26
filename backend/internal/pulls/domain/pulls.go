@@ -32,11 +32,47 @@ const (
 // "stale".
 const StaleAfter = 7 * 24 * time.Hour
 
-// Repo is the GitHub address of a stored repository.
+// Code-host providers of a stored repository.
+const (
+	ProviderGitHub = "github"
+	ProviderGitLab = "gitlab"
+)
+
+// Repo is the code-host address of a stored repository. A GitHub repository is addressed by
+// (Owner, Name); a GitLab project by its numeric ProjectID on Host (FR17), so a rename or move on
+// GitLab keeps syncing. Provider "" reads as GitHub (rows and callers that predate GitLab).
 type Repo struct {
 	ID    string
 	Owner string
 	Name  string
+	// Provider is ProviderGitHub or ProviderGitLab ("" = GitHub).
+	Provider string
+	// Host is the host key of a GitLab repository ("gitlab.com", "git.corp.example:8443"); empty or
+	// "github.com" for GitHub.
+	Host string
+	// ProjectID is the GitLab project id; 0 for GitHub.
+	ProjectID int64
+}
+
+// IsGitLab reports whether the repository is a GitLab project.
+func (r Repo) IsGitLab() bool { return r.Provider == ProviderGitLab }
+
+// PauseKey is the key of the rate-limit pause the repository falls under: its provider and host,
+// so a GitLab instance never shares a pause with GitHub or with another instance (spec FR27).
+func (r Repo) PauseKey() string {
+	if r.IsGitLab() {
+		return ProviderGitLab + "/" + r.Host
+	}
+	return ProviderGitHub + "/github.com"
+}
+
+// PullRef is how a pull request is referenced next to its repository: "!12" for a GitLab merge
+// request, "#12" otherwise (spec FR43).
+func PullRef(provider string, number int) string {
+	if provider == ProviderGitLab {
+		return "!" + strconv.Itoa(number)
+	}
+	return "#" + strconv.Itoa(number)
 }
 
 // Pull is a stored pull request.

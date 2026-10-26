@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
+	"dev-digest-go/backend/internal/platform/codehost"
 	"dev-digest-go/backend/internal/platform/gitcli"
 	"dev-digest-go/backend/internal/repos/domain"
 )
@@ -36,6 +38,11 @@ type gitClient interface {
 	Clone(ctx context.Context, owner, name, url string, opts gitcli.CloneOptions) (string, error)
 	DefaultBranch(ctx context.Context, owner, name string) (string, error)
 	Sync(ctx context.Context, owner, name, branch string) (string, error)
+	// The GitLab variants take the GitLab clone key (codehost.CloneKey) and a remote with the
+	// connection's token.
+	CloneRemote(ctx context.Context, owner, name string, r gitcli.Remote, opts gitcli.CloneOptions) (string, error)
+	DefaultBranchRemote(ctx context.Context, owner, name string, r gitcli.Remote) (string, error)
+	SyncRemote(ctx context.Context, owner, name, branch string, r gitcli.Remote) (string, error)
 }
 
 // indexTrigger is how the jobs hand a fresh or updated clone to repo-intel: it enqueues the
@@ -59,6 +66,12 @@ type JobsOptions struct {
 	// Index is told about every clone and refresh that succeeded; nil means no indexing. A
 	// failure of the trigger is logged and never fails the job.
 	Index indexTrigger
+	// Connections binds a GitLab repo's host to its connection at every job (spec FR48); nil
+	// means no GitLab connection exists, so GitLab jobs fail as not connected.
+	Connections Connections
+	// CAFile returns the PEM bundle git trusts for GitLab hosts (gitcli.WriteCABundle), or "" for
+	// git's default roots; nil means "". cmd sets it when DEVDIGEST_EXTRA_CA_FILE is configured.
+	CAFile func() string
 }
 
 // Jobs are the background handlers of the repos context. Register Clone under KindClone and
@@ -70,11 +83,16 @@ type Jobs struct {
 	now    func() time.Time
 	log    *slog.Logger
 	index  indexTrigger
+	conns  Connections
+	caFile func() string
 }
 
 // NewJobs builds the job handlers.
 func NewJobs(store jobStore, git gitClient, opts JobsOptions) *Jobs {
-	j := &Jobs{store: store, git: git, remote: opts.RemoteBase, now: opts.Now, log: opts.Log, index: opts.Index}
+	j := &Jobs{
+		store: store, git: git, remote: opts.RemoteBase, now: opts.Now, log: opts.Log, index: opts.Index,
+		conns: opts.Connections, caFile: opts.CAFile,
+	}
 	if j.remote == "" {
 		j.remote = DefaultRemoteBase
 	}
@@ -103,9 +121,19 @@ func (j *Jobs) Clone(ctx context.Context, payload json.RawMessage) error {
 	if err != nil {
 		return fmt.Errorf("load repo %s: %w", p.RepoID, err)
 	}
-	// Owner and name come from the row (validated when added), not from the payload.
-	ref := domain.Ref{Owner: repo.Owner, Name: repo.Name}
-	dir, err := j.git.Clone(ctx, ref.Owner, ref.Name, ref.CloneURL(j.remote), gitcli.CloneOptions{Depth: cloneDepth})
+	var dir string
+	if repo.Provider == codehost.GitLab {
+		var gl *gitLabTarget
+		// A repo without a connection fails with the not-connected message itself (FR48).
+		if gl, err = j.gitLabTarget(ctx, repo); err != nil {
+			return err
+		}
+		dir, err = j.git.CloneRemote(ctx, gl.first, gl.second, gl.remote, gitcli.CloneOptions{Depth: cloneDepth})
+	} else {
+		// Owner and name come from the row (validated when added), not from the payload.
+		ref := domain.Ref{Owner: repo.Owner, Name: repo.Name}
+		dir, err = j.git.Clone(ctx, ref.Owner, ref.Name, ref.CloneURL(j.remote), gitcli.CloneOptions{Depth: cloneDepth})
+	}
 	if err != nil {
 		return fmt.Errorf("clone %s: %w", repo.FullName, err)
 	}
@@ -143,7 +171,14 @@ func (j *Jobs) Refresh(ctx context.Context, payload json.RawMessage) error {
 	if !repo.Cloned() {
 		return fmt.Errorf("refresh %s: repo is not cloned", repo.FullName)
 	}
-	branch, err := j.git.DefaultBranch(ctx, repo.Owner, repo.Name)
+	var gl *gitLabTarget
+	if repo.Provider == codehost.GitLab {
+		// A repo without a connection fails with the not-connected message itself (FR48).
+		if gl, err = j.gitLabTarget(ctx, repo); err != nil {
+			return err
+		}
+	}
+	branch, err := j.defaultBranch(ctx, repo, gl)
 	if err != nil {
 		if ctx.Err() != nil {
 			return fmt.Errorf("default branch of %s: %w", repo.FullName, err)
@@ -152,7 +187,12 @@ func (j *Jobs) Refresh(ctx context.Context, payload json.RawMessage) error {
 			"repo", repo.FullName, "branch", repo.DefaultBranch, "err", err)
 		branch = repo.DefaultBranch
 	}
-	if _, err := j.git.Sync(ctx, repo.Owner, repo.Name, branch); err != nil {
+	if gl != nil {
+		_, err = j.git.SyncRemote(ctx, gl.first, gl.second, branch, gl.remote)
+	} else {
+		_, err = j.git.Sync(ctx, repo.Owner, repo.Name, branch)
+	}
+	if err != nil {
 		return fmt.Errorf("sync %s: %w", repo.FullName, err)
 	}
 	if err := j.store.SetPolled(ctx, repo.ID, j.now()); err != nil {
@@ -167,4 +207,54 @@ func (j *Jobs) Refresh(ctx context.Context, payload json.RawMessage) error {
 		}
 	}
 	return nil
+}
+
+// gitLabTarget is where a GitLab repo's clone lives and where it is fetched from.
+type gitLabTarget struct {
+	// first and second are the clone key (codehost.CloneKey): host key and project id.
+	first, second string
+	remote        gitcli.Remote
+}
+
+// gitLabTarget binds the repo's host to its connection now (FR48) and builds the remote from the
+// connection: <base>/<full name>.git, the token scoped to <base>/. A host without a connection
+// is a *NotConnectedError and no git command runs; it is not a transient error, so the job is
+// not retried.
+func (j *Jobs) gitLabTarget(ctx context.Context, repo domain.Repo) (*gitLabTarget, error) {
+	if repo.ProjectID <= 0 {
+		return nil, fmt.Errorf("%s: gitlab repo has no project id", repo.FullName)
+	}
+	if p, err := domain.ParseURL("https://gitlab.invalid/" + repo.FullName); err != nil || p.Path != repo.FullName {
+		// The path goes into a URL: refuse anything that is not a plain project path.
+		return nil, fmt.Errorf("gitlab repo %s: stored path is not a plain project path", repo.ID)
+	}
+	if j.conns == nil {
+		return nil, &NotConnectedError{Host: repo.Host}
+	}
+	conn, ok, err := j.conns.Resolve(ctx, repo.Host)
+	if err != nil {
+		return nil, fmt.Errorf("resolve gitlab connection for %s: %w", repo.Host, err)
+	}
+	if !ok {
+		return nil, &NotConnectedError{Host: repo.Host}
+	}
+	base := strings.TrimRight(conn.BaseURL, "/")
+	first, second := codehost.CloneKey(codehost.GitLab, repo.Host, repo.ProjectID, repo.Owner, repo.Name)
+	remote := gitcli.Remote{
+		URL:    codehost.WebURL(base, repo.FullName) + ".git",
+		Prefix: base + "/",
+		Token:  conn.Token,
+	}
+	if j.caFile != nil {
+		remote.CAFile = j.caFile()
+	}
+	return &gitLabTarget{first: first, second: second, remote: remote}, nil
+}
+
+// defaultBranch asks the remote for its default branch.
+func (j *Jobs) defaultBranch(ctx context.Context, repo domain.Repo, gl *gitLabTarget) (string, error) {
+	if gl != nil {
+		return j.git.DefaultBranchRemote(ctx, gl.first, gl.second, gl.remote)
+	}
+	return j.git.DefaultBranch(ctx, repo.Owner, repo.Name)
 }

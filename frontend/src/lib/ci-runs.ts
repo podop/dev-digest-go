@@ -1,5 +1,5 @@
 import type { CiRefreshResult, CiRun } from "@devdigest/shared";
-import { githubPrUrl } from "./github-urls";
+import { prUrl } from "./code-host";
 
 const PLACEHOLDER = "—";
 const REPO_FULL_NAME = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -14,7 +14,7 @@ export function formatRanAt(iso: string | null | undefined): string {
 /** GitHub PR page of a run; null when the run has no PR or the repo name is not `owner/name`. */
 export function pullRequestHref(run: Pick<CiRun, "repo" | "pr_number">): string | null {
   if (run.pr_number == null || !run.repo || !REPO_FULL_NAME.test(run.repo)) return null;
-  return githubPrUrl(run.repo, run.pr_number);
+  return prUrl({ provider: "github", full_name: run.repo }, run.pr_number);
 }
 
 /** The run link only when it is an http(s) URL — it comes from GitHub data, never render other schemes. */

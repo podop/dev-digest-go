@@ -81,7 +81,10 @@ func TestFindRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindRepo: %v", err)
 	}
-	want := domain.Repo{ID: f.repo, WorkspaceID: f.ws, Owner: "acme", Name: "shop", FullName: "acme/shop", DefaultBranch: "trunk"}
+	want := domain.Repo{
+		ID: f.repo, WorkspaceID: f.ws, Owner: "acme", Name: "shop", FullName: "acme/shop", DefaultBranch: "trunk",
+		Provider: "github", Host: "github.com",
+	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindRepo mismatch (-want +got):\n%s", diff)
 	}
@@ -90,6 +93,23 @@ func TestFindRepo(t *testing.T) {
 	}
 	if _, err := f.store.FindRepo(t.Context(), f.ws, "00000000-0000-4000-8000-000000000000"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("FindRepo(unknown repo) error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestFindRepo_GitLabReturnsTheCloneKey(t *testing.T) {
+	f := newFixture(t)
+	gl := f.insert(t, `INSERT INTO repos (workspace_id, owner, name, full_name, default_branch, provider, host, project_id, web_url)
+		VALUES (?, 'grp/sub', 'web', 'grp/sub/web', 'main', 'gitlab', 'git.corp.example:8443', 4242, 'https://git.corp.example:8443/grp/sub/web') RETURNING id`, f.ws)
+	got, err := f.store.FindRepo(t.Context(), f.ws, gl)
+	if err != nil {
+		t.Fatalf("FindRepo(gitlab): %v", err)
+	}
+	want := domain.Repo{
+		ID: gl, WorkspaceID: f.ws, Owner: "@gitlab/git.corp.example_8443", Name: "4242", FullName: "grp/sub/web", DefaultBranch: "main",
+		Provider: "gitlab", Host: "git.corp.example:8443", ProjectID: 4242,
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("FindRepo(gitlab) mismatch (-want +got):\n%s", diff)
 	}
 }
 

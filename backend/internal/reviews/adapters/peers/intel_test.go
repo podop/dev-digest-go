@@ -147,6 +147,20 @@ func TestProjectContext_MapsInputAndDocuments(t *testing.T) {
 	}
 }
 
+func TestProjectContext_GitLabRepoPassesTheCloneKey(t *testing.T) {
+	f := &fakeRunContext{}
+	_, err := peers.NewProjectContext(f).ResolveForRun(t.Context(), reviewsapp.ProjectContextInput{
+		WorkspaceID: "w", Base: "main", HeadSHA: "abc1234",
+		Repo: domain.ReviewRepo{ID: "repo", Owner: "grp/sub", Name: "web", Provider: "gitlab", Host: "git.corp.example:8443", ProjectID: 4242},
+	})
+	if err != nil {
+		t.Fatalf("ResolveForRun() error = %v", err)
+	}
+	if f.in.Owner != "@gitlab/git.corp.example_8443" || f.in.Name != "4242" {
+		t.Errorf("RunContext(Owner, Name) = %q, %q, want the clone key %q, %q", f.in.Owner, f.in.Name, "@gitlab/git.corp.example_8443", "4242")
+	}
+}
+
 func TestProjectContext_NothingAttachedAndErrors(t *testing.T) {
 	a := peers.NewProjectContext(&fakeRunContext{rc: pcapp.RunContext{BudgetTokens: 16000}})
 	got, err := a.ResolveForRun(t.Context(), reviewsapp.ProjectContextInput{})

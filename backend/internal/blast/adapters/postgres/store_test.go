@@ -64,9 +64,27 @@ func TestFindPull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindPull() error = %v", err)
 	}
-	want := domain.Pull{ID: f.pr, RepoID: f.repo, Number: 5, Owner: "acme", Name: "api"}
+	want := domain.Pull{ID: f.pr, RepoID: f.repo, Number: 5, Owner: "acme", Name: "api", Provider: "github"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindPull() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestFindPull_GitLabRepositoryReadsItsProvider(t *testing.T) { // FR29
+	f := newFixture(t)
+	repo := f.insert(t, `INSERT INTO repos (workspace_id, owner, name, full_name, provider, host, project_id, web_url)
+		VALUES (?, 'acme/core', 'payments', 'acme/core/payments', 'gitlab', 'git.example.com', 42, 'https://git.example.com/acme/core/payments') RETURNING id`, f.ws)
+	pr := f.pull(t, repo, 7)
+	got, err := f.store.FindPull(t.Context(), f.ws, pr)
+	if err != nil {
+		t.Fatalf("FindPull() error = %v", err)
+	}
+	want := domain.Pull{ID: pr, RepoID: repo, Number: 7, Owner: "acme/core", Name: "payments", Provider: "gitlab"}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("FindPull(GitLab) mismatch (-want +got):\n%s", diff)
+	}
+	if !got.IsGitLab() {
+		t.Errorf("FindPull(GitLab).IsGitLab() = false, want true")
 	}
 }
 

@@ -13,20 +13,20 @@ import (
 
 const ws = "ws-1"
 
-func mustRef(t *testing.T, url string) domain.Ref {
+func mustParsed(t *testing.T, url string) domain.Parsed {
 	t.Helper()
-	ref, err := domain.ParseURL(url)
+	parsed, err := domain.ParseURL(url)
 	if err != nil {
 		t.Fatalf("ParseURL(%q) error = %v", url, err)
 	}
-	return ref
+	return parsed
 }
 
 func TestService_Add(t *testing.T) {
 	store, queue := &memStore{}, &fakeQueue{}
 	svc := app.NewService(store, queue, "/data/workspace")
 
-	repo, created, err := svc.Add(t.Context(), ws, "user-1", mustRef(t, "https://github.com/o/r.git"))
+	repo, created, err := svc.Add(t.Context(), ws, "user-1", mustParsed(t, "https://github.com/o/r.git"))
 	if err != nil || !created {
 		t.Fatalf("Add() = %+v, %v, %v, want created", repo, created, err)
 	}
@@ -39,7 +39,7 @@ func TestService_Add(t *testing.T) {
 	}
 
 	// The same repo in another URL form exists: same row, nothing enqueued.
-	again, created, err := svc.Add(t.Context(), ws, "user-1", mustRef(t, "git@github.com:o/r"))
+	again, created, err := svc.Add(t.Context(), ws, "user-1", mustParsed(t, "git@github.com:o/r"))
 	if err != nil || created || again.ID != repo.ID {
 		t.Errorf("Add(existing) = %+v, %v, %v, want the same repo, created=false", again, created, err)
 	}
@@ -48,7 +48,7 @@ func TestService_Add(t *testing.T) {
 	}
 
 	// Full names are case-sensitive.
-	other, created, err := svc.Add(t.Context(), ws, "user-1", mustRef(t, "https://github.com/O/r"))
+	other, created, err := svc.Add(t.Context(), ws, "user-1", mustParsed(t, "https://github.com/O/r"))
 	if err != nil || !created || other.ID == repo.ID {
 		t.Errorf("Add(O/r) = %+v, %v, %v, want a new repo", other, created, err)
 	}
@@ -58,7 +58,7 @@ func TestService_Add_EnqueueFails(t *testing.T) {
 	store, queue := &memStore{}, &fakeQueue{err: errBoom}
 	svc := app.NewService(store, queue, "/data")
 
-	_, created, err := svc.Add(t.Context(), ws, "u", mustRef(t, "https://github.com/o/r"))
+	_, created, err := svc.Add(t.Context(), ws, "u", mustParsed(t, "https://github.com/o/r"))
 	if !errors.Is(err, errBoom) || created {
 		t.Errorf("Add() created = %v, error = %v, want errBoom", created, err)
 	}
@@ -70,8 +70,8 @@ func TestService_Add_EnqueueFails(t *testing.T) {
 func TestService_Refresh(t *testing.T) {
 	store, queue := &memStore{}, &fakeQueue{}
 	svc := app.NewService(store, queue, "/data")
-	fresh, _, _ := svc.Add(t.Context(), ws, "u", mustRef(t, "https://github.com/o/fresh"))
-	cloned, _, _ := svc.Add(t.Context(), ws, "u", mustRef(t, "https://github.com/o/cloned"))
+	fresh, _, _ := svc.Add(t.Context(), ws, "u", mustParsed(t, "https://github.com/o/fresh"))
+	cloned, _, _ := svc.Add(t.Context(), ws, "u", mustParsed(t, "https://github.com/o/cloned"))
 	if err := store.SetCloned(t.Context(), cloned.ID, "/data/o/cloned", time0); err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestService_Refresh(t *testing.T) {
 func TestService_NotFound(t *testing.T) {
 	store, queue := &memStore{}, &fakeQueue{}
 	svc := app.NewService(store, queue, "/data")
-	repo, _, _ := svc.Add(t.Context(), "ws-other", "u", mustRef(t, "https://github.com/o/r"))
+	repo, _, _ := svc.Add(t.Context(), "ws-other", "u", mustParsed(t, "https://github.com/o/r"))
 	queue.jobs = nil
 
 	for name, call := range map[string]func() error{
@@ -129,8 +129,8 @@ func TestService_NotFound(t *testing.T) {
 func TestService_DeleteAndOverview(t *testing.T) {
 	store, queue := &memStore{}, &fakeQueue{}
 	svc := app.NewService(store, queue, "/data/workspace")
-	a, _, _ := svc.Add(t.Context(), ws, "u", mustRef(t, "https://github.com/o/a"))
-	b, _, _ := svc.Add(t.Context(), ws, "u", mustRef(t, "https://github.com/o/b"))
+	a, _, _ := svc.Add(t.Context(), ws, "u", mustParsed(t, "https://github.com/o/a"))
+	b, _, _ := svc.Add(t.Context(), ws, "u", mustParsed(t, "https://github.com/o/b"))
 
 	ov, err := svc.Overview(t.Context(), ws)
 	if err != nil {

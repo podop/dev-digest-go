@@ -1,6 +1,12 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderWithProviders, screen, cleanup } from "@/test/render";
+import { mockFetch } from "@/test/fetch-mock";
+import { GITHUB_REPO, GITLAB_REPO } from "@/test/code-host-repo";
 import type { FindingRecord } from "@devdigest/shared";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/pulls/12" }));
+
+import { RepoProvider } from "@/lib/repo-context";
 import { FindingCard } from "./FindingCard";
 
 afterEach(cleanup);
@@ -80,5 +86,40 @@ describe("FindingCard — extraActions slot", () => {
     expect(screen.queryByRole("button", { name: "Extra" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Hardcoded Stripe secret key" }));
     expect(screen.getByRole("button", { name: "Extra" })).toBeInTheDocument();
+  });
+});
+
+describe("FindingCard — file link on the repository's code host (FR41; AC32)", () => {
+  const SPACED: FindingRecord = { ...FINDING, file: "src/a b.ts", start_line: 10, end_line: 20 };
+
+  function renderOn(repo: typeof GITLAB_REPO, props: { repoFullName?: string | null } = {}) {
+    mockFetch({ "GET /repos": [repo] });
+    return renderWithProviders(
+      <RepoProvider>
+        <FindingCard f={SPACED} headSha="abc123" onAction={() => {}} {...props} />
+      </RepoProvider>,
+    );
+  }
+
+  it("links a GitLab finding to <web_url>/-/blob/<sha>/<path>#L10-20", async () => {
+    renderOn(GITLAB_REPO);
+    expect(await screen.findByRole("link", { name: "src/a b.ts:10-20" })).toHaveAttribute(
+      "href",
+      "https://git.corp.example/gitlab/acme/platform/payments/-/blob/abc123/src/a%20b.ts#L10-20",
+    );
+  });
+
+  it("links a GitHub finding as before, with or without web_url", async () => {
+    renderOn(GITHUB_REPO, { repoFullName: "acme/api" });
+    expect(await screen.findByRole("link", { name: "src/a b.ts:10-20" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/api/blob/abc123/src/a%20b.ts#L10-L20",
+    );
+    cleanup();
+    renderOn({ ...GITHUB_REPO, web_url: "https://github.com/acme/api" });
+    expect(await screen.findByRole("link", { name: "src/a b.ts:10-20" })).toHaveAttribute(
+      "href",
+      "https://github.com/acme/api/blob/abc123/src/a%20b.ts#L10-L20",
+    );
   });
 });

@@ -79,9 +79,13 @@ type Caps interface {
 	CapReached(ctx context.Context, workspaceID string) (bool, error)
 }
 
-// Tokens tells whether the workspace has a GitHub token stored.
+// Tokens tells which of the workspace's repositories have a token for their code host (FR28).
 type Tokens interface {
-	HasGitHubToken(ctx context.Context, workspaceID string) (bool, error)
+	// CodeHostAccess reports whether the workspace has a GitLab repository, whether a GitHub token
+	// is stored and whether any repository of the workspace has a token for its host: the GitHub
+	// token for a GitHub repository, its connection's token for a GitLab one (a repository without
+	// a connection has none). The adapter answers from the repository list and the secrets.
+	CodeHostAccess(ctx context.Context, workspaceID string) (domain.CodeHostAccess, error)
 }
 
 // Deps are what *Service is built from. Every field but PollEnabled is required.

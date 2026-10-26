@@ -1,6 +1,6 @@
 /* SetupView — first-run setup (FR22–FR26): a centred card with a 3-step stepper (model
-   provider key → GitHub token → first repository). The step shown comes from the URL, pulled
-   back to the first incomplete step; completeness comes from secrets-status, GET /repos and the custom providers,
+   provider key → code host: GitHub token or GitLab connection → first repository). The step shown comes from the URL, pulled
+   back to the first incomplete step; completeness comes from secrets-status, GET /repos, the custom providers and the GitLab connections,
    so nothing new is stored. Step changes replace the URL. */
 "use client";
 
@@ -8,11 +8,11 @@ import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ErrorState, Icon, Skeleton } from "@devdigest/ui";
-import { useCustomProviders, useRepos, useSecretsStatus } from "@/lib/hooks";
+import { useCustomProviders, useGitLabConnections, useRepos, useSecretsStatus } from "@/lib/hooks";
 import type { ConnTestProvider } from "@/lib/types";
 import { SETUP_STEPS, pullsHref, setupHref, type SetupStep } from "./constants";
-import { nextStep, previousStep, resolveStep, stepsDone } from "./helpers";
-import { GithubStep } from "./_components/GithubStep";
+import { gitlabTokenCount, nextStep, previousStep, resolveStep, stepsDone } from "./helpers";
+import { CodeHostStep } from "./_components/CodeHostStep";
 import { ModelStep } from "./_components/ModelStep";
 import { RepoStep } from "./_components/RepoStep";
 import { Stepper } from "./_components/Stepper";
@@ -24,6 +24,7 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
   const secrets = useSecretsStatus();
   const repos = useRepos();
   const custom = useCustomProviders();
+  const gitlab = useGitLabConnections();
   // Providers whose test passed in this view (a passing test stores the key).
   const [tested, setTested] = React.useState<ConnTestProvider[]>([]);
 
@@ -33,8 +34,8 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
   );
 
   const done =
-    secrets.data && repos.data && custom.data
-      ? stepsDone(secrets.data, repos.data.length, tested, custom.data.length)
+    secrets.data && repos.data && custom.data && gitlab.data
+      ? stepsDone(secrets.data, repos.data.length, tested, custom.data.length, gitlabTokenCount(gitlab.data))
       : null;
   const step = done ? resolveStep(requestedStep, done) : null;
 
@@ -45,7 +46,7 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
   }, [step, requestedStep, router]);
 
   let body: React.ReactNode;
-  if (secrets.isError || repos.isError || custom.isError) {
+  if (secrets.isError || repos.isError || custom.isError || gitlab.isError) {
     body = (
       <ErrorState
         title={t("error.title")}
@@ -55,10 +56,11 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
           if (secrets.isError) void secrets.refetch();
           if (repos.isError) void repos.refetch();
           if (custom.isError) void custom.refetch();
+          if (gitlab.isError) void gitlab.refetch();
         }}
       />
     );
-  } else if (!secrets.data || !repos.data || !custom.data || !done || !step) {
+  } else if (!secrets.data || !repos.data || !custom.data || !gitlab.data || !done || !step) {
     body = (
       <div style={s.skeletons} role="status" aria-busy="true" aria-label={t("loading")}>
         <Skeleton height={24} width={260} />
@@ -76,8 +78,14 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
         {step === "model" && (
           <ModelStep secrets={secrets.data} customCount={custom.data.length} onTested={markTested} onContinue={go(next)} />
         )}
-        {step === "github" && (
-          <GithubStep secrets={secrets.data} onTested={markTested} onBack={go(prev)} onContinue={go(next)} />
+        {step === "code-host" && (
+          <CodeHostStep
+            secrets={secrets.data}
+            gitlabConnections={gitlab.data}
+            onTested={markTested}
+            onBack={go(prev)}
+            onContinue={go(next)}
+          />
         )}
         {step === "repo" && (
           <RepoStep

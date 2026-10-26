@@ -34,8 +34,14 @@ func TestFindPull(t *testing.T) {
 func TestFindRepo(t *testing.T) {
 	f := newFixture(t)
 	got, err := f.store.FindRepo(t.Context(), f.repo)
-	if err != nil || got != (domain.ReviewRepo{ID: f.repo, Owner: "acme", Name: "payments-api"}) {
-		t.Errorf("FindRepo() = %+v, %v", got, err)
+	if want := (domain.ReviewRepo{ID: f.repo, Owner: "acme", Name: "payments-api", Provider: "github", Host: "github.com"}); err != nil || got != want {
+		t.Errorf("FindRepo() = %+v, %v, want %+v", got, err, want)
+	}
+	gl := f.insertRepo(t, `INSERT INTO repos (workspace_id, owner, name, full_name, provider, host, project_id, web_url)
+		VALUES (?, 'grp/sub', 'web', 'grp/sub/web', 'gitlab', 'git.corp.example', 4242, 'https://git.corp.example/grp/sub/web') RETURNING id`, f.ws)
+	got, err = f.store.FindRepo(t.Context(), gl)
+	if want := (domain.ReviewRepo{ID: gl, Owner: "grp/sub", Name: "web", Provider: "gitlab", Host: "git.corp.example", ProjectID: 4242}); err != nil || got != want {
+		t.Errorf("FindRepo(gitlab) = %+v, %v, want %+v", got, err, want)
 	}
 	if _, err := f.store.FindRepo(t.Context(), missingID); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("FindRepo(unknown) error = %v, want ErrNotFound", err)

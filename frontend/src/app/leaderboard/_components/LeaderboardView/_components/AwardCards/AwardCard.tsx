@@ -10,15 +10,17 @@ import type { LeaderboardAward } from "@devdigest/shared";
 import { Icon } from "@devdigest/ui";
 import { CostText } from "@/components/cost-text";
 import { formatDuration, formatScore } from "../KpiTiles/helpers";
+import { NO_REPOS, prLabel, type RepoLookup } from "../../helpers";
 import { awardHref, formatCount, type AwardSpec } from "./helpers";
 import { s } from "./styles";
 
 export interface AwardCardProps {
   spec: AwardSpec;
   award: LeaderboardAward | null;
+  repos?: RepoLookup;
 }
 
-export function AwardCard({ spec, award }: AwardCardProps) {
+export function AwardCard({ spec, award, repos = NO_REPOS }: AwardCardProps) {
   const t = useTranslations("leaderboardHighlights");
   const AwardIcon = Icon[spec.icon];
   const title = t(`awards.${spec.key}.title`);
@@ -38,7 +40,7 @@ export function AwardCard({ spec, award }: AwardCardProps) {
     }
   }
 
-  const reference = award ? `${award.repo}#${award.number}` : null;
+  const reference = award ? prLabel(repos, award.repo_id, award.repo, award.number) : null;
   return (
     <div role="group" aria-label={title} style={s.card}>
       <div style={s.head}>

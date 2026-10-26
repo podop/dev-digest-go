@@ -33,6 +33,12 @@ export const customProviderKeys = {
   list: () => [...customProviderKeys.all, "list"] as const,
 };
 
+/** GET /settings/gitlab-connections — the installation-wide GitLab connections (specs/2026-10-24-gitlab-a-connection-sync.md §7). */
+export const gitlabConnectionKeys = {
+  all: ["gitlab-connections"] as const,
+  list: () => [...gitlabConnectionKeys.all, "list"] as const,
+};
+
 export const repoKeys = {
   all: ["repos"] as const,
   list: () => [...repoKeys.all, "list"] as const,

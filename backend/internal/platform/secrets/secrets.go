@@ -35,6 +35,11 @@ const FileName = "secrets.json"
 // Get never returns it.
 const customPrefix = "custom_providers."
 
+// gitlabPrefix starts the file key of a GitLab connection's token:
+// gitlab_connections.<id>. The value is an object ({"token": …}), not a string,
+// so Get never returns it.
+const gitlabPrefix = "gitlab_connections."
+
 // Store reads secrets from a JSON object file, falling back to the environment.
 // The file is read on every call, so a key saved through Set is visible to
 // every later Get without a restart.
@@ -219,6 +224,101 @@ func decodeCustom(raw any) CustomSecret {
 		return CustomSecret{}
 	}
 	return sec
+}
+
+// ErrInvalidGitLabRef is returned for an empty connection id or one holding "/".
+var ErrInvalidGitLabRef = errors.New("invalid gitlab connection secret reference")
+
+// gitlabEntry is the file value of one GitLab connection.
+type gitlabEntry struct {
+	Token string `json:"token"`
+}
+
+func gitlabKey(id string) (string, bool) {
+	if id == "" || strings.Contains(id, "/") {
+		return "", false
+	}
+	return gitlabPrefix + id, true
+}
+
+// GitLab returns the token stored for GitLab connection id, or "" when none is
+// stored, the id is invalid or the entry is malformed. There is no environment
+// fallback.
+func (s *Store) GitLab(id string) string {
+	key, ok := gitlabKey(id)
+	if !ok {
+		return ""
+	}
+	return decodeGitLab(s.readFile()[key])
+}
+
+// SetGitLab stores token for GitLab connection id, replacing what was stored,
+// and returns the previous token ("" when none) so a caller whose database
+// commit fails can put it back with RestoreGitLab. An empty token removes the
+// entry. Other names are untouched. Errors never contain the token.
+func (s *Store) SetGitLab(id, token string) (prev string, err error) {
+	key, ok := gitlabKey(id)
+	if !ok {
+		return "", ErrInvalidGitLabRef
+	}
+	old, err := s.update(key, func(map[string]any) any {
+		if token == "" {
+			return nil
+		}
+		return gitlabEntry{Token: token}
+	})
+	if err != nil {
+		return "", err
+	}
+	return decodeGitLab(old), nil
+}
+
+// DeleteGitLab removes the token of GitLab connection id and returns what was
+// stored ("" when none), for RestoreGitLab.
+func (s *Store) DeleteGitLab(id string) (prev string, err error) {
+	return s.SetGitLab(id, "")
+}
+
+// RestoreGitLab puts prev, as returned by SetGitLab or DeleteGitLab, back; an
+// empty prev removes the entry again. It undoes a write whose database
+// transaction did not commit.
+func (s *Store) RestoreGitLab(id, prev string) error {
+	_, err := s.SetGitLab(id, prev)
+	return err
+}
+
+// GitLabValues returns every non-empty GitLab token of every connection, sorted
+// and without duplicates, for redaction of logs, errors, git output and
+// LLM-bound text.
+func (s *Store) GitLabValues() []string {
+	var out []string
+	for name, raw := range s.readFile() {
+		if !strings.HasPrefix(name, gitlabPrefix) {
+			continue
+		}
+		if tok := decodeGitLab(raw); tok != "" {
+			out = append(out, tok)
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// decodeGitLab reads a file entry (decoded JSON or a gitlabEntry); anything
+// else is "".
+func decodeGitLab(raw any) string {
+	if raw == nil {
+		return ""
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return ""
+	}
+	var e gitlabEntry
+	if err := json.Unmarshal(b, &e); err != nil {
+		return ""
+	}
+	return e.Token
 }
 
 // readFile returns the parsed file, or an empty map when it is missing,

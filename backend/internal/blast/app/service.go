@@ -80,11 +80,15 @@ func (s *Service) RadiusFor(ctx context.Context, repoID string, changed []string
 }
 
 // History returns the prior merged pull requests that touched the same files. Every GitHub
-// failure is a warning and an empty list.
+// failure is a warning and an empty list. A GitLab pull request has no history here (FR29): the
+// list is empty and no request goes to GitHub.
 func (s *Service) History(ctx context.Context, workspaceID, prID string) ([]domain.PriorPR, error) {
 	pull, err := s.store.FindPull(ctx, workspaceID, prID)
 	if err != nil {
 		return nil, notFoundOr(err, "load pull request")
+	}
+	if pull.IsGitLab() {
+		return []domain.PriorPR{}, nil
 	}
 	paths, err := s.store.ChangedPaths(ctx, prID)
 	if err != nil {

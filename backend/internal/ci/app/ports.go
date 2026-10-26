@@ -23,6 +23,9 @@ var (
 	// ErrSlugTaken is returned by Store.UpsertInstallation when (repo, slug) belongs to another
 	// agent: a lost race against the pre-check.
 	ErrSlugTaken = errors.New("ci slug taken")
+	// ErrUnsupportedHost is returned by RepoDirectory.FindByFullName when the name is carried only
+	// by a repository that is not on GitHub (slice A: GitLab CI export is not available, FR29).
+	ErrUnsupportedHost = errors.New("repository host not supported for CI export")
 	// ErrNotStorable is returned by Store.RecordRun and Store.UpsertInstallation, before any
 	// write, when a value cannot be held by its column: an integer outside the column's range, a
 	// cost that overflows numeric(12,6), or text with a NUL or invalid UTF-8. The ingest maps it
@@ -50,7 +53,9 @@ type AgentDirectory interface {
 
 // RepoDirectory reads the repositories imported into the workspace (peer adapter).
 type RepoDirectory interface {
-	// FindByFullName matches the exact "owner/name"; false = not imported.
+	// FindByFullName matches the exact "owner/name" among the workspace's GitHub repositories;
+	// false = not imported. A name that only a repository of another host carries answers
+	// ErrUnsupportedHost, so a same-named GitLab project is never taken for the GitHub one.
 	FindByFullName(ctx context.Context, workspaceID, fullName string) (domain.ImportedRepo, bool, error)
 }
 

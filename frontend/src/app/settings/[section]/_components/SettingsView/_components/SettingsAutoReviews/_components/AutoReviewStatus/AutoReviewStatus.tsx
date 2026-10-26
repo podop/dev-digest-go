@@ -5,8 +5,10 @@ import { useTranslations } from "next-intl";
 import { Button } from "@devdigest/ui";
 import { useAutomaticReviewsStatus } from "@/lib/hooks";
 import { sectionHref } from "../../../../constants";
-import { fixSectionOf, pollAge, toneOf, type PollAge } from "./helpers";
+import { fixSectionsOf, pollAge, toneOf, type PollAge } from "./helpers";
 import { s } from "./styles";
+
+const LINK_KEY = { github: "links.github", gitlab: "links.gitlab", "api-keys": "links.apiKeys" } as const;
 
 /** Message key of the "last poll" text for an age. */
 function agePart(t: ReturnType<typeof useTranslations>, age: PollAge): string {
@@ -41,7 +43,7 @@ export function AutoReviewStatus() {
     );
   }
 
-  const fix = fixSectionOf(data.state);
+  const fixes = fixSectionsOf(data.state);
   const text =
     data.state === "active"
       ? t.rich("states.active", {
@@ -55,11 +57,11 @@ export function AutoReviewStatus() {
     <div role="status" style={s.line}>
       <span aria-hidden style={s.dot(toneOf(data.state))} />
       <span>{text}</span>
-      {fix && (
-        <Link href={sectionHref(fix)} style={s.link}>
-          {t(fix === "github" ? "links.github" : "links.apiKeys")}
+      {fixes.map((fix) => (
+        <Link key={fix} href={sectionHref(fix)} style={s.link}>
+          {t(LINK_KEY[fix])}
         </Link>
-      )}
+      ))}
     </div>
   );
 }

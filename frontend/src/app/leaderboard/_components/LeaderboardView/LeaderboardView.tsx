@@ -8,6 +8,7 @@
    period" in the table's place, with a button to the PR list of the filtered (else the active) repo. */
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -25,7 +26,7 @@ import { KpiTiles } from "./_components/KpiTiles";
 import { LeaderboardTable } from "./_components/LeaderboardTable";
 import { NeedsAttention } from "./_components/NeedsAttention";
 import { ALL_REPOS } from "./constants";
-import { leaderboardHref, resolveRepoFilter } from "./helpers";
+import { leaderboardHref, repoLookup, resolveRepoFilter } from "./helpers";
 import { s } from "./styles";
 
 export interface LeaderboardViewProps {
@@ -88,14 +89,15 @@ export function LeaderboardView({ period, repo }: LeaderboardViewProps) {
 function LoadedPage({ data, pullsRepoId }: { data: Leaderboard; pullsRepoId: string | null }) {
   const t = useTranslations("leaderboard");
   const router = useRouter();
+  const repos = React.useMemo(() => repoLookup(data.repos), [data.repos]);
   return (
     <div style={s.loaded}>
       <KpiTiles summary={data.summary} previous={data.previous_summary} />
-      <AwardCards awards={data.awards} />
+      <AwardCards awards={data.awards} repos={repos} />
       <div style={s.main}>
         <div style={s.mainWide}>
           {data.rows.length > 0 ? (
-            <LeaderboardTable rows={data.rows} />
+            <LeaderboardTable rows={data.rows} repos={repos} />
           ) : (
             <section style={s.tableEmpty}>
               <EmptyState
@@ -109,8 +111,8 @@ function LoadedPage({ data, pullsRepoId }: { data: Leaderboard; pullsRepoId: str
           )}
         </div>
         <div style={s.mainSide}>
-          <NeedsAttention data={data.needs_attention} />
-          <HotFiles files={data.hot_files} />
+          <NeedsAttention data={data.needs_attention} repos={repos} />
+          <HotFiles files={data.hot_files} repos={repos} />
         </div>
       </div>
       <div style={s.main}>

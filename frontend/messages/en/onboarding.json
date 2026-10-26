@@ -54,7 +54,7 @@
   },
   "paths": {
     "open": "Open",
-    "openAria": "Open {path} on GitHub",
+    "openAria": "Open {path} on {host}",
     "criticalList": "Critical paths",
     "readingList": "Guided reading path"
   },

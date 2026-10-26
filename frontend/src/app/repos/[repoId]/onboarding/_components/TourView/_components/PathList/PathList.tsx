@@ -1,12 +1,14 @@
 /* PathList — body of the "Critical paths" and "Guided reading path" sections. Paths are monospace,
-   truncated with the full path as tooltip. Critical paths get an "Open" button (GitHub at the
+   truncated with the full path as tooltip. Critical paths get an "Open" button (the code host at the
    tour's indexed commit, new tab); the reading path is a numbered list. Empty → "Not enough information". */
 "use client";
 
 import { useTranslations } from "next-intl";
 import { Button, Icon } from "@devdigest/ui";
 import type { OnboardingPathItem } from "@devdigest/shared";
-import { openPathOnGithub } from "./helpers";
+import { codeHostName } from "@/lib/code-host";
+import { useLinkRepo } from "@/lib/link-repo";
+import { openPathOnHost } from "./helpers";
 import { s } from "./styles";
 
 export type PathListVariant = "critical" | "reading";
@@ -25,6 +27,7 @@ export function PathList({
   indexedSha: string;
 }) {
   const t = useTranslations("onboarding");
+  const repo = useLinkRepo(repoFullName);
   if (items.length === 0) return <p style={s.empty}>{t("empty")}</p>;
 
   if (variant === "reading") {
@@ -58,8 +61,8 @@ export function PathList({
           <span style={s.reasonInline}>— {item.reason}</span>
           <Button
             size="sm"
-            aria-label={t("paths.openAria", { path: item.path })}
-            onClick={() => openPathOnGithub(repoFullName, indexedSha, item.path)}
+            aria-label={t("paths.openAria", { path: item.path, host: codeHostName(repo) })}
+            onClick={() => openPathOnHost(repo, indexedSha, item.path)}
           >
             {t("paths.open")}
           </Button>

@@ -265,6 +265,12 @@ type RepoRef struct {
 	FullName string // owner/name, echoed in the response's repos list
 	// LastPolledAt is the repository's last successful poll, nil if never polled.
 	LastPolledAt *time.Time
+	// Provider, Host and WebURL describe a repository of a code host other than GitHub
+	// (Provider "gitlab", Host the host key, WebURL the project's web address); all three are
+	// empty for GitHub, whose response does not carry them.
+	Provider string
+	Host     string
+	WebURL   string
 }
 
 // Facts is everything one window read returns, covering [From, To) = [Window.ReadFrom(),

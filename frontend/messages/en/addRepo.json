@@ -1,9 +1,13 @@
 {
   "urlLabel": "Repository URL",
-  "urlHint": "e.g. https://github.com/acme/payments-api",
-  "urlPlaceholder": "https://github.com/owner/repo",
+  "urlHint": "Paste a GitHub or GitLab repository URL, e.g. https://github.com/acme/payments-api or https://gitlab.com/acme/platform/payments",
+  "urlPlaceholder": "https://github.com/owner/repo or https://gitlab.com/group/project",
   "addError": "Could not add repository",
   "cancel": "Cancel",
   "submit": "Add repository",
-  "submitting": "Cloning…"
+  "submitting": "Cloning…",
+  "hostNotConnected": "No GitLab connection for {host}.",
+  "addConnection": "Add a GitLab connection",
+  "serverError": "The server could not add the repository. Try again in a moment.",
+  "addedTo": "Added to {provider} · {host}"
 }

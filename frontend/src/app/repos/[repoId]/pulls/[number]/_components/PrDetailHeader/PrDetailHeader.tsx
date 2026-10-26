@@ -2,17 +2,18 @@
 
 import { useTranslations } from "next-intl";
 import { Icon, Avatar, Badge, Button, Tabs } from "@devdigest/ui";
+import { isGitLab, prRef, prUrl } from "@/lib/code-host";
 import { RunReviewPicker } from "../RunReviewPicker";
 import { s } from "./styles";
-import type { PrDetail } from "@/lib/types";
+import type { PrDetail, Repo } from "@/lib/types";
 
 interface PrDetailHeaderProps {
   pr: PrDetail;
   prId: string;
   tab: string;
   findingsCount: number;
-  /** github.com PR URL; null when the repo's full_name isn't known yet. */
-  githubUrl?: string | null;
+  /** The PR's repository (null until it has loaded): decides the `!n` / `#n` reference and the host link. */
+  repo?: Repo | null;
   onSetTab: (tab: string) => void;
   onRunStart: () => void;
 }
@@ -22,11 +23,13 @@ export function PrDetailHeader({
   prId,
   tab,
   findingsCount,
-  githubUrl,
+  repo,
   onSetTab,
   onRunStart,
 }: PrDetailHeaderProps) {
   const t = useTranslations("prReview");
+  // The link comes from the repository's own web_url (https only), never from a response URL (FR41).
+  const hostUrl = prUrl(repo, pr.number);
   const settled = pr.status === "merged" || pr.status === "closed";
   const statusColor =
     pr.status === "merged"
@@ -41,7 +44,7 @@ export function PrDetailHeader({
         <div style={s.titleCol}>
           <h1 style={s.h1}>
             <span className="mono" style={s.prNumber}>
-              #{pr.number}
+              {prRef(repo, pr.number)}
             </span>
             {pr.title}
           </h1>
@@ -74,12 +77,12 @@ export function PrDetailHeader({
             kind="ghost"
             size="sm"
             icon="ExternalLink"
-            disabled={!githubUrl}
+            disabled={!hostUrl}
             onClick={() =>
-              githubUrl && window.open(githubUrl, "_blank", "noopener,noreferrer")
+              hostUrl && window.open(hostUrl, "_blank", "noopener,noreferrer")
             }
           >
-            {t("header.viewOnGithub")}
+            {t(isGitLab(repo) ? "header.viewOnGitlab" : "header.viewOnGithub")}
           </Button>
           <RunReviewPicker prId={prId} warnMerged={settled} onRunStart={onRunStart} />
         </div>

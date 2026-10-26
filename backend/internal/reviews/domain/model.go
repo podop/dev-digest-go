@@ -131,6 +131,11 @@ type ReviewRepo struct {
 	ID    string
 	Owner string
 	Name  string
+	// Provider ("github" | "gitlab"; "" reads as github), Host (the host key) and ProjectID (the
+	// GitLab project id; 0 = none) locate the repository's clone: see codehost.CloneKey.
+	Provider  string
+	Host      string
+	ProjectID int64
 }
 
 // ReviewSkill is an enabled skill linked to an agent, as it goes into a run: rendered as a

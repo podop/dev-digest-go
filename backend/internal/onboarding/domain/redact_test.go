@@ -55,6 +55,40 @@ func TestRedactSecrets_Behaviour(t *testing.T) {
 	}
 }
 
+// GitLab token prefixes (spec FR31, NFR1): each is redacted from 20 token characters on, the
+// routable form with dots included; shorter values and unrelated words stay.
+func TestRedactSecrets_GitLabTokens(t *testing.T) {
+	body := "AbCdEfGhIjKlMnOpQrSt"
+	var tests []struct{ name, in, want string }
+	for _, prefix := range []string{"glpat", "gloas", "gldt", "glrt", "glrtr", "glcbt", "glptt", "glft", "glimt", "glagent", "glsoat", "glffct"} {
+		tests = append(tests, struct{ name, in, want string }{prefix, "use " + prefix + "-" + body + " now", "use <redacted> now"})
+	}
+	tests = append(tests, []struct{ name, in, want string }{
+		{"routable with dots", "glpat-" + body + ".01.0abc12345", "<redacted>"},
+		{"underscore and hyphen", "x=glpat-ab_cd-ef_gh-ij_kl-mn_op", "x=<redacted>"},
+		{"in a clone url", "remote https://oauth2:glpat-" + body + "@gitlab.example/g/p.git failed", "remote https://oauth2:<redacted>@gitlab.example/g/p.git failed"},
+		{"two tokens", "glpat-" + body + " and gldt-" + body, "<redacted> and <redacted>"},
+		{"exactly 19 characters stays", "glpat-" + body[:19], "glpat-" + body[:19]},
+		{"unknown prefix stays", "glxyz-" + body, "glxyz-" + body},
+		{"embedded in a word stays", "xglpat-" + body, "xglpat-" + body},
+		{"ordinary text", "glob-pattern and gl-ssl-config-options-here-ok", "glob-pattern and gl-ssl-config-options-here-ok"},
+	}...)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := domain.RedactSecrets(tc.in)
+			if got != tc.want {
+				t.Errorf("RedactSecrets(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if strings.Contains(got, body) && tc.want == "<redacted>" {
+				t.Errorf("RedactSecrets(%q) = %q still holds part of the token", tc.in, got)
+			}
+			if again := domain.RedactSecrets(got); again != got {
+				t.Errorf("RedactSecrets is not idempotent on %q: second pass gave %q", got, again)
+			}
+		})
+	}
+}
+
 // A hostile README (a blob is at most 512 KiB; this is a quarter) must not take quadratic time (minutes at this size;
 // -race makes the linear case ten times slower, hence the generous bound): a long hyphenated word, repeated
 // quotes and a long run of key characters (INSIGHTS: hostile scans, one pass per file).

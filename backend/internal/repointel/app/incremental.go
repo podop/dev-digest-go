@@ -24,6 +24,7 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 		return ix.ended(start, "no_clone"), nil
 	}
 	root := repo.ClonePath
+	owner, name := repo.CloneKey()
 
 	state, ok, err := ix.d.Reader.GetState(ctx, repoID)
 	if err != nil {
@@ -33,7 +34,7 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 		return ix.full(ctx, repoID)
 	}
 
-	head, err := ix.d.Git.Head(ctx, repo.Owner, repo.Name)
+	head, err := ix.d.Git.Head(ctx, owner, name)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return Result{}, fmt.Errorf("read HEAD: %w", ctxErr)
@@ -48,7 +49,7 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 			Duration: ix.since(start), Reason: "sha_unchanged"}, nil
 	}
 
-	changedAll, err := ix.d.Git.DiffNames(ctx, repo.Owner, repo.Name, state.LastIndexedSHA, head)
+	changedAll, err := ix.d.Git.DiffNames(ctx, owner, name, state.LastIndexedSHA, head)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return Result{}, fmt.Errorf("list changed files: %w", ctxErr)

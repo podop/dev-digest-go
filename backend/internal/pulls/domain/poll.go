@@ -57,3 +57,57 @@ func ResumeAfterRateLimit(start, nextDue, reset time.Time) time.Time {
 	}
 	return nextDue
 }
+
+// DueAt is when a workspace's next cycle is due: the start of its last cycle plus the polling
+// interval it has now (spec D17). It is worked out on every tick, never stored, so a changed
+// interval applies within one tick. A rate limit no longer moves it: it pauses a host (HostPauses).
+func DueAt(lastStart time.Time, interval time.Duration) time.Time {
+	return lastStart.Add(interval)
+}
+
+// IsDue reports whether a cycle due at due may start now. Ticks are tick apart, so a cycle that
+// began a hair after its tick would otherwise miss the next one; half a tick of slack keeps a
+// 1-minute interval at one minute.
+func IsDue(now, due time.Time, tick time.Duration) bool {
+	return !now.Add(tick / 2).Before(due)
+}
+
+// HostPauses holds the rate-limit pauses of the code hosts the poller talks to, by pause key
+// (Repo.PauseKey): GitHub and each GitLab instance have their own (spec FR27, P9). A pause stops
+// polling the repositories of that host only. It is owned by one goroutine and not safe for
+// concurrent use.
+type HostPauses struct {
+	until map[string]time.Time
+}
+
+// NewHostPauses returns an empty set.
+func NewHostPauses() *HostPauses { return &HostPauses{until: map[string]time.Time{}} }
+
+// Pause pauses the host until resume. A later pause never shortens an earlier one.
+func (h *HostPauses) Pause(key string, resume time.Time) {
+	if cur, ok := h.until[key]; ok && !resume.After(cur) {
+		return
+	}
+	h.until[key] = resume
+}
+
+// Paused reports whether the host is paused at now (it resumes at the resume time itself).
+func (h *HostPauses) Paused(key string, now time.Time) bool {
+	resume, ok := h.until[key]
+	return ok && now.Before(resume)
+}
+
+// ResumeAt returns when the host resumes; ok is false when it has no pause.
+func (h *HostPauses) ResumeAt(key string) (time.Time, bool) {
+	resume, ok := h.until[key]
+	return resume, ok
+}
+
+// Prune drops the pauses that ended by now.
+func (h *HostPauses) Prune(now time.Time) {
+	for key, resume := range h.until {
+		if !now.Before(resume) {
+			delete(h.until, key)
+		}
+	}
+}

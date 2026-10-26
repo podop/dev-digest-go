@@ -32,3 +32,8 @@ export function withSearchParam(search: string, key: string, value: string | nul
 
 /** The PR list links here too, so the path builder lives in lib/pr-urls. */
 export { prDetailPath } from "@/lib/pr-urls";
+
+/** `title` with the server-rendered "#<number>" swapped for `ref` ("!<number>" on GitLab); untouched when absent. */
+export function withPrRef(title: string, number: string, ref: string): string {
+  return title.replace(`#${number}`, ref);
+}

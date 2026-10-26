@@ -37,8 +37,12 @@ func importsOf(t *testing.T, dir string) map[string][]string {
 	return out
 }
 
-// isNetwork reports a standard-library networking package: net and everything below it.
-func isNetwork(p string) bool { return p == "net" || strings.HasPrefix(p, "net/") }
+// isNetwork reports a standard-library networking package: net and everything below it, except
+// net/netip, which only holds address values (platform/codehost parses host keys with it) and
+// opens no socket.
+func isNetwork(p string) bool {
+	return p != "net/netip" && (p == "net" || strings.HasPrefix(p, "net/"))
+}
 
 // AC3067 (imports): nothing the indexer is built from starts a process or opens a socket. The
 // check reads the import declarations of every non-test file under internal/repointel, and of

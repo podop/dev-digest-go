@@ -1842,3 +1842,311 @@ func objects(t *testing.T, db *sql.DB) []string {
 	sort.Strings(out)
 	return out
 }
+
+// TestMigration0010_GitLab: Up adds gitlab_connections (global, unique host key, CHECKs that mirror FR1
+// and FR2) and repos.provider/host/project_id/web_url (existing rows become github on github.com with
+// NULL project id and web URL, A10), replaces repos_ws_fullname_uq with (workspace, host, full_name)
+// plus a partial unique (workspace, host, project_id) for GitLab, so a GitHub and a GitLab `acme/web`
+// coexist (FR30, AC12). Down REFUSES while a GitLab connection or repository exists and names the
+// data (A11, EC29); with only GitHub data it restores version 9 exactly and Up again restores
+// version 10, with every repository and PR untouched.
+func TestMigration0010_GitLab(t *testing.T) {
+	upTo9Names := []string{"0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes", "0005_cost_ledger", "0006_auto_review_records", "0007_pr_head_repo", "0008_plugin_ownership", "0009_custom_providers"}
+	upTo10Names := append(append([]string{}, upTo9Names...), "0010_gitlab")
+
+	const ws1, ws2 = "00000000-0000-0000-0000-0000000000a1", "00000000-0000-0000-0000-0000000000a2"
+	const repoGH1, repoGH2, pr1 = "00000000-0000-0000-0000-0000000000b1", "00000000-0000-0000-0000-0000000000b2", "00000000-0000-0000-0000-0000000000c1"
+
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+	if _, err := newMigrator(t, db, embeddedFS(t, upTo9Names...)).Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-9 error = %v", err)
+	}
+	exec := func(q string) error {
+		_, err := db.ExecContext(t.Context(), q)
+		return err
+	}
+	// Version 9 data: two workspaces, two GitHub repositories (one with a PR), inserted the way the
+	// pre-GitLab code did, without naming the new columns.
+	if err := exec(`
+INSERT INTO workspaces (id, name) VALUES ('` + ws1 + `', 'w1'), ('` + ws2 + `', 'w2');
+INSERT INTO repos (id, workspace_id, owner, name, full_name) VALUES
+  ('` + repoGH1 + `', '` + ws1 + `', 'acme', 'web', 'acme/web'),
+  ('` + repoGH2 + `', '` + ws2 + `', 'acme', 'web', 'acme/web');
+INSERT INTO pull_requests (id, workspace_id, repo_id, number, title, author, branch, base, head_sha)
+  VALUES ('` + pr1 + `', '` + ws1 + `', '` + repoGH1 + `', 7, 't', 'a', 'f', 'main', 'abc');`); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	before := catalog(t, db)
+	const rowsQ = `SELECT (SELECT string_agg(r.id::text || ' ' || r.workspace_id::text || ' ' || r.full_name || ' ' || r.default_branch, ',' ORDER BY r.id) FROM repos r)
+	  || ' | ' || (SELECT string_agg(p.id::text || ' ' || p.repo_id::text || ' ' || p.number::text, ',' ORDER BY p.id) FROM pull_requests p)`
+	rowsBefore := queryStrings(t, db, rowsQ)
+
+	upTo10 := embeddedFS(t, upTo10Names...)
+	all, err := migrate.Load(upTo10)
+	if err != nil {
+		t.Fatalf("Load(versions 1-10) error = %v", err)
+	}
+	if len(all) != 10 || all[9].Version != 10 || all[9].Name != "gitlab" {
+		t.Fatalf("Load(versions 1-10) = %d migrations, last %+v, want 10 ending in version 10 gitlab", len(all), all[len(all)-1])
+	}
+	m := newMigrator(t, db, upTo10)
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 10 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+
+	wantRemoved := []string{
+		"index repos repos_ws_fullname_uq CREATE UNIQUE INDEX repos_ws_fullname_uq ON public.repos USING btree (workspace_id, full_name)",
+	}
+	if diff := cmp.Diff(wantRemoved, onlyIn(before, afterUp)); diff != "" {
+		t.Errorf("objects removed by 0010 mismatch (-want +got):\n%s", diff)
+	}
+	wantAdded := []string{
+		"column gitlab_connections.base_url #3 text NOT NULL default=<none> generated= identity=",
+		"column gitlab_connections.created_at #5 timestamp with time zone NOT NULL default=now() generated= identity=",
+		"column gitlab_connections.host #4 text NOT NULL default=<none> generated= identity=",
+		"column gitlab_connections.id #1 uuid NOT NULL default=gen_random_uuid() generated= identity=",
+		"column gitlab_connections.name #2 text NOT NULL default=<none> generated= identity=",
+		"column gitlab_connections.updated_at #6 timestamp with time zone NOT NULL default=now() generated= identity=",
+		"column repos.host #12 text NOT NULL default='github.com'::text generated= identity=",
+		"column repos.project_id #13 bigint default=<none> generated= identity=",
+		"column repos.provider #11 text NOT NULL default='github'::text generated= identity=",
+		"column repos.web_url #14 text default=<none> generated= identity=",
+		"constraint gitlab_connections gitlab_connections_base_url_chk c CHECK (((char_length(base_url) <= 2048) AND (base_url ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'::text) AND (base_url !~ '/$'::text)))",
+		"constraint gitlab_connections gitlab_connections_host_chk c CHECK (((host <> ''::text) AND (host = lower(host)) AND (host !~ '[[:space:]]'::text)))",
+		"constraint gitlab_connections gitlab_connections_host_uq u UNIQUE (host)",
+		"constraint gitlab_connections gitlab_connections_name_chk c CHECK ((((char_length(btrim(name)) >= 1) AND (char_length(btrim(name)) <= 80)) AND (name !~ '[[:cntrl:]]'::text)))",
+		"constraint gitlab_connections gitlab_connections_pkey p PRIMARY KEY (id)",
+		"constraint repos repos_project_id_chk c CHECK (((project_id IS NULL) OR (project_id > 0)))",
+		"constraint repos repos_provider_chk c CHECK ((provider = ANY (ARRAY['github'::text, 'gitlab'::text])))",
+		"constraint repos repos_provider_cols_chk c CHECK ((((provider = 'github'::text) AND (project_id IS NULL) AND (web_url IS NULL)) OR ((provider = 'gitlab'::text) AND (project_id IS NOT NULL) AND (web_url IS NOT NULL))))",
+		"constraint repos repos_provider_host_chk c CHECK ((((provider = 'github'::text) AND (host = 'github.com'::text)) OR ((provider = 'gitlab'::text) AND (host <> ''::text) AND (host = lower(host)) AND (host !~ '[[:space:]]'::text) AND (host <> ALL (ARRAY['github.com'::text, 'www.github.com'::text, 'api.github.com'::text])))))",
+		"constraint repos repos_web_url_chk c CHECK (((web_url IS NULL) OR ((char_length(web_url) <= 2048) AND (web_url ~ '^https://[^/?#@[:space:]]+(/[^?#[:space:]]*)?$'::text))))",
+		"index gitlab_connections gitlab_connections_host_uq CREATE UNIQUE INDEX gitlab_connections_host_uq ON public.gitlab_connections USING btree (host)",
+		"index gitlab_connections gitlab_connections_pkey CREATE UNIQUE INDEX gitlab_connections_pkey ON public.gitlab_connections USING btree (id)",
+		"index repos repos_ws_host_fullname_uq CREATE UNIQUE INDEX repos_ws_host_fullname_uq ON public.repos USING btree (workspace_id, host, full_name)",
+		"index repos repos_ws_host_project_uq CREATE UNIQUE INDEX repos_ws_host_project_uq ON public.repos USING btree (workspace_id, host, project_id) WHERE (provider = 'gitlab'::text)",
+		"table gitlab_connections",
+	}
+	if diff := cmp.Diff(wantAdded, onlyIn(afterUp, before)); diff != "" {
+		t.Errorf("objects added by 0010 mismatch (-want +got):\n%s", diff)
+	}
+
+	// Existing GitHub rows: github on github.com, no project id and no web URL (A10); nothing else changed.
+	if got := queryStrings(t, db, `SELECT string_agg(provider || ' ' || host || ' ' || coalesce(project_id::text, '-') || ' ' || coalesce(web_url, '-'), ',' ORDER BY id) FROM repos`); !cmp.Equal(got, []string{"github github.com - -,github github.com - -"}) {
+		t.Errorf("existing repositories after Up = %v, want github on github.com without project id and web URL", got)
+	}
+	if diff := cmp.Diff(rowsBefore, queryStrings(t, db, rowsQ)); diff != "" {
+		t.Errorf("repositories and PRs after Up mismatch (-before +got):\n%s", diff)
+	}
+
+	// An insert that names none of the new columns still works (the pre-GitLab code path) and is GitHub.
+	if err := exec(`INSERT INTO repos (workspace_id, owner, name, full_name) VALUES ('` + ws1 + `', 'acme', 'api', 'acme/api')`); err != nil {
+		t.Errorf("insert a repository without the new columns: %v", err)
+	}
+	// ... and the old uniqueness still holds for GitHub on github.com.
+	if err := exec(`INSERT INTO repos (workspace_id, owner, name, full_name) VALUES ('` + ws1 + `', 'acme', 'api', 'acme/api')`); err == nil || !strings.Contains(err.Error(), "repos_ws_host_fullname_uq") {
+		t.Errorf("same GitHub repository twice error = %v, want a violation of repos_ws_host_fullname_uq", err)
+	}
+	if err := exec(`DELETE FROM repos WHERE full_name = 'acme/api'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// gitlab_connections: a valid row, then one broken rule at a time (FR1, FR2, FR3).
+	valid := map[string]string{"name": "'Corp'", "base_url": "'https://git.corp.example'", "host": "'git.corp.example'"}
+	conn := func(over map[string]string) string {
+		cols := map[string]string{}
+		for k, v := range valid {
+			cols[k] = v
+		}
+		for k, v := range over {
+			cols[k] = v
+		}
+		var names, vals []string
+		for k := range cols {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		for _, k := range names {
+			vals = append(vals, cols[k])
+		}
+		return `INSERT INTO gitlab_connections (` + strings.Join(names, ", ") + `) VALUES (` + strings.Join(vals, ", ") + `)`
+	}
+	if err := exec(conn(nil)); err != nil {
+		t.Fatalf("insert a connection: %v", err)
+	}
+	if got := queryStrings(t, db, `SELECT (id IS NOT NULL)::text || ' ' || (created_at IS NOT NULL)::text || ' ' || (updated_at IS NOT NULL)::text FROM gitlab_connections`); !cmp.Equal(got, []string{"true true true"}) {
+		t.Errorf("defaults of a connection = %v, want a generated id and both timestamps set", got)
+	}
+	for _, tc := range []struct {
+		name string
+		over map[string]string
+		want string // violated constraint
+	}{
+		{"same host key twice", map[string]string{"name": "'Other'", "base_url": "'https://git.corp.example/gl'"}, "gitlab_connections_host_uq"},
+		{"empty name", map[string]string{"host": "'a1'", "name": "''"}, "gitlab_connections_name_chk"},
+		{"blank name", map[string]string{"host": "'a2'", "name": "'   '"}, "gitlab_connections_name_chk"},
+		{"81-character name", map[string]string{"host": "'a3'", "name": "'" + strings.Repeat("n", 81) + "'"}, "gitlab_connections_name_chk"},
+		{"control character in the name", map[string]string{"host": "'a4'", "name": "E'a\\tb'"}, "gitlab_connections_name_chk"},
+		{"http base url", map[string]string{"host": "'b1'", "base_url": "'http://gl.example'"}, "gitlab_connections_base_url_chk"},
+		{"base url without host", map[string]string{"host": "'b2'", "base_url": "'https:///x'"}, "gitlab_connections_base_url_chk"},
+		{"base url with userinfo", map[string]string{"host": "'b3'", "base_url": "'https://u:p@gl.example'"}, "gitlab_connections_base_url_chk"},
+		{"base url with query", map[string]string{"host": "'b4'", "base_url": "'https://gl.example?x=1'"}, "gitlab_connections_base_url_chk"},
+		{"base url with fragment", map[string]string{"host": "'b5'", "base_url": "'https://gl.example#f'"}, "gitlab_connections_base_url_chk"},
+		{"base url with a trailing slash", map[string]string{"host": "'b6'", "base_url": "'https://gl.example/'"}, "gitlab_connections_base_url_chk"},
+		{"base url with a path and a trailing slash", map[string]string{"host": "'b7'", "base_url": "'https://gl.example/gitlab/'"}, "gitlab_connections_base_url_chk"},
+		{"base url with a space", map[string]string{"host": "'b8'", "base_url": "'https://gl.example/a b'"}, "gitlab_connections_base_url_chk"},
+		{"base url of 2049 characters", map[string]string{"host": "'b9'", "base_url": "'https://gl.example/" + strings.Repeat("a", 2030) + "'"}, "gitlab_connections_base_url_chk"},
+		{"empty host key", map[string]string{"host": "''"}, "gitlab_connections_host_chk"},
+		{"upper-case host key", map[string]string{"host": "'GL.example'"}, "gitlab_connections_host_chk"},
+		{"host key with a space", map[string]string{"host": "'gl example'"}, "gitlab_connections_host_chk"},
+	} {
+		if err := exec(conn(tc.over)); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error = %v, want a violation of %s", tc.name, err, tc.want)
+		}
+	}
+	for name, over := range map[string]map[string]string{
+		"gitlab.com":                  {"host": "'gitlab.com'", "base_url": "'https://gitlab.com'"},
+		"port and path prefix":        {"host": "'gl.example:8443'", "base_url": "'https://gl.example:8443/gitlab'"},
+		"loopback":                    {"host": "'127.0.0.1:8443'", "base_url": "'https://127.0.0.1:8443'"},
+		"80-character padded name":    {"host": "'c1'", "name": "' " + strings.Repeat("n", 80) + " '"},
+		"base url of 2048 characters": {"host": "'c2'", "base_url": "'https://gl.example/" + strings.Repeat("a", 2029) + "'"},
+	} {
+		if err := exec(conn(over)); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	if err := exec(`DELETE FROM gitlab_connections WHERE host <> 'git.corp.example'`); err != nil {
+		t.Fatal(err)
+	}
+
+	// repos: the provider columns (FR30). A GitLab row needs host, project id and web URL.
+	const webURL = "'https://git.corp.example/acme/web'"
+	gl := func(ws, fullName, host, projectID, web string) string {
+		return `INSERT INTO repos (workspace_id, owner, name, full_name, provider, host, project_id, web_url)
+		  VALUES ('` + ws + `', 'acme', 'web', '` + fullName + `', 'gitlab', '` + host + `', ` + projectID + `, ` + web + `)`
+	}
+	if err := exec(gl(ws1, "acme/web", "git.corp.example", "42", webURL)); err != nil {
+		t.Errorf("a GitLab acme/web next to the GitHub acme/web (AC12): %v", err)
+	}
+	for _, tc := range []struct {
+		name, q, want string
+	}{
+		{"same GitLab full name on the same host", gl(ws1, "acme/web", "git.corp.example", "43", webURL), "repos_ws_host_fullname_uq"},
+		{"same GitLab project id on the same host", gl(ws1, "acme/renamed", "git.corp.example", "42", webURL), "repos_ws_host_project_uq"},
+		{"GitHub acme/web twice", `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES ('` + ws1 + `', 'acme', 'web', 'acme/web')`, "repos_ws_host_fullname_uq"},
+		{"unknown provider", `INSERT INTO repos (workspace_id, owner, name, full_name, provider) VALUES ('` + ws1 + `', 'a', 'b', 'a/b', 'bitbucket')`, "repos_provider_chk"},
+		{"GitHub on another host", `INSERT INTO repos (workspace_id, owner, name, full_name, host) VALUES ('` + ws1 + `', 'a', 'b', 'a/b', 'git.corp.example')`, "repos_provider_host_chk"},
+		{"GitLab on github.com", gl(ws1, "a/b", "github.com", "50", webURL), "repos_provider_host_chk"},
+		{"GitLab on api.github.com", gl(ws1, "a/b", "api.github.com", "50", webURL), "repos_provider_host_chk"},
+		{"GitLab with an upper-case host", gl(ws1, "a/b", "Git.Corp.example", "50", webURL), "repos_provider_host_chk"},
+		{"GitLab without a project id", gl(ws1, "a/b", "git.corp.example", "NULL", webURL), "repos_provider_cols_chk"},
+		{"GitLab without a web URL", gl(ws1, "a/b", "git.corp.example", "50", "NULL"), "repos_provider_cols_chk"},
+		{"GitHub with a project id", `INSERT INTO repos (workspace_id, owner, name, full_name, project_id) VALUES ('` + ws1 + `', 'a', 'b', 'a/b', 5)`, "repos_provider_cols_chk"},
+		{"GitHub with a web URL", `INSERT INTO repos (workspace_id, owner, name, full_name, web_url) VALUES ('` + ws1 + `', 'a', 'b', 'a/b', 'https://github.com/a/b')`, "repos_provider_cols_chk"},
+		{"GitLab project id 0", gl(ws1, "a/b", "git.corp.example", "0", webURL), "repos_project_id_chk"},
+		{"GitLab negative project id", gl(ws1, "a/b", "git.corp.example", "-1", webURL), "repos_project_id_chk"},
+		{"http web URL", gl(ws1, "a/b", "git.corp.example", "50", "'http://git.corp.example/a/b'"), "repos_web_url_chk"},
+		{"web URL with a query", gl(ws1, "a/b", "git.corp.example", "50", "'https://git.corp.example/a/b?x=1'"), "repos_web_url_chk"},
+		{"web URL with userinfo", gl(ws1, "a/b", "git.corp.example", "50", "'https://u@git.corp.example/a/b'"), "repos_web_url_chk"},
+	} {
+		if err := exec(tc.q); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: error = %v, want a violation of %s", tc.name, err, tc.want)
+		}
+	}
+	// The identity of a GitLab repository is (workspace, host, project id): the same id on another
+	// host or in another workspace is another repository; a project id may be 2^63-1; GitHub rows
+	// (NULL project id) are outside the partial index.
+	for name, q := range map[string]string{
+		"same project id in another workspace": gl(ws2, "acme/web", "git.corp.example", "42", webURL),
+		"same project id on another host":      gl(ws1, "acme/web", "gitlab.com", "42", "'https://gitlab.com/acme/web'"),
+		"largest project id":                   gl(ws1, "acme/big", "git.corp.example", "9223372036854775807", "'https://git.corp.example/acme/big'"),
+		"another GitHub repository":            `INSERT INTO repos (workspace_id, owner, name, full_name) VALUES ('` + ws1 + `', 'acme', 'other', 'acme/other')`,
+	} {
+		if err := exec(q); err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+	}
+	// A GitLab repository carries its own PRs next to the GitHub one with the same name (AC12), and
+	// deleting the connection leaves the repository alone (no foreign key, D26).
+	if err := exec(`INSERT INTO pull_requests (workspace_id, repo_id, number, title, author, branch, base, head_sha)
+	  SELECT workspace_id, id, 7, 't', 'a', 'f', 'main', 'abc' FROM repos WHERE provider = 'gitlab' AND workspace_id = '` + ws1 + `' AND host = 'git.corp.example' AND project_id = 42`); err != nil {
+		t.Errorf("a PR of the GitLab repository: %v", err)
+	}
+	if got := queryStrings(t, db, `SELECT string_agg(r.provider || ':' || p.number::text, ',' ORDER BY r.provider) FROM pull_requests p JOIN repos r ON r.id = p.repo_id WHERE p.workspace_id = '`+ws1+`' AND r.full_name = 'acme/web'`); !cmp.Equal(got, []string{"github:7,gitlab:7"}) {
+		t.Errorf("PRs of the two acme/web repositories = %v, want one each", got)
+	}
+	if err := exec(`DELETE FROM gitlab_connections`); err != nil {
+		t.Errorf("delete the connection while a GitLab repository exists: %v", err)
+	}
+	if err := exec(conn(nil)); err != nil {
+		t.Fatalf("recreate the connection: %v", err)
+	}
+
+	// Down refuses while GitLab data exists (A11, EC29): the error names it, the transaction rolled
+	// back, the schema, the rows and the version are unchanged.
+	const repoRowsQ = `SELECT string_agg(id::text || ' ' || provider || ' ' || host || ' ' || full_name, ',' ORDER BY id) FROM repos`
+	refused := func(what string, want ...string) {
+		t.Helper()
+		wantRows := queryStrings(t, db, repoRowsQ)
+		_, _, err := m.Down(t.Context())
+		if err == nil {
+			t.Fatalf("Down() %s error = nil, want the refusal", what)
+		}
+		for _, w := range want {
+			if !strings.Contains(err.Error(), w) {
+				t.Errorf("Down() %s error = %v, want it to contain %q", what, err, w)
+			}
+		}
+		if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+			t.Errorf("schema after a refused Down (%s) differs from version 10 (-v10 +got):\n%s", what, diff)
+		}
+		if got := queryStrings(t, db, repoRowsQ); !cmp.Equal(got, wantRows) {
+			t.Errorf("repositories after a refused Down (%s) = %v, want %v", what, got, wantRows)
+		}
+		if st, err := m.Status(t.Context()); err != nil || len(st) != 10 || !st[9].Applied {
+			t.Errorf("Status() after a refused Down (%s) = %+v, %v, want version 10 still applied", what, st, err)
+		}
+	}
+	refused("with a connection and GitLab repositories",
+		"cannot revert 0010_gitlab: GitLab data exists: 1 connection(s), 4 GitLab repositor(y/ies)",
+		"git.corp.example acme/big", "git.corp.example acme/web", "gitlab.com acme/web")
+	if err := exec(`DELETE FROM repos WHERE provider = 'gitlab'`); err != nil {
+		t.Fatal(err)
+	}
+	refused("with only a connection", "cannot revert 0010_gitlab: GitLab data exists: 1 connection(s), 0 GitLab repositor(y/ies) (up to 20 listed: none)")
+	if err := exec(`DELETE FROM gitlab_connections; ` + gl(ws1, "acme/web", "git.corp.example", "42", webURL)); err != nil {
+		t.Fatal(err)
+	}
+	refused("with only a GitLab repository", "cannot revert 0010_gitlab: GitLab data exists: 0 connection(s), 1 GitLab repositor(y/ies) (up to 20 listed: git.corp.example acme/web)")
+
+	// With only GitHub data, Down reverses everything: exactly version 9, rows untouched; the old
+	// uniqueness is back, and Up again restores version 10.
+	if err := exec(`DELETE FROM repos WHERE provider = 'gitlab' OR full_name <> 'acme/web'`); err != nil {
+		t.Fatal(err)
+	}
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 10 {
+		t.Fatalf("Down() = %d, %v, %v, want 10, true, nil", v, ok, err)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0010 differs from version 9 (-v9 +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(rowsBefore, queryStrings(t, db, rowsQ)); diff != "" {
+		t.Errorf("repositories and PRs after Down mismatch (-before +got):\n%s", diff)
+	}
+	if err := exec(`INSERT INTO repos (workspace_id, owner, name, full_name) VALUES ('` + ws1 + `', 'acme', 'web', 'acme/web')`); err == nil || !strings.Contains(err.Error(), "repos_ws_fullname_uq") {
+		t.Errorf("same repository twice after Down error = %v, want a violation of repos_ws_fullname_uq", err)
+	}
+
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, `SELECT string_agg(provider || ' ' || host, ',' ORDER BY id) FROM repos`); !cmp.Equal(got, []string{"github github.com,github github.com"}) {
+		t.Errorf("repositories after Down->Up = %v, want github on github.com", got)
+	}
+}

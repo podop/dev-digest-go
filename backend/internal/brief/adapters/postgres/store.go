@@ -37,6 +37,9 @@ type pullRow struct {
 	RepoID      string  `gorm:"column:repo_id"`
 	Owner       string  `gorm:"column:owner"`
 	Name        string  `gorm:"column:name"`
+	Provider    string  `gorm:"column:provider"`
+	Host        string  `gorm:"column:host"`
+	ProjectID   *int64  `gorm:"column:project_id"`
 	Number      int     `gorm:"column:number"`
 	Title       string  `gorm:"column:title"`
 	Body        *string `gorm:"column:body"`
@@ -49,7 +52,7 @@ type pullRow struct {
 func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.Pull, error) {
 	var row pullRow
 	err := s.conn(ctx).Table("pull_requests AS p").
-		Select("p.id, p.workspace_id, p.repo_id, r.owner, r.name, p.number, p.title, p.body, p.base, p.head_sha").
+		Select("p.id, p.workspace_id, p.repo_id, r.owner, r.name, r.provider, r.host, r.project_id, p.number, p.title, p.body, p.base, p.head_sha").
 		Joins("JOIN repos r ON r.id = p.repo_id").
 		Where("p.workspace_id = ? AND p.id = ?", workspaceID, prID).
 		Take(&row).Error
@@ -59,10 +62,15 @@ func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.
 	if err != nil {
 		return domain.Pull{}, fmt.Errorf("select pull request: %w", err)
 	}
-	return domain.Pull{
+	pull := domain.Pull{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, RepoID: row.RepoID, Owner: row.Owner, Name: row.Name,
+		Provider: row.Provider, Host: row.Host,
 		Number: row.Number, Title: row.Title, Body: row.Body, Base: row.Base, HeadSHA: row.HeadSHA,
-	}, nil
+	}
+	if row.ProjectID != nil {
+		pull.ProjectID = *row.ProjectID
+	}
+	return pull, nil
 }
 
 type fileRow struct {

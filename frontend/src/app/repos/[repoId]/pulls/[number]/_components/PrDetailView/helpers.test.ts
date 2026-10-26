@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { ReviewRecord } from "@devdigest/shared";
-import { countFindings, findPrId, parseOrder, parseTab, prDetailPath, withSearchParam } from "./helpers";
+import { countFindings, findPrId, parseOrder, parseTab, prDetailPath, withPrRef, withSearchParam } from "./helpers";
 
 describe("findPrId", () => {
   const pulls = [
@@ -55,5 +55,13 @@ describe("withSearchParam", () => {
 describe("prDetailPath", () => {
   it("builds the route path", () => {
     expect(prDetailPath("r1", "7")).toBe("/repos/r1/pulls/7");
+  });
+});
+
+describe("withPrRef", () => {
+  it("swaps the server-rendered #<n> for the host's reference and leaves other titles alone", () => {
+    expect(withPrRef("PR #7 · DevDigest", "7", "!7")).toBe("PR !7 · DevDigest");
+    expect(withPrRef("PR #7 · DevDigest", "7", "#7")).toBe("PR #7 · DevDigest");
+    expect(withPrRef("DevDigest", "7", "!7")).toBe("DevDigest");
   });
 });

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -25,16 +26,23 @@ const (
 type Service struct {
 	store store
 	gh    gitHub
+	gl    GitLab // nil: every GitLab repository reads as not connected
 	log   *slog.Logger
 	now   func() time.Time
 }
 
-// NewService builds a Service. now is the clock (nil means time.Now).
-func NewService(store store, gh gitHub, log *slog.Logger, now func() time.Time) *Service {
+// NewService builds a Service. now is the clock (nil means time.Now). A repository is routed to
+// GitHub or, with WithGitLab, to GitLab by the provider read with its row (FR29): a GitLab
+// repository never reaches gh and a GitHub repository never reaches the GitLab port.
+func NewService(store store, gh gitHub, log *slog.Logger, now func() time.Time, opts ...Option) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{store: store, gh: gh, log: log, now: now}
+	s := &Service{store: store, gh: gh, log: log, now: now}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // ListItem is one row of the PR list.
@@ -53,11 +61,22 @@ func (s *Service) ListForRepo(ctx context.Context, workspaceID, repoID string) (
 		return nil, err
 	}
 
-	listed, err := s.gh.ListPullRequests(ctx, repo.Owner, repo.Name)
-	hasToken := !errors.Is(err, ErrNoToken)
+	var (
+		listed   []domain.Listed
+		hasToken bool
+	)
+	msg := "github pull request sync skipped; serving stored pull requests"
+	if repo.IsGitLab() {
+		listed, err = s.syncListGitLab(ctx, workspaceID, repo)
+		hasToken = gitLabReadable(err)
+		msg = "gitlab merge request sync skipped; serving stored merge requests"
+	} else {
+		listed, err = s.gh.ListPullRequests(ctx, repo.Owner, repo.Name)
+		hasToken = !errors.Is(err, ErrNoToken)
+	}
 	switch {
 	case err != nil:
-		s.log.WarnContext(ctx, "github pull request sync skipped; serving stored pull requests", "repo_id", repo.ID, "err", err)
+		s.log.WarnContext(ctx, msg, "repo_id", repo.ID, "err", err)
 	default:
 		if err := s.store.UpsertListed(ctx, workspaceID, repo.ID, listed); err != nil {
 			return nil, fmt.Errorf("sync pull requests of repo %s: %w", repo.ID, err)
@@ -95,6 +114,10 @@ func (s *Service) ListForRepo(ctx context.Context, workspaceID, repoID string) (
 // backfillDiffStats fills the stats of at most BackfillLimit stored PRs that still have none,
 // BackfillConcurrency at a time, updating pulls in place. Failures are logged and skipped.
 func (s *Service) backfillDiffStats(ctx context.Context, repo domain.Repo, pulls []domain.Pull) {
+	if repo.IsGitLab() {
+		s.backfillDiffStatsGitLab(ctx, repo, pulls)
+		return
+	}
 	var pending []int
 	for i, p := range pulls {
 		if domain.NeedsDiffStats(domain.DiffStats{Additions: p.Additions, Deletions: p.Deletions, FilesCount: p.FilesCount}) {
@@ -143,12 +166,20 @@ func (s *Service) Poll(ctx context.Context, workspaceID, repoID string) (PollRes
 	if err != nil {
 		return PollResult{}, err
 	}
-	listed, err := s.gh.ListPullRequests(ctx, repo.Owner, repo.Name)
-	if errors.Is(err, ErrNoToken) {
-		return PollResult{}, apperr.Config("GITHUB_TOKEN is not configured").WithCause(err)
-	}
-	if err != nil {
-		return PollResult{}, apperr.ExternalService("GitHub request failed").WithCause(err)
+	var listed []domain.Listed
+	if repo.IsGitLab() {
+		listed, err = s.syncListGitLab(ctx, workspaceID, repo)
+		if err != nil {
+			return PollResult{}, gitLabPollError(repo, err)
+		}
+	} else {
+		listed, err = s.gh.ListPullRequests(ctx, repo.Owner, repo.Name)
+		if errors.Is(err, ErrNoToken) {
+			return PollResult{}, apperr.Config("GITHUB_TOKEN is not configured").WithCause(err)
+		}
+		if err != nil {
+			return PollResult{}, apperr.ExternalService("GitHub request failed").WithCause(err)
+		}
 	}
 	if err := s.store.UpsertListed(ctx, workspaceID, repo.ID, listed); err != nil {
 		return PollResult{}, fmt.Errorf("sync pull requests of repo %s: %w", repo.ID, err)
@@ -189,11 +220,22 @@ func (s *Service) Detail(ctx context.Context, workspaceID, prID string) (domain.
 }
 
 func (s *Service) refreshDetail(ctx context.Context, pr domain.Pull, repo domain.Repo) (domain.Detail, error) {
-	fetched, err := s.gh.GetPullRequest(ctx, repo.Owner, repo.Name, pr.Number)
+	var (
+		fetched domain.Fetched
+		err     error
+	)
+	if repo.IsGitLab() {
+		fetched, err = s.fetchGitLabDetail(ctx, repo, pr.Number)
+	} else {
+		fetched, err = s.gh.GetPullRequest(ctx, repo.Owner, repo.Name, pr.Number)
+	}
 	if err != nil {
 		return domain.Detail{}, err
 	}
 	files := domain.MergeFiles(fetched.Files)
+	if repo.IsGitLab() {
+		fetched.DiffStats = s.gitLabDetailStats(ctx, repo, fetched, files)
+	}
 	issue := s.linkedIssue(ctx, repo, fetched.Body)
 	err = s.store.ReplaceDetail(ctx, pr.ID, domain.DetailMirror{
 		Body: fetched.Body, DiffStats: fetched.DiffStats, Files: files, Commits: fetched.Commits,
@@ -225,7 +267,15 @@ func (s *Service) linkedIssue(ctx context.Context, repo domain.Repo, body *strin
 	if !ok {
 		return nil
 	}
-	issue, err := s.gh.GetIssue(ctx, repo.Owner, repo.Name, n)
+	var (
+		issue domain.Issue
+		err   error
+	)
+	if repo.IsGitLab() {
+		issue, err = s.gitLab().Issue(ctx, repo, n)
+	} else {
+		issue, err = s.gh.GetIssue(ctx, repo.Owner, repo.Name, n)
+	}
 	if err != nil {
 		s.log.WarnContext(ctx, "linked issue not resolved", "issue", n, "err", err)
 		return nil
@@ -239,6 +289,9 @@ func (s *Service) Comments(ctx context.Context, workspaceID, prID string) ([]dom
 	pr, repo, err := s.resolvePull(ctx, workspaceID, prID)
 	if err != nil {
 		return nil, err
+	}
+	if repo.IsGitLab() {
+		return []domain.ReviewComment{}, nil // no GitLab review comments yet and no GitHub request (FR29)
 	}
 	comments, err := s.gh.ListReviewComments(ctx, repo.Owner, repo.Name, pr.Number)
 	if err != nil {
@@ -265,6 +318,10 @@ func (s *Service) PostComment(ctx context.Context, workspaceID, prID string, req
 	pr, repo, err := s.resolvePull(ctx, workspaceID, prID)
 	if err != nil {
 		return domain.ReviewComment{}, err
+	}
+	if repo.IsGitLab() {
+		return domain.ReviewComment{}, apperr.InvalidInput("Posting to GitLab merge requests is not available yet.").
+			WithCode("gitlab_unavailable")
 	}
 	created, err := s.gh.CreateReviewComment(ctx, repo.Owner, repo.Name, pr.Number, domain.CommentInput{
 		CommitID: pr.HeadSHA, Path: req.Path, Line: req.Line, Side: req.Side, Body: req.Body, InReplyTo: req.InReplyTo,
@@ -311,4 +368,182 @@ func (s *Service) resolvePull(ctx context.Context, workspaceID, prID string) (do
 		return domain.Pull{}, domain.Repo{}, err
 	}
 	return pr, repo, nil
+}
+
+// gitLab returns the GitLab port; without one every call fails with ErrNotConnected, so no
+// request is sent.
+func (s *Service) gitLab() GitLab {
+	if s.gl == nil {
+		return disconnectedGitLab{}
+	}
+	return s.gl
+}
+
+// disconnectedGitLab is the GitLab port of a Service built without WithGitLab.
+type disconnectedGitLab struct{}
+
+func (disconnectedGitLab) Project(context.Context, domain.Repo) (domain.GitLabProject, error) {
+	return domain.GitLabProject{}, ErrNotConnected
+}
+
+func (disconnectedGitLab) ListPage(context.Context, domain.Repo, int, int) ([]domain.Listed, error) {
+	return nil, ErrNotConnected
+}
+
+func (disconnectedGitLab) Get(context.Context, domain.Repo, int) (domain.Fetched, error) {
+	return domain.Fetched{}, ErrNotConnected
+}
+
+func (disconnectedGitLab) Issue(context.Context, domain.Repo, int) (domain.Issue, error) {
+	return domain.Issue{}, ErrNotConnected
+}
+
+func (disconnectedGitLab) Stats(context.Context, domain.Repo, []int) (map[int]domain.DiffStats, error) {
+	return nil, ErrNotConnected
+}
+
+// gitLabReadable reports whether more GitLab requests for the repository make sense after err: not
+// when the host has no connection, the connection has no token, or the instance rate-limits.
+func gitLabReadable(err error) bool {
+	if errors.Is(err, ErrNotConnected) {
+		return false
+	}
+	var nt *NoTokenError
+	if errors.As(err, &nt) {
+		return false
+	}
+	var ge *GitLabError
+	if errors.As(err, &ge) {
+		if _, limited := ge.RateLimit(); limited {
+			return false
+		}
+	}
+	return true
+}
+
+// syncListGitLab reads the project (FR47) and then one page of its merge requests (FR21). A failed
+// project fetch is a failed sync: no list request follows.
+func (s *Service) syncListGitLab(ctx context.Context, workspaceID string, repo domain.Repo) ([]domain.Listed, error) {
+	gl := s.gitLab()
+	project, err := gl.Project(ctx, repo)
+	if err != nil {
+		return nil, fmt.Errorf("project of repo %s: %w", repo.ID, err)
+	}
+	s.updateRepoPath(ctx, workspaceID, repo, project)
+	listed, err := gl.ListPage(ctx, repo, 1, GitLabPageSize)
+	if err != nil {
+		return nil, fmt.Errorf("merge requests of repo %s: %w", repo.ID, err)
+	}
+	return listed, nil
+}
+
+// updateRepoPath stores the project's current path when it differs from the stored one (FR47). A
+// collision (another repository holds the new full_name) or a store failure keeps the stored path;
+// the sync goes on by project id and the next fetch tries again.
+func (s *Service) updateRepoPath(ctx context.Context, workspaceID string, repo domain.Repo, p domain.GitLabProject) {
+	if p.FullName == "" || (p.Owner == repo.Owner && p.Name == repo.Name) {
+		return
+	}
+	updated, err := s.store.UpdateRepoPath(ctx, workspaceID, repo.ID, p)
+	switch {
+	case err != nil:
+		s.log.WarnContext(ctx, "gitlab project path not stored; keeping the stored path", "repo_id", repo.ID, "err", err)
+	case !updated:
+		s.log.WarnContext(ctx, "gitlab project path held by another repository; keeping the stored path",
+			"repo_id", repo.ID, "project_id", repo.ProjectID, "host", repo.Host)
+	}
+}
+
+// gitLabPollError maps a failed GitLab list sync of a manual poll (spec §7): a host without a
+// connection is 422 repo_host_not_connected, a connection without a token 500 config_error, any
+// other failure (rate limit included) 502 external_service.
+func gitLabPollError(repo domain.Repo, err error) error {
+	if errors.Is(err, ErrNotConnected) {
+		return NotConnectedError(repo).WithCause(err)
+	}
+	var nt *NoTokenError
+	if errors.As(err, &nt) {
+		return apperr.Config("GitLab connection " + nt.Conn + " has no token").WithCause(err)
+	}
+	return apperr.ExternalService("GitLab request failed").WithCause(err)
+}
+
+// NotConnectedError is the 422 repo_host_not_connected answer for a GitLab repository whose host
+// has no connection (FR48), with details {host, repo_id}.
+func NotConnectedError(repo domain.Repo) *apperr.Error {
+	return apperr.Validation("No GitLab connection for " + repo.Host + ". Add one in Settings → GitLab Integration.").
+		WithCode("repo_host_not_connected").
+		WithDetails(map[string]string{"host": repo.Host, "repo_id": repo.ID})
+}
+
+// fetchGitLabDetail reads a merge request with its files and commits inside GitLabDetailTimeout.
+// Commits come newest first from GitLab; they are returned oldest first like GitHub's.
+func (s *Service) fetchGitLabDetail(ctx context.Context, repo domain.Repo, number int) (domain.Fetched, error) {
+	dctx, cancel := context.WithTimeout(ctx, GitLabDetailTimeout)
+	defer cancel()
+	fetched, err := s.gitLab().Get(dctx, repo, number)
+	if err != nil {
+		return domain.Fetched{}, err
+	}
+	fetched.Commits = slices.Clone(fetched.Commits)
+	slices.Reverse(fetched.Commits)
+	return fetched, nil
+}
+
+// gitLabDetailStats decides the stats of a fetched merge request (FR24): the fetch's own when it
+// has any, else the diff-stats source (FR26), else the sums of the merged files. A failing source
+// is logged once and falls back to the sums.
+func (s *Service) gitLabDetailStats(ctx context.Context, repo domain.Repo, fetched domain.Fetched, files []domain.File) domain.DiffStats {
+	if !domain.NeedsDiffStats(fetched.DiffStats) {
+		return fetched.DiffStats
+	}
+	stats, err := s.gitLab().Stats(ctx, repo, []int{fetched.Number})
+	if err != nil {
+		s.log.WarnContext(ctx, "gitlab diff stats not read; counting from files", "number", fetched.Number, "err", err)
+	} else if st, ok := stats[fetched.Number]; ok && !domain.NeedsDiffStats(st) {
+		return st
+	}
+	return domain.FileTotals(files)
+}
+
+// backfillDiffStatsGitLab fills the stats of at most BackfillLimit stored merge requests that still
+// have none with one GraphQL query per GitLabStatsBatch numbers (FR26). A failed batch is logged
+// once and leaves its merge requests unset for the next list request; a merge request without a
+// summary stays unset too.
+func (s *Service) backfillDiffStatsGitLab(ctx context.Context, repo domain.Repo, pulls []domain.Pull) {
+	var pending []int // indexes into pulls
+	for i, p := range pulls {
+		if domain.NeedsDiffStats(domain.DiffStats{Additions: p.Additions, Deletions: p.Deletions, FilesCount: p.FilesCount}) {
+			pending = append(pending, i)
+			if len(pending) == BackfillLimit {
+				break
+			}
+		}
+	}
+	for batch := range slices.Chunk(pending, domain.GitLabStatsBatch) {
+		if ctx.Err() != nil {
+			return
+		}
+		numbers := make([]int, len(batch))
+		for j, i := range batch {
+			numbers[j] = pulls[i].Number
+		}
+		stats, err := s.gitLab().Stats(ctx, repo, numbers)
+		if err != nil {
+			s.log.WarnContext(ctx, "gitlab diff-stat backfill skipped", "repo_id", repo.ID, "merge_requests", len(numbers), "err", err)
+			continue
+		}
+		for _, i := range batch {
+			p := &pulls[i]
+			st, ok := stats[p.Number]
+			if !ok || domain.NeedsDiffStats(st) {
+				continue
+			}
+			if err := s.store.SetDiffStats(ctx, p.ID, st); err != nil {
+				s.log.WarnContext(ctx, "gitlab diff-stat backfill not stored", "number", p.Number, "err", err)
+				continue
+			}
+			p.Additions, p.Deletions, p.FilesCount = st.Additions, st.Deletions, st.FilesCount
+		}
+	}
 }

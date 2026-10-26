@@ -2,6 +2,7 @@
 
 import type { RepoSummary } from "@devdigest/ui";
 import { WORKSPACE_SWITCHER_NAME_MAX } from "@devdigest/shared/constants/workspace";
+import { repoLabel } from "@/lib/code-host";
 import type { Repo } from "@/lib/types";
 
 /**
@@ -18,6 +19,7 @@ export function switcherWorkspaceName(name: string | null | undefined): string {
 
 /**
  * Map a lib `Repo` to the `RepoSummary` shape the AppFrame shell context expects. The switcher
+ * switcher label is `full_name`, with the host for a GitLab repository (FR44, "acme/platform/payments · gitlab.com"); the
  * subtitle is `<branch> · <syncedLabel>`, so a workspace name goes into the label: `<label> · <name>`.
  */
 export function toShellRepo(r: Repo, workspaceName?: string | null): RepoSummary {
@@ -25,7 +27,7 @@ export function toShellRepo(r: Repo, workspaceName?: string | null): RepoSummary
   const name = switcherWorkspaceName(workspaceName);
   return {
     id: r.id,
-    full_name: r.full_name,
+    full_name: repoLabel(r),
     default_branch: r.default_branch,
     syncedLabel: name ? `${label} · ${name}` : label,
   };

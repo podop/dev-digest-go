@@ -21,6 +21,7 @@ vi.mock("@/components/app-shell", () => ({
 }));
 vi.mock("./_components/SettingsApiKeys", () => ({ SettingsApiKeys: () => <div data-testid="panel-api-keys" /> }));
 vi.mock("./_components/SettingsGithub", () => ({ SettingsGithub: () => <div data-testid="panel-github" /> }));
+vi.mock("./_components/SettingsGitlab", () => ({ SettingsGitlab: () => <div data-testid="panel-gitlab" /> }));
 vi.mock("./_components/SettingsWorkspace", () => ({ SettingsWorkspace: () => <div data-testid="panel-workspace" /> }));
 vi.mock("./_components/SettingsAutoReviews", () => ({
   SettingsAutoReviews: () => <div data-testid="panel-automatic-reviews" />,
@@ -39,6 +40,7 @@ afterEach(cleanup);
 const LABELS: Record<SettingsSectionKey, string> = {
   "api-keys": "API Keys",
   github: "GitHub Integration",
+  gitlab: "GitLab Integration",
   workspace: "Workspace",
   "automatic-reviews": "Automatic Reviews",
   integrations: "Integrations",
@@ -48,6 +50,7 @@ const LABELS: Record<SettingsSectionKey, string> = {
 const PANEL_TESTID: Record<SettingsSectionKey, string> = {
   "api-keys": "panel-api-keys",
   github: "panel-github",
+  gitlab: "panel-gitlab",
   workspace: "panel-workspace",
   "automatic-reviews": "panel-automatic-reviews",
   integrations: "panel-integrations",
@@ -56,7 +59,7 @@ const PANEL_TESTID: Record<SettingsSectionKey, string> = {
 };
 
 describe("SettingsView", () => {
-  it("lists the seven sections in order, linked to /settings/<key>", () => {
+  it("lists the eight sections in order, linked to /settings/<key>", () => {
     renderWithProviders(<SettingsView section="api-keys" />);
 
     const nav = screen.getByRole("navigation", { name: "Settings sections" });
@@ -64,6 +67,7 @@ describe("SettingsView", () => {
     expect(links.map((a) => a.textContent)).toEqual([
       "API Keys",
       "GitHub Integration",
+      "GitLab Integration",
       "Workspace",
       "Automatic Reviews",
       "Integrations",

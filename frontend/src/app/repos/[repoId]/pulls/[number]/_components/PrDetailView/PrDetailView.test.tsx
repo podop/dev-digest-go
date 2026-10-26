@@ -206,3 +206,69 @@ describe("PrDetailView — run trace drawer", () => {
     expect(ES.all("run-1")).toHaveLength(0);
   });
 });
+
+describe("PrDetailView — GitLab (FR42, FR43, FR49; AC32, AC42)", () => {
+  const GITLAB = {
+    id: "r1",
+    owner: "acme/platform",
+    name: "payments",
+    full_name: "acme/platform/payments",
+    provider: "gitlab",
+    host: "git.corp.example",
+    web_url: "https://git.corp.example/gitlab/acme/platform/payments",
+    connection_id: "c1",
+  } as Repo;
+
+  it("shows !n and 'View on GitLab' linking to the merge request under web_url", async () => {
+    document.title = "PR #7 · DevDigest";
+    routes({ "GET /repos": [GITLAB] });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const { user } = renderView();
+    expect(await screen.findByRole("heading", { name: /!7\s*Add rate limiting/ })).toBeInTheDocument();
+    expect(screen.queryByText("#7")).toBeNull();
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.queryByRole("button", { name: "View on GitHub" })).toBeNull();
+    await waitFor(() => expect(document.title).toBe("PR !7 · DevDigest"));
+
+    await user.click(screen.getByRole("button", { name: "View on GitLab" }));
+    expect(open).toHaveBeenCalledWith(
+      "https://git.corp.example/gitlab/acme/platform/payments/-/merge_requests/7",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    open.mockRestore();
+  });
+
+  it("never links to a non-https web_url", async () => {
+    routes({ "GET /repos": [{ ...GITLAB, web_url: "javascript:alert(1)" }] });
+    renderView();
+    expect(await screen.findByRole("heading", { name: /!7/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View on GitLab" })).toBeDisabled();
+  });
+
+  it("an unknown PR number names the merge request as !n", async () => {
+    routes({ "GET /repos": [GITLAB], "GET /repos/r1/pulls": [] });
+    renderView();
+    expect(await screen.findByText("PR !7 could not be loaded.")).toBeInTheDocument();
+  });
+
+  it("a not-connected repo shows the banner with the link and still renders the stored PR", async () => {
+    routes({ "GET /repos": [{ ...GITLAB, connection_id: null }] });
+    renderView();
+    expect(await screen.findByRole("heading", { name: /Add rate limiting/ })).toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent("Not connected — add a GitLab connection for git.corp.example.");
+    expect(screen.getByRole("link", { name: "GitLab Integration" })).toHaveAttribute("href", "/settings/gitlab");
+    expect(screen.getByText("Limits public endpoints.")).toBeInTheDocument();
+  });
+
+  it("GitHub keeps #n, 'View on GitHub' and no banner", async () => {
+    routes();
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const { user } = renderView();
+    expect(await screen.findByRole("heading", { name: /#7\s*Add rate limiting/ })).toBeInTheDocument();
+    expect(screen.queryByRole("note")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "View on GitHub" }));
+    expect(open).toHaveBeenCalledWith("https://github.com/acme/api/pull/7", "_blank", "noopener,noreferrer");
+    open.mockRestore();
+  });
+});

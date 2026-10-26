@@ -52,10 +52,12 @@ func deref(s *string) string {
 func scanRepo(rows *sql.Rows) (domain.RepoRef, error) {
 	var r domain.RepoRef
 	var polled *int64
-	if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.FullName, &polled); err != nil {
+	var provider, host, webURL *string
+	if err := rows.Scan(&r.ID, &r.Owner, &r.Name, &r.FullName, &polled, &provider, &host, &webURL); err != nil {
 		return domain.RepoRef{}, err
 	}
 	r.LastPolledAt = instant(polled)
+	r.Provider, r.Host, r.WebURL = deref(provider), deref(host), deref(webURL)
 	return r, nil
 }
 

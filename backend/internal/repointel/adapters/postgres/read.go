@@ -28,7 +28,11 @@ func (s *Store) GetRepo(ctx context.Context, repoID string) (domain.Repo, error)
 
 func (r repoRow) toDomain() domain.Repo {
 	repo := domain.Repo{
-		ID: r.ID, WorkspaceID: r.WorkspaceID, Owner: r.Owner, Name: r.Name, DefaultBranch: r.DefaultBranch,
+		ID: r.ID, WorkspaceID: r.WorkspaceID, Owner: r.Owner, Name: r.Name, Provider: r.Provider, Host: r.Host,
+		DefaultBranch: r.DefaultBranch,
+	}
+	if r.ProjectID != nil {
+		repo.ProjectID = *r.ProjectID
 	}
 	if r.ClonePath != nil {
 		repo.ClonePath = *r.ClonePath
@@ -67,7 +71,7 @@ func (s *Store) GetState(ctx context.Context, repoID string) (domain.IndexState,
 func (s *Store) ListBackfill(ctx context.Context) ([]domain.Repo, error) {
 	var rows []repoRow
 	err := s.conn(ctx).Table("repos AS r").
-		Select("r.id, r.workspace_id, r.owner, r.name, r.default_branch, r.clone_path").
+		Select("r.id, r.workspace_id, r.owner, r.name, r.provider, r.host, r.project_id, r.default_branch, r.clone_path").
 		Joins("LEFT JOIN repo_index_state st ON st.repo_id = r.id").
 		Where("r.clone_path IS NOT NULL AND r.clone_path <> ''").
 		Where("(st.repo_id IS NULL OR st.indexer_version <> ?)", domain.IndexerVersion).

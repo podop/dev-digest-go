@@ -5,6 +5,7 @@
   "sections": {
     "api-keys": "API Keys",
     "github": "GitHub Integration",
+    "gitlab": "GitLab Integration",
     "workspace": "Workspace",
     "automatic-reviews": "Automatic Reviews",
     "integrations": "Integrations",

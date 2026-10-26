@@ -64,6 +64,7 @@ type pollGitHub struct {
 	maxInflight int
 	delay       time.Duration
 	respond     func(repo string, page int) ([]domain.Listed, error)
+	flight      *flightCount // shared with the GitLab fake: requests in flight across hosts
 }
 
 func (g *pollGitHub) ListPullRequestsPage(ctx context.Context, _, name string, page, perPage int) ([]domain.Listed, error) {
@@ -73,6 +74,7 @@ func (g *pollGitHub) ListPullRequestsPage(ctx context.Context, _, name string, p
 	g.maxInflight = max(g.maxInflight, g.inflight)
 	respond, delay := g.respond, g.delay
 	g.mu.Unlock()
+	defer g.flight.enter()()
 	defer func() {
 		g.mu.Lock()
 		g.inflight--
@@ -135,6 +137,17 @@ type pollStore struct {
 	marked   []polled
 	pulls    map[string][]storedPull // repo -> stored PRs
 	listErr  error
+	// UpdateRepoPath: the path updates it was asked for, and what it answers.
+	pathUpdates []domain.GitLabProject
+	pathUpdated bool
+	pathErr     error
+}
+
+func (s *pollStore) UpdateRepoPath(_ context.Context, _, _ string, p domain.GitLabProject) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pathUpdates = append(s.pathUpdates, p)
+	return s.pathUpdated, s.pathErr
 }
 
 func (s *pollStore) ListWithoutDiffStats(_ context.Context, _, repo string, since time.Time, limit int) ([]domain.Pull, error) {
@@ -270,6 +283,7 @@ func (s *logSink) warns() []string {
 type pollRig struct {
 	gh        *pollGitHub
 	stats     *pollStats
+	gl        *pollGitLab
 	store     *pollStore
 	intervals *pollIntervals
 	logs      *logSink
@@ -280,7 +294,7 @@ type pollRig struct {
 
 func newRig(targets ...domain.PollTarget) *pollRig {
 	return &pollRig{
-		gh: &pollGitHub{}, stats: &pollStats{}, store: &pollStore{}, logs: &logSink{}, targets: targets,
+		gh: &pollGitHub{}, stats: &pollStats{}, gl: &pollGitLab{}, store: &pollStore{pathUpdated: true}, logs: &logSink{}, targets: targets,
 		intervals: &pollIntervals{set: map[string]time.Duration{}},
 	}
 }
@@ -290,7 +304,7 @@ func newRig(targets ...domain.PollTarget) *pollRig {
 func (r *pollRig) start(t *testing.T) (stop func()) {
 	t.Helper()
 	p := app.NewPoller(app.PollerDeps{
-		Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Stats: r.stats, Store: r.store, Observer: r.observer, Log: slog.New(r.logs),
+		Targets: r.targets, Intervals: r.intervals, Pages: r.gh, Stats: r.stats, GitLab: r.gl, Store: r.store, Observer: r.observer, Log: slog.New(r.logs),
 	}, r.opts)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})

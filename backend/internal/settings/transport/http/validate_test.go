@@ -35,6 +35,12 @@ type fakeService struct {
 	gotCustomWS  string
 	gotCustomID  app.Provider
 	gotCustomKey string
+
+	gitlabResult app.ConnTestResult
+	gitlabErr    error
+	gitlabCalls  int
+	gotGitLabID  string
+	gotGitLabKey string
 }
 
 func (f *fakeService) Get(context.Context, string) (app.Bag, error) { return app.Bag{}, nil }
@@ -64,6 +70,12 @@ func (f *fakeService) TestCustomConnection(_ context.Context, ws string, id app.
 	f.customCalls++
 	f.gotCustomWS, f.gotCustomID, f.gotCustomKey = ws, id, key
 	return f.customResult, f.customErr
+}
+
+func (f *fakeService) TestGitLabConnection(_ context.Context, id, key string) (app.ConnTestResult, error) {
+	f.gitlabCalls++
+	f.gotGitLabID, f.gotGitLabKey = id, key
+	return f.gitlabResult, f.gitlabErr
 }
 
 type fakeIdentities struct{ err error }
@@ -323,7 +335,7 @@ func TestTestConnection_validation(t *testing.T) {
 		want []issueView
 	}{
 		{name: "missing provider", body: `{}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/provider"}}},
-		{name: "unknown provider", body: `{"provider":"gitlab"}`, want: []issueView{{Keyword: "invalid_enum_value", InstancePath: "/provider"}}},
+		{name: "unknown provider", body: `{"provider":"bitbucket"}`, want: []issueView{{Keyword: "invalid_enum_value", InstancePath: "/provider"}}},
 		{name: "provider not a string", body: `{"provider":1}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/provider"}}},
 		{name: "empty key", body: `{"provider":"openai","key":""}`, want: []issueView{{Keyword: "too_small", InstancePath: "/key"}}},
 		{name: "null key", body: `{"provider":"openai","key":null}`, want: []issueView{{Keyword: "invalid_type", InstancePath: "/key"}}},

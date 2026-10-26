@@ -112,9 +112,9 @@ func (c *loadCaps) CapReached(context.Context, string) (bool, error) {
 
 type loadTokens struct{ calls atomic.Int64 }
 
-func (t *loadTokens) HasGitHubToken(context.Context, string) (bool, error) {
+func (t *loadTokens) CodeHostAccess(context.Context, string) (domain.CodeHostAccess, error) {
 	t.calls.Add(1)
-	return true, nil
+	return domain.CodeHostAccess{GitHubToken: true, RepoWithToken: true}, nil
 }
 
 // outboundCounter stands in for GitHub and for every LLM provider: it replaces the process-wide

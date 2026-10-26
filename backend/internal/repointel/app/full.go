@@ -31,8 +31,9 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 		return ix.ended(start, "no_clone"), nil
 	}
 	root := repo.ClonePath
+	owner, name := repo.CloneKey()
 
-	sha, err := ix.d.Git.Head(ctx, repo.Owner, repo.Name)
+	sha, err := ix.d.Git.Head(ctx, owner, name)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return Result{}, fmt.Errorf("read HEAD: %w", ctxErr)

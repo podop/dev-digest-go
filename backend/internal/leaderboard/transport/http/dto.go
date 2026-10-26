@@ -32,6 +32,11 @@ type repoDTO struct {
 	ID           string  `json:"id"`
 	FullName     string  `json:"full_name"`
 	LastPolledAt *string `json:"last_polled_at"`
+	// provider, host and web_url are optional in the contract: present for a GitLab repository,
+	// absent for GitHub (FR46).
+	Provider string `json:"provider,omitempty"`
+	Host     string `json:"host,omitempty"`
+	WebURL   string `json:"web_url,omitempty"`
 }
 
 type kpisDTO struct {
@@ -300,7 +305,10 @@ func toAttention(l domain.AttentionList) needsAttentionDTO {
 func toLeaderboard(lb domain.Leaderboard) leaderboardDTO {
 	repos := make([]repoDTO, len(lb.Repos))
 	for i, r := range lb.Repos {
-		repos[i] = repoDTO{ID: r.ID, FullName: r.FullName, LastPolledAt: utcPtr(r.LastPolledAt)}
+		repos[i] = repoDTO{
+			ID: r.ID, FullName: r.FullName, LastPolledAt: utcPtr(r.LastPolledAt),
+			Provider: r.Provider, Host: r.Host, WebURL: r.WebURL,
+		}
 	}
 	files := make([]hotFileDTO, len(lb.HotFiles))
 	for i, f := range lb.HotFiles {

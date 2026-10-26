@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import type { LeaderboardRow } from "@devdigest/shared";
 import { prDetailPath } from "@/lib/pr-urls";
+import type { RepoLookup } from "../../helpers";
 import { SORT_KEYS, TOP_N, type SortKey, type SortState } from "./constants";
 import { ariaSort, nextSort, rankRows, sortRows } from "./helpers";
 import { HealthInfo } from "./_components/HealthInfo";
@@ -20,6 +21,8 @@ import { s } from "./styles";
 export interface LeaderboardTableProps {
   /** Rows in server rank order (health desc; ties: PR number ascending, then repo). */
   rows: readonly LeaderboardRow[];
+  /** The response's repositories by id (GitLab references and host labels). */
+  repos?: RepoLookup;
 }
 
 const isSortKey = (key: string): key is SortKey => (SORT_KEYS as readonly string[]).includes(key);
@@ -27,7 +30,7 @@ const isSortKey = (key: string): key is SortKey => (SORT_KEYS as readonly string
 /** Column keys in display order. */
 const COLUMNS = ["rank", "pr", "status", "size", "risk", "health", "findings", "rounds", "time", "cost"] as const;
 
-export function LeaderboardTable({ rows }: LeaderboardTableProps) {
+export function LeaderboardTable({ rows, repos }: LeaderboardTableProps) {
   const t = useTranslations("leaderboardTable");
   const router = useRouter();
   const headingId = React.useId();
@@ -82,6 +85,7 @@ export function LeaderboardTable({ rows }: LeaderboardTableProps) {
               <LeaderboardTableRow
                 key={row.pr_id}
                 row={row}
+                repos={repos}
                 rank={rank}
                 open={openId === row.pr_id}
                 onToggle={() => setOpenId(openId === row.pr_id ? null : row.pr_id)}

@@ -17,7 +17,7 @@
     "findings": "{count, plural, one {# finding} other {# findings}}",
     "critical": "{count} critical",
     "location": "{repo} ·",
-    "prLink": "<link>#{number}</link>",
+    "prLink": "<link>{ref}</link>",
     "emptyTitle": "No hot files",
     "emptyBody": "No findings landed on a file in this period."
   },

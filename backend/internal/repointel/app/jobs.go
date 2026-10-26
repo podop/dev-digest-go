@@ -135,14 +135,15 @@ func (j *Jobs) resync(ctx context.Context, repoID string) (Result, error) {
 	if repo.ClonePath == "" {
 		return ended("no_clone"), nil
 	}
-	branch, err := j.d.Git.DefaultBranch(ctx, repo.Owner, repo.Name)
+	owner, name := repo.CloneKey()
+	branch, err := j.d.Git.DefaultBranch(ctx, owner, name)
 	if err != nil {
 		if ctx.Err() != nil {
 			return Result{}, fmt.Errorf("default branch: %w", err)
 		}
 		branch = repo.DefaultBranch
 	}
-	if _, err := j.d.Git.Sync(ctx, repo.Owner, repo.Name, branch); err != nil {
+	if _, err := j.d.Git.Sync(ctx, owner, name, branch); err != nil {
 		if ctx.Err() != nil {
 			return Result{}, fmt.Errorf("sync clone: %w", err)
 		}

@@ -11,8 +11,8 @@ import (
 	"dev-digest-go/backend/internal/autoreview/domain"
 )
 
-// FR12: the state follows the precedence off > poll_disabled > no_github_token > no_agents >
-// no_triggers > paused_spend_cap > active.
+// FR12: the state follows the precedence off > poll_disabled > no_github_token (no_code_host_token
+// with a GitLab repository) > no_agents > no_triggers > paused_spend_cap > active.
 func TestStatus_States(t *testing.T) {
 	tests := []struct {
 		name string
@@ -26,6 +26,13 @@ func TestStatus_States(t *testing.T) {
 		{"poll disabled", func(f *fakes) { f.pollOff = true }, domain.StatePollDisabled},
 		{"poll disabled beats no token", func(f *fakes) { f.pollOff, f.hasToken = true, false }, domain.StatePollDisabled},
 		{"no token", func(f *fakes) { f.hasToken = false }, domain.StateNoGitHubToken},
+		// FR28: with a GitLab repository the state is no_code_host_token, never no_github_token.
+		{"gitlab repo without any token", func(f *fakes) { f.gitlabRepos, f.hasToken = true, false }, domain.StateNoCodeHostToken},
+		{"gitlab repo, github token only", func(f *fakes) { f.gitlabRepos = true }, domain.StateNoCodeHostToken},
+		{"gitlab repo with a token", func(f *fakes) { f.gitlabRepos, f.hasToken, f.repoToken = true, false, true }, domain.StateActive},
+		{"no code host token beats cap", func(f *fakes) { f.gitlabRepos, f.capReached = true, true }, domain.StateNoCodeHostToken},
+		{"poll disabled beats no code host token", func(f *fakes) { f.gitlabRepos, f.pollOff = true, true }, domain.StatePollDisabled},
+		{"repo token without a gitlab repo does not count", func(f *fakes) { f.hasToken, f.repoToken = false, true }, domain.StateNoGitHubToken},
 		{"legacy true: no agent ids", func(f *fakes) { f.setting.AgentIDs = nil }, domain.StateNoAgents},
 		{"selected agents all disabled or deleted (EC9)", func(f *fakes) { f.enabled["a1"] = false }, domain.StateNoAgents},
 		{"no triggers", func(f *fakes) { f.setting.OnNewPR, f.setting.OnNewCommits = false, false }, domain.StateNoTriggers},
@@ -101,6 +108,7 @@ func TestStatus_ReadErrorsAreWrapped(t *testing.T) {
 	}{
 		{"cap", func(f *fakes) { f.capErr = errBoom }},
 		{"setting", func(f *fakes) { f.settErr = errBoom }},
+		{"code host tokens", func(f *fakes) { f.tokensErr = errBoom }},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

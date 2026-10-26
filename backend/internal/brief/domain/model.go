@@ -3,7 +3,8 @@
 // missing-input list. The pure rules (facts to prompt, trimming, normalisation and grounding,
 // missing inputs, staleness, the output schema) are added next to this file; it fixes only the
 // shared types and constants. It imports only the standard library and the review engine's
-// domain package (the shared kernel: Intent, Severity, JS text helpers) and carries no JSON or
+// domain package (the shared kernel: Intent, Severity, JS text helpers), platform/codehost's
+// provider names, and carries no JSON or
 // database tags: the wire and stored shapes live in transport/http and adapters/postgres.
 package domain
 
@@ -11,6 +12,7 @@ import (
 	"errors"
 	"time"
 
+	"dev-digest-go/backend/internal/platform/codehost"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 )
 
@@ -84,14 +86,23 @@ type Pull struct {
 	RepoID      string
 	// Owner and Name are the repository's.
 	Owner, Name string
-	Number      int
-	Title       string
+	// Provider ("github" | "gitlab"; "" reads as github), Host (the host key) and ProjectID (the
+	// GitLab project id; 0 = none) locate the repository: GitHub reads apply to GitHub only
+	// (FR29) and the clone location comes from codehost.CloneKey.
+	Provider  string
+	Host      string
+	ProjectID int64
+	Number    int
+	Title     string
 	// Body is the PR description; nil or blank means none.
 	Body *string
 	// Base is the base branch name and HeadSHA the head commit as stored now.
 	Base    string
 	HeadSHA string
 }
+
+// IsGitLab reports whether the pull request belongs to a GitLab project.
+func (p Pull) IsGitLab() bool { return p.Provider == codehost.GitLab }
 
 // StoredFile is a stored file of the pull request (pr_files).
 type StoredFile struct {

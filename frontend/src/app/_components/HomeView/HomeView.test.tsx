@@ -1,13 +1,14 @@
-/* HomeView — the first-run gate on `/` (AC18, FR27; AC26, FR21): the redirect for each missing
-   prerequisite and for a complete setup, a custom provider counting as a model provider, the error
+/* HomeView — the first-run gate on `/` (AC18, FR27; AC26, FR21; AC30, FR39): the redirect for each missing
+   prerequisite and for a complete setup, a custom provider counting as a model provider, a GitLab
+   connection with a token counting as a code host, the error
    state with Retry (no redirect), no home content before the redirect, and the no-hard-coded-copy
    check (AC22). AppShell is a passthrough; fetch is stubbed
    and the real hooks run. */
 import type React from "react";
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import type { CustomProvider, Repo, SecretsStatus } from "@devdigest/shared";
+import type { CustomProvider, GitLabConnection, Repo, SecretsStatus } from "@devdigest/shared";
 import { renderWithProviders, screen, cleanup, waitFor, pseudoMessages } from "@/test/render";
-import { mockFetch, jsonResponse, type RouteHandler } from "@/test/fetch-mock";
+import { mockFetch as rawMockFetch, jsonResponse, type RouteHandler } from "@/test/fetch-mock";
 import { strayText } from "@/test/pseudo";
 
 const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
@@ -54,6 +55,22 @@ const customProvider = (over: Partial<CustomProvider> = {}): CustomProvider => (
   ...over,
 });
 const CUSTOM = "GET /settings/custom-providers";
+const GITLAB = "GET /settings/gitlab-connections";
+
+const gitlabConnection = (over: Partial<GitLabConnection> = {}): GitLabConnection => ({
+  id: "c1",
+  name: "gitlab.com",
+  base_url: "https://gitlab.com",
+  host: "gitlab.com",
+  token_configured: true,
+  repo_count: 0,
+  created_at: "2026-10-26T10:00:00Z",
+  updated_at: "2026-10-26T10:00:00Z",
+  ...over,
+});
+
+/** The gate loads four requests; unless a test says otherwise there is no GitLab connection. */
+const mockFetch = (routes: Record<string, RouteHandler>) => rawMockFetch({ [GITLAB]: [], ...routes });
 
 const NONE: SecretsStatus = { openai: false, anthropic: false, openrouter: false, github: false };
 const secrets = (over: Partial<SecretsStatus>): SecretsStatus => ({ ...NONE, ...over });
@@ -62,7 +79,7 @@ describe("HomeView gate", () => {
   it.each([
     ["no model key, no token, no repo", secrets({}), [], "/setup?step=model"],
     ["no model key even with a token and repos", secrets({ github: true }), REPOS, "/setup?step=model"],
-    ["a model key but no GitHub token", secrets({ openai: true }), REPOS, "/setup?step=github"],
+    ["a model key but no GitHub token and no GitLab connection", secrets({ openai: true }), REPOS, "/setup?step=code-host"],
     ["an anthropic key and a token but no repo", secrets({ anthropic: true, github: true }), [], "/setup?step=repo"],
     // An env-provided key is reported by secrets-status exactly like a stored one (EC11).
     ["only an env-provided openrouter key and a token, with repos", secrets({ openrouter: true, github: true }), REPOS, "/repos/r1/pulls"],
@@ -111,10 +128,10 @@ describe("HomeView gate", () => {
     expect(nav.replace).toHaveBeenCalledTimes(1);
   });
 
-  it("with a custom provider the next unmet step is still reported (github, then repo) (AC26)", async () => {
+  it("with a custom provider the next unmet step is still reported (code host, then repo) (AC26)", async () => {
     mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": REPOS, [CUSTOM]: [customProvider()] });
     renderWithProviders(<HomeView />);
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=github"));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=code-host"));
     cleanup();
     nav.replace.mockReset();
 
@@ -139,16 +156,58 @@ describe("HomeView gate", () => {
     expect(nav.replace).toHaveBeenCalledTimes(1);
   });
 
+  // AC30 / FR39: a GitLab connection with a token is a code host; one without a token is not.
+  it.each([
+    ["with a token and no GitHub token, goes on to the repository", [gitlabConnection()], [], "/setup?step=repo"],
+    ["with a token and no GitHub token, opens the first repo when there is one", [gitlabConnection()], REPOS, "/repos/r1/pulls"],
+    ["without a token (alone) still stops at the code-host step", [gitlabConnection({ token_configured: false })], REPOS, "/setup?step=code-host"],
+    [
+      "without a token next to one with a token passes",
+      [gitlabConnection({ id: "c2", token_configured: false }), gitlabConnection({ id: "c3", host: "git.corp.example" })],
+      REPOS,
+      "/repos/r1/pulls",
+    ],
+  ] as const)("a GitLab connection %s (AC30)", async (_name, connections, repos, href) => {
+    mockFetch({
+      "GET /settings/secrets-status": secrets({ openai: true }),
+      "GET /repos": [...repos],
+      [CUSTOM]: [],
+      [GITLAB]: [...connections],
+    });
+    renderWithProviders(<HomeView />);
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith(href));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the GitLab connections before redirecting — no code-host step flashes for a GitLab-only workspace (AC30)", async () => {
+    let release: (r: Response) => void = () => {};
+    mockFetch({
+      "GET /settings/secrets-status": secrets({ openai: true }),
+      "GET /repos": REPOS,
+      [CUSTOM]: [],
+      [GITLAB]: () => new Promise<Response>((resolve) => (release = resolve)),
+    });
+    const { container } = renderWithProviders(<HomeView />);
+    await waitFor(() => expect(container.querySelector("[aria-busy='true']")).not.toBeNull());
+    expect(nav.replace).not.toHaveBeenCalled();
+
+    release(jsonResponse([gitlabConnection()]));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/repos/r1/pulls"));
+    expect(nav.replace).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ["secrets-status", "GET /settings/secrets-status"],
     ["repos", "GET /repos"],
     ["custom providers", CUSTOM],
+    ["GitLab connections", GITLAB],
   ])("shows an error with Retry and does not redirect when %s fails; Retry recovers", async (_name, failing) => {
     let broken = true;
     const ok: Record<string, RouteHandler> = {
       "GET /settings/secrets-status": secrets({ github: true }),
       "GET /repos": [REPOS[0]],
       [CUSTOM]: [customProvider()],
+      [GITLAB]: [],
     };
     mockFetch({
       ...ok,

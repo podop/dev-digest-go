@@ -558,7 +558,7 @@ func TestPRPoll_PrimaryRateLimitPausesUntilReset(t *testing.T) {
 
 	h.waitLists("r1", 1)
 	eventually(t, 30*time.Second, "the pause to be logged", func() bool {
-		return len(logLines(t, h.s.logs, "background poll paused: GitHub rate limit reached")) == 1
+		return len(logLines(t, h.s.logs, "background poll paused: rate limit reached")) == 1
 	})
 	h.idle()
 	if got := len(h.lists("r2")); got != 0 {
@@ -598,7 +598,7 @@ func TestPRPoll_SecondaryRateLimitPausesForRetryAfter(t *testing.T) {
 
 	h.waitLists("r1", 1)
 	eventually(t, 30*time.Second, "the pause to be logged", func() bool {
-		return len(logLines(t, h.s.logs, "background poll paused: GitHub rate limit reached")) == 1
+		return len(logLines(t, h.s.logs, "background poll paused: rate limit reached")) == 1
 	})
 	limited.Store(false)
 	// Retry-After is 30 minutes after the (real) moment of the answer: neither the interval (5 min)
@@ -646,7 +646,7 @@ func TestPRPoll_ServerErrorOnOneRepoGoesOn(t *testing.T) {
 	if len(lines) != 1 || lines[0]["repo"] != "o/r1" || lines[0]["level"] != "WARN" {
 		t.Errorf("failure log lines = %v, want one WARN for o/r1", lines)
 	}
-	if got := len(logLines(t, h.s.logs, "background poll paused: GitHub rate limit reached")); got != 0 {
+	if got := len(logLines(t, h.s.logs, "background poll paused: rate limit reached")); got != 0 {
 		t.Errorf("rate-limit pauses logged for a 500 = %d, want 0", got)
 	}
 

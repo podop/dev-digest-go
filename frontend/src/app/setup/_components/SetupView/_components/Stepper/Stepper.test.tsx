@@ -6,18 +6,18 @@ afterEach(cleanup);
 
 describe("Stepper", () => {
   it("marks done steps with a text equivalent, the current one with aria-current, the rest as plain", () => {
-    renderWithProviders(<Stepper current="github" done={{ model: true, github: false, repo: false }} />);
+    renderWithProviders(<Stepper current="code-host" done={{ model: true, "code-host": false, repo: false }} />);
     const items = within(screen.getByRole("list", { name: "Setup steps" })).getAllByRole("listitem");
     expect(items[0]).toHaveTextContent("Model provider");
     expect(within(items[0]!).getByText("completed")).toBeInTheDocument();
-    expect(items[1]).toHaveTextContent("2GitHub token");
+    expect(items[1]).toHaveTextContent("2Code host");
     expect(within(items[1]!).queryByText("completed")).toBeNull();
     expect(items[2]).toHaveTextContent("3Repository");
     expect(items.map((li) => li.getAttribute("aria-current"))).toEqual([null, "step", null]);
   });
 
   it("shows the current step by its number even when its prerequisite state is done", () => {
-    renderWithProviders(<Stepper current="repo" done={{ model: true, github: true, repo: true }} />);
+    renderWithProviders(<Stepper current="repo" done={{ model: true, "code-host": true, repo: true }} />);
     const items = screen.getAllByRole("listitem");
     expect(items[2]).toHaveAttribute("aria-current", "step");
     expect(items[2]).toHaveTextContent("3Repository");

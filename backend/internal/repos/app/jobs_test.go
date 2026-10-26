@@ -35,7 +35,7 @@ func newJobsWithIndex(store *memStore, g *fakeGit, tr *fakeTrigger) *app.Jobs {
 
 func seedRepo(t *testing.T, store *memStore, url string) domain.Repo {
 	t.Helper()
-	repo, _, err := app.NewService(store, &fakeQueue{}, "/data").Add(t.Context(), ws, "u", mustRef(t, url))
+	repo, _, err := app.NewService(store, &fakeQueue{}, "/data").Add(t.Context(), ws, "u", mustParsed(t, url))
 	if err != nil {
 		t.Fatal(err)
 	}

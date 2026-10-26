@@ -6,6 +6,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { LEADERBOARD_PERIODS, type LeaderboardPeriod, type LeaderboardPeriodKey, type LeaderboardRepo } from "@devdigest/shared";
+import { repoLabel, type CodeHostRepo } from "@/lib/code-host";
 import { Select } from "@/components/select";
 import { ALL_REPOS } from "../../constants";
 import { syncedAgo, windowRanges } from "../../helpers";
@@ -16,7 +17,7 @@ export interface HeaderProps {
   /** The repo filter in effect: "all" or an id from `repos`. */
   repo: string;
   /** The repositories to offer besides "All"; undefined while the list loads (the select is disabled). */
-  repos: readonly { id: string; full_name: string }[] | undefined;
+  repos: readonly (CodeHostRepo & { id: string; full_name: string })[] | undefined;
   /** The resolved window of the loaded response; null while loading or failed (no label, no digits). */
   window: LeaderboardPeriod | null;
   /** The response carries a previous summary: only then the label says what the week is compared with (FR25). */
@@ -43,7 +44,7 @@ export function Header({ period, repo, repos, window, compared, syncRepos, onPer
   const options = React.useMemo(
     () => [
       { value: ALL_REPOS, label: t("header.repo.all") },
-      ...(repos ?? []).map((r) => ({ value: r.id, label: r.full_name })),
+      ...(repos ?? []).map((r) => ({ value: r.id, label: repoLabel(r) })),
     ],
     [repos, t],
   );
@@ -97,7 +98,7 @@ function SyncNote({ repos }: { repos: readonly LeaderboardRepo[] }) {
         const ago = syncedAgo(r.last_polled_at);
         return (
           <li key={r.id}>
-            <span style={s.syncRepo}>{r.full_name}</span> {ago === null ? t("never") : t("synced", { when: ago })}
+            <span style={s.syncRepo}>{repoLabel(r)}</span> {ago === null ? t("never") : t("synced", { when: ago })}
           </li>
         );
       })}

@@ -45,6 +45,7 @@ function stub(settings: Record<string, unknown>, extra: Record<string, never | u
     "GET /settings": settings,
     "GET /agents": [agent(A1, "Security"), agent(A2, "Style")],
     [STATUS_ROUTE]: STATUS,
+    "GET /repos": [],
     ...extra,
   } as never);
 }
@@ -55,6 +56,24 @@ const interval = () => screen.getByRole("combobox", { name: "Polling interval" }
 const box = (name: string) => screen.getByRole("checkbox", { name });
 
 describe("SettingsAutoReviews", () => {
+  it("names the code hosts in the subtitle once a GitLab repository exists (GitLab A FR13)", async () => {
+    stub(
+      { polling_interval_min: 5, automatic_reviews: automatic() },
+      {
+        "GET /repos": [
+          { id: "r1", full_name: "acme/web", provider: "github" },
+          { id: "r2", full_name: "acme/platform/api", provider: "gitlab", host: "gitlab.com" },
+        ],
+      },
+    );
+    renderWithProviders(<SettingsAutoReviews />);
+
+    expect(
+      await screen.findByText("Poll your code hosts for new PRs and run agents without manual triggering."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Poll GitHub for new PRs and run agents without manual triggering.")).not.toBeInTheDocument();
+  });
+
   it("composes title, toggle, interval, chips, triggers, status and the Integrations link; each control saves its own patch (FR13, FR18, FR20, AC17, NFR6)", async () => {
     // Like the server: the answer carries the full stored object with the patch merged in.
     let stored: Record<string, unknown> = { polling_interval_min: 7, automatic_reviews: automatic() };

@@ -7,7 +7,10 @@
 //     placed in argv, never written to .git/config and scrubbed from errors;
 //   - hooks are disabled (core.hooksPath=/dev/null) and no code of a cloned
 //     repository is ever executed;
-//   - clone paths are exactly <root>/<owner>/<name> with validated segments.
+//   - clone paths are exactly <root>/<owner>/<name> with validated segments, or the GitLab
+//     form <root>/@gitlab/<host>[_<port>]/<project id>;
+//   - a GitLab remote ([Remote]) gets its own token, scoped to the remote's URL prefix, plus no
+//     redirects, no proxy, an optional CA bundle and a pinned, checked address (curloptResolve).
 package gitcli
 
 import (
@@ -16,6 +19,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
@@ -24,6 +30,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"dev-digest-go/backend/internal/platform/egress"
 )
 
 const (
@@ -32,6 +40,9 @@ const (
 	SyncDepth = 50
 
 	tokenUsername = "x-access-token"
+	// gitlabUsername is the Basic user name for a GitLab access token: GitLab accepts any
+	// non-empty name (spec D32).
+	gitlabUsername = "oauth2"
 	// githubPrefix scopes the auth header: git never sends it to other hosts.
 	githubPrefix = "https://github.com/"
 
@@ -56,6 +67,16 @@ var (
 	ErrInvalidBlobPath = errors.New("invalid file path")
 	// ErrNotBlob means the path exists at the commit but is not a regular file (a directory or a submodule).
 	ErrNotBlob = errors.New("path at commit is not a file")
+	// ErrInvalidRemote reports a Remote that is not a credential-free https URL, whose prefix is
+	// not a prefix of that URL, or whose CA file is not an absolute path.
+	ErrInvalidRemote = errors.New("invalid git remote")
+	// ErrForbiddenAddress means the remote host resolves to an address git must not connect to.
+	ErrForbiddenAddress = errors.New("git remote resolves to a forbidden address")
+	// ErrGitLabKey means Clone, Sync or DefaultBranch (GitHub only) was given a GitLab clone key;
+	// those need CloneRemote, SyncRemote or DefaultBranchRemote.
+	ErrGitLabKey = errors.New("GitLab clone key needs the *Remote calls")
+	// ErrNotGitLabKey means a *Remote call was given a clone key that is not the GitLab form.
+	ErrNotGitLabKey = errors.New("clone key is not a GitLab key")
 )
 
 // TokenProvider returns the GitHub token at call time, so rotations apply
@@ -70,6 +91,39 @@ type Options struct {
 	CloneRoot string
 	// Token is optional; nil means always anonymous.
 	Token TokenProvider
+	// Resolver looks up the addresses of a GitLab remote host; nil means the system resolver.
+	Resolver func(ctx context.Context, host string) ([]netip.Addr, error)
+	// AddrGuard reports whether an address must not be connected to; nil means
+	// egress.ForbiddenAddr (link-local and unspecified, IPv4-mapped IPv6 judged as IPv4;
+	// loopback and private addresses stay allowed: self-hosted GitLab often runs there).
+	// cmd injects the stricter custom.ForbiddenAddr (it also catches IPv4-compatible, NAT64
+	// and 6to4 forms), keeping this platform package free of the llm layer.
+	AddrGuard func(netip.Addr) bool
+}
+
+// Remote is where a GitLab clone fetches from and how it authenticates. Its token never reaches
+// argv, the URL, the clone's git config, errors or logs.
+type Remote struct {
+	// URL is the credential-free https clone URL, e.g. https://gitlab.example.com/g/p.git.
+	URL string
+	// Prefix scopes the auth header (http.<Prefix>.extraHeader): an https URL ending in "/" that
+	// URL starts with, e.g. https://gitlab.example.com/. Git never sends the token elsewhere.
+	Prefix string
+	// Token is the access token; empty means anonymous.
+	Token string
+	// CAFile is a PEM bundle for http.sslCAInfo (see WriteCABundle); empty means git's default.
+	CAFile string
+}
+
+// String omits the token, so a Remote printed with %v or %+v cannot leak it.
+func (r Remote) String() string { return "Remote{" + r.URL + "}" }
+
+// GoString omits the token, so %#v cannot leak it.
+func (r Remote) GoString() string { return r.String() }
+
+// LogValue omits the token for slog.
+func (r Remote) LogValue() slog.Value {
+	return slog.GroupValue(slog.String("url", r.URL), slog.String("prefix", r.Prefix))
 }
 
 // CloneOptions tunes Clone.
@@ -80,9 +134,11 @@ type CloneOptions struct {
 
 // Client runs git commands. It is safe for concurrent use.
 type Client struct {
-	binary string
-	root   string
-	token  TokenProvider
+	binary   string
+	root     string
+	token    TokenProvider
+	resolver func(ctx context.Context, host string) ([]netip.Addr, error)
+	guard    func(netip.Addr) bool
 }
 
 // New validates the options and returns a Client.
@@ -98,7 +154,16 @@ func New(opts Options) (*Client, error) {
 	if bin == "" {
 		bin = "git"
 	}
-	return &Client{binary: bin, root: root, token: opts.Token}, nil
+	c := &Client{binary: bin, root: root, token: opts.Token, resolver: opts.Resolver, guard: opts.AddrGuard}
+	if c.resolver == nil {
+		c.resolver = func(ctx context.Context, host string) ([]netip.Addr, error) {
+			return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+		}
+	}
+	if c.guard == nil {
+		c.guard = egress.ForbiddenAddr
+	}
+	return c, nil
 }
 
 // Root returns the absolute clone root.
@@ -145,6 +210,9 @@ func (e *BlobSizeError) Is(target error) bool { return target == ErrBlobTooLarge
 // <root>/<owner>/<name>/.git exists it fetches; otherwise it removes any partial
 // directory and clones rawURL. It returns the absolute clone directory.
 func (c *Client) Clone(ctx context.Context, owner, name, rawURL string, opts CloneOptions) (string, error) {
+	if _, ok := gitlabHostSegment(owner); ok {
+		return "", ErrGitLabKey
+	}
 	dest, err := c.ClonePath(owner, name)
 	if err != nil {
 		return "", err
@@ -183,9 +251,217 @@ func (c *Client) Clone(ctx context.Context, owner, name, rawURL string, opts Clo
 	return dest, nil
 }
 
+// CloneRemote is Clone for a GitLab project: owner and name are the GitLab clone key
+// ("@gitlab/<host>[_<port>]", "<project id>"), and the clone fetches from r.URL with r's token.
+// An existing clone gets origin := r.URL first, so a project renamed on GitLab keeps syncing.
+// Nothing is created when the remote is invalid or its host resolves to a forbidden address.
+func (c *Client) CloneRemote(ctx context.Context, owner, name string, r Remote, opts CloneOptions) (string, error) {
+	dest, err := c.gitlabClonePath(owner, name)
+	if err != nil {
+		return "", err
+	}
+	if opts.Depth < 0 {
+		return "", errors.New("gitcli: negative clone depth")
+	}
+	rcfg, err := c.remoteCfg(ctx, r)
+	if err != nil {
+		return "", err
+	}
+	if err := c.prepareDest(dest); err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(filepath.Join(dest, ".git")); err == nil {
+		if err := c.setOrigin(ctx, dest, r.URL); err != nil {
+			return "", err
+		}
+		if _, _, err := c.exec(ctx, rcfg, dest, "", "fetch"); err != nil {
+			return "", err
+		}
+		return dest, nil
+	}
+	// A previous attempt may have died mid-write; git refuses a non-empty dest.
+	if err := os.RemoveAll(dest); err != nil {
+		return "", fmt.Errorf("remove partial clone: %w", err)
+	}
+	args := []string{"clone"}
+	if opts.Depth > 0 {
+		args = append(args, "--depth", strconv.Itoa(opts.Depth))
+	}
+	args = append(args, "--", r.URL, dest)
+	if _, _, err := c.exec(ctx, rcfg, c.root, "", args...); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
+// SyncRemote is Sync for a GitLab project (see CloneRemote for the key and the remote).
+func (c *Client) SyncRemote(ctx context.Context, owner, name, branch string, r Remote) (string, error) {
+	dest, err := c.existingGitLabClone(owner, name)
+	if err != nil {
+		return "", err
+	}
+	if !validRef(branch) {
+		return "", ErrInvalidRef
+	}
+	rcfg, err := c.remoteCfg(ctx, r)
+	if err != nil {
+		return "", err
+	}
+	if err := c.setOrigin(ctx, dest, r.URL); err != nil {
+		return "", err
+	}
+	refspec := "+refs/heads/" + branch + ":refs/remotes/origin/" + branch
+	if _, _, err := c.exec(ctx, rcfg, dest, "", "fetch", "--depth", strconv.Itoa(SyncDepth), "origin", refspec); err != nil {
+		return "", err
+	}
+	local := runCfg{remote: true}
+	if _, _, err := c.exec(ctx, local, dest, "", "reset", "--hard", "refs/remotes/origin/"+branch, "--"); err != nil {
+		return "", err
+	}
+	out, _, err := c.exec(ctx, local, dest, "", "rev-parse", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// DefaultBranchRemote is DefaultBranch for a GitLab project (see CloneRemote for the key and the remote).
+func (c *Client) DefaultBranchRemote(ctx context.Context, owner, name string, r Remote) (string, error) {
+	dest, err := c.existingGitLabClone(owner, name)
+	if err != nil {
+		return "", err
+	}
+	rcfg, err := c.remoteCfg(ctx, r)
+	if err != nil {
+		return "", err
+	}
+	if err := c.setOrigin(ctx, dest, r.URL); err != nil {
+		return "", err
+	}
+	out, _, err := c.exec(ctx, rcfg, dest, "", "ls-remote", "--symref", "origin", "HEAD")
+	if err != nil {
+		return "", err
+	}
+	return parseDefaultBranch(out)
+}
+
+func (c *Client) existingGitLabClone(owner, name string) (string, error) {
+	if _, ok := gitlabHostSegment(owner); !ok {
+		return "", ErrNotGitLabKey
+	}
+	return c.existingClone(owner, name)
+}
+
+func (c *Client) gitlabClonePath(owner, name string) (string, error) {
+	if !strings.HasPrefix(owner, gitlabDir+"/") {
+		return "", ErrNotGitLabKey
+	}
+	return c.ClonePath(owner, name)
+}
+
+// setOrigin points origin at rawURL (a credential-free URL checked by remoteCfg).
+func (c *Client) setOrigin(ctx context.Context, dir, rawURL string) error {
+	_, _, err := c.exec(ctx, runCfg{remote: true}, dir, "", "remote", "set-url", "origin", rawURL)
+	return err
+}
+
+// remoteCfg validates r and builds the configuration of its network commands: the token scoped
+// to r.Prefix, no redirects, no proxy, certificate verification on, r.CAFile as the trust store
+// and the host pinned to the addresses checked here.
+func (c *Client) remoteCfg(ctx context.Context, r Remote) (runCfg, error) {
+	u, err := checkRemote(r)
+	if err != nil {
+		return runCfg{}, err
+	}
+	pre := []string{
+		"-c", "http.followRedirects=false",
+		"-c", "http.proxy=",
+		"-c", "http.sslVerify=true",
+	}
+	if r.CAFile != "" {
+		pre = append(pre, "-c", "http.sslCAInfo="+r.CAFile)
+	}
+	pin, err := c.pin(ctx, u)
+	if err != nil {
+		return runCfg{}, err
+	}
+	if pin != "" {
+		pre = append(pre, "-c", "http.curloptResolve="+pin)
+	}
+	return runCfg{token: r.Token, user: gitlabUsername, prefix: r.Prefix, pre: pre, remote: true}, nil
+}
+
+// checkRemote accepts only a credential-free https URL that starts with a clean https prefix of
+// the same host (fail closed: git would otherwise scope the header by its own matching rules).
+func checkRemote(r Remote) (*url.URL, error) {
+	for _, s := range []string{r.URL, r.Prefix, r.CAFile} {
+		for _, ch := range s {
+			if ch < 0x21 || ch == 0x7f {
+				return nil, ErrInvalidRemote
+			}
+		}
+	}
+	u, err := url.Parse(r.URL)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil ||
+		u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" {
+		return nil, ErrInvalidRemote
+	}
+	p, err := url.Parse(r.Prefix)
+	if err != nil || p.Scheme != "https" || p.Host != u.Host || p.User != nil ||
+		p.RawQuery != "" || p.Fragment != "" || strings.Contains(r.Prefix, "*") ||
+		!strings.HasSuffix(r.Prefix, "/") || !strings.HasPrefix(r.URL, r.Prefix) {
+		return nil, ErrInvalidRemote
+	}
+	if r.CAFile != "" && !filepath.IsAbs(r.CAFile) {
+		return nil, ErrInvalidRemote
+	}
+	return u, nil
+}
+
+// pin resolves the remote host, refuses it when any address is forbidden and returns the
+// http.curloptResolve entry that makes git connect to exactly those addresses ("" for an IP
+// literal, which needs no lookup). Checking and pinning the same answer closes the window in
+// which git could resolve the name again and reach another address (DNS rebinding).
+func (c *Client) pin(ctx context.Context, u *url.URL) (string, error) {
+	host := strings.ToLower(u.Hostname())
+	if a, err := netip.ParseAddr(host); err == nil {
+		if c.guard(a) {
+			return "", ErrForbiddenAddress
+		}
+		return "", nil
+	}
+	port := u.Port()
+	if port == "" {
+		port = "443"
+	}
+	addrs, err := c.resolver(ctx, host)
+	if err != nil {
+		return "", &Error{Op: "resolve", Err: fmt.Errorf("resolve git host: %w", err)}
+	}
+	if len(addrs) == 0 {
+		return "", &Error{Op: "resolve", Err: errors.New("git host has no address")}
+	}
+	list := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		if c.guard(a) {
+			return "", &Error{Op: "resolve", Err: ErrForbiddenAddress}
+		}
+		a = a.WithZone("")
+		if a.Is6() && !a.Is4In6() {
+			list = append(list, "["+a.String()+"]")
+		} else {
+			list = append(list, a.Unmap().String())
+		}
+	}
+	return host + ":" + port + ":" + strings.Join(list, ","), nil
+}
+
 // Sync fetches branch with depth SyncDepth, hard-resets the clone to it and
 // returns the new HEAD sha. The clone is a read-only mirror, so the reset is safe.
 func (c *Client) Sync(ctx context.Context, owner, name, branch string) (string, error) {
+	if _, ok := gitlabHostSegment(owner); ok {
+		return "", ErrGitLabKey
+	}
 	dest, err := c.existingClone(owner, name)
 	if err != nil {
 		return "", err
@@ -211,6 +487,9 @@ func (c *Client) Sync(ctx context.Context, owner, name, branch string) (string, 
 // DefaultBranch asks the remote of an existing clone for its default branch
 // (`git ls-remote --symref origin HEAD`).
 func (c *Client) DefaultBranch(ctx context.Context, owner, name string) (string, error) {
+	if _, ok := gitlabHostSegment(owner); ok {
+		return "", ErrGitLabKey
+	}
 	dest, err := c.existingClone(owner, name)
 	if err != nil {
 		return "", err
@@ -219,6 +498,11 @@ func (c *Client) DefaultBranch(ctx context.Context, owner, name string) (string,
 	if err != nil {
 		return "", err
 	}
+	return parseDefaultBranch(out)
+}
+
+// parseDefaultBranch reads the symbolic HEAD out of `git ls-remote --symref` output.
+func parseDefaultBranch(out string) (string, error) {
 	for _, line := range strings.Split(out, "\n") {
 		ref, ok := strings.CutPrefix(line, "ref: refs/heads/")
 		if !ok {
@@ -416,10 +700,7 @@ func (c *Client) existingClone(owner, name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := rejectSymlink(filepath.Dir(dest)); err != nil {
-		return "", err
-	}
-	if err := rejectSymlink(dest); err != nil {
+	if err := c.rejectSymlinks(dest); err != nil {
 		return "", err
 	}
 	return dest, nil
@@ -471,25 +752,41 @@ func (c *Client) runCapped(ctx context.Context, dir string, args ...string) (str
 	return c.runStdin(ctx, dir, "", args...)
 }
 
-// runStdin is runCapped that feeds stdin to git; empty stdin means none.
+// runStdin is runCapped that feeds stdin to git; empty stdin means none. It authenticates with
+// the GitHub token, scoped to https://github.com/.
 func (c *Client) runStdin(ctx context.Context, dir, stdin string, args ...string) (string, bool, error) {
-	op := args[0]
-	var token string
+	cfg := runCfg{}
 	if c.token != nil {
 		t, err := c.token(ctx)
 		if err != nil {
-			return "", false, &Error{Op: op, Err: fmt.Errorf("resolve token: %w", err)}
+			return "", false, &Error{Op: args[0], Err: fmt.Errorf("resolve token: %w", err)}
 		}
-		token = t
+		cfg = runCfg{token: t, user: tokenUsername, prefix: githubPrefix}
 	}
+	return c.exec(ctx, cfg, dir, stdin, args...)
+}
+
+// runCfg is how one git process is hardened and authenticated.
+type runCfg struct {
+	token  string   // empty = anonymous
+	user   string   // Basic user name
+	prefix string   // URL prefix the auth header is scoped to
+	pre    []string // extra "-c key=value" pairs, placed after the hardening flags
+	remote bool     // GitLab remote: proxy and TLS overrides of the environment are dropped
+}
+
+// exec runs `git <hardening> <cfg.pre> <args...>` in dir; args[0] is the subcommand.
+func (c *Client) exec(ctx context.Context, cfg runCfg, dir, stdin string, args ...string) (string, bool, error) {
+	op := args[0]
 	argv := append([]string{
 		"-c", "core.hooksPath=" + os.DevNull,
 		"-c", "credential.helper=",
-	}, args...)
+	}, cfg.pre...)
+	argv = append(argv, args...)
 
 	cmd := exec.CommandContext(ctx, c.binary, argv...)
 	cmd.Dir = dir
-	cmd.Env = gitEnv(token)
+	cmd.Env = gitEnv(cfg)
 	var stdout, stderr limitedBuffer
 	stdout.limit, stderr.limit = stdoutLimit, stderrKeep
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -502,7 +799,7 @@ func (c *Client) runStdin(ctx context.Context, dir, stdin string, args ...string
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return "", false, &Error{Op: op, Err: ctxErr}
 		}
-		return "", false, &Error{Op: op, Err: err, Stderr: tail(scrub(stderr.String(), token), stderrReport)}
+		return "", false, &Error{Op: op, Err: err, Stderr: tail(scrubAs(stderr.String(), cfg.user, cfg.token), stderrReport)}
 	}
 	return stdout.String(), stdout.truncated, nil
 }
@@ -510,27 +807,40 @@ func (c *Client) runStdin(ctx context.Context, dir, stdin string, args ...string
 // gitEnv builds the child environment: the parent's, minus variables that could
 // redirect git or inject configuration, plus the non-interactive switches and,
 // when a token is set, the one-process auth header.
-func gitEnv(token string) []string {
+func gitEnv(cfg runCfg) []string {
 	env := make([]string, 0, len(os.Environ())+6)
 	for _, kv := range os.Environ() {
-		if dropEnv(kv) {
+		if dropEnv(kv) || (cfg.remote && dropRemoteEnv(kv)) {
 			continue
 		}
 		env = append(env, kv)
 	}
 	env = append(env, "GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never")
-	if token != "" {
+	if cfg.token != "" {
 		env = append(env,
 			"GIT_CONFIG_COUNT=1",
-			"GIT_CONFIG_KEY_0=http."+githubPrefix+".extraHeader",
-			"GIT_CONFIG_VALUE_0=Authorization: Basic "+basic(token),
+			"GIT_CONFIG_KEY_0=http."+cfg.prefix+".extraHeader",
+			"GIT_CONFIG_VALUE_0=Authorization: Basic "+basicAs(cfg.user, cfg.token),
 		)
 	}
 	return env
 }
 
-func basic(token string) string {
-	return base64.StdEncoding.EncodeToString([]byte(tokenUsername + ":" + token))
+func basicAs(user, token string) string {
+	return base64.StdEncoding.EncodeToString([]byte(user + ":" + token))
+}
+
+// dropRemoteEnv reports whether an inherited variable must not reach git for a GitLab remote:
+// proxies (SCR2) and TLS overrides that could turn verification off or swap the trust store.
+func dropRemoteEnv(kv string) bool {
+	key, _, _ := strings.Cut(kv, "=")
+	switch strings.ToLower(key) {
+	case "http_proxy", "https_proxy", "all_proxy", "ftp_proxy", "no_proxy",
+		"git_ssl_no_verify", "git_ssl_cainfo", "git_ssl_capath", "git_ssl_cert", "git_ssl_key",
+		"git_http_proxy_authmethod", "git_proxy_command", "curl_ca_bundle":
+		return true
+	}
+	return false
 }
 
 // dropEnv reports whether an inherited variable must not reach git.
@@ -552,10 +862,10 @@ var (
 	basicRE    = regexp.MustCompile(`(?i)(Authorization:\s*Basic\s+)\S+`)
 )
 
-// scrub removes the token, its Basic-auth encoding and URL userinfo from git output.
-func scrub(s, token string) string {
+// scrubAs removes the token, its Basic-auth encoding (sent under user) and URL userinfo from git output.
+func scrubAs(s, user, token string) string {
 	if token != "" {
-		s = strings.NewReplacer(token, "[REDACTED]", basic(token), "[REDACTED]").Replace(s)
+		s = strings.NewReplacer(token, "[REDACTED]", basicAs(user, token), "[REDACTED]").Replace(s)
 	}
 	s = basicRE.ReplaceAllString(s, "${1}[REDACTED]")
 	return userinfoRE.ReplaceAllString(s, "${1}[REDACTED]@")

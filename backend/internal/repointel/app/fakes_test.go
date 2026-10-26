@@ -571,6 +571,8 @@ type fakeGit struct {
 	diffErr error
 	// diffBase records the base asked for.
 	diffBase string
+	// keys records the "owner/name" every call located the clone under.
+	keys []string
 
 	// remote default branch and sync behaviour for the resync job.
 	branch    string
@@ -583,10 +585,12 @@ type fakeGit struct {
 }
 
 func (g *fakeGit) DefaultBranch(ctx context.Context, owner, name string) (string, error) {
+	g.keys = append(g.keys, owner+"/"+name)
 	return g.branch, g.branchErr
 }
 
 func (g *fakeGit) Sync(ctx context.Context, owner, name, branch string) (string, error) {
+	g.keys = append(g.keys, owner+"/"+name)
 	g.synced = append(g.synced, branch)
 	if g.onSync != nil {
 		if err := g.onSync(ctx); err != nil {
@@ -597,10 +601,12 @@ func (g *fakeGit) Sync(ctx context.Context, owner, name, branch string) (string,
 }
 
 func (g *fakeGit) Head(ctx context.Context, owner, name string) (string, error) {
+	g.keys = append(g.keys, owner+"/"+name)
 	return g.head, g.headErr
 }
 
 func (g *fakeGit) DiffNames(ctx context.Context, owner, name, base, head string) ([]string, error) {
+	g.keys = append(g.keys, owner+"/"+name)
 	g.diffBase = base
 	return g.diff, g.diffErr
 }

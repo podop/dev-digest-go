@@ -1,7 +1,7 @@
 // Package domain is the vocabulary and the pure rules of the intent context (Phase 5, spec 7.4):
 // deriving what a pull request is meant to change from its title, body, commits, linked tickets
-// and docs. It imports only the standard library and reviewer/domain (the shared kernel that
-// holds Intent) and carries no JSON tags: the wire shapes live in transport/http, the stored
+// and docs. It imports only the standard library, reviewer/domain (the shared kernel that
+// holds Intent) and platform/codehost (stdlib-only provider names) and carries no JSON tags: the wire shapes live in transport/http, the stored
 // shapes in adapters/postgres.
 //
 // This file fixes the shared types and constants; the rules sit next to it: links.go (ticket and
@@ -14,6 +14,7 @@ import (
 	"errors"
 	"time"
 
+	"dev-digest-go/backend/internal/platform/codehost"
 	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 )
 
@@ -120,7 +121,16 @@ type Pull struct {
 // Repo is the repository of a pull request.
 type Repo struct {
 	ID, Owner, Name string
+	// Provider ("github" | "gitlab"; "" reads as github), Host (the host key) and ProjectID (the
+	// GitLab project id; 0 = none) say where the repository lives: the GitHub reads apply to a
+	// GitHub repository only (FR29) and the clone location comes from codehost.CloneKey.
+	Provider  string
+	Host      string
+	ProjectID int64
 }
+
+// IsGitLab reports whether the repository is a GitLab project.
+func (r Repo) IsGitLab() bool { return r.Provider == codehost.GitLab }
 
 // Commit is one commit of the pull request (pr_commits).
 type Commit struct {

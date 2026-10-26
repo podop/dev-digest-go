@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -257,6 +258,52 @@ func (noContents) GetContent(context.Context, string, string, string, string, in
 	return nil, false, nil
 }
 
+// recordingGit records the clone location BlobAt is asked for.
+type recordingGit struct {
+	owner, name string
+	err         error
+}
+
+func (g *recordingGit) BlobAt(_ context.Context, owner, name, _, _ string, _ int64) ([]byte, error) {
+	g.owner, g.name = owner, name
+	return []byte("# From the clone\n"), g.err
+}
+
+var gitlabRepo = domain.Repo{ID: "r", Owner: "acme/core", Name: "payments", Provider: "gitlab", Host: "git.example.com:8443", ProjectID: 42}
+
+func TestDocs_GitLabReadsTheCloneByItsKeyAndNeverAsksGitHub(t *testing.T) { // FR29, FR18
+	gh := newStub(t, contentsHandler(map[string]string{"docs/a.md": "From GitHub"}))
+	git := &recordingGit{}
+	docs := peers.NewDocs(git, gh.client(token))
+	sha := "0123456789abcdef0123456789abcdef01234567"
+
+	got := docs.Read(t.Context(), gitlabRepo, sha, "docs/a.md")
+	if want := (app.DocRead{OK: true, Content: "# From the clone\n"}); !cmp.Equal(got, want) {
+		t.Errorf("Read(GitLab clone doc) = %+v, want %+v", got, want)
+	}
+	if git.owner != "@gitlab/git.example.com_8443" || git.name != "42" {
+		t.Errorf("BlobAt location = %q, %q, want the GitLab clone key", git.owner, git.name)
+	}
+
+	git.err = errors.New("no such path")
+	got = docs.Read(t.Context(), gitlabRepo, sha, "docs/a.md")
+	if want := (app.DocRead{Reason: "not found"}); !cmp.Equal(got, want) {
+		t.Errorf("Read(GitLab doc absent from the clone) = %+v, want %+v", got, want)
+	}
+	if reqs := gh.requests(); len(reqs) != 0 {
+		t.Errorf("GitHub requests = %v, want none for a GitLab repository", reqs)
+	}
+}
+
+func TestDocs_GitHubKeepsItsCloneLocation(t *testing.T) {
+	git := &recordingGit{}
+	docs := peers.NewDocs(git, noContents{})
+	docs.Read(t.Context(), repo, "0123456789abcdef", "docs/a.md")
+	if git.owner != "acme" || git.name != "api" {
+		t.Errorf("BlobAt location = %q, %q, want acme, api", git.owner, git.name)
+	}
+}
+
 func TestDocs_TextOverTheCapInUnitsIsCutAndMarkedTruncated(t *testing.T) {
 	// 40,000 astral characters are 160,000 bytes but 80,000 UTF-16 units: over 65,536 units.
 	docs := peers.NewDocs(fakeGit{blob: []byte(strings.Repeat("😀", 40_000))}, noContents{})
@@ -333,6 +380,17 @@ type failingIssues struct{ err error }
 
 func (f failingIssues) GetIssue(context.Context, string, string, int) (github.Issue, error) {
 	return github.Issue{}, f.err
+}
+
+func TestTickets_GitLabRepositoryIsUnresolvedWithoutARequest(t *testing.T) { // FR29, AC22
+	gh := newStub(t, issueHandler)
+	got := peers.NewTickets(gh.client(token), nil).Read(t.Context(), gitlabRepo, 7)
+	if want := (app.TicketRead{Reason: "GitLab issues are not available yet"}); !cmp.Equal(got, want) {
+		t.Errorf("Read(GitLab ticket) = %+v, want %+v", got, want)
+	}
+	if reqs := gh.requests(); len(reqs) != 0 {
+		t.Errorf("GitHub requests = %v, want none for a GitLab repository", reqs)
+	}
 }
 
 func TestTickets_OtherFailuresAreRedactedAndBounded(t *testing.T) {

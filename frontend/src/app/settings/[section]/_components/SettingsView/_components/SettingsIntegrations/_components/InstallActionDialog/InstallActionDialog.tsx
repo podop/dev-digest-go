@@ -12,6 +12,7 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { Button, ErrorState, Modal } from "@devdigest/ui";
 import { Select } from "@/components/select";
+import { isGitLab } from "@/lib/code-host";
 import { useDialogFocus } from "@/lib/dialog-focus";
 import { useAgents, useCustomProviders, useRepos } from "@/lib/hooks";
 import { AgentRow } from "./_components/AgentRow";
@@ -26,6 +27,8 @@ const ADD_REPO_HREF = "/settings/github";
 export function InstallActionDialog({ onClose }: { onClose: () => void }) {
   const t = useTranslations("integrationsGithubAction.dialog");
   const repos = useRepos();
+  // SCR3: the Action is installed into GitHub repositories only; GitLab ones are not offered.
+  const githubRepos = React.useMemo(() => repos.data?.filter((r) => !isGitLab(r)), [repos.data]);
   const agents = useAgents();
   const customProviders = useCustomProviders();
   const [repo, setRepo] = React.useState("");
@@ -50,9 +53,9 @@ export function InstallActionDialog({ onClose }: { onClose: () => void }) {
   const repoOptions = React.useMemo(
     () => [
       { value: "", label: t("repoPlaceholder") },
-      ...(repos.data ?? []).map((r) => ({ value: r.full_name, label: r.full_name })),
+      ...(githubRepos ?? []).map((r) => ({ value: r.full_name, label: r.full_name })),
     ],
-    [repos.data, t],
+    [githubRepos, t],
   );
   const started = hasStarted(runs);
   const failed = failedIds(runs, order);
@@ -102,8 +105,8 @@ export function InstallActionDialog({ onClose }: { onClose: () => void }) {
             <span id="gha-install-repo" style={s.label}>
               {t("repoLabel")}
             </span>
-            {repos.data ? (
-              repos.data.length === 0 ? (
+            {githubRepos ? (
+              githubRepos.length === 0 ? (
                 <div style={s.muted}>
                   {t("noRepos")}{" "}
                   <Link href={ADD_REPO_HREF} style={s.link}>

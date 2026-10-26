@@ -24,6 +24,16 @@ function repo(id: string, fullName: string, branch = "main"): Repo {
   };
 }
 
+function glRepo(id: string, fullName: string, connectionId: string | null = "c1"): Repo {
+  return {
+    ...repo(id, fullName),
+    provider: "gitlab",
+    host: "gitlab.com",
+    web_url: `https://gitlab.com/${fullName}`,
+    connection_id: connectionId,
+  };
+}
+
 function indexState(repoId: string) {
   return {
     repoId,
@@ -114,6 +124,32 @@ describe("ConnectedRepos", () => {
     expect(within(screen.getByRole("dialog")).getByText("Remove acme/web?")).toBeInTheDocument();
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+  });
+});
+
+describe("ConnectedRepos GitLab repositories (FR37, AC29)", () => {
+  it("lists only the GitHub repository and counts it; a GitLab one (also not connected) stays out", async () => {
+    mockFetch({
+      "GET /repos": [repo("r1", "acme/api"), glRepo("r2", "group/sub/proj"), glRepo("r3", "other/proj", null)],
+      "GET /repos/:id/index-state": (req) => indexState(req.params.id!),
+    });
+    renderWithProviders(<ConnectedRepos />);
+
+    expect(await screen.findByRole("heading", { name: "Connected repositories (1)" })).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByText("acme/api")).toBeInTheDocument();
+    expect(screen.queryByText(/group\/sub\/proj/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/other\/proj/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/gitlab\.com/)).not.toBeInTheDocument();
+  });
+
+  it("shows the empty text when the workspace has only GitLab repositories", async () => {
+    mockFetch({ "GET /repos": [glRepo("r2", "group/proj")] });
+    renderWithProviders(<ConnectedRepos />);
+
+    expect(await screen.findByText("No repositories connected yet.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Connected repositories (0)" })).toBeInTheDocument();
+    expect(screen.queryByRole("list")).not.toBeInTheDocument();
   });
 });
 

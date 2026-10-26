@@ -52,6 +52,7 @@ import (
 	evalsapp "dev-digest-go/backend/internal/evals/app"
 	evalsexec "dev-digest-go/backend/internal/evals/app/executor"
 	evalshttp "dev-digest-go/backend/internal/evals/transport/http"
+	gitlabconnhttp "dev-digest-go/backend/internal/gitlabconn/transport/http"
 	"dev-digest-go/backend/internal/health"
 	intentpeers "dev-digest-go/backend/internal/intent/adapters/peers"
 	intentpg "dev-digest-go/backend/internal/intent/adapters/postgres"
@@ -66,6 +67,7 @@ import (
 	"dev-digest-go/backend/internal/llm/adapters/anthropic"
 	"dev-digest-go/backend/internal/llm/adapters/mock"
 	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
+	"dev-digest-go/backend/internal/llm/custom"
 	onbpeers "dev-digest-go/backend/internal/onboarding/adapters/peers"
 	onbpg "dev-digest-go/backend/internal/onboarding/adapters/postgres"
 	onbapp "dev-digest-go/backend/internal/onboarding/app"
@@ -76,6 +78,7 @@ import (
 	"dev-digest-go/backend/internal/platform/egress"
 	"dev-digest-go/backend/internal/platform/gitcli"
 	"dev-digest-go/backend/internal/platform/github"
+	"dev-digest-go/backend/internal/platform/gitlab"
 	"dev-digest-go/backend/internal/platform/httpx"
 	"dev-digest-go/backend/internal/platform/inflight"
 	"dev-digest-go/backend/internal/platform/logging"
@@ -90,6 +93,7 @@ import (
 	pcapp "dev-digest-go/backend/internal/projectcontext/app"
 	pchttp "dev-digest-go/backend/internal/projectcontext/transport/http"
 	pullsgh "dev-digest-go/backend/internal/pulls/adapters/github"
+	pullsgl "dev-digest-go/backend/internal/pulls/adapters/gitlab"
 	pullspg "dev-digest-go/backend/internal/pulls/adapters/postgres"
 	pullsapp "dev-digest-go/backend/internal/pulls/app"
 	pullshttp "dev-digest-go/backend/internal/pulls/transport/http"
@@ -233,6 +237,15 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 		return fmt.Errorf("DEVDIGEST_EXTRA_CA_FILE: %w", err)
 	}
 
+	// git does not read the extra CA from the process: it gets a bundle of the system roots plus the
+	// extra CA. A host without a system bundle cannot make one, and does not start (SCR5).
+	gitCA, err := prepareGitCA(cfg)
+	if err != nil {
+		log.ErrorContext(ctx, "startup failed", "step", "git_ca_bundle", "variable", "DEVDIGEST_EXTRA_CA_FILE",
+			"path", cfg.ExtraCAFile, "error", err)
+		return fmt.Errorf("DEVDIGEST_EXTRA_CA_FILE: %w", err)
+	}
+
 	db, err := postgres.Open(ctx, cfg.DatabaseURL, log, postgres.WithMaxOpenConns(cfg.DBMaxOpenConns))
 	if err != nil {
 		return err
@@ -249,7 +262,7 @@ func serve(ctx context.Context, cfg config.Config, opts ...option) error {
 
 	o.jobs.Logger = log
 	runner := jobs.New(jobspg.NewStore(db), o.jobs)
-	w, err := wire(cfg, o, db, sqlDB, runner, rootCAs, log)
+	w, err := wire(cfg, o, db, sqlDB, runner, rootCAs, gitCA, log)
 	if err != nil {
 		return err
 	}
@@ -373,8 +386,9 @@ func llmAdapters(cfg config.Config, urls llmURLs, rootCAs *x509.CertPool, log *s
 
 // wire builds the adapters, use cases, job handlers and routes. rootCAs is the extra trust store
 // (DEVDIGEST_EXTRA_CA_FILE) that every outbound HTTPS client gets besides the system one; nil = the
-// system store only. A client a test injected through options is left as it is.
-func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs.Runner, rootCAs *x509.CertPool, log *slog.Logger) (*wired, error) {
+// system store only. gitCA is the CA bundle git trusts for GitLab hosts (prepareGitCA; "" = git's
+// default roots). A client a test injected through options is left as it is.
+func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs.Runner, rootCAs *x509.CertPool, gitCA string, log *slog.Logger) (*wired, error) {
 	sec := secrets.New(filepath.Join(cfg.DataDir, secrets.FileName), o.getenv)
 	githubToken := func() string { return sec.Get(secrets.GitHubToken) }
 	gh := github.New(github.Options{
@@ -387,6 +401,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Binary:    o.gitBinary,
 		CloneRoot: cfg.CloneDir,
 		Token:     func(context.Context) (string, error) { return sec.Get(secrets.GitHubToken), nil },
+		// The same connect-time guard as the custom providers (it also sees IPv4 inside IPv6 forms).
+		AddrGuard: custom.ForbiddenAddr,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("git: %w", err)
@@ -414,6 +430,16 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	// answers with the mock instead (A4).
 	cpSvc := newCustomProviders(db, sec, rootCAs, now, log)
 
+	// GitLab connections (GitLab A): installation-wide, with their tokens in the secrets file. One
+	// client serves the interactive calls (retrying reads); the background poll gets a copy that
+	// never retries. Both go through the egress client: no proxy, no redirects, guarded addresses.
+	glClient := gitlab.New(gitlab.Options{HTTP: newGitLabHTTP(rootCAs), Log: log})
+	gcSvc := newGitLabConnections(db, sec, glClient, now, log)
+	glConns := reposConnections{conns: gcSvc}
+	pullsStore := pullspg.NewStore(db, pullspg.WithLogger(log))
+	// Repo-intel's resync fetches a GitLab clone from its connection (the clone key holds no path).
+	intelGitPort := intelGit{Client: git, conns: gcSvc, paths: pullsStore, caFile: gitCAFile(gitCA)}
+
 	llmOpts := o.llm
 	llmOpts.Keys = sec
 	llmOpts.Adapters = o.llmAdapters
@@ -421,7 +447,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		llmOpts.Adapters = llmAdapters(cfg, o.llmURLs, rootCAs, log)
 	}
 	llmOpts.Custom = cpSvc
-	llmOpts.ExtraRedactions = sec.CustomValues
+	llmOpts.ExtraRedactions = extraRedactions(sec)
 	if cfg.LLMProviderOverride == config.LLMProviderMock {
 		llmOpts.Custom = mockCustomResolver{delay: cfg.LLMMockDelay}
 	}
@@ -439,6 +465,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		GitHub:    gh,
 		Providers: providers.New(providersOptions(o.providers, rootCAs)),
 		Custom:    settingsCustom{svc: cpSvc},
+		GitLab:    settingsGitLab{svc: gcSvc},
 		Clock:     now,
 		Logger:    log,
 	})
@@ -453,7 +480,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 			Reader:   intelStore,
 			Writer:   intelStore,
 			Tx:       tx,
-			Git:      git,
+			Git:      intelGitPort,
 			Files:    intelFiles,
 			Analyzer: intelAnalyzer,
 			Graph:    intelapp.NewImportGraph(intelFiles, intelAnalyzer, log),
@@ -461,7 +488,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 			Redact:   llmClient,
 		}, intelapp.IndexerOptions{Log: log}),
 		Repos:  intelStore,
-		Git:    git,
+		Git:    intelGitPort,
 		Queue:  runner,
 		Redact: llmClient,
 	}, intelapp.JobsOptions{Log: log})
@@ -472,10 +499,13 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		intelapp.WithCallerScan(intelapp.CallerScan{Repos: intelStore, Files: intelFiles, Analyzer: intelAnalyzer}))
 
 	reposStore := reposdb.NewStore(db)
-	reposSvc := reposapp.NewService(reposStore, runner, git.Root())
-	repoJobs := reposapp.NewJobs(reposStore, git, reposapp.JobsOptions{RemoteBase: o.remoteBase, Log: log, Index: intelJobs})
-	pullsStore := pullspg.NewStore(db)
-	pullsSvc := pullsapp.NewService(pullsStore, pullsgh.New(gh), log, nil)
+	reposSvc := reposapp.NewService(reposStore, runner, git.Root(),
+		reposapp.WithGitLab(glConns, glClient), reposapp.WithLog(log))
+	repoJobs := reposapp.NewJobs(reposStore, git, reposapp.JobsOptions{
+		RemoteBase: o.remoteBase, Log: log, Index: intelJobs, Connections: glConns, CAFile: gitCAFile(gitCA),
+	})
+	pullsSvc := pullsapp.NewService(pullsStore, pullsgh.New(gh), log, nil,
+		pullsapp.WithGitLab(pullsgl.New(glClient, pullsResolver(gcSvc))))
 
 	agentsSvc := agentsapp.NewService(agentsdb.NewStore(db), tx, llmClient, log,
 		agentsapp.WithCustomProviders(agentsCustom{svc: cpSvc}))
@@ -634,6 +664,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	health.AddRoutes(e, sqlDB, log)
 	settingshttp.AddRoutes(e, settingshttp.NewHandler(settingsSvc, resolver))
 	customprovidershttp.AddRoutes(e, cpSvc, resolver)
+	// GitLab connections are installation-wide: no tenant resolver.
+	gitlabconnhttp.AddRoutes(e, gcSvc)
 	reposhttp.AddRoutes(e, reposSvc, resolver)
 	pullshttp.AddRoutes(e, pullsSvc, resolver)
 	agentshttp.AddRoutes(e, agentsSvc, resolver)
@@ -667,7 +699,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Starter:     autoStarter{reviews: reviewsSvc},
 		Budget:      autoBudget{spend: spendSvc},
 		Caps:        autoCaps{spend: spendSvc},
-		Tokens:      autoTokens{token: githubToken},
+		Tokens:      autoTokens{token: githubToken, repos: reposSvc, conns: gcSvc},
 		PollEnabled: cfg.PRPollEnabled,
 		Now:         autoreviewapp.Clock(now),
 		Log:         log,
@@ -712,6 +744,7 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 			Intervals: settingsIntervals{settings: settingsSvc},
 			Pages:     pollGH,
 			Stats:     pollGH,
+			GitLab:    pullsgl.New(glClient.WithRetry(retry.Options{}), pullsResolver(gcSvc)),
 			Store:     pullsStore,
 			Observer:  autoSvc,
 			Log:       log,

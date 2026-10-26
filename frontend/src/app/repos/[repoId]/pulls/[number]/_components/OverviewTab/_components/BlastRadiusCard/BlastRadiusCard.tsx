@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import { ApiError } from "@/lib/api";
 import { useBlastRadius, useResyncBlast } from "@/lib/hooks/blast";
+import { useLinkRepo } from "@/lib/link-repo";
 import { BlastGraph } from "./_components/BlastGraph";
 import { BlastTree } from "./_components/BlastTree";
 import { PriorPrs } from "./_components/PriorPrs";
@@ -28,6 +29,7 @@ export function BlastRadiusCard({ prId, repoId, repoFullName, headSha }: BlastRa
   const tc = useTranslations("common");
   const { data, isLoading, isError, error, refetch } = useBlastRadius(prId);
   const resync = useResyncBlast(repoId, prId);
+  const repo = useLinkRepo(repoFullName);
   const [view, setView] = React.useState<(typeof VIEWS)[number]>("tree");
 
   if (isLoading) return <Skeleton height={140} />;
@@ -94,7 +96,7 @@ export function BlastRadiusCard({ prId, repoId, repoFullName, headSha }: BlastRa
       {view === "graph" ? (
         <BlastGraph downstream={data.downstream} />
       ) : data.downstream.length > 0 ? (
-        <BlastTree downstream={data.downstream} callerHref={(c) => callerHref(repoFullName, headSha, c)} />
+        <BlastTree downstream={data.downstream} callerHref={(c) => callerHref(repo, headSha, c)} />
       ) : (
         !degraded && (
           <p style={s.muted}>{stats.symbols > 0 ? t("noDownstream", { count: stats.symbols }) : t("noSymbols")}</p>

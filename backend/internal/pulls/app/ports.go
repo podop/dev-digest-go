@@ -33,7 +33,11 @@ func (e *GitHubError) Error() string {
 // store is the persistence the use cases need. Every method that takes a workspace id only
 // sees that workspace's rows.
 type store interface {
-	// FindRepo returns domain.ErrRepoNotFound for an unknown repo.
+	// RepoPathUpdater stores a GitLab project's current path (FR47); only GitLab syncs call it.
+	RepoPathUpdater
+	// FindRepo returns domain.ErrRepoNotFound for an unknown repo. The returned domain.Repo carries
+	// the repository's own Provider, Host and ProjectID, read with the row (FR29): a GitHub and a
+	// GitLab repository of the same name are never confused.
 	FindRepo(ctx context.Context, workspaceID, repoID string) (domain.Repo, error)
 	MarkPolled(ctx context.Context, workspaceID, repoID string, at time.Time) error
 	// FindPull returns domain.ErrPullNotFound for an unknown pull request.
@@ -62,6 +66,23 @@ type gitHub interface {
 	ListReviewComments(ctx context.Context, owner, name string, number int) ([]domain.ReviewComment, error)
 	CreateReviewComment(ctx context.Context, owner, name string, number int, in domain.CommentInput) (domain.ReviewComment, error)
 }
+
+// Limits of the GitLab sync (spec FR21, FR24).
+const (
+	// GitLabPageSize is the merge requests per page of a list sync (FR21).
+	GitLabPageSize = 50
+	// GitLabDetailTimeout bounds the whole merge request detail fetch (the MR, its diff pages and
+	// its commit pages). It equals the GitLab client's DefaultDetailTimeout; the app layer may not
+	// import platform/gitlab.
+	GitLabDetailTimeout = 90 * time.Second
+)
+
+// Option customises a Service.
+type Option func(*Service)
+
+// WithGitLab gives the Service its GitLab access. Without it every GitLab repository reads as not
+// connected (fail closed: no request is sent).
+func WithGitLab(gl GitLab) Option { return func(s *Service) { s.gl = gl } }
 
 // PollTargets lists the repositories the background poll refreshes: every repository of every
 // workspace, grouped by workspace.
@@ -92,6 +113,8 @@ type StatsFetcher interface {
 
 // PollStore is the persistence of the background poll.
 type PollStore interface {
+	// RepoPathUpdater stores a GitLab project's current path (FR47) after the poll's project fetch.
+	RepoPathUpdater
 	UpsertListed(ctx context.Context, workspaceID, repoID string, listed []domain.Listed) error
 	MarkPolled(ctx context.Context, workspaceID, repoID string, at time.Time) error
 	// ListWithoutDiffStats returns at most limit PRs of the repo whose stats are still missing

@@ -38,7 +38,11 @@ func (s *Store) FindRepo(ctx context.Context, repoID string) (domain.ReviewRepo,
 	if err != nil {
 		return domain.ReviewRepo{}, fmt.Errorf("select repo: %w", err)
 	}
-	return domain.ReviewRepo{ID: row.ID, Owner: row.Owner, Name: row.Name}, nil
+	out := domain.ReviewRepo{ID: row.ID, Owner: row.Owner, Name: row.Name, Provider: row.Provider, Host: row.Host}
+	if row.ProjectID != nil {
+		out.ProjectID = *row.ProjectID
+	}
+	return out, nil
 }
 
 func (r agentRow) toDomain() domain.ReviewAgent {

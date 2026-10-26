@@ -50,6 +50,15 @@ func (f fixture) insert(t *testing.T, query string, args ...any) string {
 	return id
 }
 
+func (f fixture) insertRepo(t *testing.T, query string, args ...any) string {
+	t.Helper()
+	var id string
+	if err := f.db.Raw(query, args...).Scan(&id).Error; err != nil {
+		t.Fatalf("fixture %q: %v", query, err)
+	}
+	return id
+}
+
 func (f fixture) exec(t *testing.T, query string, args ...any) {
 	t.Helper()
 	if err := f.db.Exec(query, args...).Error; err != nil {

@@ -120,6 +120,8 @@ func parseSettingsUpdate(body []byte, defined definedFunc) (app.Bag, []httpx.Iss
 type connTestRequest struct {
 	Provider app.Provider
 	Key      string
+	// ConnectionID is set (and required) for the gitlab provider only.
+	ConnectionID string
 }
 
 // isCustomID reports whether s is a well-formed custom provider id (`custom:<slug>`).
@@ -128,9 +130,10 @@ func isCustomID(s string) bool {
 	return ok
 }
 
-// parseConnTest validates {provider, key?}; other fields are ignored. The provider is a
-// connection-test provider or a well-formed custom provider id (whether it is defined is the use
-// case's 404, FR11).
+// parseConnTest validates {provider, key?, connection_id?}; other fields are ignored. The provider
+// is a connection-test provider or a well-formed custom provider id (whether it is defined is the
+// use case's 404, FR11). connection_id is required for gitlab (whether it exists is the use case's
+// 404, FR9) and ignored for every other provider.
 func parseConnTest(body []byte) (connTestRequest, []httpx.Issue) {
 	var obj map[string]json.RawMessage
 	if issues := decodeObject(body, &obj); issues != nil {
@@ -145,8 +148,8 @@ func parseConnTest(body []byte) (connTestRequest, []httpx.Issue) {
 		var name string
 		if !decodeString(raw, &name) {
 			issues = append(issues, typeIssue("string", raw, "provider"))
-		} else if !slices.Contains(app.ProviderNames(), name) && !isCustomID(name) {
-			issues = append(issues, enumIssue(app.ProviderNames(), name, "provider"))
+		} else if !slices.Contains(app.ConnTestProviderNames(), name) && !isCustomID(name) {
+			issues = append(issues, enumIssue(app.ConnTestProviderNames(), name, "provider"))
 		} else {
 			req.Provider = app.Provider(name)
 		}
@@ -160,6 +163,21 @@ func parseConnTest(body []byte) (connTestRequest, []httpx.Issue) {
 			issues = append(issues, issue(codeTooSmall, "String must contain at least 1 character(s)", "key"))
 		default:
 			req.Key = key
+		}
+	}
+	if req.Provider == app.GitLab {
+		if raw, ok := obj["connection_id"]; !ok {
+			issues = append(issues, issue(codeInvalidType, "Required", "connection_id"))
+		} else {
+			var id string
+			switch {
+			case !decodeString(raw, &id):
+				issues = append(issues, typeIssue("string", raw, "connection_id"))
+			case id == "":
+				issues = append(issues, issue(codeTooSmall, "String must contain at least 1 character(s)", "connection_id"))
+			default:
+				req.ConnectionID = id
+			}
 		}
 	}
 	if issues != nil {

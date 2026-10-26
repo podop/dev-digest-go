@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
+	"dev-digest-go/backend/internal/platform/codehost"
 	"dev-digest-go/backend/internal/platform/gitcli"
+	"dev-digest-go/backend/internal/platform/gitlab"
 	"dev-digest-go/backend/internal/repos/app"
 	"dev-digest-go/backend/internal/repos/domain"
 )
@@ -16,7 +20,9 @@ import (
 type memStore struct {
 	mu    sync.Mutex
 	repos []domain.Repo
-	seq   int
+	// adds records every NewRepo the store was asked to insert.
+	adds []app.NewRepo
+	seq  int
 	// onGet runs after every GetByID, to simulate concurrent changes.
 	onGet func()
 }
@@ -24,19 +30,53 @@ type memStore struct {
 func (m *memStore) Add(_ context.Context, in app.NewRepo) (domain.Repo, bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.adds = append(m.adds, in)
 	for _, r := range m.repos {
-		if r.WorkspaceID == in.WorkspaceID && r.FullName == in.Ref.FullName() {
+		if r.WorkspaceID == in.WorkspaceID && r.Host == in.Host &&
+			in.Provider == codehost.GitLab && r.ProjectID == in.ProjectID {
+			return r, false, nil
+		}
+	}
+	for _, r := range m.repos {
+		if r.WorkspaceID == in.WorkspaceID && r.Host == in.Host && r.FullName == in.Ref.FullName() {
 			return r, false, nil
 		}
 	}
 	m.seq++
 	by := in.CreatedBy
+	branch := in.DefaultBranch
+	if branch == "" {
+		branch = domain.DefaultBranch
+	}
 	r := domain.Repo{
 		ID: fmt.Sprintf("id-%d", m.seq), WorkspaceID: in.WorkspaceID, Owner: in.Ref.Owner, Name: in.Ref.Name,
-		FullName: in.Ref.FullName(), DefaultBranch: domain.DefaultBranch, CreatedBy: &by,
+		FullName: in.Ref.FullName(), DefaultBranch: branch, CreatedBy: &by,
+		Provider: in.Provider, Host: in.Host, ProjectID: in.ProjectID, WebURL: in.WebURL,
 	}
 	m.repos = append(m.repos, r)
 	return r, true, nil
+}
+
+func (m *memStore) UpdatePath(_ context.Context, ws, id string, p app.ProjectPath) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	target := -1
+	for i, r := range m.repos {
+		if r.WorkspaceID == ws && r.ID == id {
+			target = i
+		}
+	}
+	if target < 0 {
+		return "", domain.ErrNotFound
+	}
+	for _, r := range m.repos {
+		if r.WorkspaceID == ws && r.Host == m.repos[target].Host && r.ID != id && r.FullName == p.FullName {
+			return r.ID, nil
+		}
+	}
+	m.repos[target].FullName, m.repos[target].Owner, m.repos[target].Name, m.repos[target].WebURL =
+		p.FullName, p.Owner, p.Name, p.WebURL
+	return "", nil
 }
 
 func (m *memStore) List(_ context.Context, ws string) ([]domain.Repo, error) {
@@ -162,6 +202,8 @@ type fakeGit struct {
 	syncBranch       string
 	syncErr          error
 	synced           bool
+
+	remoteCalls []gitlabCall
 }
 
 func (g *fakeGit) Clone(_ context.Context, owner, name, url string, opts gitcli.CloneOptions) (string, error) {
@@ -182,6 +224,74 @@ func (g *fakeGit) DefaultBranch(context.Context, string, string) (string, error)
 func (g *fakeGit) Sync(_ context.Context, _, _, branch string) (string, error) {
 	g.synced, g.syncBranch = true, branch
 	return "sha", g.syncErr
+}
+
+// gitlabCall records one CloneRemote, DefaultBranchRemote or SyncRemote call.
+type gitlabCall struct {
+	Kind          string
+	First, Second string
+	Branch        string
+	Remote        gitcli.Remote
+}
+
+func (g *fakeGit) CloneRemote(_ context.Context, first, second string, r gitcli.Remote, opts gitcli.CloneOptions) (string, error) {
+	g.remoteCalls = append(g.remoteCalls, gitlabCall{Kind: "clone", First: first, Second: second, Remote: r})
+	g.cloneDepth = opts.Depth
+	return g.cloneDir, g.cloneErr
+}
+
+func (g *fakeGit) DefaultBranchRemote(_ context.Context, first, second string, r gitcli.Remote) (string, error) {
+	g.remoteCalls = append(g.remoteCalls, gitlabCall{Kind: "default-branch", First: first, Second: second, Remote: r})
+	return g.defaultBranch, g.defaultBranchErr
+}
+
+func (g *fakeGit) SyncRemote(_ context.Context, first, second, branch string, r gitcli.Remote) (string, error) {
+	g.remoteCalls = append(g.remoteCalls, gitlabCall{Kind: "sync", First: first, Second: second, Branch: branch, Remote: r})
+	return "sha", g.syncErr
+}
+
+// fakeConns is the connection port: conns by host key; resolveErr fails Resolve.
+type fakeConns struct {
+	conns      map[string]app.GitLabConn
+	resolveErr error
+	resolved   []string
+}
+
+func (f *fakeConns) Resolve(_ context.Context, hostKey string) (app.GitLabConn, bool, error) {
+	f.resolved = append(f.resolved, hostKey)
+	if f.resolveErr != nil {
+		return app.GitLabConn{}, false, f.resolveErr
+	}
+	c, ok := f.conns[hostKey]
+	return c, ok, nil
+}
+
+func (f *fakeConns) HostKeysByName(_ context.Context, name string) ([]string, error) {
+	var keys []string
+	for key := range f.conns {
+		if n, _, _ := strings.Cut(key, ":"); n == name {
+			keys = append(keys, key)
+		}
+	}
+	slices.Sort(keys)
+	return keys, nil
+}
+
+// fakeProjects is the GitLab project port: it records every call and answers project or err.
+type fakeProjects struct {
+	project gitlab.Project
+	err     error
+	calls   []projectCall
+}
+
+type projectCall struct {
+	Conn gitlab.Conn
+	Path string
+}
+
+func (f *fakeProjects) ProjectByPath(_ context.Context, conn gitlab.Conn, path string) (gitlab.Project, error) {
+	f.calls = append(f.calls, projectCall{conn, path})
+	return f.project, f.err
 }
 
 var errBoom = errors.New("boom")

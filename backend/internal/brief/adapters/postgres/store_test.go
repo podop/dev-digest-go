@@ -96,7 +96,7 @@ func TestFindPull(t *testing.T) {
 	}
 	body := "Fixes #12"
 	want := domain.Pull{
-		ID: f.pr, WorkspaceID: f.ws, RepoID: f.repo, Owner: "acme", Name: "api", Number: 1,
+		ID: f.pr, WorkspaceID: f.ws, RepoID: f.repo, Owner: "acme", Name: "api", Provider: "github", Host: "github.com", Number: 1,
 		Title: "Add rate limiting", Body: &body, Base: "main", HeadSHA: "a1b2c3d4e5f6",
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
@@ -106,6 +106,19 @@ func TestFindPull(t *testing.T) {
 	f.exec(t, `UPDATE pull_requests SET body = NULL WHERE id = ?`, f.pr)
 	if got, _ := f.store.FindPull(t.Context(), f.ws, f.pr); got.Body != nil {
 		t.Errorf("FindPull(NULL body).Body = %q, want nil", *got.Body)
+	}
+}
+
+func TestFindPull_GitLabRepositoryReadsItsLocation(t *testing.T) { // FR29, FR18
+	f := newFixture(t)
+	f.exec(t, `UPDATE repos SET owner = 'acme/core', name = 'payments', full_name = 'acme/core/payments', provider = 'gitlab',
+		host = 'git.example.com:8443', project_id = 42, web_url = 'https://git.example.com:8443/acme/core/payments' WHERE id = ?`, f.repo)
+	got, err := f.store.FindPull(t.Context(), f.ws, f.pr)
+	if err != nil {
+		t.Fatalf("FindPull() error = %v", err)
+	}
+	if got.Provider != "gitlab" || got.Host != "git.example.com:8443" || got.ProjectID != 42 || !got.IsGitLab() {
+		t.Errorf("FindPull(GitLab) = %+v, want gitlab on git.example.com:8443 project 42", got)
 	}
 }
 

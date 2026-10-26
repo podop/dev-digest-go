@@ -8,6 +8,7 @@ import (
 	autoreviewapp "dev-digest-go/backend/internal/autoreview/app"
 	autoreviewdomain "dev-digest-go/backend/internal/autoreview/domain"
 	"dev-digest-go/backend/internal/platform/apperr"
+	"dev-digest-go/backend/internal/platform/codehost"
 	pullsdomain "dev-digest-go/backend/internal/pulls/domain"
 	reviewsapp "dev-digest-go/backend/internal/reviews/app"
 	settingsapp "dev-digest-go/backend/internal/settings/app"
@@ -117,11 +118,39 @@ func (c autoCaps) CapReached(ctx context.Context, workspaceID string) (bool, err
 	return st.Reached(), nil
 }
 
-// autoTokens adapts the secrets store to autoreview's Tokens port. The GitHub token is one value for
-// the whole local install, so the workspace does not matter.
-type autoTokens struct{ token func() string }
+// autoTokens adapts the secrets store, the repository list and the GitLab connections to
+// autoreview's Tokens port (FR28). The GitHub token is one value for the whole local install, so
+// the workspace only matters for its repositories.
+type autoTokens struct {
+	token func() string // the stored GitHub token ("" = none)
+	repos repoLister
+	conns tokenSource
+}
 
-// HasGitHubToken reports whether a GitHub token is stored.
-func (t autoTokens) HasGitHubToken(context.Context, string) (bool, error) {
-	return t.token() != "", nil
+// CodeHostAccess reports which code hosts the workspace can poll: whether it has a GitLab
+// repository, whether a GitHub token is stored, and whether any repository has a token for its
+// host (the GitHub token for a GitHub repository, its connection's token for a GitLab one; a
+// GitLab repository without a connection has none).
+func (t autoTokens) CodeHostAccess(ctx context.Context, workspaceID string) (autoreviewdomain.CodeHostAccess, error) {
+	access := autoreviewdomain.CodeHostAccess{GitHubToken: t.token() != ""}
+	repos, err := t.repos.List(ctx, workspaceID)
+	if err != nil {
+		return autoreviewdomain.CodeHostAccess{}, fmt.Errorf("list repositories: %w", err)
+	}
+	for _, r := range repos {
+		if r.Provider != codehost.GitLab {
+			access.RepoWithToken = access.RepoWithToken || access.GitHubToken
+			continue
+		}
+		access.GitLabRepos = true
+		if access.RepoWithToken {
+			continue
+		}
+		conn, ok, err := t.conns.Resolve(ctx, r.Host)
+		if err != nil {
+			return autoreviewdomain.CodeHostAccess{}, fmt.Errorf("resolve gitlab connection: %w", err)
+		}
+		access.RepoWithToken = ok && conn.Token != ""
+	}
+	return access, nil
 }

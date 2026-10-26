@@ -28,6 +28,9 @@ var _ app.Tickets = (*Tickets)(nil)
 const (
 	noTokenReason  = "GITHUB_TOKEN is not configured"
 	notFoundReason = "Not Found"
+	// gitlabReason is the failure of a ticket of a GitLab repository: issues are read from GitHub
+	// only (FR29), so none is requested.
+	gitlabReason = "GitLab issues are not available yet"
 	// maxReasonBytes bounds a stored failure text, as GitHub's messages are bounded.
 	maxReasonBytes = 1000
 )
@@ -42,12 +45,16 @@ func NewTickets(gh Issues, redact func(string) string) *Tickets {
 	return &Tickets{gh: gh, redact: redact}
 }
 
-// Read reads an issue of the repository. A number that cannot name an issue (not a positive safe
+// Read reads an issue of the repository. A ticket of a GitLab repository is a failed read with
+// no request (FR29). A number that cannot name an issue (not a positive safe
 // integer: JavaScript's Number of an absurdly long digit run is Infinity) fails as GitHub would
 // answer it, without a request. A failure is data: "GITHUB_TOKEN is not configured" without a
 // token, GitHub's message for an error status, else the error's text; the token is redacted and
 // the text bounded.
 func (t *Tickets) Read(ctx context.Context, repo domain.Repo, number float64) app.TicketRead {
+	if repo.IsGitLab() {
+		return app.TicketRead{Reason: gitlabReason}
+	}
 	if !(number >= 1 && number <= 1<<53-1) || number != math.Trunc(number) {
 		return app.TicketRead{Reason: notFoundReason}
 	}

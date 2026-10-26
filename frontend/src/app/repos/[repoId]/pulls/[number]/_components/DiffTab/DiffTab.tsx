@@ -4,6 +4,8 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button } from "@devdigest/ui";
 import { DiffViewer, type DiffCommentApi, type DiffFindingApi, type DiffHighlight } from "@/components/diff-viewer";
+import { isGitLab } from "@/lib/code-host";
+import { useLinkRepo } from "@/lib/link-repo";
 import { usePrComments, useCreatePrComment, useLiveRunRefresh, usePrReviews, useSmartDiff } from "@/lib/hooks";
 import { notify } from "@/lib/toast";
 import type { FindingRecord } from "@devdigest/shared";
@@ -29,6 +31,10 @@ interface DiffTabProps {
 
 export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder, focus }: DiffTabProps) {
   const t = useTranslations("prReview");
+  const tp = useTranslations("prPosting");
+  // Posting comments is GitHub-only until GitLab slice B (FR45): no composer and no "Post to PR" on a GitLab PR.
+  const gitlab = isGitLab(useLinkRepo());
+  const postable = !!canComment && !gitlab;
   const { data: comments } = usePrComments(prId);
   const create = useCreatePrComment(prId);
   const { data: smartDiff } = useSmartDiff(prId);
@@ -52,7 +58,7 @@ export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder
 
   const commenting: DiffCommentApi = {
     comments: comments ?? [],
-    canComment: !!canComment,
+    canComment: postable,
     showComments: show,
     posting: create.isPending,
     onSubmit: async (input) => {
@@ -81,7 +87,7 @@ export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder
     show,
     // GitHub anchors comments only on diff lines of an open PR.
     renderCard: (f, placement) => (
-      <InlineFindingCard f={f} prId={prId} canPublish={!!canComment && placement === "line"} />
+      <InlineFindingCard f={f} prId={prId} canPublish={postable && placement === "line"} />
     ),
   };
 
@@ -120,6 +126,7 @@ export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder
           })}
         </span>
         {!hasReview && <span style={s.noReviewHint}>{t("smartDiff.noReview")}</span>}
+        {gitlab && <span style={s.noReviewHint}>{tp("gitlabCommentsNotShown")}</span>}
       </div>
 
       {order === "original" ? (

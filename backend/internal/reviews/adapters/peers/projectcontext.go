@@ -3,6 +3,7 @@ package peers
 import (
 	"context"
 
+	"dev-digest-go/backend/internal/platform/codehost"
 	pcapp "dev-digest-go/backend/internal/projectcontext/app"
 	reviewsapp "dev-digest-go/backend/internal/reviews/app"
 	"dev-digest-go/backend/internal/reviews/domain"
@@ -28,8 +29,11 @@ func (a *ProjectContext) ResolveForRun(ctx context.Context, in reviewsapp.Projec
 	for i, s := range in.Skills {
 		skills[i] = pcapp.RunSkill{ID: s.ID, Name: s.Name}
 	}
+	// The service forwards (Owner, Name) to the git reader as the clone location: the clone key
+	// (GitHub: the pair itself; GitLab: "@gitlab/<host dir>", "<project id>").
+	owner, name := codehost.CloneKey(in.Repo.Provider, in.Repo.Host, in.Repo.ProjectID, in.Repo.Owner, in.Repo.Name)
 	rc, err := a.s.RunContext(ctx, pcapp.RunContextInput{
-		WorkspaceID: in.WorkspaceID, RepoID: in.Repo.ID, Owner: in.Repo.Owner, Name: in.Repo.Name,
+		WorkspaceID: in.WorkspaceID, RepoID: in.Repo.ID, Owner: owner, Name: name,
 		Base: in.Base, HeadSHA: in.HeadSHA, AgentID: in.AgentID, Skills: skills,
 	})
 	if err != nil {

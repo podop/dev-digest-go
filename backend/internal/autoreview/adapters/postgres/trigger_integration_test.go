@@ -40,7 +40,9 @@ func (stubCaps) CapReached(context.Context, string) (bool, error) { return false
 
 type stubTokens struct{}
 
-func (stubTokens) HasGitHubToken(context.Context, string) (bool, error) { return true, nil }
+func (stubTokens) CodeHostAccess(context.Context, string) (domain.CodeHostAccess, error) {
+	return domain.CodeHostAccess{GitHubToken: true, RepoWithToken: true}, nil
+}
 
 type allowBudget struct{}
 

@@ -211,6 +211,8 @@ var (
 		regexp.MustCompile(`\bgithub_pat_[A-Za-z0-9_]{20,}`),
 		regexp.MustCompile(`\bAKIA[0-9A-Z]{16}\b`),
 		regexp.MustCompile(`\bxox[baprs]-[A-Za-z0-9-]{10,}`),
+		// GitLab token prefixes (spec FR31); the routable form has dots between its parts.
+		regexp.MustCompile(`\bgl(?:pat|oas|dt|rt|rtr|cbt|ptt|ft|imt|agent|soat|ffct)-[A-Za-z0-9_.-]{20,}`),
 	}
 )
 
@@ -483,8 +485,8 @@ func trailingCR(l string) string {
 	return ""
 }
 
-// RedactSecrets replaces secret values in text with "<redacted>", exactly as Node's
-// redactSecrets does (spec 7.10.2): URL passwords, the seven token patterns, then per line the
+// RedactSecrets replaces secret values in text with "<redacted>", as Node's
+// redactSecrets does (spec 7.10.2): URL passwords, the seven token patterns plus the GitLab one, then per line the
 // values of secret-keyed pairs and the bodies of their block scalars. "\r" is preserved.
 func RedactSecrets(text string) string {
 	out := redactURLUserinfo(text)

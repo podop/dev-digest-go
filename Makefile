@@ -104,8 +104,8 @@ backend-fmt: ## List files gofmt would change (fails if any)
 	if [ -n "$$out" ]; then echo "gofmt needed:"; echo "$$out"; exit 1; else echo "gofmt OK"; fi
 
 .PHONY: backend-test
-backend-test: ## Full test gate: race, shuffle, no cache (Docker for integration tests)
-	cd $(BACKEND) && $(GO) test -race -shuffle=on -count=1 ./...
+backend-test: ## Full test gate: race, shuffle, no cache, 25 m timeout (cmd/server exceeds the default 10 m)
+	cd $(BACKEND) && $(GO) test -race -shuffle=on -count=1 -timeout 25m ./...
 
 .PHONY: backend-test-short
 backend-test-short: ## Fast loop without Docker (integration tests skipped)

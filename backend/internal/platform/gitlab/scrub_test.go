@@ -1,0 +1,63 @@
+package gitlab
+
+import (
+	"encoding/json"
+	"net/url"
+	"strconv"
+	"strings"
+	"testing"
+)
+
+func TestScrub(t *testing.T) {
+	const tok = "glpat-AbCdEfGhIjKlMnOpQrSt"
+	quoted := strconv.Quote("x" + tok + `"`)
+	jsonTok, _ := json.Marshal(`a"` + tok)
+	tests := []struct {
+		name, in string
+	}{
+		{"plain", "bad token " + tok + " rejected"},
+		{"quoted", "header " + quoted},
+		{"json", string(jsonTok)},
+		{"url escaped", "?private_token=" + url.QueryEscape(tok)},
+		{"fragment", "token ending in " + tok[10:] + " is wrong"},
+		{"prefix fragment", "starts with " + tok[:14]},
+		{"other token shape", "got glpat-ZZZZZZZZZZZZZZZZZZZZ and gldt-0123456789abcdef"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := scrub(tc.in, tok)
+			for i := 0; i+minFragment <= len(tok); i++ {
+				if strings.Contains(got, tok[i:i+minFragment]) {
+					t.Errorf("scrub(%q) = %q, still holds %q", tc.in, got, tok[i:i+minFragment])
+				}
+			}
+			if strings.Contains(got, "glpat-Z") || strings.Contains(got, "gldt-0") {
+				t.Errorf("scrub(%q) = %q, still holds a token-shaped run", tc.in, got)
+			}
+		})
+	}
+}
+
+func TestScrub_LeavesPlainText(t *testing.T) {
+	const in = "401 Unauthorized: the project was not found"
+	if got := scrub(in, "glpat-AbCdEfGhIjKlMnOpQrSt"); got != in {
+		t.Errorf("scrub(%q) = %q, want unchanged", in, got)
+	}
+	if got := scrub(in, ""); got != in {
+		t.Errorf("scrub(%q, \"\") = %q, want unchanged", in, got)
+	}
+}
+
+func FuzzScrub(f *testing.F) {
+	f.Add("glpat-AbCdEfGhIjKlMnOpQrSt", "error: glpat-AbCdEfGhIjKlMnOpQrSt")
+	f.Add("glpat-0123456789abcdefghij", `"glpat-0123456789abcdefghij"`)
+	f.Fuzz(func(t *testing.T, token, text string) {
+		if len(token) < minFragment {
+			return
+		}
+		got := scrub(text+token+text, token)
+		if strings.Contains(got, token) {
+			t.Errorf("scrub left the token in %q", got)
+		}
+	})
+}

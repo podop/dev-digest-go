@@ -49,42 +49,72 @@ func validRef(s string) bool {
 		!strings.HasSuffix(s, ".lock")
 }
 
-// ClonePath returns <root>/<owner>/<name>, guaranteed to be exactly two levels
-// under the clone root. It does not touch the filesystem.
+// gitlabDir is the top-level clone directory of GitLab projects. '@' is outside the segment
+// rule, so no GitHub owner can be named like it (spec FR18, EC22).
+const gitlabDir = "@gitlab"
+
+var projectIDRE = regexp.MustCompile(`^[0-9]{1,19}$`)
+
+// gitlabHostSegment returns the host-key directory of a GitLab clone key's owner
+// ("@gitlab/<host>[_<port>]") and whether owner has that shape (the segment is not validated).
+func gitlabHostSegment(owner string) (string, bool) {
+	return strings.CutPrefix(owner, gitlabDir+"/")
+}
+
+// ClonePath returns the clone directory of a repository, guaranteed to be exactly two levels
+// under the clone root (<root>/<owner>/<name>, GitHub), or three for the GitLab clone key:
+// owner "@gitlab/<host>[_<port>]" and name "<project id>" give
+// <root>/@gitlab/<host>[_<port>]/<project id>. It does not touch the filesystem.
 func (c *Client) ClonePath(owner, name string) (string, error) {
-	for _, seg := range []string{owner, name} {
-		if !validSegment(seg) {
+	levels := 2
+	if host, ok := gitlabHostSegment(owner); ok {
+		if !validSegment(host) || !projectIDRE.MatchString(name) {
 			return "", ErrInvalidSegment
 		}
+		levels = 3
+	} else {
+		for _, seg := range []string{owner, name} {
+			if !validSegment(seg) {
+				return "", ErrInvalidSegment
+			}
+		}
 	}
-	dest := filepath.Join(c.root, owner, name)
+	dest := filepath.Join(c.root, filepath.FromSlash(owner), name)
 	rel, err := filepath.Rel(c.root, dest)
 	if err != nil || rel == "." || filepath.IsAbs(rel) ||
-		strings.HasPrefix(rel, "..") || len(strings.Split(rel, string(filepath.Separator))) != 2 {
+		strings.HasPrefix(rel, "..") || len(strings.Split(rel, string(filepath.Separator))) != levels {
 		return "", ErrUnsafePath
 	}
 	return dest, nil
 }
 
-// prepareDest makes sure <root>/<owner> exists as a real directory and that the
-// destination is not a symlink, so that creating or removing it cannot reach
-// outside the clone root.
+// prepareDest makes sure every directory above the destination exists as a real directory and
+// that no level down to the destination is a symlink, so that creating or removing it cannot
+// reach outside the clone root.
 func (c *Client) prepareDest(dest string) error {
-	ownerDir := filepath.Dir(dest)
+	parent := filepath.Dir(dest)
 	if err := os.MkdirAll(c.root, 0o750); err != nil {
 		return fmt.Errorf("create clone root: %w", err)
 	}
-	if err := rejectSymlink(ownerDir); err != nil {
+	if err := c.rejectSymlinks(parent); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(ownerDir, 0o750); err != nil {
+	if err := os.MkdirAll(parent, 0o750); err != nil {
 		return fmt.Errorf("create owner directory: %w", err)
 	}
-	// Re-check after creation: the entry must now be a plain directory.
-	if err := rejectSymlink(ownerDir); err != nil {
-		return err
+	// Re-check after creation: every entry must now be a plain directory.
+	return c.rejectSymlinks(dest)
+}
+
+// rejectSymlinks fails with ErrUnsafePath when p, or any directory between the clone root and p,
+// exists and is a symlink.
+func (c *Client) rejectSymlinks(p string) error {
+	for ; p != c.root && len(p) > len(c.root); p = filepath.Dir(p) {
+		if err := rejectSymlink(p); err != nil {
+			return err
+		}
 	}
-	return rejectSymlink(dest)
+	return nil
 }
 
 // rejectSymlink fails with ErrUnsafePath when p exists and is a symlink.

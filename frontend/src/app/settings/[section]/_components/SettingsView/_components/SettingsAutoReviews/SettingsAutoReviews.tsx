@@ -1,4 +1,4 @@
-/* SettingsAutoReviews — Settings → Automatic Reviews (FR13–FR18, FR20). The section owns the
+/* SettingsAutoReviews — Settings → Automatic Reviews (FR13–FR18, FR20; GitLab A FR13 subtitle). The section owns the
    data: it reads the settings and the agents, and every control saves at once with
    PUT /settings. Controls render the stored value, so a failed save returns them to it (the
    global mutation toast shows the API message). */
@@ -7,7 +7,8 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ErrorState, FormField, Icon, Skeleton } from "@devdigest/ui";
-import { useAgents, useSettings, useUpdateSettings } from "@/lib/hooks";
+import { isGitLab } from "@/lib/code-host";
+import { useAgents, useRepos, useSettings, useUpdateSettings } from "@/lib/hooks";
 import { sectionHref } from "../../constants";
 import { SectionTitle } from "../SectionTitle";
 import { AgentChips } from "./_components/AgentChips";
@@ -25,8 +26,11 @@ export function SettingsAutoReviews() {
   const settings = useSettings();
   const agents = useAgents();
   const update = useUpdateSettings();
+  const repos = useRepos();
+  // GitLab A FR13: the copy names GitHub until a GitLab repository exists (a failed list keeps it).
+  const pollsGitLab = repos.data?.some(isGitLab) ?? false;
 
-  const title = <SectionTitle title={t("title")} body={t("body")} />;
+  const title = <SectionTitle title={t("title")} body={t(pollsGitLab ? "bodyCodeHosts" : "body")} />;
 
   if (settings.isError) {
     return (

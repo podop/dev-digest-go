@@ -1,5 +1,5 @@
 /* LeaderboardTableRow — one ranked PR plus its expandable top-findings row (FR21, D23). A click on the
-   row opens the PR (`onOpen`), except on links and buttons; `repo#number` is a real link for the
+   row opens the PR (`onOpen`), except on links and buttons; `repo#number` (`repo!number` · host on GitLab) is a real link for the
    keyboard and for "open in new tab". The chevron is a <button aria-expanded> that only expands.
    Severity and risk always carry text, never colour only (NFR4). Long titles are truncated with a
    native tooltip (EC15). */
@@ -15,6 +15,7 @@ import { CostText } from "@/components/cost-text";
 import { prDetailPath } from "@/lib/pr-urls";
 import { COLUMN_COUNT, RISK_COLOR, SIZE_COLOR } from "../../constants";
 import { durationParts, openAgeParts, type DurationParts } from "../../helpers";
+import { NO_REPOS, prLabel, type RepoLookup } from "../../../../helpers";
 import { FindingChips } from "../FindingChips";
 import { HealthRing } from "../HealthRing";
 import { TopFindings } from "../TopFindings";
@@ -29,12 +30,14 @@ export interface LeaderboardTableRowProps {
   onToggle: () => void;
   /** Opens the PR detail page (a click on the row). */
   onOpen: () => void;
+  /** The response's repositories by id, for the `!n` reference and host of a GitLab row (FR43, FR44). */
+  repos?: RepoLookup;
 }
 
-export function LeaderboardTableRow({ row, rank, open, onToggle, onOpen }: LeaderboardTableRowProps) {
+export function LeaderboardTableRow({ row, rank, open, onToggle, onOpen, repos = NO_REPOS }: LeaderboardTableRowProps) {
   const t = useTranslations("leaderboardTable");
   const status = STATUS_META[row.status] ?? STATUS_META.needs_review!;
-  const pr = `${row.repo}#${row.number}`;
+  const pr = prLabel(repos, row.repo_id, row.repo, row.number);
   const dash = <span style={s.muted}>{t("noValue")}</span>;
 
   const duration = (p: DurationParts) => t(`duration.${p.unit}`, { value: p.value });

@@ -103,6 +103,10 @@ type repoRow struct {
 	ID    string `gorm:"column:id"`
 	Owner string `gorm:"column:owner"`
 	Name  string `gorm:"column:name"`
+	// Provider, Host and ProjectID locate the repository on its code host (0010).
+	Provider  string `gorm:"column:provider"`
+	Host      string `gorm:"column:host"`
+	ProjectID *int64 `gorm:"column:project_id"`
 }
 
 func (repoRow) TableName() string { return "repos" }
@@ -143,7 +147,11 @@ func (s *Store) Repo(ctx context.Context, repoID string) (domain.Repo, error) {
 	if err != nil {
 		return domain.Repo{}, fmt.Errorf("select repo: %w", err)
 	}
-	return domain.Repo{ID: row.ID, Owner: row.Owner, Name: row.Name}, nil
+	repo := domain.Repo{ID: row.ID, Owner: row.Owner, Name: row.Name, Provider: row.Provider, Host: row.Host}
+	if row.ProjectID != nil {
+		repo.ProjectID = *row.ProjectID
+	}
+	return repo, nil
 }
 
 // Commits returns the pull request's commits by committed_at ascending (NULL last), then id: the

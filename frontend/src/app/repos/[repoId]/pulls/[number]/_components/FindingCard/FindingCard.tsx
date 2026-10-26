@@ -21,7 +21,8 @@ import {
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { isFromInteractive, lineLabel } from "./helpers";
-import { githubBlobUrl } from "@/lib/github-urls";
+import { blobUrl } from "@/lib/code-host";
+import { useLinkRepo } from "@/lib/link-repo";
 import { s } from "./styles";
 
 /** State + action of a finding's "Post to PR" button. */
@@ -60,11 +61,9 @@ export function FindingCard({
   const [expanded, setExpanded] = React.useState(defaultExpanded ?? false);
   const bodyId = React.useId();
   const toggle = () => setExpanded((e) => !e);
+  const repo = useLinkRepo(repoFullName);
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
-  const fileHref =
-    repoFullName && headSha
-      ? githubBlobUrl(repoFullName, headSha, f.file, f.start_line, f.end_line)
-      : undefined;
+  const fileHref = headSha ? (blobUrl(repo, headSha, f.file, f.start_line, f.end_line) ?? undefined) : undefined;
   const accepted = !!f.accepted_at;
   const dismissed = !!f.dismissed_at;
   const muted = accepted || dismissed;

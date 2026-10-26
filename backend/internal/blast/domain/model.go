@@ -3,10 +3,14 @@
 // the PR page shows, and the prior merged pull requests that touched the same files. The pure
 // rules (mapping the port answer to the read model, summary text, history selection) are added
 // next to this file; it fixes only the shared types and constants. It imports only the standard
-// library and carries no JSON or database tags: the wire shapes live in transport/http.
+// library (and platform/codehost's provider names) and carries no JSON or database tags: the wire shapes live in transport/http.
 package domain
 
-import "errors"
+import (
+	"errors"
+
+	"dev-digest-go/backend/internal/platform/codehost"
+)
 
 // ErrNotFound is returned by the store for a pull request that does not exist in the workspace.
 var ErrNotFound = errors.New("blast: not found")
@@ -103,7 +107,12 @@ type Pull struct {
 	Number int
 	// Owner and Name are the repository's.
 	Owner, Name string
+	// Provider is the repository's code host ("github" | "gitlab"; "" reads as github).
+	Provider string
 }
+
+// IsGitLab reports whether the pull request belongs to a GitLab project.
+func (p Pull) IsGitLab() bool { return p.Provider == codehost.GitLab }
 
 // MergedPR is a merged pull request of the repository with the files it touched, as the GitHub
 // read answers it.

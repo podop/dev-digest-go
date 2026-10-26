@@ -27,7 +27,7 @@ import { CostText } from "@/components/cost-text";
 import { formatUsd } from "@/lib/format-usage";
 import { PeriodPicker } from "@/components/stats-period-picker";
 import { ApiError } from "@/lib/api";
-import { useAgentStats } from "@/lib/hooks";
+import { useAgentStats, useRepos } from "@/lib/hooks";
 import { agentStatsHref, formatPeriodRange, type StatsPeriod } from "@/lib/stats-period";
 import { RunHistory } from "./_components/RunHistory";
 import { SeverityBars } from "./_components/SeverityBars";
@@ -71,6 +71,7 @@ export function StatsTab({ agent, period }: { agent: Agent; period: StatsPeriod 
 function Loaded({ stats }: { stats: AgentStats }) {
   const t = useTranslations("agentPerformance.statsTab");
   const tm = useTranslations("agentPerformance.metrics");
+  const repos = useRepos().data;
   const m = stats.metrics;
   const seconds = formatDurationS(m.avg_duration_ms);
   const percent = formatPercent(m.accept_rate);
@@ -145,7 +146,7 @@ function Loaded({ stats }: { stats: AgentStats }) {
 
       <section aria-label={t("history.title")} style={s.section}>
         <SectionLabel icon="History">{t("history.title")}</SectionLabel>
-        <RunHistory runs={stats.run_history} agentName={stats.agent_name} />
+        <RunHistory runs={stats.run_history} agentName={stats.agent_name} repos={repos} />
       </section>
     </>
   );

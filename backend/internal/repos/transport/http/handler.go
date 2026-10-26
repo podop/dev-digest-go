@@ -14,6 +14,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"dev-digest-go/backend/internal/platform/codehost"
 	"dev-digest-go/backend/internal/platform/httpx"
 	"dev-digest-go/backend/internal/repos/domain"
 	"dev-digest-go/backend/internal/tenancy"
@@ -21,7 +22,7 @@ import (
 
 // service is what the handlers need from the repos use cases.
 type service interface {
-	Add(ctx context.Context, workspaceID, userID string, ref domain.Ref) (repo domain.Repo, created bool, err error)
+	Add(ctx context.Context, workspaceID, userID string, parsed domain.Parsed) (repo domain.Repo, created bool, err error)
 	List(ctx context.Context, workspaceID string) ([]domain.Repo, error)
 	Refresh(ctx context.Context, workspaceID, id string) error
 	Delete(ctx context.Context, workspaceID, id string) error
@@ -49,7 +50,8 @@ func AddRoutes(e *echo.Echo, svc service, tenants resolver) {
 }
 
 // repoResponse is the wire shape of a repo (contract: Repo in platform.ts); all keys are
-// always present.
+// always present. connection_id is null for GitHub and for a GitLab repo whose host has no
+// connection (FR16, FR48).
 type repoResponse struct {
 	ID            string      `json:"id"`
 	WorkspaceID   string      `json:"workspace_id"`
@@ -60,13 +62,25 @@ type repoResponse struct {
 	ClonePath     *string     `json:"clone_path"`
 	LastPolledAt  *httpx.Time `json:"last_polled_at"`
 	CreatedBy     *string     `json:"created_by"`
+	Provider      string      `json:"provider"`
+	Host          string      `json:"host"`
+	WebURL        string      `json:"web_url"`
+	ConnectionID  *string     `json:"connection_id"`
 }
 
 func toRepoResponse(r domain.Repo) repoResponse {
+	provider, host, webURL := r.Provider, r.Host, r.WebURL
+	if provider == "" {
+		provider = codehost.GitHub
+	}
+	if provider == codehost.GitHub {
+		// The GitHub address is derived, not stored (A10).
+		host, webURL = codehost.GitHubHost, codehost.WebURL("https://"+codehost.GitHubHost, r.FullName)
+	}
 	return repoResponse{
 		ID: r.ID, WorkspaceID: r.WorkspaceID, Owner: r.Owner, Name: r.Name, FullName: r.FullName,
 		DefaultBranch: r.DefaultBranch, ClonePath: r.ClonePath, LastPolledAt: wireTime(r.LastPolledAt),
-		CreatedBy: r.CreatedBy,
+		CreatedBy: r.CreatedBy, Provider: provider, Host: host, WebURL: webURL, ConnectionID: r.ConnectionID,
 	}
 }
 
@@ -87,7 +101,7 @@ func (h *Handler) add(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	ref, err := domain.ParseURL(rawURL)
+	parsed, err := domain.ParseURL(rawURL)
 	if err != nil {
 		return httpx.NewValidationError(httpx.Issue{Code: "custom", Path: []any{"url"}, Message: domain.InvalidURLMessage})
 	}
@@ -95,7 +109,7 @@ func (h *Handler) add(c *echo.Context) error {
 	if err != nil {
 		return err
 	}
-	repo, created, err := h.svc.Add(c.Request().Context(), id.WorkspaceID, id.UserID, ref)
+	repo, created, err := h.svc.Add(c.Request().Context(), id.WorkspaceID, id.UserID, parsed)
 	if err != nil {
 		return err
 	}

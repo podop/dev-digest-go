@@ -19,6 +19,7 @@ export function FilterBar({
   onSort,
   onRefresh,
   refreshing,
+  refreshDisabled = false,
 }: {
   active: string;
   /** PRs per status filter key ("all" included); counts are hidden while undefined. */
@@ -30,6 +31,8 @@ export function FilterBar({
   onSort: (v: string) => void;
   onRefresh: () => void;
   refreshing: boolean;
+  /** The code host cannot be reached (not-connected GitLab repository, FR49). */
+  refreshDisabled?: boolean;
 }) {
   const t = useTranslations("prReview");
   const sortOptions = SORT_ORDERS.map((value) => ({ value, label: t(`list.sort.${value}`) }));
@@ -61,7 +64,7 @@ export function FilterBar({
           size="sm"
           icon="RefreshCw"
           onClick={onRefresh}
-          disabled={refreshing}
+          disabled={refreshing || refreshDisabled}
         >
           {refreshing ? t("list.refreshing") : t("list.refresh")}
         </Button>

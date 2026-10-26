@@ -28,6 +28,9 @@ const (
 	Anthropic  Provider = "anthropic"
 	OpenRouter Provider = "openrouter"
 	GitHub     Provider = "github"
+	// GitLab is tested per connection (a connection id), not through a single stored key; it is
+	// not one of Providers.
+	GitLab Provider = "gitlab"
 )
 
 // IsCustom reports whether p is a well-formed custom provider id (`custom:<slug>`). Such a
@@ -37,7 +40,7 @@ func (p Provider) IsCustom() bool {
 	return ok
 }
 
-// Providers lists every connection-test provider, in the order of SecretsStatus.
+// Providers lists every provider with a stored key, in the order of SecretsStatus.
 var Providers = []Provider{OpenAI, Anthropic, OpenRouter, GitHub}
 
 // ProviderNames returns the wire names of Providers.
@@ -47,6 +50,12 @@ func ProviderNames() []string {
 		names[i] = string(p)
 	}
 	return names
+}
+
+// ConnTestProviderNames returns the wire names a connection test accepts besides a custom
+// provider id: Providers, then gitlab (the ConnTestProvider enum of the UI contract).
+func ConnTestProviderNames() []string {
+	return append(ProviderNames(), string(GitLab))
 }
 
 // SecretName returns the secrets-store name the provider's key is saved under.
@@ -98,8 +107,27 @@ type ConnTestResult struct {
 	// Login is the owner of the GitHub token.
 	Login *string
 	// Scopes is the X-OAuth-Scopes list of the token: empty when the header was empty, nil
-	// when GitHub did not report scopes (fine-grained token).
+	// when GitHub did not report scopes (fine-grained token). A GitLab test sets it from
+	// /personal_access_tokens/self (nil when that call failed).
 	Scopes []string
+
+	// The fields below belong to a GitLab test (FR10, FR11); the result carries Login and Scopes
+	// too. Each is nil when unknown or when the test failed.
+
+	// ExpiresAt is the token's expiry as YYYY-MM-DD; nil = no expiry or not reported.
+	ExpiresAt *string
+	// InstanceVersion is the version of GET /metadata (for example 17.5.1-ee).
+	InstanceVersion *string
+	// TokenAccess is "full" or "read_only"; nil when the scopes are unknown.
+	TokenAccess *string
+	// Warnings are the hints of a passed test, in the FR11 order; empty when there are none.
+	Warnings []TestWarning
+}
+
+// TestWarning is one hint of a successful GitLab test.
+type TestWarning struct {
+	Code    string
+	Message string
 }
 
 // referenceModels is the model a test checks for a provider without a workspace default_model;
@@ -147,8 +175,22 @@ type customProviders interface {
 	TestConnection(ctx context.Context, workspaceID, id, key string) (ConnTestResult, error)
 }
 
-// Deps are the ports a Service needs. Custom, Clock and Logger are optional: a nil Custom means
-// the workspace has no custom providers (every custom id is undefined), the clock defaults to
+// GitLabTester is the settings view of the GitLab connections context; cmd binds it to an adapter
+// over gitlabconn/app.Service. The settings use cases never import that context.
+type GitLabTester interface {
+	// TestConnection runs the connection test of the GitLab connection connectionID (FR9, FR10): it
+	// saves key as the connection's token first when given (and keeps it when the test fails),
+	// makes the three calls and evaluates the token. It returns an apperr NotFound with code
+	// gitlab_connection_not_found for an unknown id (nothing saved); any failure of the check
+	// itself, including a connection without a token, is data (OK false, scrubbed message), not
+	// an error. The result carries Login, Scopes, LatencyMS, ExpiresAt, InstanceVersion,
+	// TokenAccess and Warnings; the Service sets Provider.
+	TestConnection(ctx context.Context, connectionID, key string) (ConnTestResult, error)
+}
+
+// Deps are the ports a Service needs. Custom, GitLab, Clock and Logger are optional: a nil Custom
+// means the workspace has no custom providers (every custom id is undefined), a nil GitLab means
+// there are no GitLab connections (every connection id is unknown), the clock defaults to
 // time.Now and a missing logger discards its output.
 type Deps struct {
 	Store     store
@@ -156,6 +198,7 @@ type Deps struct {
 	GitHub    githubClient
 	Providers modelLister
 	Custom    customProviders
+	GitLab    GitLabTester
 	Clock     func() time.Time
 	Logger    *slog.Logger
 }
@@ -265,6 +308,40 @@ func (s *Service) TestCustomConnection(ctx context.Context, workspaceID string, 
 		slog.Bool("ok", res.OK),
 		slog.Int64("latency_ms", s.d.Clock().Sub(start).Milliseconds()))
 	return res, nil
+}
+
+// TestGitLabConnection tests the GitLab connection connectionID through the GitLab port (FR9): the
+// key (when given) is saved by the port. An unknown or empty id is a 404 gitlab_connection_not_found
+// error and nothing is saved; the check's own failures come back as ok=false data with the key
+// value scrubbed. Each test logs one INFO line with provider, ok and latency; neither the key nor
+// the connection id reaches a log line.
+func (s *Service) TestGitLabConnection(ctx context.Context, connectionID, key string) (ConnTestResult, error) {
+	if s.d.GitLab == nil || connectionID == "" {
+		return ConnTestResult{}, gitLabNotFound()
+	}
+	start := s.d.Clock()
+	res, err := s.d.GitLab.TestConnection(ctx, connectionID, key)
+	if err != nil {
+		return ConnTestResult{}, err
+	}
+	res.Provider = GitLab
+	res.Message = scrub(res.Message, key)
+	if len(res.Warnings) > 0 {
+		warnings := make([]TestWarning, len(res.Warnings))
+		for i, w := range res.Warnings {
+			warnings[i] = TestWarning{Code: w.Code, Message: scrub(w.Message, key)}
+		}
+		res.Warnings = warnings
+	}
+	s.d.Logger.InfoContext(ctx, "settings test connection",
+		slog.String("provider", string(GitLab)),
+		slog.Bool("ok", res.OK),
+		slog.Int64("latency_ms", s.d.Clock().Sub(start).Milliseconds()))
+	return res, nil
+}
+
+func gitLabNotFound() error {
+	return apperr.NotFound("GitLab connection not found").WithCode("gitlab_connection_not_found")
 }
 
 // TestConnection saves key (when given) under the provider's secret name, then checks the

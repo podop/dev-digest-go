@@ -44,6 +44,12 @@ describe("switcherWorkspaceName / toShellRepo", () => {
     expect(switcherWorkspaceName("  ")).toBe("");
   });
 
+  it("labels a GitLab repository with its host and a GitHub one as is (FR44)", () => {
+    const gitlab = { ...repo, full_name: "acme/platform/payments", provider: "gitlab", host: "gitlab.com" } as Repo;
+    expect(toShellRepo(gitlab).full_name).toBe("acme/platform/payments · gitlab.com");
+    expect(toShellRepo(repo).full_name).toBe("acme/payments");
+  });
+
   it("appends the name to the sync label only when there is one", () => {
     expect(toShellRepo(repo).syncedLabel).toBe("synced");
     expect(toShellRepo(repo, undefined).syncedLabel).toBe("synced");

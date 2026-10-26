@@ -1,8 +1,13 @@
 /* PriorPrs — count badge, expandable rows with GitHub links; hidden when empty or on error. */
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import type { PrHistory } from "@devdigest/shared";
 import { renderWithProviders, screen, cleanup, within, waitFor, act } from "@/test/render";
 import { mockFetch, jsonResponse } from "@/test/fetch-mock";
+import { GITLAB_REPO } from "@/test/code-host-repo";
+
+vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/pulls/12" }));
+
+import { RepoProvider } from "@/lib/repo-context";
 import { PriorPrs } from "./PriorPrs";
 import { FILES_SHOWN } from "./constants";
 
@@ -95,5 +100,24 @@ describe("PriorPrs", () => {
     await act(async () => {});
     expect(screen.queryByRole("button")).toBeNull();
     expect(screen.queryByText(/Prior PRs touching these files/)).toBeNull();
+  });
+});
+
+describe("PriorPrs — GitLab repository (FR41, FR43)", () => {
+  it("numbers the merge requests !n and links them under the repository's web_url", async () => {
+    mockFetch({ "GET /repos": [GITLAB_REPO], "GET /pulls/pr-1/history": HISTORY });
+    const { user } = renderWithProviders(
+      <RepoProvider>
+        <PriorPrs prId="pr-1" repoFullName={null} />
+      </RepoProvider>,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /Prior PRs touching these files/ }));
+    expect(await screen.findByRole("link", { name: "Newer limiter" })).toHaveAttribute(
+      "href",
+      "https://git.corp.example/gitlab/acme/platform/payments/-/merge_requests/410",
+    );
+    expect(screen.getByText("!410")).toBeInTheDocument();
+    expect(screen.queryByText("#410")).toBeNull();
   });
 });

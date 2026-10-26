@@ -8,6 +8,7 @@ import (
 	"dev-digest-go/backend/internal/ci/app"
 	"dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/platform/apperr"
+	"dev-digest-go/backend/internal/platform/codehost"
 	reposdomain "dev-digest-go/backend/internal/repos/domain"
 	skillsdomain "dev-digest-go/backend/internal/skills/domain"
 )
@@ -109,16 +110,33 @@ var _ app.RepoDirectory = (*Repos)(nil)
 // NewRepos builds the directory.
 func NewRepos(repos RepoService) *Repos { return &Repos{repos: repos} }
 
-// FindByFullName matches the exact "owner/name" among the workspace's repositories.
+// FindByFullName matches the exact "owner/name" among the workspace's GitHub repositories (host
+// github.com); GitHub is the only CI export target in slice A. A name that only a GitLab
+// repository carries answers app.ErrUnsupportedHost, so the export never picks a same-named
+// GitLab project (FR29, EC25). With both, the GitHub repository is used.
 func (d *Repos) FindByFullName(ctx context.Context, workspaceID, fullName string) (domain.ImportedRepo, bool, error) {
 	list, err := d.repos.List(ctx, workspaceID)
 	if err != nil {
 		return domain.ImportedRepo{}, false, fmt.Errorf("list repos: %w", err)
 	}
+	otherHost := false
 	for _, r := range list {
-		if r.FullName == fullName {
+		if r.FullName != fullName {
+			continue
+		}
+		if isGitHub(r) {
 			return domain.ImportedRepo{Owner: r.Owner, Name: r.Name, FullName: r.FullName, DefaultBranch: r.DefaultBranch}, true, nil
 		}
+		otherHost = true
+	}
+	if otherHost {
+		return domain.ImportedRepo{}, false, app.ErrUnsupportedHost
 	}
 	return domain.ImportedRepo{}, false, nil
+}
+
+// isGitHub reports whether the repository is on github.com; an empty provider is a GitHub row
+// that predates the provider column.
+func isGitHub(r reposdomain.Repo) bool {
+	return (r.Provider == "" || r.Provider == codehost.GitHub) && (r.Host == "" || r.Host == codehost.GitHubHost)
 }

@@ -42,15 +42,29 @@ describe("blastStats", () => {
 });
 
 describe("callerHref", () => {
+  const GITHUB = { provider: "github", full_name: "acme/api" } as const;
+  const GITLAB = {
+    provider: "gitlab",
+    full_name: "acme/platform/payments",
+    web_url: "https://git.corp.example/gitlab/acme/platform/payments",
+  } as const;
+
   it("links the exact line at the head sha and encodes the path", () => {
-    expect(callerHref("acme/api", "abc123", caller("x", "src/my file.ts", 23))).toBe(
+    expect(callerHref(GITHUB, "abc123", caller("x", "src/my file.ts", 23))).toBe(
       "https://github.com/acme/api/blob/abc123/src/my%20file.ts#L23",
     );
   });
 
-  it("is undefined without a repo name or a head sha", () => {
+  it("links a GitLab caller under the repository's web_url", () => {
+    expect(callerHref(GITLAB, "abc123", caller("x", "src/my file.ts", 23))).toBe(
+      "https://git.corp.example/gitlab/acme/platform/payments/-/blob/abc123/src/my%20file.ts#L23",
+    );
+  });
+
+  it("is undefined without a repository, a web root or a head sha", () => {
     expect(callerHref(null, "abc", caller("x", "src/x.ts", 1))).toBeUndefined();
-    expect(callerHref("acme/api", null, caller("x", "src/x.ts", 1))).toBeUndefined();
+    expect(callerHref({ ...GITLAB, web_url: "" }, "abc", caller("x", "src/x.ts", 1))).toBeUndefined();
+    expect(callerHref(GITHUB, null, caller("x", "src/x.ts", 1))).toBeUndefined();
   });
 });
 

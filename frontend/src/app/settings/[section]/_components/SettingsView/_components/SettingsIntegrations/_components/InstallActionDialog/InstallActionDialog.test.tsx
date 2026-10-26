@@ -25,6 +25,18 @@ const REPO: Repo = {
   created_by: null,
 };
 
+const GITLAB_REPO: Repo = {
+  ...REPO,
+  id: "r2",
+  owner: "grp",
+  name: "svc",
+  full_name: "grp/svc",
+  provider: "gitlab",
+  host: "gitlab.com",
+  web_url: "https://gitlab.com/grp/svc",
+  connection_id: "c1",
+};
+
 const agent = (id: string, name: string, over: Partial<Agent> = {}): Agent => ({ ...AGENT, id, name, provider: "openrouter", ...over });
 const A1 = agent("a1", "Security Reviewer");
 const A2 = agent("a2", "Style Reviewer");
@@ -85,6 +97,23 @@ async function openDialog(user: ReturnType<typeof renderWithProviders>["user"]) 
 }
 
 describe("InstallActionDialog", () => {
+  it("offers GitHub repositories only (SCR3) and says no repository is connected when only GitLab ones exist", async () => {
+    mockFetch({ "GET /repos": [GITLAB_REPO, REPO], "GET /agents": [A1], "GET /settings/custom-providers": [] });
+    const { user } = renderWithProviders(<Harness />);
+    await openDialog(user);
+
+    await user.click(await screen.findByRole("combobox", { name: "Repository" }));
+    expect(screen.getByRole("option", { name: "acme/api" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "grp/svc" })).not.toBeInTheDocument();
+
+    cleanup();
+    mockFetch({ "GET /repos": [GITLAB_REPO], "GET /agents": [A1], "GET /settings/custom-providers": [] });
+    const again = renderWithProviders(<Harness />);
+    await openDialog(again.user);
+    expect(await screen.findByText(/No repository is connected yet/)).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Repository" })).not.toBeInTheDocument();
+  });
+
   it("lists agents with reasons for the unselectable ones, hides disabled-plugin agents, and keeps Install off until repo + agent", async () => {
     mockFetch({
       "GET /repos": [REPO],

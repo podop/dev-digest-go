@@ -123,6 +123,9 @@ type repoRow struct {
 	WorkspaceID   string  `gorm:"column:workspace_id"`
 	Owner         string  `gorm:"column:owner"`
 	Name          string  `gorm:"column:name"`
+	Provider      string  `gorm:"column:provider"`
+	Host          string  `gorm:"column:host"`
+	ProjectID     *int64  `gorm:"column:project_id"`
 	DefaultBranch string  `gorm:"column:default_branch"`
 	ClonePath     *string `gorm:"column:clone_path"`
 }

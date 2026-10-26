@@ -662,6 +662,21 @@ func TestGenerate_IssueReadIsBoundedByItsOwnTimeout(t *testing.T) {
 	})
 }
 
+func TestGenerate_GitLabPullMakesNoIssueRequest(t *testing.T) { // FR29, AC22
+	f := newFixture(t)
+	f.store.Pull.Provider, f.store.Pull.Host, f.store.Pull.ProjectID = "gitlab", "git.example.com", 42
+	got, err := f.svc.Generate(t.Context(), wsID, prID)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if len(f.issues.Calls) != 0 {
+		t.Errorf("issue reads = %v, want none for a GitLab pull request", f.issues.Repos)
+	}
+	if want := (domain.MissingInput{Input: domain.InputLinkedIssue, Reason: domain.ReasonFetchFailed}); !contains(got.Brief.MissingInputs, want) {
+		t.Errorf("missing inputs = %+v, want %+v among them (the issue is not read)", got.Brief.MissingInputs, want)
+	}
+}
+
 func TestGenerate_SaveFailureIsInternal(t *testing.T) {
 	f := newFixture(t)
 	f.store.SaveErr = errors.New("disk full")

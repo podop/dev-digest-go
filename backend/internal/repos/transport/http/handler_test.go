@@ -21,6 +21,7 @@ import (
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
 	reposdb "dev-digest-go/backend/internal/repos/adapters/postgres"
 	"dev-digest-go/backend/internal/repos/app"
+	"dev-digest-go/backend/internal/repos/domain"
 	httpapi "dev-digest-go/backend/internal/repos/transport/http"
 	"dev-digest-go/backend/internal/tenancy"
 	tenancypg "dev-digest-go/backend/internal/tenancy/adapters/postgres"
@@ -79,7 +80,7 @@ type env struct {
 
 // newEnv builds the routes over a migrated database holding the default workspace and the
 // system user (no demo data).
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, opts ...app.ServiceOption) *env {
 	t.Helper()
 	d := pgtest.Migrated(t)
 	var ws, user string
@@ -89,15 +90,15 @@ func newEnv(t *testing.T) *env {
 	if err := d.DB.Raw(`INSERT INTO users (email, name) VALUES ('you@local', 'You') RETURNING id`).Scan(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	return wire(t, d.DB, ws, user)
+	return wire(t, d.DB, ws, user, opts...)
 }
 
-func wire(t *testing.T, db *gorm.DB, ws, user string) *env {
+func wire(t *testing.T, db *gorm.DB, ws, user string, opts ...app.ServiceOption) *env {
 	t.Helper()
 	queue := &fakeQueue{}
 	store := reposdb.NewStore(db)
 	e := httpx.New(httpx.Options{Log: slog.New(slog.DiscardHandler), CORSOrigins: []string{uiOrigin}})
-	httpapi.AddRoutes(e, app.NewService(store, queue, cloneDir), tenancy.NewResolver(tenancypg.NewStore(db)))
+	httpapi.AddRoutes(e, app.NewService(store, queue, cloneDir, opts...), tenancy.NewResolver(tenancypg.NewStore(db)))
 	return &env{e: e, db: db, queue: queue, ws: ws, user: user}
 }
 
@@ -162,6 +163,7 @@ func TestAdd_Created(t *testing.T) {
 	want := map[string]any{
 		"id": id, "workspace_id": v.ws, "owner": "o", "name": "r", "full_name": "o/r",
 		"default_branch": "main", "clone_path": nil, "last_polled_at": nil, "created_by": v.user,
+		"provider": "github", "host": "github.com", "web_url": "https://github.com/o/r", "connection_id": nil,
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("POST /repos body mismatch (-want +got):\n%s", diff)
@@ -251,7 +253,8 @@ func TestAdd_InvalidURL(t *testing.T) {
 		"http://github.com/o/r",
 		"ssh://git@github.com/o/r",
 		"https://github.com/o/r/tree/main",
-		"https://gitlab.com/o/r",
+		"https://gitlab.com/o/r/-/merge_requests/1",
+		"https://gitlab.com/o",
 		"https://github.com/../r",
 		"https://github.com/o/.git",
 		"https://github.com/-x/r",
@@ -271,10 +274,10 @@ func TestAdd_InvalidURL(t *testing.T) {
 			}
 			wantDetails := []any{map[string]any{
 				"keyword": "custom", "instancePath": "/url", "schemaPath": "#/url/custom",
-				"message": "Must be a GitHub repository URL, e.g. https://github.com/owner/repo",
+				"message": domain.InvalidURLMessage,
 				"params": map[string]any{"issue": map[string]any{
 					"code": "custom", "path": []any{"url"},
-					"message": "Must be a GitHub repository URL, e.g. https://github.com/owner/repo",
+					"message": domain.InvalidURLMessage,
 				}},
 			}}
 			if diff := cmp.Diff(wantDetails, got.Error.Details); diff != "" {
@@ -353,8 +356,8 @@ func TestList_OrderKeysAndTimestamps(t *testing.T) {
 	var names []string
 	for _, r := range got {
 		names = append(names, r["name"].(string))
-		if len(r) != 9 {
-			t.Errorf("repo keys = %d, want all 9 Repo keys present: %v", len(r), r)
+		if len(r) != 13 {
+			t.Errorf("repo keys = %d, want all 13 Repo keys present: %v", len(r), r)
 		}
 		if p, ok := r["last_polled_at"].(string); ok && !isoMillis.MatchString(p) {
 			t.Errorf("last_polled_at = %q, want ISO-8601 with milliseconds", p)

@@ -33,7 +33,13 @@ const pullColumns = `p.id, p.repo_id, r.name AS repo, p.number, p.title, p.autho
 	(EXTRACT(EPOCH FROM p.opened_at) * 1000000)::bigint AS opened_at, (EXTRACT(EPOCH FROM p.updated_at) * 1000000)::bigint AS updated_at,
 	(EXTRACT(EPOCH FROM p.merged_at) * 1000000)::bigint AS merged_at, (EXTRACT(EPOCH FROM p.closed_at) * 1000000)::bigint AS closed_at`
 
-const repoColumns = "id, owner, name, full_name, (EXTRACT(EPOCH FROM last_polled_at) * 1000000)::bigint AS last_polled_at"
+// repoColumns is the column list of the repository queries. provider, host and web_url are
+// selected only for a repository of a code host other than GitHub (NULL for GitHub, so its
+// response stays as it was, FR46); they come from the repos row, so no extra statement runs.
+const repoColumns = `id, owner, name, full_name, (EXTRACT(EPOCH FROM last_polled_at) * 1000000)::bigint AS last_polled_at,
+	CASE WHEN provider <> 'github' THEN provider END AS provider,
+	CASE WHEN provider <> 'github' THEN host END AS host,
+	CASE WHEN provider <> 'github' THEN web_url END AS web_url`
 
 // repoAll lists every repository of the workspace, ordered by full name in byte order (C
 // collation, independent of the database locale), then by id.

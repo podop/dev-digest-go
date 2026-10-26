@@ -9,6 +9,7 @@
 import React from "react";
 import type { CiFile } from "@devdigest/shared";
 import { useCiExportFiles, useCustomProviders, useOpenCiPr, useRepos, type CiExportOptions } from "@/lib/hooks";
+import { isGitLab } from "@/lib/code-host";
 import { useDialogFocus } from "@/lib/dialog-focus";
 import { useActiveRepo } from "@/lib/repo-context";
 import { hostOf } from "@/lib/providers/custom";
@@ -58,7 +59,9 @@ export function useExportWizard({
   const [method, setMethod] = React.useState<InstallMethod>("pr");
   const [zipName, setZipName] = React.useState<string | null>(null);
 
-  const repoNames = React.useMemo(() => (repos.data ?? []).map((r) => r.full_name), [repos.data]);
+  // SCR3: the GitHub Actions export targets GitHub repositories only; GitLab ones are not offered.
+  const githubRepos = React.useMemo(() => repos.data?.filter((r) => !isGitLab(r)), [repos.data]);
+  const repoNames = React.useMemo(() => (githubRepos ?? []).map((r) => r.full_name), [githubRepos]);
   // The chosen repo, else the one "Update" came from, else the active repo — only if still imported.
   const repo = [chosenRepo, initialRepo, activeRepo?.full_name].find((r) => r != null && repoNames.includes(r)) ?? null;
   const triggerList = triggersToList(triggers);
@@ -107,7 +110,7 @@ export function useExportWizard({
     back: () => setStep((n) => Math.max(n - 1, 0)),
     canContinue,
     noTriggers: triggerList.length === 0,
-    repos,
+    repos: { data: githubRepos, isLoading: repos.isLoading, isError: repos.isError, refetch: repos.refetch },
     repo,
     chooseRepo,
     triggers,

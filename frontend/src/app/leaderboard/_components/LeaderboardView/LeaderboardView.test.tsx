@@ -43,6 +43,17 @@ const repo = (id: string, full_name: string): Repo => ({
 });
 const REPOS = [repo(API_ID, "acme/api"), repo(WEB_ID, "acme/web")];
 
+const GL_ID = "5b7d9f11-2c3e-4a5b-8c6d-7e8f9a0b1c2d";
+const GL2_ID = "6c8e0a22-3d4f-4b6c-9d7e-8f9a0b1c2d3e";
+const glRepo = (id: string, host: string, full_name = "acme/platform/payments"): Repo => ({
+  ...repo(id, full_name),
+  name: full_name.split("/").pop() ?? full_name,
+  provider: "gitlab",
+  host,
+  web_url: `https://${host}/${full_name}`,
+  connection_id: "c1",
+});
+
 const KPIS = {
   prs_reviewed: 12,
   merged: 7,
@@ -198,6 +209,67 @@ describe("LeaderboardView", () => {
     expect(sync.getByText(/never polled/)).toBeInTheDocument();
 
     expect(api.requests("GET", "/leaderboard")).toHaveLength(1);
+  });
+
+  it("AC33: a GitLab repository shows !n and its host in rows, awards, needs attention, hot files and the filter; GitHub stays as is", async () => {
+    const gl = glRepo(GL_ID, "gitlab.com");
+    const gl2 = glRepo(GL2_ID, "git.corp.example", "acme/web");
+    const data = loaded({
+      repos: [
+        { id: API_ID, full_name: "acme/api", last_polled_at: null },
+        { id: WEB_ID, full_name: "acme/web", last_polled_at: null },
+        { id: GL_ID, full_name: gl.full_name, last_polled_at: null, provider: "gitlab", host: "gitlab.com", web_url: gl.web_url! },
+        { id: GL2_ID, full_name: gl2.full_name, last_polled_at: null, provider: "gitlab", host: "git.corp.example", web_url: gl2.web_url! },
+      ],
+      awards: {
+        ...loaded().awards,
+        cleanest: award(GL_ID, "payments", 12, 98, "Tighten auth"),
+      },
+      rows: [
+        row({ pr_id: "pr-g", repo_id: GL_ID, repo: "payments", number: 12, title: "GitLab MR", author: "ivan.petrov" }),
+        row({ pr_id: "pr-h", repo_id: API_ID, repo: "acme/api", number: 12, title: "GitHub PR", author: "olga.k" }),
+      ],
+      needs_attention: {
+        total: 1,
+        items: [
+          { pr_id: "pr-a", repo_id: GL2_ID, repo: "web", number: 3, title: "Stale MR", author: "dana-lee", opened_at: null, reasons: [{ kind: "no_review" }] },
+        ],
+      },
+      hot_files: [
+        { path: "a.go", repo_id: GL_ID, repo: "payments", findings: 2, critical: 0, prs: [12, 14] },
+        { path: "b.go", repo_id: API_ID, repo: "acme/api", findings: 1, critical: 0, prs: [41] },
+      ],
+    });
+    mockFetch({ "GET /repos": [...REPOS, gl, gl2], "GET /leaderboard": data });
+    const { user } = renderWithProviders(view());
+
+    const cleanest = within(await screen.findByRole("group", { name: "Cleanest PR" }));
+    expect(cleanest.getByRole("link", { name: "payments!12 · gitlab.com" })).toHaveAttribute("href", `/repos/${GL_ID}/pulls/12`);
+
+    const table = within(screen.getByRole("table", { name: "Pull requests ranked by health" }));
+    expect(table.getByRole("link", { name: "payments!12 · gitlab.com" })).toHaveAttribute("href", `/repos/${GL_ID}/pulls/12`);
+    expect(table.getByRole("link", { name: "acme/api#12" })).toBeInTheDocument();
+
+    const attention = within(screen.getByRole("list", { name: "Needs attention" }));
+    expect(attention.getByRole("link", { name: "web!3 · git.corp.example" })).toHaveAttribute("href", `/repos/${GL2_ID}/pulls/3`);
+
+    const hot = within(screen.getByRole("list", { name: "Hot files" }));
+    const glFile = within(hot.getByText("a.go").closest("li")!);
+    expect(glFile.getByText(/payments · gitlab\.com/)).toBeInTheDocument();
+    expect(glFile.getByRole("link", { name: "!12" })).toHaveAttribute("href", `/repos/${GL_ID}/pulls/12`);
+    expect(glFile.getByRole("link", { name: "!14" })).toBeInTheDocument();
+    const ghFile = within(hot.getByText("b.go").closest("li")!);
+    expect(ghFile.getByRole("link", { name: "#41" })).toBeInTheDocument();
+
+    // the filter names same-named projects on two hosts apart, GitHub as today (FR44)
+    const select = screen.getByRole("combobox", { name: "Repository" });
+    await pickOption(user, select, "acme/web · git.corp.example");
+    expect(nav.replace).toHaveBeenLastCalledWith(`/leaderboard?period=week&repo=${GL2_ID}`);
+    await pickOption(user, screen.getByRole("combobox", { name: "Repository" }), "acme/platform/payments · gitlab.com");
+    expect(nav.replace).toHaveBeenLastCalledWith(`/leaderboard?period=week&repo=${GL_ID}`);
+    await pickOption(user, screen.getByRole("combobox", { name: "Repository" }), "acme/web");
+    expect(nav.replace).toHaveBeenLastCalledWith(`/leaderboard?period=week&repo=${WEB_ID}`);
+    expect(within(screen.getByRole("list", { name: "Repository sync" })).getByText("acme/platform/payments · gitlab.com")).toBeInTheDocument();
   });
 
   it("AC15: the request carries period, tz and repo; switching period and repo replaces the URL and refetches", async () => {

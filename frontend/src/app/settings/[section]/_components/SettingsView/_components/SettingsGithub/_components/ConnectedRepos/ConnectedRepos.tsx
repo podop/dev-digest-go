@@ -4,20 +4,21 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, ErrorState, Icon } from "@devdigest/ui";
 import { AddRepoForm } from "@/components/add-repo-form";
+import { isGitLab } from "@/lib/code-host";
 import { useRepos } from "@/lib/hooks";
 import type { Repo } from "@/lib/types";
 import { RemoveRepoDialog } from "../RemoveRepoDialog";
 import { RepoRow } from "../RepoRow";
 import { s } from "./styles";
 
-/** FR19: the repos of GET /repos, "Add repository" in place, Remove behind a confirm dialog. */
+/** FR19 + FR37: the GitHub repos of GET /repos (GitLab ones belong to GitLab Integration), "Add repository" in place, Remove behind a confirm dialog. */
 export function ConnectedRepos() {
   const t = useTranslations("githubIntegration.repos");
   const tc = useTranslations("common");
   const repos = useRepos();
   const [adding, setAdding] = React.useState(false);
   const [removing, setRemoving] = React.useState<Repo | null>(null);
-  const list = repos.data ?? [];
+  const list = (repos.data ?? []).filter((repo) => !isGitLab(repo));
 
   return (
     <section aria-labelledby="gh-repos-title">

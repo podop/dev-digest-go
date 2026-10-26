@@ -557,3 +557,279 @@ func TestStore_Custom_concurrentWithSet(t *testing.T) {
 		t.Errorf("secrets file has %d keys, want 6: %v", len(got), got)
 	}
 }
+
+const gitlabTok = "glpat-AbCdEfGhIjKlMnOpQrSt"
+
+func TestStore_GitLab_roundTrip(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), secrets.FileName)
+	s := secrets.New(path, envOf(nil))
+
+	prev, err := s.SetGitLab("conn-1", gitlabTok)
+	if err != nil {
+		t.Fatalf("SetGitLab error: %v", err)
+	}
+	if prev != "" {
+		t.Errorf("SetGitLab previous = %q, want empty", prev)
+	}
+	if got := s.GitLab("conn-1"); got != gitlabTok {
+		t.Errorf("GitLab(conn-1) = %q, want %q", got, gitlabTok)
+	}
+	// A second Store over the same file sees it (read per call, no cache).
+	if got := secrets.New(path, envOf(nil)).GitLab("conn-1"); got != gitlabTok {
+		t.Errorf("GitLab via a second store = %q, want %q", got, gitlabTok)
+	}
+	want := map[string]any{"token": gitlabTok}
+	if diff := cmp.Diff(want, readJSON(t, path)["gitlab_connections.conn-1"]); diff != "" {
+		t.Errorf("file entry gitlab_connections.conn-1 mismatch (-want +got):\n%s", diff)
+	}
+
+	prev, err = s.SetGitLab("conn-1", "glpat-ReplacementToken0123")
+	if err != nil || prev != gitlabTok {
+		t.Errorf("SetGitLab replace = (%q, %v), want (%q, nil)", prev, err, gitlabTok)
+	}
+}
+
+func TestStore_GitLab_deleteAndRestore(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), secrets.FileName)
+	s := secrets.New(path, envOf(nil))
+	if err := s.Set(secrets.OpenAIKey, "sk-builtin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetGitLab("a", gitlabTok); err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := s.DeleteGitLab("a")
+	if err != nil || deleted != gitlabTok {
+		t.Fatalf("DeleteGitLab = (%q, %v), want (%q, nil)", deleted, err, gitlabTok)
+	}
+	if got := s.GitLab("a"); got != "" {
+		t.Errorf("GitLab after delete = %q, want empty", got)
+	}
+	if diff := cmp.Diff(map[string]any{"OPENAI_API_KEY": "sk-builtin"}, readJSON(t, path)); diff != "" {
+		t.Errorf("secrets file after delete mismatch (-want +got):\n%s", diff)
+	}
+	if prev, err := s.DeleteGitLab("a"); err != nil || prev != "" {
+		t.Errorf("DeleteGitLab of a missing entry = (%q, %v), want (empty, nil)", prev, err)
+	}
+
+	// A delete that must be undone.
+	if err := s.RestoreGitLab("a", deleted); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GitLab("a"); got != gitlabTok {
+		t.Errorf("GitLab after restoring a delete = %q, want %q", got, gitlabTok)
+	}
+
+	// A replace that must be undone.
+	prev, err := s.SetGitLab("a", "glpat-NewTokenValue012345")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RestoreGitLab("a", prev); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GitLab("a"); got != gitlabTok {
+		t.Errorf("GitLab after restoring a replace = %q, want %q", got, gitlabTok)
+	}
+
+	// A create that must be undone: the previous value was empty, so restore removes it.
+	prev, err = s.SetGitLab("b", "glpat-BBBBBBBBBBBBBBBBBBBB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RestoreGitLab("b", prev); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GitLab("b"); got != "" {
+		t.Errorf("GitLab after restoring a create = %q, want empty", got)
+	}
+	if got := s.Get(secrets.OpenAIKey); got != "sk-builtin" {
+		t.Errorf("Get(%q) = %q, want sk-builtin untouched", secrets.OpenAIKey, got)
+	}
+}
+
+func TestStore_GitLab_isolationAndNoEnvFallback(t *testing.T) {
+	t.Parallel()
+	env := map[string]string{
+		"gitlab_connections.a": "env-token",
+		"GITLAB_TOKEN":         "env-token",
+		"GITHUB_TOKEN":         "env-gh",
+	}
+	s := secrets.New(filepath.Join(t.TempDir(), secrets.FileName), envOf(env))
+	if got := s.GitLab("a"); got != "" {
+		t.Errorf("GitLab with only environment values = %q, want empty", got)
+	}
+	if got := s.GitLabValues(); len(got) != 0 {
+		t.Errorf("GitLabValues() = %v, want none", got)
+	}
+	if _, err := s.SetGitLab("a", "tok-a"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetGitLab("b", "tok-b"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetCustom("ws", "a", secrets.CustomSecret{Key: "k-custom"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ id, want string }{{"a", "tok-a"}, {"b", "tok-b"}, {"c", ""}} {
+		if got := s.GitLab(tc.id); got != tc.want {
+			t.Errorf("GitLab(%q) = %q, want %q", tc.id, got, tc.want)
+		}
+	}
+	if _, err := s.DeleteGitLab("a"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.GitLab("b"); got != "tok-b" {
+		t.Errorf("GitLab(b) after deleting a = %q, want tok-b", got)
+	}
+	if got := s.Custom("ws", "a").Key; got != "k-custom" {
+		t.Errorf("Custom(ws, a).Key after GitLab writes = %q, want k-custom", got)
+	}
+	if got := s.Get("gitlab_connections.b"); got != "" {
+		t.Errorf("Get of a gitlab file key = %q, want empty (never a string value)", got)
+	}
+}
+
+func TestStore_GitLab_builtinsUntouched(t *testing.T) {
+	t.Parallel()
+	s := secrets.New(filepath.Join(t.TempDir(), secrets.FileName), envOf(map[string]string{"GITHUB_PAT": "pat"}))
+	if err := s.Set(secrets.GitHubToken, "ghp_file"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetGitLab("a", gitlabTok); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Get(secrets.GitHubToken); got != "ghp_file" {
+		t.Errorf("Get(%q) after SetGitLab = %q, want ghp_file", secrets.GitHubToken, got)
+	}
+	if got := s.CustomValues(); len(got) != 0 {
+		t.Errorf("CustomValues() = %v, want none (GitLab tokens are not custom secrets)", got)
+	}
+}
+
+func TestStore_GitLab_fileModeAndNoLeftovers(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "nested", secrets.FileName)
+	s := secrets.New(path, envOf(nil))
+	check := func(when string) {
+		t.Helper()
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := info.Mode().Perm(); mode != 0o600 {
+			t.Errorf("secrets file mode %s = %o, want 600", when, mode)
+		}
+		entries, err := os.ReadDir(filepath.Dir(path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 1 {
+			t.Errorf("secrets dir %s has %d entries, want only the secrets file", when, len(entries))
+		}
+	}
+	if _, err := s.SetGitLab("a", gitlabTok); err != nil {
+		t.Fatal(err)
+	}
+	check("after SetGitLab")
+	if _, err := s.DeleteGitLab("a"); err != nil {
+		t.Fatal(err)
+	}
+	check("after DeleteGitLab")
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetGitLab("a", gitlabTok); err != nil {
+		t.Fatal(err)
+	}
+	check("after a write over a 0644 file")
+}
+
+func TestStore_GitLabValues(t *testing.T) {
+	t.Parallel()
+	s := secrets.New(filepath.Join(t.TempDir(), secrets.FileName), envOf(nil))
+	if err := s.Set(secrets.GitHubToken, "ghp_builtin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetCustom("ws", "custom-a", secrets.CustomSecret{Key: "k-custom"}); err != nil {
+		t.Fatal(err)
+	}
+	for id, tok := range map[string]string{"a": "tok-2", "b": "tok-1", "c": "tok-2"} {
+		if _, err := s.SetGitLab(id, tok); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := []string{"tok-1", "tok-2"} // sorted, deduplicated, no built-in or custom value
+	if diff := cmp.Diff(want, s.GitLabValues()); diff != "" {
+		t.Errorf("GitLabValues() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestStore_GitLab_malformedEntryIsEmpty(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), secrets.FileName)
+	writeFile(t, path, `{"gitlab_connections.a":"plain","gitlab_connections.b":{"token":5},"gitlab_connections.c":["x"],"gitlab_connections.d":{}}`)
+	s := secrets.New(path, envOf(nil))
+	for _, id := range []string{"a", "b", "c", "d"} {
+		if got := s.GitLab(id); got != "" {
+			t.Errorf("GitLab(%q) on a malformed entry = %q, want empty", id, got)
+		}
+	}
+	if got := s.GitLabValues(); len(got) != 0 {
+		t.Errorf("GitLabValues() on malformed entries = %v, want none", got)
+	}
+}
+
+func TestStore_SetGitLab_invalidRef(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), secrets.FileName)
+	s := secrets.New(path, envOf(nil))
+	for _, id := range []string{"", "a/b"} {
+		if _, err := s.SetGitLab(id, gitlabTok); !errors.Is(err, secrets.ErrInvalidGitLabRef) {
+			t.Errorf("SetGitLab(%q) error = %v, want ErrInvalidGitLabRef", id, err)
+		}
+		if got := s.GitLab(id); got != "" {
+			t.Errorf("GitLab(%q) = %q, want empty", id, got)
+		}
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("secrets file exists after only invalid writes (stat error %v)", err)
+	}
+}
+
+func TestStore_SetGitLab_errorDoesNotLeakValue(t *testing.T) {
+	t.Parallel()
+	blocker := filepath.Join(t.TempDir(), "file")
+	writeFile(t, blocker, "x")
+	s := secrets.New(filepath.Join(blocker, "sub", secrets.FileName), envOf(nil))
+	_, err := s.SetGitLab("a", gitlabTok)
+	if err == nil {
+		t.Fatal("SetGitLab() error = nil, want an error")
+	}
+	if strings.Contains(err.Error(), gitlabTok) {
+		t.Errorf("SetGitLab() error leaks the token: %v", err)
+	}
+}
+
+func TestStore_GitLab_concurrentWithSet(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), secrets.FileName)
+	s := secrets.New(path, envOf(nil))
+	errs := make(chan error, 6)
+	go func() { errs <- s.Set(secrets.OpenAIKey, "sk") }()
+	go func() { _, err := s.SetCustom("ws", "custom-a", secrets.CustomSecret{Key: "k"}); errs <- err }()
+	for _, id := range []string{"a", "b", "c", "d"} {
+		go func() { _, err := s.SetGitLab(id, "tok-"+id); errs <- err }()
+	}
+	for range 6 {
+		if err := <-errs; err != nil {
+			t.Errorf("write error: %v", err)
+		}
+	}
+	if got := readJSON(t, path); len(got) != 6 {
+		t.Errorf("secrets file has %d keys, want 6: %v", len(got), got)
+	}
+}

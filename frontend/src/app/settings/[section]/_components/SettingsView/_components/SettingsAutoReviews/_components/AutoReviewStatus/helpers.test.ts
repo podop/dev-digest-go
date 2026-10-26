@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fixSectionOf, pollAge, toneOf } from "./helpers";
+import { fixSectionsOf, pollAge, toneOf } from "./helpers";
 
 const NOW = Date.parse("2026-10-25T12:00:00Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -17,15 +17,16 @@ describe("pollAge", () => {
 });
 
 describe("state presentation", () => {
-  it("only active is green, off is muted, the paused states warn; two states link to a fix", () => {
+  it("only active is green, off is muted, the paused states warn; three states link to a fix", () => {
     expect(toneOf("active")).toBe("ok");
     expect(toneOf("off")).toBe("muted");
-    for (const state of ["poll_disabled", "no_github_token", "no_agents", "no_triggers", "paused_spend_cap"] as const) {
+    for (const state of ["poll_disabled", "no_github_token", "no_code_host_token", "no_agents", "no_triggers", "paused_spend_cap"] as const) {
       expect(toneOf(state)).toBe("warn");
     }
-    expect(fixSectionOf("no_github_token")).toBe("github");
-    expect(fixSectionOf("paused_spend_cap")).toBe("api-keys");
-    expect(fixSectionOf("active")).toBeNull();
-    expect(fixSectionOf("no_agents")).toBeNull();
+    expect(fixSectionsOf("no_github_token")).toEqual(["github"]);
+    expect(fixSectionsOf("no_code_host_token")).toEqual(["github", "gitlab"]);
+    expect(fixSectionsOf("paused_spend_cap")).toEqual(["api-keys"]);
+    expect(fixSectionsOf("active")).toEqual([]);
+    expect(fixSectionsOf("no_agents")).toEqual([]);
   });
 });

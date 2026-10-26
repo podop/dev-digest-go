@@ -92,11 +92,22 @@ func TestRepo(t *testing.T) {
 	f := newFixture(t)
 
 	got, err := f.store.Repo(t.Context(), f.repo)
-	if want := (domain.Repo{ID: f.repo, Owner: "acme", Name: "payments-api"}); err != nil || got != want {
+	if want := (domain.Repo{ID: f.repo, Owner: "acme", Name: "payments-api", Provider: "github", Host: "github.com"}); err != nil || got != want {
 		t.Errorf("Repo() = %+v, %v, want %+v", got, err, want)
 	}
 	if _, err := f.store.Repo(t.Context(), "99999999-9999-4999-8999-999999999999"); !errorsIsNotFound(err) {
 		t.Errorf("Repo(unknown) error = %v, want domain.ErrNotFound", err)
+	}
+}
+
+func TestRepo_GitLabReadsItsLocation(t *testing.T) { // FR29, FR18
+	f := newFixture(t)
+	f.exec(t, `UPDATE repos SET owner = 'acme/core', name = 'payments', full_name = 'acme/core/payments', provider = 'gitlab',
+		host = 'git.example.com:8443', project_id = 42, web_url = 'https://git.example.com:8443/acme/core/payments' WHERE id = ?`, f.repo)
+	got, err := f.store.Repo(t.Context(), f.repo)
+	want := domain.Repo{ID: f.repo, Owner: "acme/core", Name: "payments", Provider: "gitlab", Host: "git.example.com:8443", ProjectID: 42}
+	if err != nil || got != want || !got.IsGitLab() {
+		t.Errorf("Repo(GitLab) = %+v, %v, want %+v", got, err, want)
 	}
 }
 

@@ -8,10 +8,13 @@ import { useTranslations } from "next-intl";
 import type { LeaderboardAttention, LeaderboardAttentionReason, LeaderboardNeedsAttention } from "@devdigest/shared";
 import { Avatar, Badge, Card } from "@devdigest/ui";
 import { prDetailPath } from "@/lib/pr-urls";
+import { NO_REPOS, prLabel, type RepoLookup } from "../../helpers";
 import { s } from "./styles";
 
 export interface NeedsAttentionProps {
   data: LeaderboardNeedsAttention;
+  /** The response's repositories by id (GitLab references and host labels). */
+  repos?: RepoLookup;
 }
 
 type Translate = ReturnType<typeof useTranslations<"needsAttention">>;
@@ -34,12 +37,12 @@ function reasonLabel(t: Translate, r: LeaderboardAttentionReason): string {
 /** The reasons that mean an open critical finding (shown in red). */
 const isCriticalReason = (r: LeaderboardAttentionReason): boolean => r.kind === "merged_open_critical" || r.kind === "open_critical";
 
-function Item({ item, t }: { item: LeaderboardAttention; t: Translate }) {
+function Item({ item, t, repos }: { item: LeaderboardAttention; t: Translate; repos: RepoLookup }) {
   return (
     <li style={s.item} data-series={item.pr_id}>
       <div style={s.head}>
         <Link href={prDetailPath(encodeURIComponent(item.repo_id), item.number)} className="mono" style={s.ref}>
-          {item.repo}#{item.number}
+          {prLabel(repos, item.repo_id, item.repo, item.number)}
         </Link>
         <span style={s.prTitle} title={item.title}>
           {item.title}
@@ -60,7 +63,7 @@ function Item({ item, t }: { item: LeaderboardAttention; t: Translate }) {
   );
 }
 
-export function NeedsAttention({ data }: NeedsAttentionProps) {
+export function NeedsAttention({ data, repos = NO_REPOS }: NeedsAttentionProps) {
   const t = useTranslations("leaderboardPanels.needsAttention");
   const { total, items } = data;
   return (
@@ -77,7 +80,7 @@ export function NeedsAttention({ data }: NeedsAttentionProps) {
       ) : (
         <ul style={s.list} aria-label={t("title")}>
           {items.map((item) => (
-            <Item key={item.pr_id} item={item} t={t} />
+            <Item key={item.pr_id} item={item} t={t} repos={repos} />
           ))}
         </ul>
       )}

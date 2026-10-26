@@ -1,6 +1,6 @@
 /* PriorPrs — "Prior PRs touching these files" (client/specs/07-blast-radius.md,
    P3): a bordered accordion with a count badge that opens a timeline. Each row:
-   #number + title (a github.com link built from the PR's own repo), avatar +
+   #number (!number on GitLab) + title (a link on the code host built from the PR's own repo), avatar +
    author · date, then the PR's notes — or, with none, one prose line naming the overlapping files
    (basenames, the full paths in the tooltip).
    Rendered only when there is something to show: a loading, failed or empty
@@ -13,7 +13,8 @@ import { useTranslations } from "next-intl";
 import type { PrHistoryItem } from "@devdigest/shared";
 import { Avatar, Badge, Icon } from "@devdigest/ui";
 import { usePrHistory } from "@/lib/hooks/blast";
-import { githubPrUrl } from "@/lib/github-urls";
+import { prRef, prUrl, type CodeHostRepo } from "@/lib/code-host";
+import { useLinkRepo } from "@/lib/link-repo";
 import { FILES_SHOWN } from "./constants";
 import { fileBasename } from "./helpers";
 import { s } from "./styles";
@@ -31,6 +32,7 @@ function formatWhen(iso: string): string {
 export function PriorPrs({ prId, repoFullName }: PriorPrsProps) {
   const t = useTranslations("blast");
   const { data } = usePrHistory(prId);
+  const repo = useLinkRepo(repoFullName);
   const [open, setOpen] = React.useState(false);
   const listId = React.useId();
 
@@ -49,7 +51,7 @@ export function PriorPrs({ prId, repoFullName }: PriorPrsProps) {
         {open && (
           <ul id={listId} style={s.list}>
             {items.map((pr, i) => (
-              <HistoryRow key={pr.pr_number} pr={pr} repoFullName={repoFullName} last={i === items.length - 1} />
+              <HistoryRow key={pr.pr_number} pr={pr} repo={repo} last={i === items.length - 1} />
             ))}
           </ul>
         )}
@@ -58,8 +60,9 @@ export function PriorPrs({ prId, repoFullName }: PriorPrsProps) {
   );
 }
 
-function HistoryRow({ pr, repoFullName, last }: { pr: PrHistoryItem; repoFullName: string | null; last: boolean }) {
+function HistoryRow({ pr, repo, last }: { pr: PrHistoryItem; repo: CodeHostRepo | null; last: boolean }) {
   const t = useTranslations("blast");
+  const href = prUrl(repo, pr.pr_number);
   return (
     <li style={s.row(last)}>
       <div style={s.rail} aria-hidden="true">
@@ -69,10 +72,10 @@ function HistoryRow({ pr, repoFullName, last }: { pr: PrHistoryItem; repoFullNam
       <div style={s.body}>
         <div style={s.titleLine}>
           <span className="mono" style={s.number}>
-            #{pr.pr_number}
+            {prRef(repo, pr.pr_number)}
           </span>
-          {repoFullName ? (
-            <a href={githubPrUrl(repoFullName, pr.pr_number)} target="_blank" rel="noopener noreferrer" style={s.link}>
+          {href ? (
+            <a href={href} target="_blank" rel="noopener noreferrer" style={s.link}>
               {pr.title}
             </a>
           ) : (

@@ -3,6 +3,7 @@
    reviews, trace, repo-intel, conventions) are internal to this folder. */
 export * from "./core";
 export * from "./custom-providers";
+export * from "./gitlab-connections";
 export * from "./agents";
 export * from "./skills";
 export * from "./reviews";

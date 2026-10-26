@@ -1,9 +1,9 @@
 /* IntentCard helpers — confidence → color, source kind → icon, source → a
-   client-built github.com link (server/specs/05-intent-layer.md: the client
+   client-built link on the repository's code host (server/specs/05-intent-layer.md: the client
    builds every link, never a server-echoed URL). */
 import type { IntentConfidence, IntentSource, IntentSourceKind, IntentSourceStatus } from "@devdigest/shared";
 import type { IconName } from "@devdigest/ui";
-import { githubBlobUrl, githubIssueUrl } from "@/lib/github-urls";
+import { blobUrl, issueUrl, type CodeHostRepo } from "@/lib/code-host";
 
 export function confidenceColor(confidence: IntentConfidence | null | undefined): { fg: string; bg: string } {
   if (confidence === "high") return { fg: "var(--ok)", bg: "var(--ok-bg)" };
@@ -26,13 +26,13 @@ export function sourceIcon(kind: IntentSourceKind): IconName {
 }
 
 /** undefined when there's nothing sensible to link to (title/body/commits/branch/diff). */
-export function sourceHref(source: IntentSource, repoFullName: string, headSha: string | null): string | undefined {
+export function sourceHref(source: IntentSource, repo: CodeHostRepo | null, headSha: string | null): string | undefined {
   if (source.kind === "ticket") {
     const n = Number(source.ref);
-    return Number.isFinite(n) ? githubIssueUrl(repoFullName, n) : undefined;
+    return Number.isFinite(n) ? (issueUrl(repo, n) ?? undefined) : undefined;
   }
   if (source.kind === "doc" && headSha) {
-    return githubBlobUrl(repoFullName, headSha, source.ref);
+    return blobUrl(repo, headSha, source.ref) ?? undefined;
   }
   return undefined;
 }

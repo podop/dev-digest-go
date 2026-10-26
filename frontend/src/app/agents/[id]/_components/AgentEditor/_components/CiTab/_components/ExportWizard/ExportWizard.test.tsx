@@ -23,6 +23,18 @@ const REPO: Repo = {
   created_by: null,
 };
 
+const GITLAB_REPO: Repo = {
+  ...REPO,
+  id: "r2",
+  owner: "grp",
+  name: "svc",
+  full_name: "grp/svc",
+  provider: "gitlab",
+  host: "gitlab.com",
+  web_url: "https://gitlab.com/grp/svc",
+  connection_id: "c1",
+};
+
 const FILES: CiFile[] = [
   { path: ".github/workflows/devdigest-review-synapse-bot.yml", contents: "name: review\n", editable: true },
   { path: ".devdigest/runner/index.js", contents: "// bundle", editable: false },
@@ -79,6 +91,25 @@ async function toConfigure(user: ReturnType<typeof open>["user"]) {
 
 const exportBodies = (http: ReturnType<typeof mockFetch>) =>
   http.requests("POST", "/agents/a1/export-ci").map((r) => r.body as Record<string, unknown>);
+
+describe("ExportWizard — repository picker (SCR3)", () => {
+  it("offers GitHub repositories only and says to connect one when the workspace has GitLab ones only", async () => {
+    mockFetch({ "GET /repos": [GITLAB_REPO, REPO], "GET /settings/custom-providers": [] });
+    const { user } = renderWithProviders(
+      <ExportWizard agentId="a1" agentName="Bot" provider="openrouter" onClose={() => {}} />,
+    );
+
+    await user.click(await screen.findByRole("combobox", { name: "Target repository" }));
+    expect(screen.getByRole("option", { name: "acme/api" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "grp/svc" })).not.toBeInTheDocument();
+
+    cleanup();
+    mockFetch({ "GET /repos": [GITLAB_REPO], "GET /settings/custom-providers": [] });
+    renderWithProviders(<ExportWizard agentId="a1" agentName="Bot" provider="openrouter" onClose={() => {}} />);
+    expect(await screen.findByText("Connect a repository first")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Target repository" })).not.toBeInTheDocument();
+  });
+});
 
 describe("ExportWizard — custom provider", () => {
   it("defaults to Self-hosted with the note, lists the response's secrets and variables with the base URL and a copy button, and re-requests the preview on a Runner change", async () => {
