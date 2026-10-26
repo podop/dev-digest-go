@@ -1229,6 +1229,16 @@ strict golden are unchanged.
 - D35 — The user approved this spec with D25–D34 and it is ready for planning; planning still starts only after
   Settings A passes its review gate (D3) (user, 2026-10-24).
 
+- D36 — Planner SCRs answered by the user (2026-10-26; plan `docs/plans/2026-10-26-gitlab-a-connection-sync.md`):
+  SCR1 an MR counts as a fork when `source_project_id ≠ target_project_id`, and a missing value counts as a fork
+  (fail closed, like Settings C D13); SCR2 GitLab API and git calls ignore HTTP(S)_PROXY (custom providers A3) and git
+  pins the address it checked; SCR5 git uses `<DataDir>/git-ca-bundle.pem` (system store + `DEVDIGEST_EXTRA_CA_FILE`),
+  and the backend refuses to start when the extra CA is set but no system bundle is found.
+- D37 — Planner defaults accepted (user pre-approval, 2026-10-26): SCR3 the CI export wizard and the GitHub Action
+  install dialog list GitHub repos only; SCR4 diff stats via GraphQL `projects(ids:[gid])` (query complexity measured
+  in the manual step); SCR6 leaderboard rows' `repo` is the repo name; SCR7 moved code paths updated; A1–A13 as in
+  the plan's context pack. The migration number is 0010.
+
 ## 17. Open questions
 None open. Q1–Q9 of the draft were answered by the user on 2026-10-24 and are recorded as D25–D34 (Q1 → D25, D26;
 Q2 → D33; Q3 → D27; Q4 → D28; Q5 → D29; Q6 → D30; Q7 → D31; Q8 → D32; Q9 → D34).
