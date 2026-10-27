@@ -553,6 +553,37 @@ func TestLists_GitLabFields(t *testing.T) {
 	if err != nil || len(onlyB) != 1 || onlyB[0].Host != hostA {
 		t.Errorf("ListInstallations(agent B) = %+v, %v, want the one GitLab installation", onlyB, err)
 	}
+
+	// FR45: the repository listing's newest run carries the merge request number and link (same rule
+	// as the runs); GitHub keeps its pull request number and never has a link.
+	repoList, err := f.store.ListRepoInstallations(ctx, f.ws)
+	if err != nil {
+		t.Fatalf("ListRepoInstallations() = _, %v", err)
+	}
+	type prView struct {
+		Number int
+		URL    string
+	}
+	gotPR := map[string]prView{}
+	for _, g := range domain.GroupByRepo(repoList) {
+		if g.LastRun == nil || g.LastRun.PRNumber == nil {
+			t.Fatalf("GroupByRepo()[%s %s] last run = %+v, want one with a PR number", g.Host, g.Repo, g.LastRun)
+		}
+		v := prView{Number: *g.LastRun.PRNumber}
+		if g.LastRun.PRURL != nil {
+			v.URL = *g.LastRun.PRURL
+		}
+		gotPR[g.Host+"|"+g.Repo] = v
+	}
+	wantPR := map[string]prView{
+		hostA + "|grp/current-path/": {12, "https://" + hostA + "/grp/current-path/-/merge_requests/12"},
+		hostB + "|ops/web":           {12, ""}, // no connection: no link (EC34)
+		hostA + "|grp/unbound":       {12, ""}, // connected host, no repository row
+		"github.com|acme/web":        {7, ""},
+	}
+	if diff := cmp.Diff(wantPR, gotPR); diff != "" {
+		t.Errorf("ListRepoInstallations() last-run PR mismatch (-want +got):\n%s", diff)
+	}
 }
 
 // AC35 (FR46): the per-repository list has GitLab entries, grouped by repository identity and

@@ -1,5 +1,6 @@
 import type { CiRepoEntry, CiRepoInstallation, CiRepoLastRun } from "@devdigest/shared";
 import { safeRunHref } from "@/lib/ci-runs";
+import { prRef } from "@/lib/code-host";
 
 const MINUTE = 60;
 const HOUR = 3600;
@@ -62,6 +63,19 @@ export function lastRunView(run: CiRepoLastRun | null, now: number = Date.now())
     absolute: new Date(run.ran_at).toLocaleString(),
     href: safeRunHref(run.github_url),
   };
+}
+
+/** The merge request of a GitLab row's last run: `!<n>` and its http(s) link (null when the server sent none, EC34). */
+export interface LastRunMergeRequest {
+  ref: string;
+  href: string | null;
+}
+
+/** GitLab rows only (GitHub rows keep their job link and no `#<n>`, FR45); null without a last run or a number. */
+export function lastRunMergeRequest(entry: Pick<CiRepoEntry, "provider" | "target_type" | "last_run">): LastRunMergeRequest | null {
+  const run = entry.last_run;
+  if (!isGitLabEntry(entry) || !run || run.pr_number == null) return null;
+  return { ref: prRef({ provider: "gitlab" }, run.pr_number), href: safeRunHref(run.pr_url) };
 }
 
 /** Whether the entry is a GitLab CI repository (FR46: `target_type` / `provider`, absent on pre-GitLab payloads). */

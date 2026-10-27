@@ -1592,10 +1592,10 @@ func TestSettingsD_CIInstallationsByRepo(t *testing.T) { // AC1, FR1, EC12
 	run := func(agent string) string {
 		return e.id(t, `INSERT INTO agent_runs (workspace_id, agent_id, status, source) VALUES (?, ?, 'done', 'ci') RETURNING id::text`, e.ws, agent)
 	}
-	e.exec(t, `INSERT INTO ci_runs (ci_installation_id, agent_run_id, ran_at, status, github_url) VALUES
-		(?, ?, '2026-10-10T08:00:00Z', 'failed', 'https://github.com/acme/api/actions/runs/1'),
-		(?, ?, '2026-10-12T09:15:30.250Z', 'succeeded', 'https://github.com/acme/api/actions/runs/2'),
-		(?, ?, NULL, 'running', NULL)`, x1, run(a1), x2, run(a2), x1, run(a1))
+	e.exec(t, `INSERT INTO ci_runs (ci_installation_id, agent_run_id, ran_at, status, github_url, pr_number) VALUES
+		(?, ?, '2026-10-10T08:00:00Z', 'failed', 'https://github.com/acme/api/actions/runs/1', NULL),
+		(?, ?, '2026-10-12T09:15:30.250Z', 'succeeded', 'https://github.com/acme/api/actions/runs/2', 21),
+		(?, ?, NULL, 'running', NULL, NULL)`, x1, run(a1), x2, run(a2), x1, run(a1))
 	s := e.boot(t)
 
 	got := s.get("/ci/installations")
@@ -1632,7 +1632,7 @@ func TestSettingsD_CIInstallationsByRepo(t *testing.T) { // AC1, FR1, EC12
 	if want := []any{nil, "zeta"}; !cmp.Equal(slugs, want) {
 		t.Errorf("acme/api slugs = %v, want %v", slugs, want)
 	}
-	wantLast := sdDoc{"status": "succeeded", "ran_at": "2026-10-12T09:15:30.250Z", "github_url": "https://github.com/acme/api/actions/runs/2", "agent_id": a2}
+	wantLast := sdDoc{"status": "succeeded", "ran_at": "2026-10-12T09:15:30.250Z", "github_url": "https://github.com/acme/api/actions/runs/2", "agent_id": a2, "pr_number": float64(21), "pr_url": nil}
 	if diff := cmp.Diff(any(wantLast), api["last_run"]); diff != "" {
 		t.Errorf("acme/api last_run mismatch (-want +got):\n%s", diff)
 	}

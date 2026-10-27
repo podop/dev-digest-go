@@ -225,9 +225,14 @@ func TestRuns_GitLabShape(t *testing.T) {
 func TestRepoInstallations_GitLabShape(t *testing.T) {
 	t.Parallel()
 	installed := time.Date(2026, 10, 19, 8, 0, 0, 0, time.UTC)
+	ranAt := time.Date(2026, 10, 20, 9, 30, 0, 0, time.UTC)
+	mrURL := "https://" + gitlabHost + "/grp/proj/-/merge_requests/9"
 	f := &fakeCI{groups: []domain.RepoGroup{
 		{Repo: "grp/proj", TargetType: "gitlab_ci", Host: gitlabHost, ProjectID: 42, Installations: []domain.RepoInstallation{
 			{ID: instID, AgentID: agentID, AgentName: "alpha", Repo: "grp/proj", Slug: ptr("alpha"), InstalledAt: installed, TargetType: "gitlab_ci", Host: gitlabHost, ProjectID: 42},
+		}, LastRun: &domain.Run{
+			ID: "r1", Status: ptr("succeeded"), RanAt: &ranAt, AgentID: ptr(agentID),
+			GithubURL: ptr("https://" + gitlabHost + "/grp/proj/-/jobs/5"), PRNumber: ptr(9), PRURL: &mrURL,
 		}},
 		{Repo: "grp/proj", TargetType: "gha", Installations: []domain.RepoInstallation{
 			{ID: "i2", AgentID: agentID, AgentName: "alpha", Repo: "grp/proj", InstalledAt: installed},
@@ -239,7 +244,11 @@ func TestRepoInstallations_GitLabShape(t *testing.T) {
 	}
 	want := map[string]any{"repos": []any{
 		map[string]any{
-			"repo": "grp/proj", "provider": "gitlab", "host": gitlabHost, "target_type": "gitlab_ci", "last_run": nil,
+			"repo": "grp/proj", "provider": "gitlab", "host": gitlabHost, "target_type": "gitlab_ci",
+			"last_run": map[string]any{
+				"status": "succeeded", "ran_at": "2026-10-20T09:30:00.000Z", "agent_id": agentID,
+				"github_url": "https://" + gitlabHost + "/grp/proj/-/jobs/5", "pr_number": 9.0, "pr_url": mrURL,
+			},
 			"installations": []any{map[string]any{"id": instID, "agent_id": agentID, "agent_name": "alpha", "slug": "alpha", "installed_at": "2026-10-19T08:00:00.000Z"}},
 		},
 		map[string]any{

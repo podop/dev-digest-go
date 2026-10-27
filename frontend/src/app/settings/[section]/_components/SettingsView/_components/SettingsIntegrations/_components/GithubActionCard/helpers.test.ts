@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { entryKey, installedAgents, isGitLabEntry, lastRunView, manageHref, relativeTime, runStatusKey } from "./helpers";
+import { entryKey, installedAgents, isGitLabEntry, lastRunMergeRequest, lastRunView, manageHref, relativeTime, runStatusKey } from "./helpers";
 
 const NOW = Date.parse("2026-10-26T12:00:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -50,5 +50,21 @@ describe("GithubActionCard helpers", () => {
     expect(entryKey({ repo: "a/b", host: "gitlab.com", target_type: "gitlab_ci" })).not.toBe(
       entryKey({ repo: "a/b", host: "github.com", target_type: "gha" }),
     );
+  });
+
+  it("lastRunMergeRequest gives '!<n>' and its http(s) link for GitLab rows only, never '#<n>' for GitHub", () => {
+    const run = (pr_number: number | null, pr_url: string | null) => ({
+      status: "failed" as const, ran_at: ago(60_000), github_url: null, agent_id: "a1", pr_number, pr_url,
+    });
+    const gl = { provider: "gitlab" as const, target_type: "gitlab_ci" as const };
+    expect(lastRunMergeRequest({ ...gl, last_run: run(9, "https://gitlab.com/g/p/-/merge_requests/9") })).toEqual({
+      ref: "!9",
+      href: "https://gitlab.com/g/p/-/merge_requests/9",
+    });
+    expect(lastRunMergeRequest({ ...gl, last_run: run(9, null) })).toEqual({ ref: "!9", href: null });
+    expect(lastRunMergeRequest({ ...gl, last_run: run(9, "javascript:alert(1)") })).toEqual({ ref: "!9", href: null });
+    expect(lastRunMergeRequest({ ...gl, last_run: run(null, null) })).toBeNull();
+    expect(lastRunMergeRequest({ ...gl, last_run: null })).toBeNull();
+    expect(lastRunMergeRequest({ provider: "github", target_type: "gha", last_run: run(7, null) })).toBeNull();
   });
 });

@@ -111,13 +111,19 @@ func runGitLab(ctx context.Context, cfg Config, deps Deps, in glRun) (result, er
 	triggered := domain.GateTriggered(findings, m.CIFailOn)
 
 	// 5. The artifact is written before anything is posted (FR22).
+	// The artifact holds counts and metadata, never finding text; the strings it does carry (names
+	// from the manifest, the project path) are redacted like every other output (FR30, r1 L3).
 	commit, projectID, jobID, attempt := glEnv.CommitSHA, glEnv.ProjectID, glEnv.JobID, int64(glRunAttempt)
+	skills := make([]string, len(m.Skills))
+	for i, s := range m.Skills {
+		skills[i] = redactGitLab(env, s)
+	}
 	artifact, err := domain.BuildArtifact(domain.ArtifactInput{
 		Findings: findings, CostUSD: outcome.Usage.CostUSD, DurationMS: durationMS,
-		Agent: m.Name, PRNumber: int(glEnv.MRIID), CommitSHA: &commit,
-		Repository: glEnv.ProjectPath, RepositoryID: &projectID, RunID: &jobID, RunAttempt: &attempt,
-		Model: m.Model, ManifestVersion: artifactVersion(m.Version),
-		Skills: m.Skills, Blockers: blockers,
+		Agent: redactGitLab(env, m.Name), PRNumber: int(glEnv.MRIID), CommitSHA: &commit,
+		Repository: redactGitLab(env, glEnv.ProjectPath), RepositoryID: &projectID, RunID: &jobID, RunAttempt: &attempt,
+		Model: redactGitLab(env, m.Model), ManifestVersion: artifactVersion(m.Version),
+		Skills: skills, Blockers: blockers,
 	})
 	if err != nil {
 		return result{}, err
@@ -306,6 +312,14 @@ func gitLabLine(env Env, text string) string {
 // gitLabFailureLine is the failure line of GitLab mode, cut to MaxFailureBytes after redaction.
 func gitLabFailureLine(env Env, text string) string {
 	return cutBytes(failurePrefix+gitLabLine(env, text), MaxFailureBytes)
+}
+
+// GitLabLine is prefix plus text as one GitLab job-log line, for the lines the composition root
+// prints outside the use case (a panic, an unusable CA bundle, the model layer's warnings): the
+// §7.5 secrets are redacted, the text is made safe by domain.GitLabLogText (FR29) and the whole
+// line is cut to MaxFailureBytes. The prefix is trusted.
+func GitLabLine(env Env, prefix, text string) string {
+	return cutBytes(prefix+gitLabLine(env, text), MaxFailureBytes)
 }
 
 // gitLabSecretNames are the variables of §7.5 whose values never reach a log line, an error text

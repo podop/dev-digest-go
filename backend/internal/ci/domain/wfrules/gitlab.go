@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // This file is the rule checker of a GitLab CI job file (GitLab C, FR14): the generated file of
@@ -152,7 +153,99 @@ func CheckGitLab(text string, r GitLabRules) Result {
 			return fail(UntrustedVariable)
 		}
 	}
+	if !gitlabShellOK(job) {
+		return fail(UntrustedVariable)
+	}
 	return Result{OK: true}
+}
+
+// gitlabShellOK is the second half of rule 6: the strings the shell reads - the members of
+// `script` and of `image.entrypoint` - must not read variables around the written-out reference
+// forms of referencesOK. Rule 6 is a lint, not a sandbox: it refuses the ways to reach a
+// variable's value without naming it that are cheap to detect, and fails closed on them.
+func gitlabShellOK(job *object) bool {
+	var lines []value
+	lines, _ = job.vals["script"].([]value)
+	if img, ok := job.vals["image"].(*object); ok {
+		if e, ok := img.vals["entrypoint"].([]value); ok {
+			lines = append(slices.Clone(lines), e...)
+		}
+	}
+	for _, l := range lines {
+		if s, ok := l.(string); ok && !shellReadsNoVariables(s) {
+			return false
+		}
+	}
+	return true
+}
+
+// gitlabEnvCommands are the words that print, dump or evaluate variables: printenv, env, eval,
+// declare/typeset/set/export/readonly/compgen (their no-argument and -p/-v forms dump every
+// variable) - set variables in `variables`, not in the script.
+var gitlabEnvCommands = []string{"printenv", "env", "eval", "declare", "typeset", "set", "export", "readonly", "compgen"}
+
+// namesEnviron reports whether s holds the word "environ" (any case) not followed by a letter.
+func namesEnviron(s string) bool {
+	lower := strings.ToLower(s)
+	for from := 0; ; {
+		i := strings.Index(lower[from:], "environ")
+		if i < 0 {
+			return false
+		}
+		end := from + i + len("environ")
+		if end == len(lower) || lower[end] < 'a' || lower[end] > 'z' {
+			return true
+		}
+		from = end
+	}
+}
+
+// shellReadsNoVariables reports whether the script line s contains none of the indirect reads:
+//   - command substitution `$(` (also `$((`) and backticks, process substitution `<(` and `>(`;
+//   - ANSI-C quoting `$'`, which writes a name as escapes ($'\x24NAME'); `${!` indirection is
+//     refused by referencesOK;
+//   - brace expansion with a comma or `..` (e{,}nv spells env);
+//   - the word "environ" in any case, not followed by a letter (/proc/self/environ, ENVIRON[..],
+//     os.environ; "environment" passes);
+//   - a command word of gitlabEnvCommands, after quotes and backslashes are removed (a quote or a
+//     backslash inside the name does not hide it) and with a path reduced to its last element
+//     (/usr/bin/env); words are split at white space and at ; & | ( ) < > { } , $ ! and #.
+//
+// Glob spellings (/usr/bin/e?v) and interpreters (python -c) are out of scope: they need a
+// shell-aware parser, and the job file is the user's own, edited through the local API.
+func shellReadsNoVariables(s string) bool {
+	for _, bad := range []string{"$(", "`", "$'", "<(", ">("} {
+		if strings.Contains(s, bad) {
+			return false
+		}
+	}
+	if namesEnviron(s) {
+		return false
+	}
+	inGroup := false
+	for i := 0; i < len(s); i++ {
+		switch {
+		case s[i] == '{' && (i == 0 || s[i-1] != '$'):
+			inGroup = true
+		case s[i] == '}':
+			inGroup = false
+		case inGroup && (s[i] == ',' || s[i] == '.' && i+1 < len(s) && s[i+1] == '.'):
+			return false
+		}
+	}
+	plain := strings.NewReplacer("'", "", `"`, "", `\`, "").Replace(s)
+	words := strings.FieldsFunc(plain, func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune(";&|()<>{},$!#", r)
+	})
+	for _, word := range words {
+		if i := strings.LastIndexByte(word, '/'); i >= 0 {
+			word = word[i+1:]
+		}
+		if slices.Contains(gitlabEnvCommands, word) {
+			return false
+		}
+	}
+	return true
 }
 
 // baseURLName, apiKeyName and headerName are the derived names for <S> = env (spec 7.3, FR10); they

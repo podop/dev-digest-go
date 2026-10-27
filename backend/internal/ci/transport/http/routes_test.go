@@ -753,7 +753,7 @@ func TestRepoInstallations_Shape(t *testing.T) {
 				{ID: instID, AgentID: agentID, AgentName: "alpha", Repo: "acme/api", Slug: ptr("alpha"), InstalledAt: installed},
 				{ID: "i2", AgentID: "a2", AgentName: "beta", Repo: "acme/api", InstalledAt: installed},
 			},
-			LastRun: &domain.Run{ID: "r1", Status: ptr("succeeded"), RanAt: &ranAt, GithubURL: ptr("https://github.com/acme/api/actions/runs/1"), AgentID: ptr(agentID)},
+			LastRun: &domain.Run{ID: "r1", Status: ptr("succeeded"), RanAt: &ranAt, GithubURL: ptr("https://github.com/acme/api/actions/runs/1"), AgentID: ptr(agentID), PRNumber: ptr(7)},
 		},
 		{
 			Repo:          "acme/web",
@@ -780,6 +780,7 @@ func TestRepoInstallations_Shape(t *testing.T) {
 			"last_run": map[string]any{
 				"status": "succeeded", "ran_at": "2026-10-20T09:30:00.000Z",
 				"github_url": "https://github.com/acme/api/actions/runs/1", "agent_id": agentID,
+				"pr_number": 7.0, "pr_url": nil,
 			},
 		},
 		map[string]any{
@@ -794,7 +795,7 @@ func TestRepoInstallations_Shape(t *testing.T) {
 			"installations": []any{
 				map[string]any{"id": "i4", "agent_id": agentID, "agent_name": "alpha", "slug": nil, "installed_at": "2026-10-19T08:00:00.000Z"},
 			},
-			"last_run": map[string]any{"status": nil, "ran_at": nil, "github_url": nil, "agent_id": nil},
+			"last_run": map[string]any{"status": nil, "ran_at": nil, "github_url": nil, "agent_id": nil, "pr_number": nil, "pr_url": nil},
 		},
 	}}
 	if diff := cmp.Diff(want, decode(t, r)); diff != "" {

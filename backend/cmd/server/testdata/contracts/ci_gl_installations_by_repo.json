@@ -14,6 +14,8 @@
       "last_run": {
         "agent_id": "00000000-0000-4000-8000-000000000002",
         "github_url": "https://github.com/acme/web/actions/runs/1001",
+        "pr_number": 7,
+        "pr_url": null,
         "ran_at": "2026-01-01T00:00:00.000Z",
         "status": "succeeded"
       },
@@ -35,6 +37,8 @@
       "last_run": {
         "agent_id": "00000000-0000-4000-8000-000000000002",
         "github_url": "https://gitlab.example.com/acme/web/-/jobs/3001",
+        "pr_number": 4,
+        "pr_url": null,
         "ran_at": "2026-01-01T00:00:00.000Z",
         "status": "succeeded"
       },
@@ -56,6 +60,8 @@
       "last_run": {
         "agent_id": "00000000-0000-4000-8000-000000000002",
         "github_url": "https://gitlab-1.lab.test/acme/web-renamed/-/jobs/2001",
+        "pr_number": 3,
+        "pr_url": "https://gitlab-1.lab.test/acme/web-renamed/-/merge_requests/3",
         "ran_at": "2026-01-01T00:00:00.000Z",
         "status": "succeeded"
       },

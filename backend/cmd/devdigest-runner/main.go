@@ -126,6 +126,21 @@ func (k envKeys) Get(name string) string {
 	return ""
 }
 
+// gitLabLogWriter passes the model layer's log lines (one slog record per Write) through line
+// before they reach the GitLab job log: redaction, FR29 sanitising and the cap. The record's
+// closing line break is kept; the text itself holds none (slog quotes them).
+type gitLabLogWriter struct {
+	w    io.Writer
+	line func(text string) string
+}
+
+func (g gitLabLogWriter) Write(p []byte) (int, error) {
+	if _, err := io.WriteString(g.w, g.line(strings.TrimSuffix(string(p), "\n"))+"\n"); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
 // noPrices is the runner's price book for OpenRouter: none. The cost of a call is only what
 // OpenRouter reports.
 type noPrices struct{}
@@ -261,7 +276,7 @@ func (p providers) customCall(id llm.Provider, sel runnerapp.ProviderSelection) 
 // secretNames are the environment variables whose values never reach the job log (NFR7, A10):
 // every key and token the runner knows, whichever provider the manifest names.
 func secretNames() []string {
-	names := []string{cidomain.SecretOpenRouter, cidomain.SecretOpenAI, cidomain.SecretAnthropic, keynames.GitHubToken, "DEVDIGEST_LLM_API_KEY"}
+	names := []string{cidomain.SecretOpenRouter, cidomain.SecretOpenAI, cidomain.SecretAnthropic, keynames.GitHubToken, cidomain.GitLabTokenVariable, "DEVDIGEST_LLM_API_KEY"}
 	for n := 1; n <= custom.MaxHeaders; n++ {
 		names = append(names, "DEVDIGEST_LLM_HEADER_"+strconv.Itoa(n))
 	}
@@ -277,6 +292,15 @@ const minRedactLen = 8
 func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr io.Writer, ep endpoints) (code int) {
 	getenv := func(name string) string { v, _ := lookup(name); return v }
 	out := env.NewOut(stdout, stderr)
+	gitLab := false // set below, once the panic handler is in place
+	// logLine is a line printed outside the use case: in GitLab mode it passes the §7.5 redaction,
+	// the FR29 sanitiser and the 1,200-byte cap (security r1 L2); in GitHub mode it is LogLine.
+	logLine := func(prefix, text string) string {
+		if gitLab {
+			return runnerapp.GitLabLine(env.Process{LookupEnv: lookup}, prefix, text)
+		}
+		return runnerapp.LogLine(prefix, text)
+	}
 	defer func() {
 		// A panic is a bug, not a review result; it still must not leave a key in the job log.
 		if r := recover(); r != nil {
@@ -286,28 +310,34 @@ func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr
 					msg = strings.ReplaceAll(msg, v, "[REDACTED]")
 				}
 			}
-			out.Stderr(runnerapp.LogLine("[agent-runner] fatal error: ", msg))
+			out.Stderr(logLine("[agent-runner] fatal error: ", msg))
 			code = runnerapp.ExitFailed
 		}
 	}()
 
+	gitLab = runnerdomain.GitLabModeRequested(lookup)
+	logOut := stderr
+	if gitLab {
+		logOut = gitLabLogWriter{w: stderr, line: func(text string) string { return logLine("", text) }}
+	}
+
 	rootCAs, err := egress.LoadExtraCA(getenv(envExtraCAFile))
 	if err != nil {
-		out.Stderr(runnerapp.LogLine("[agent-runner] FAILED: ", envExtraCAFile+": "+err.Error()))
+		out.Stderr(logLine("[agent-runner] FAILED: ", envExtraCAFile+": "+err.Error()))
 		return runnerapp.ExitFailed
 	}
 
-	client := newClient(getenv, stderr, ep)
+	client := newClient(getenv, logOut, ep)
 	defer client.Close()
 	deps := runnerapp.Deps{
 		Env:       env.Process{LookupEnv: lookup},
 		Files:     env.Files{},
 		GitHub:    ghapi.New(ghapi.Options{BaseURL: ep.GitHub}),
 		LLM:       reviewLLM{client: client},
-		Providers: providers{ep: ep, stderr: stderr, rootCAs: rootCAs},
+		Providers: providers{ep: ep, stderr: logOut, rootCAs: rootCAs},
 		Out:       out,
 	}
-	if runnerdomain.GitLabModeRequested(lookup) {
+	if gitLab {
 		deps.GitLab, deps.GitDiff = gitLabDeps(lookup)
 	}
 	return runnerapp.Run(ctx, runnerapp.Config{BuildID: buildID}, deps)

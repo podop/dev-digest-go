@@ -1095,7 +1095,7 @@ describe("Go backend golden responses", () => {
   it("the CI repositories golden lists repositories in byte order with the newest run", () => {
     const { repos } = ciRepoInstallations.parse(read("ci_installations_by_repo"));
     expect(repos.map((r) => r.repo)).toEqual(["acme/api", "acme/web"]);
-    expect(repos[0]?.last_run).toMatchObject({ status: "succeeded" });
+    expect(repos[0]?.last_run).toMatchObject({ status: "succeeded", pr_number: null, pr_url: null });
     expect(repos[1]?.last_run).toBeNull();
   });
 
@@ -1206,6 +1206,16 @@ describe("Go backend golden responses", () => {
       ["github", "github.com", "acme/web", "gha"],
       ["gitlab", "gitlab.example.com", "acme/web", "gitlab_ci"],
       ["gitlab", "gitlab-1.lab.test", "acme/web-renamed", "gitlab_ci"],
+    ]);
+    // FR45: the last run carries its PR/MR number; pr_url only for a GitLab run on a connected host (EC34), never GitHub.
+    const lastRuns = ciMixedRepoInstallations.parse(read("ci_gl_installations_by_repo")).repos.map((r) => [
+      r.last_run?.pr_number,
+      r.last_run?.pr_url,
+    ]);
+    expect(lastRuns).toEqual([
+      [7, null],
+      [4, null],
+      [3, expect.stringMatching(/^https:\/\/gitlab-1\.lab\.test\/acme\/web-renamed\/-\/merge_requests\/3$/)],
     ]);
   });
 

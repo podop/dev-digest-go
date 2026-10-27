@@ -22,7 +22,8 @@
       "running": "running",
       "unknown": "unknown status"
     },
-    "targetGitlab": "GitLab CI"
+    "targetGitlab": "GitLab CI",
+    "mergeRequest": "Merge request {ref}"
   },
   "dialog": {
     "title": "Install in a repo",

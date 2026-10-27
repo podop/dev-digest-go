@@ -20,6 +20,7 @@ export const s = {
   } satisfies CSSProperties,
   target: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 8 } satisfies CSSProperties,
   host: { fontSize: 12, color: "var(--text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
+  mr: { flexShrink: 0, fontSize: 12.5, color: "var(--text-secondary)" } satisfies CSSProperties,
   run: {
     flexShrink: 0,
     maxWidth: 220,

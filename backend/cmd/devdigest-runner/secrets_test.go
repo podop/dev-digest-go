@@ -301,7 +301,7 @@ func maps(m map[string]string) map[string]string {
 func TestSecrets_PanicRedactsEveryKnownName(t *testing.T) {
 	names := secretNames()
 	want := []string{
-		"OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "DEVDIGEST_LLM_API_KEY",
+		"OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "DEVDIGEST_GITLAB_TOKEN", "DEVDIGEST_LLM_API_KEY",
 		"DEVDIGEST_LLM_HEADER_1", "DEVDIGEST_LLM_HEADER_2", "DEVDIGEST_LLM_HEADER_3", "DEVDIGEST_LLM_HEADER_4", "DEVDIGEST_LLM_HEADER_5",
 	}
 	if !slices.Equal(names, want) {

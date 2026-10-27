@@ -366,6 +366,39 @@ func TestGitLab_ArtifactFields(t *testing.T) {
 	}
 }
 
+// FR30: the artifact carries no finding text, and the strings it does carry are redacted.
+func TestGitLab_ArtifactHoldsNoSecret(t *testing.T) {
+	const key = "sk-or-ABCDEFGH12345678"
+	leaky := finding(reviewer.SeverityWarning, "new.go", 3, "key "+key)
+	leaky.Rationale = "token " + glToken
+	e := glVars()
+	e["DEVDIGEST_POST_AS"] = "none"
+	e["OPENROUTER_API_KEY"] = key
+	e["CI_PROJECT_PATH"] = "grp/" + key
+	files := &fakeFiles{files: map[string]string{
+		"/ws/.devdigest/agents/rev.yaml": "name: Rev " + key + "\nmodel: m-" + key + "\nsystem_prompt: be strict\nstrategy: map-reduce\nci_fail_on: warning\n",
+	}}
+	gl, d := glStd()
+	r := glRunApp(t, e, files, gl, d, glEngine(leaky))
+	if r.code != 0 && r.code != 1 {
+		t.Fatalf("Run() = %d, stderr %q", r.code, r.out.stderr)
+	}
+	got := files.written["/ws/devdigest-result.json"]
+	if got == "" {
+		t.Fatalf("no artifact written, stderr %q", r.out.stderr)
+	}
+	for _, secret := range []string{key, glToken} {
+		if strings.Contains(got, secret) {
+			t.Errorf("artifact holds %q:\n%s", secret, got)
+		}
+	}
+	for _, want := range []string{`"model": "m-[REDACTED]"`, `"repository": "grp/[REDACTED]"`, `"agent": "Rev [REDACTED]"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("artifact lacks %s:\n%s", want, got)
+		}
+	}
+}
+
 func TestGitLab_TraceLine(t *testing.T) {
 	e := glVars()
 	e["DEVDIGEST_POST_AS"] = "none"

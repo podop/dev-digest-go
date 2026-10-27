@@ -136,12 +136,19 @@ describe("GithubActionCard", () => {
 const GITLAB_ENTRY: CiRepoEntry = {
   repo: "grp/svc",
   installations: [inst("i9", "ag1", "Security Reviewer")],
-  last_run: { status: "failed", ran_at: HOURS_AGO(3), github_url: "https://gitlab.com/grp/svc/-/jobs/55", agent_id: "ag1" },
+  last_run: { status: "failed", ran_at: HOURS_AGO(3), github_url: "https://gitlab.com/grp/svc/-/jobs/55", agent_id: "ag1", pr_number: 9, pr_url: "https://gitlab.com/grp/svc/-/merge_requests/9" },
   provider: "gitlab",
   host: "gitlab.com",
   target_type: "gitlab_ci",
 };
-const GITHUB_SAME_NAME: CiRepoEntry = { ...SINGLE, repo: "grp/svc", provider: "github", host: "github.com", target_type: "gha" };
+const GITHUB_SAME_NAME: CiRepoEntry = {
+  ...SINGLE,
+  repo: "grp/svc",
+  last_run: { ...SINGLE.last_run!, pr_number: 7, pr_url: null },
+  provider: "github",
+  host: "github.com",
+  target_type: "gha",
+};
 
 describe("GithubActionCard with GitLab (GitLab C FR45, AC42)", () => {
   it("is titled 'GitHub Action' without a GitLab repository and 'CI reviews' with one", async () => {
@@ -177,6 +184,38 @@ describe("GithubActionCard with GitLab (GitLab C FR45, AC42)", () => {
     );
     expect(within(gitlab!).getByRole("link", { name: "Manage grp/svc" })).toHaveAttribute("href", "/agents/ag1?tab=ci");
   });
+
+  it("shows the last run's merge request as '!<n>' linked to pr_url on GitLab rows, and no '#<n>' on GitHub rows (FR45)", async () => {
+    mockFetch({ [ROUTE]: body(GITHUB_SAME_NAME, GITLAB_ENTRY) });
+    renderWithProviders(<GithubActionCard />);
+
+    expect(await screen.findByText("2 repos")).toBeInTheDocument();
+    const [github, gitlab] = screen.getAllByRole("listitem");
+    const mr = within(gitlab!).getByRole("link", { name: "Merge request !9" });
+    expect(mr).toHaveTextContent("!9");
+    expect(mr).toHaveAttribute("href", "https://gitlab.com/grp/svc/-/merge_requests/9");
+    expect(mr).toHaveAttribute("rel", "noopener noreferrer");
+    expect(within(github!).queryByText(/^[#!]\d+$/)).not.toBeInTheDocument();
+    expect(within(github!).queryByRole("link", { name: /Merge request/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps '!<n>' as plain text when the server sent no link (host not connected) or an unsafe one", async () => {
+    const withUrl = (pr_url: string | null): CiRepoEntry => ({ ...GITLAB_ENTRY, last_run: { ...GITLAB_ENTRY.last_run!, pr_url } });
+    for (const pr_url of [null, "javascript:alert(document.cookie)"]) {
+      mockFetch({ [ROUTE]: body(withUrl(pr_url)) });
+      renderWithProviders(<GithubActionCard />);
+      const row = (await screen.findAllByRole("listitem"))[0]!;
+      expect(within(row).getByText("!9")).toBeInTheDocument();
+      expect(within(row).queryByRole("link", { name: /Merge request/ })).not.toBeInTheDocument();
+      expect(document.querySelector('a[href^="javascript:"]')).toBeNull();
+      cleanup();
+    }
+    // No number: nothing to show.
+    mockFetch({ [ROUTE]: body({ ...GITLAB_ENTRY, last_run: { ...GITLAB_ENTRY.last_run!, pr_number: null, pr_url: null } }) });
+    renderWithProviders(<GithubActionCard />);
+    await screen.findByText("grp/svc");
+    expect(screen.queryByText(/^[#!]\d+$/)).not.toBeInTheDocument();
+  });
 });
 
 describe("GithubActionCard messages (AC22)", () => {
@@ -206,6 +245,6 @@ describe("GithubActionCard messages (AC22)", () => {
     await screen.findByText("grp/svc");
     await screen.findByText("⟦integrationsGithubAction.card.titleCiReviews⟧");
     expect(screen.getByText("⟦integrationsGithubAction.card.targetGitlab⟧")).toBeInTheDocument();
-    expect(strayText(document.body, ["grp/svc", "gitlab.com", /ago$/])).toEqual([]);
+    expect(strayText(document.body, ["grp/svc", "gitlab.com", /ago$/, /^[#!]\d+$/])).toEqual([]);
   });
 });

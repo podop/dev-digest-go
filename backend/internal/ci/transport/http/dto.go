@@ -418,6 +418,10 @@ type repoLastRunDTO struct {
 	RanAt     *httpx.Time `json:"ran_at"`
 	GithubURL *string     `json:"github_url"`
 	AgentID   *string     `json:"agent_id"`
+	// PRNumber and PRURL are the pull/merge request of the run; PRURL is the merge request link of
+	// a GitLab run (null for GitHub and for a host that is not connected), as on runDTO (GitLab C FR45).
+	PRNumber *int    `json:"pr_number"`
+	PRURL    *string `json:"pr_url"`
 }
 
 type runListDTO struct {
@@ -568,7 +572,10 @@ func toRepoInstallations(groups []domain.RepoGroup) repoInstallationsDTO {
 			}
 		}
 		if g.LastRun != nil {
-			last := repoLastRunDTO{Status: g.LastRun.Status, GithubURL: g.LastRun.GithubURL, AgentID: g.LastRun.AgentID}
+			last := repoLastRunDTO{
+				Status: g.LastRun.Status, GithubURL: g.LastRun.GithubURL, AgentID: g.LastRun.AgentID,
+				PRNumber: g.LastRun.PRNumber, PRURL: g.LastRun.PRURL,
+			}
 			if g.LastRun.RanAt != nil {
 				t := httpx.NewTime(*g.LastRun.RanAt)
 				last.RanAt = &t

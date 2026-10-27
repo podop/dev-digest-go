@@ -1,8 +1,7 @@
 /* RepoRow — one repository of the GitHub Action card: the name, the last run as text
    ("<status> <relative time>" or "no runs yet") and Manage (FR2, EC15). The run link comes
    from GitHub or GitLab data, so it is only rendered through safeRunHref (inside lastRunView). A GitLab row also
-   shows its host and "GitLab CI" (GitLab C FR45); the card's last run has no merge request number, so the link
-   is the job link as for GitHub. */
+   shows its host, "GitLab CI" and the last run's merge request as `!<n>` linked to pr_url (GitLab C FR45). */
 "use client";
 
 import Link from "next/link";
@@ -10,12 +9,13 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Badge, Button, Dropdown } from "@devdigest/ui";
 import type { CiRepoEntry } from "@devdigest/shared";
-import { installedAgents, isGitLabEntry, lastRunView, manageHref } from "../../helpers";
+import { installedAgents, isGitLabEntry, lastRunMergeRequest, lastRunView, manageHref } from "../../helpers";
 import { s } from "./styles";
 
 export function RepoRow({ entry, now }: { entry: CiRepoEntry; now?: number }) {
   const t = useTranslations("integrationsGithubAction.card");
   const run = lastRunView(entry.last_run, now);
+  const mr = lastRunMergeRequest(entry);
   const runText = run ? t("lastRun", { status: t(`status.${run.statusKey}`), time: run.time }) : t("noRuns");
 
   return (
@@ -30,6 +30,22 @@ export function RepoRow({ entry, now }: { entry: CiRepoEntry; now?: number }) {
             <span className="mono" style={s.host} title={entry.host}>
               {entry.host}
             </span>
+          )}
+        </span>
+      )}
+      {mr && (
+        <span className="mono" style={s.mr}>
+          {mr.href ? (
+            <a
+              href={mr.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t("mergeRequest", { ref: mr.ref })}
+              style={s.runLink}>
+              {mr.ref}
+            </a>
+          ) : (
+            mr.ref
           )}
         </span>
       )}

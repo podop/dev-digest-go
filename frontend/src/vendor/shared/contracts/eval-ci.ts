@@ -283,6 +283,10 @@ export const CiRepoLastRun = z.object({
   ran_at: z.string().nullable(),
   github_url: z.string().nullable(),
   agent_id: z.string().nullable(),
+  // GitLab C FR45 — always sent by the Go API: the PR/MR number of the run and, for a GitLab run on a connected host,
+  // its merge request link (null otherwise).
+  pr_number: z.number().int().nullable().optional(),
+  pr_url: z.string().nullable().optional(),
 });
 export type CiRepoLastRun = z.infer<typeof CiRepoLastRun>;
 
