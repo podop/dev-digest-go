@@ -21,6 +21,5 @@ export const s = {
     background: on ? "var(--bg-hover)" : "transparent",
     marginBottom: 2,
   }),
-  navIcon: { marginRight: 7, verticalAlign: "-2px" } satisfies CSSProperties,
   pane: { flex: 1, minWidth: 0, overflow: "auto", padding: "24px 28px" } satisfies CSSProperties,
 } as const;

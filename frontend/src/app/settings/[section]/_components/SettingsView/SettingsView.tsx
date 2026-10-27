@@ -4,7 +4,7 @@
 
 import type React from "react";
 import Link from "next/link";
-import { EmptyState, Icon } from "@devdigest/ui";
+import { EmptyState } from "@devdigest/ui";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/app-shell";
 import { SettingsAbout } from "./_components/SettingsAbout";
@@ -46,10 +46,7 @@ export function SettingsView({ section }: { section: SettingsSectionKey }) {
             const on = key === section;
             return (
               <Link key={key} href={sectionHref(key)} aria-current={on ? "page" : undefined}>
-                <div style={s.navItem(on)}>
-                  {key === "setup" && <Icon.Sparkles size={13} style={s.navIcon} aria-hidden />}
-                  {t(`sections.${key}`)}
-                </div>
+                <div style={s.navItem(on)}>{t(`sections.${key}`)}</div>
               </Link>
             );
           })}
