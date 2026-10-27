@@ -188,27 +188,51 @@ func adversarial(n int) map[string]string {
 		return b.String()
 	}
 	return map[string]string{
-		"backtick ladder":        ladder(),
-		"same-length run pairs":  strings.Repeat("`` a ", n/5),
-		"single backtick":        strings.Repeat("`", n),
-		"unclosed fence then at": "```\n" + strings.Repeat("@x <b> ![", n/9),
-		"mentions":               strings.Repeat("@", n),
-		"html":                   strings.Repeat("<>", n/2),
-		"images":                 strings.Repeat("![", n/2),
-		"slash lines":            strings.Repeat("/a\n", n/3),
-		"list prefix":            strings.Repeat("- ", n/2) + "/x",
-		"quote prefix":           strings.Repeat(">", n) + "/x",
-		"space prefix":           strings.Repeat(" ", n) + "/x",
-		"digits":                 strings.Repeat("1", n) + ". /x",
-		"digit lines":            strings.Repeat("12345678. \n", n/11),
-		"bom prefix":             strings.Repeat("\ufeff", n/3) + "/x",
-		"carriage returns":       strings.Repeat("\r", n),
-		"newlines":               strings.Repeat("\n", n),
-		"crlf slash lines":       strings.Repeat("/\r\n", n/3),
-		"fake markers":           strings.Repeat("<!-- devdigest-finding:a -->\n", n/29),
-		"fake sub lines":         strings.Repeat("<sub>DevDigest · 85% confidence</sub>\n", n/40),
-		"trailing blanks":        "x" + strings.Repeat(" \t\n", n/3),
+		"backtick ladder":         ladder(),
+		"same-length run pairs":   strings.Repeat("`` a ", n/5),
+		"single backtick":         strings.Repeat("`", n),
+		"unclosed fence then at":  "```\n" + strings.Repeat("@x <b> ![", n/9),
+		"mentions":                strings.Repeat("@", n),
+		"html":                    strings.Repeat("<>", n/2),
+		"images":                  strings.Repeat("![", n/2),
+		"slash lines":             strings.Repeat("/a\n", n/3),
+		"list prefix":             strings.Repeat("- ", n/2) + "/x",
+		"quote prefix":            strings.Repeat(">", n) + "/x",
+		"space prefix":            strings.Repeat(" ", n) + "/x",
+		"digits":                  strings.Repeat("1", n) + ". /x",
+		"digit lines":             strings.Repeat("12345678. \n", n/11),
+		"bom prefix":              strings.Repeat("\ufeff", n/3) + "/x",
+		"carriage returns":        strings.Repeat("\r", n),
+		"newlines":                strings.Repeat("\n", n),
+		"crlf slash lines":        strings.Repeat("/\r\n", n/3),
+		"fake markers":            strings.Repeat("<!-- devdigest-finding:a -->\n", n/29),
+		"fake sub lines":          strings.Repeat("<sub>DevDigest · 85% confidence</sub>\n", n/40),
+		"trailing blanks":         "x" + strings.Repeat(" \t\n", n/3),
+		"fence openers no closer": strings.Repeat("```a\n", n/5),
+		"fence length ladder":     fenceLadder(n),
+		"fence pairs":             strings.Repeat("```\n@a\n```\n", n/12),
+		"tilde openers":           strings.Repeat("~~~ a`\n", n/7),
+		"list then fences":        "- x\n" + strings.Repeat("  ```\n", n/6),
+		"pipe lines":              strings.Repeat("| `a | b` |\n", n/12),
+		"backslash backticks":     strings.Repeat("\\`", n/2),
+		"escaped run ladder":      strings.Repeat("\\`` ` ", n/6),
+		"entities":                strings.Repeat("&#64;&commat;&#x", n/16),
+		"zero entity":             "&#" + strings.Repeat("0", n),
+		"ampersands":              strings.Repeat("&", n),
+		"named entity ladder":     strings.Repeat("&abcdefghijkl", n/13),
 	}
+}
+
+// fenceLadder is fence lines of strictly decreasing length: each opener needs a longer closer.
+func fenceLadder(n int) string {
+	var b strings.Builder
+	for k := 1; b.Len() < n; k++ {
+		b.WriteString(strings.Repeat("`", k))
+		b.WriteString("\n")
+	}
+	lines := strings.Split(b.String(), "\n")
+	slices.Reverse(lines)
+	return strings.Join(lines, "\n")
 }
 
 func fastest(runs int, f func()) time.Duration {
@@ -227,6 +251,9 @@ func fastest(runs int, f func()) time.Duration {
 func TestApply_IsLinear(t *testing.T) {
 	const small, large = 64 << 10, 1 << 20
 	bound := 2 * time.Second
+	if raceEnabled {
+		bound = 20 * time.Second // the race detector slows the rules ~10x and a loaded host more; the ratio below stays strict
+	}
 	smallIn, largeIn := adversarial(small), adversarial(large)
 	for name, big := range largeIn {
 		t.Run(name, func(t *testing.T) {

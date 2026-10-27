@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -239,4 +240,40 @@ func FuzzExtractGitLab(f *testing.F) {
 			t.Errorf("ExtractGitLabDocs(%q) returned %d refs, want at most %d", text, len(docs.Refs), domain.DocMax)
 		}
 	})
+}
+
+// Security review r1 MEDIUM-1: the "<p>#<n>" scan of a 1 MB text (a description or a commit
+// message of a merge request) must not be quadratic; it took 20 s before it was bounded.
+func TestExtractGitLabTickets_AdversarialTextIsLinear(t *testing.T) {
+	size := 1 << 20
+	if raceEnabled {
+		size = 1 << 18 // the race detector slows the extractor ~10x; normal builds cover 1 MB
+	}
+	inputs := map[string]string{
+		"dashes then slash then hash": strings.Repeat("-a", size/2) + "/#1",
+		"dashes then double slash":    strings.Repeat("-a", size/2) + "//x#1",
+		"dashes, 22 slashes at end":   strings.Repeat("-a", size/2) + strings.Repeat("/a", 22) + "#1",
+		"slashes only":                strings.Repeat("a/", size/2) + "#1",
+		"many hashes after a run":     strings.Repeat("-a", size/4) + "/" + strings.Repeat("#1 ", size/6),
+		"hash heavy":                  strings.Repeat("a-b/c#1 ", size/8),
+		"issue urls and hashes":       strings.Repeat(projectURL+"/-/issues/1 #2 ", size/(len(projectURL)+16)),
+	}
+	// The quadratic scan took 20 s on the first input; a linear pass takes well under a second
+	// (the reference-heavy inputs, 170k references, up to ~1.5 s on a loaded host).
+	bound := 5 * time.Second
+	if raceEnabled {
+		bound = 30 * time.Second
+	}
+	for name, text := range inputs {
+		t.Run(name, func(t *testing.T) {
+			start := time.Now()
+			links := domain.ExtractGitLabTickets([]string{text}, payments)
+			if took := time.Since(start); took > bound {
+				t.Errorf("ExtractGitLabTickets(%s, %d bytes) took %v, want <= %v", name, len(text), took, bound)
+			}
+			if len(links.Refs) > domain.TicketMax {
+				t.Errorf("ExtractGitLabTickets(%s) returned %d refs, want at most %d", name, len(links.Refs), domain.TicketMax)
+			}
+		})
+	}
 }

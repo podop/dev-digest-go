@@ -8,7 +8,7 @@ import (
 )
 
 // FuzzApply checks FR17 on arbitrary input: Apply never panics, is idempotent, leaves no CR and
-// only ever adds bytes besides the CR and the HTML it escapes.
+// only ever adds bytes besides the CR, the HTML it escapes and the "&amp;" of a neutralised entity.
 func FuzzApply(f *testing.F) {
 	for _, tc := range loadCorpus(f) {
 		f.Add(tc.In)
@@ -18,9 +18,11 @@ func FuzzApply(f *testing.F) {
 		"", "`", "``", "` `` ``` ` ``", "@\u200b@", "!\u200b[", "\r\r\n\n\r",
 		"\u200b/", ">\u200b/", "- 1) 2. > /x", "<sub>DevDigest · 5% confidence</sub>\n<!-- devdigest-finding:a -->\n \t",
 		"\xff\xfe\xe2\x80/", "\ufeff\u00a0\t/x", "`@`\n/a`<`", "![", "```\n<!-- devdigest-finding:a -->",
+		"&#64;", "&#x0040;&commat;&LT;&lt;", "\\`` a ` @b `", "- x\n  ```\n@a\n  ```", "~~~\n`\n~~~\n@a\n`", "| `a | @b` |",
 	} {
 		f.Add(seed)
 	}
+	plain := strings.NewReplacer(notebody.ZWSP, "", "&lt;", "<", "&gt;", ">", "&amp;", "&")
 	f.Fuzz(func(t *testing.T, in string) {
 		out := notebody.Apply(in)
 		if again := notebody.Apply(out); again != out {
@@ -29,16 +31,10 @@ func FuzzApply(f *testing.F) {
 		if strings.Contains(out, "\r") {
 			t.Fatalf("Apply(%q) = %q still contains a CR", in, out)
 		}
-		// Removing what the rules add must give back the input apart from newline normalisation
-		// and the escaped angle brackets.
-		stripped := strings.ReplaceAll(out, notebody.ZWSP, "")
-		stripped = strings.ReplaceAll(stripped, "&lt;", "<")
-		stripped = strings.ReplaceAll(stripped, "&gt;", ">")
+		// Removing what the rules add must give back the input apart from newline normalisation,
+		// the escaped angle brackets and the "&amp;" of neutralised entities.
 		base := strings.ReplaceAll(strings.ReplaceAll(in, "\r\n", "\n"), "\r", "\n")
-		base = strings.ReplaceAll(base, notebody.ZWSP, "")
-		base = strings.ReplaceAll(base, "&lt;", "<")
-		base = strings.ReplaceAll(base, "&gt;", ">")
-		if stripped != base {
+		if stripped, want := plain.Replace(out), plain.Replace(base); stripped != want {
 			t.Fatalf("Apply(%q) = %q changes more than FR14-FR16 allow", in, out)
 		}
 	})

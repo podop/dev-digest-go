@@ -5,13 +5,16 @@
 // created, edited or published, notifies @mentions, renders raw HTML and fetches Markdown
 // images. [Apply] neutralises all four with invisible U+200B characters and escaped HTML:
 //
-//   - FR14: CR LF and a lone CR become LF; a code region is a run of N backticks up to the next
-//     run of exactly N backticks (a run with no closer is not code).
+//   - FR14: CR LF and a lone CR become LF; code is recognised conservatively, only where GitLab
+//     surely renders code (see [codeRegions]): an inline span on ONE line and a CLOSED top-level
+//     fence. Everything else, indented code included, is prose.
 //   - FR15 (everywhere, code regions included): U+200B before the "/" that follows a line's
 //     leading prefix of spaces, tabs, U+FEFF, U+00A0, ">" and list markers.
 //   - FR16 (outside code regions): U+200B after each "@"; "<" and ">" become &lt; and &gt;
 //     except on the "<sub>DevDigest · N% confidence</sub>" line and the body's last non-empty
-//     line when it is the "<!-- devdigest-finding:ID -->" marker; "![" becomes "!" + U+200B + "[".
+//     line when it is the "<!-- devdigest-finding:ID -->" marker; "![" becomes "!" + U+200B + "[";
+//     the "&" of a character reference that decodes to "@", "<", "!" or "[" becomes "&amp;"
+//     (decision D-new-2; Apply's own "&lt;" is kept, it decodes to inert text and keeps FR17).
 //   - FR17: the output depends only on the body and Apply is idempotent.
 //
 // The package imports only the standard library: the GitLab CI runner (slice C) links it, and
@@ -19,7 +22,9 @@
 package notebody
 
 import (
+	"sort"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -40,7 +45,7 @@ const (
 func Chars(s string) int { return utf8.RuneCountInString(s) }
 
 // special marks the bytes FR16 may change outside code regions.
-var special = [256]bool{'@': true, '<': true, '>': true, '!': true}
+var special = [256]bool{'@': true, '<': true, '>': true, '!': true, '&': true}
 
 // Apply returns body after FR14, FR15 and FR16, in that order, applied to the whole body.
 // It runs in time linear in len(body).
@@ -108,6 +113,10 @@ func Apply(body string) string {
 				if j+1 < len(line) && line[j+1] == '[' {
 					edit(i+1, ZWSP, 0)
 				}
+			case '&':
+				if specialEntity(line[j:]) {
+					edit(i, "&amp;", 1)
+				}
 			}
 			j++
 		}
@@ -136,55 +145,294 @@ func normalizeNewlines(s string) string {
 	return string(b)
 }
 
-// region is the half-open byte range [start, end) of a code region, backtick runs included.
+// region is the half-open byte range [start, end) of a code region, delimiters included.
 type region struct{ start, end int }
 
-// codeRegions finds the code regions of s in linear time: each backtick run opens a region at
-// the next run of exactly the same length; a run with no such closer is plain text and the scan
-// continues with the following run.
+// codeRegions returns the code regions of s, sorted and disjoint, in time linear in len(s)
+// (decision D-new-1: text is code only where GitLab surely renders code; over-neutralising a
+// real code span is acceptable, under-neutralising prose is not):
+//
+//   - a CLOSED fenced block: an opening line of 3+ backticks (no backtick in the info string) or
+//     tildes at column 0-3, closed by a line of the same character, at least as long, at column
+//     0-3 and followed by blanks only. A fence indented 1-3 columns counts only while no list item
+//     or block quote can be open (no earlier line started with ">" or a list marker); a fence at
+//     column 0 can never be inside a container. Unclosed fences and indented code are prose.
+//   - an inline span on ONE line: a backtick run and the next run of exactly the same length on
+//     that line. A backslash-escaped backtick is literal, so an escaped run opens with one
+//     backtick fewer; a closer is never affected by a backslash. A line that contains "|" has no
+//     inline spans (a GFM table row splits its cells at a pipe even inside a code span).
+//
+// A line inside a fenced block is never scanned for spans.
 func codeRegions(s string) []region {
-	type run struct{ start, length int }
-	var runs []run
-	for i := 0; i < len(s); {
-		k := strings.IndexByte(s[i:], '`')
+	starts := lineStarts(s)
+	closer := fenceClosers(s, starts)
+
+	var fences []region
+	var runs []btRun
+	containerSeen := false
+	for i := 0; i < len(starts); {
+		line := lineAt(s, starts, i)
+		if c := closer[i]; c >= 0 && (leadingSpaces(line) == 0 || !containerSeen) {
+			fences = append(fences, region{starts[i], starts[c] + len(lineAt(s, starts, c))})
+			i = c + 1
+			continue
+		}
+		if !containerSeen && startsContainer(line) {
+			containerSeen = true
+		}
+		if strings.IndexByte(line, '|') < 0 {
+			runs = appendRuns(runs, s, starts[i], starts[i]+len(line))
+		}
+		i++
+	}
+	return mergeRegions(fences, inlineSpans(s, runs))
+}
+
+// lineStarts returns the byte offset of every line of s (a body of n newlines has n+1 lines).
+func lineStarts(s string) []int {
+	starts := make([]int, 1, strings.Count(s, "\n")+1)
+	for i := 0; ; {
+		k := strings.IndexByte(s[i:], '\n')
+		if k < 0 {
+			return starts
+		}
+		i += k + 1
+		starts = append(starts, i)
+	}
+}
+
+// lineAt returns line i of s without its newline.
+func lineAt(s string, starts []int, i int) string {
+	end := len(s)
+	if i+1 < len(starts) {
+		end = starts[i+1] - 1
+	}
+	return s[starts[i]:end]
+}
+
+// leadingSpaces returns the number of spaces before the first other character of line.
+func leadingSpaces(line string) int {
+	n := 0
+	for n < len(line) && line[n] == ' ' {
+		n++
+	}
+	return n
+}
+
+// fenceLine parses line as a fence delimiter: up to 3 spaces, then 3+ backticks or tildes. It
+// reports the character, the run length and the text after the run.
+func fenceLine(line string) (ch byte, n int, rest string, ok bool) {
+	indent := leadingSpaces(line)
+	if indent > 3 || indent >= len(line) || (line[indent] != '`' && line[indent] != '~') {
+		return 0, 0, "", false
+	}
+	ch = line[indent]
+	end := indent
+	for end < len(line) && line[end] == ch {
+		end++
+	}
+	if end-indent < 3 {
+		return 0, 0, "", false
+	}
+	return ch, end - indent, line[end:], true
+}
+
+// fenceClosers returns, for every line, the index of the line that closes a fence opened there,
+// or -1 (the line opens no fence, or none closes it). It runs right to left with one stack per
+// fence character that keeps, nearest first, only closers longer than every nearer one, so
+// "the nearest closer at least n long" is a binary search: linear-ish even for adversarial input.
+func fenceClosers(s string, starts []int) []int {
+	type closerAt struct{ line, n int }
+	var stacks [2][]closerAt // backtick, tilde; the last element is the nearest and the shortest
+	closer := make([]int, len(starts))
+	for i := len(starts) - 1; i >= 0; i-- {
+		closer[i] = -1
+		ch, n, rest, ok := fenceLine(lineAt(s, starts, i))
+		if !ok {
+			continue
+		}
+		st := &stacks[0]
+		if ch == '~' {
+			st = &stacks[1]
+		}
+		if ch == '~' || !strings.Contains(rest, "`") { // opening line
+			// Lengths decrease towards the end of the stack: the entries long enough are a prefix.
+			k := sort.Search(len(*st), func(j int) bool { return (*st)[j].n < n })
+			if k > 0 {
+				closer[i] = (*st)[k-1].line
+			}
+		}
+		if strings.Trim(rest, " \t") == "" { // closing line
+			for len(*st) > 0 && (*st)[len(*st)-1].n <= n {
+				*st = (*st)[:len(*st)-1]
+			}
+			*st = append(*st, closerAt{i, n})
+		}
+	}
+	return closer
+}
+
+// startsContainer reports whether line opens a block quote or a list item (CommonMark: after
+// leading blanks, ">" or a list marker followed by a blank or the end of the line).
+func startsContainer(line string) bool {
+	i := 0
+	for i < len(line) && isBlank(line[i]) {
+		i++
+	}
+	if i >= len(line) {
+		return false
+	}
+	switch c := line[i]; {
+	case c == '>':
+		return true
+	case c == '-' || c == '*' || c == '+':
+		return i+1 == len(line) || isBlank(line[i+1])
+	case c >= '0' && c <= '9':
+		end := i
+		for end < len(line) && line[end] >= '0' && line[end] <= '9' {
+			end++
+		}
+		return end-i <= 9 && end < len(line) && (line[end] == '.' || line[end] == ')') &&
+			(end+1 == len(line) || isBlank(line[end+1]))
+	}
+	return false
+}
+
+// btRun is a maximal run of backticks. openStart/openLen describe it as an opener: a run
+// preceded by an odd number of backslashes has its first backtick escaped (literal).
+type btRun struct {
+	start, end         int // the whole run
+	openStart, openLen int
+	lineEnd            int // offset of the end of the run's line
+}
+
+// appendRuns adds the backtick runs of s[from:to] (one line) to runs.
+func appendRuns(runs []btRun, s string, from, to int) []btRun {
+	for i := from; i < to; {
+		k := strings.IndexByte(s[i:to], '`')
 		if k < 0 {
 			break
 		}
 		start := i + k
 		end := start
-		for end < len(s) && s[end] == '`' {
+		for end < to && s[end] == '`' {
 			end++
 		}
-		runs = append(runs, run{start, end - start})
+		slashes := 0
+		for p := start - 1; p >= from && s[p] == '\\'; p-- {
+			slashes++
+		}
+		r := btRun{start: start, end: end, openStart: start, openLen: end - start, lineEnd: to}
+		if slashes%2 == 1 {
+			r.openStart++
+			r.openLen--
+		}
+		runs = append(runs, r)
 		i = end
 	}
+	return runs
+}
+
+// inlineSpans pairs each opener with the next run of exactly its length on the same line.
+func inlineSpans(s string, runs []btRun) []region {
 	if len(runs) < 2 {
 		return nil
 	}
-
-	// nextSame[i] is the index of the next run with the same length as runs[i], or -1.
-	nextSame := make([]int, len(runs))
-	seen := make(map[int]int)
+	// pair[i] is the nearest later run as long as runs[i] opens, or -1; one right-to-left pass
+	// with the nearest run of every length.
+	pair := make([]int, len(runs))
+	nearest := make(map[int]int)
 	for i := len(runs) - 1; i >= 0; i-- {
-		if j, ok := seen[runs[i].length]; ok {
-			nextSame[i] = j
-		} else {
-			nextSame[i] = -1
+		pair[i] = -1
+		if runs[i].openLen > 0 {
+			if j, ok := nearest[runs[i].openLen]; ok {
+				pair[i] = j
+			}
 		}
-		seen[runs[i].length] = i
+		nearest[runs[i].end-runs[i].start] = i
 	}
-
-	var regions []region
+	var spans []region
 	for i := 0; i < len(runs); {
-		j := nextSame[i]
-		if j < 0 {
-			i++
+		if j := pair[i]; j >= 0 && runs[j].start < runs[i].lineEnd {
+			spans = append(spans, region{runs[i].openStart, runs[j].end})
+			i = j + 1
 			continue
 		}
-		regions = append(regions, region{runs[i].start, runs[j].start + runs[j].length})
-		i = j + 1
+		i++
 	}
-	return regions
+	return spans
+}
+
+// mergeRegions merges two sorted lists of disjoint regions.
+func mergeRegions(a, b []region) []region {
+	if len(b) == 0 {
+		return a
+	}
+	out := make([]region, 0, len(a)+len(b))
+	for len(a) > 0 || len(b) > 0 {
+		if len(b) == 0 || (len(a) > 0 && a[0].start < b[0].start) {
+			out, a = append(out, a[0]), a[1:]
+		} else {
+			out, b = append(out, b[0]), b[1:]
+		}
+	}
+	return out
+}
+
+// specialEntity reports whether s, which starts with "&", begins with a character reference that
+// decodes to "@", "<", "!" or "[": numeric (decimal or hex, any number of leading zeros) or one of
+// &commat; &lt; &excl; &lsqb; &lbrack; in any letter case. A reference needs its ";". The exact
+// lower-case "&lt;" is not reported: Apply writes it for "<", it decodes to inert text, and
+// neutralising it would break FR17 and double-escape a body that was already escaped.
+func specialEntity(s string) bool {
+	if len(s) < 4 {
+		return false
+	}
+	if s[1] == '#' {
+		i, base := 2, 10
+		if s[i] == 'x' || s[i] == 'X' {
+			i, base = 3, 16
+		}
+		digits, v := i, 0
+		for ; i < len(s); i++ {
+			d := digitValue(s[i], base)
+			if d < 0 {
+				break
+			}
+			if v <= unicode.MaxRune {
+				v = v*base + d
+			}
+		}
+		if i == digits || i >= len(s) || s[i] != ';' {
+			return false
+		}
+		return v == '@' || v == '<' || v == '!' || v == '['
+	}
+	i := 1
+	for i < len(s) && i <= 8 && (s[i] >= 'a' && s[i] <= 'z' || s[i] >= 'A' && s[i] <= 'Z') {
+		i++
+	}
+	if i == 1 || i >= len(s) || s[i] != ';' || s[1:i] == "lt" {
+		return false
+	}
+	switch strings.ToLower(s[1:i]) {
+	case "commat", "lt", "excl", "lsqb", "lbrack":
+		return true
+	}
+	return false
+}
+
+// digitValue returns the value of c as a digit in base 10 or 16, or -1.
+func digitValue(c byte, base int) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case base == 16 && c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	case base == 16 && c >= 'A' && c <= 'F':
+		return int(c-'A') + 10
+	}
+	return -1
 }
 
 // quickActionSlash returns the index in line of the "/" that FR15 puts a U+200B before, or -1.

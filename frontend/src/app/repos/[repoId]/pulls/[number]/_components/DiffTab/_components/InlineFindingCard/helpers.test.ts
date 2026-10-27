@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
 import type { FindingRecord, PrReviewComment } from "@devdigest/shared";
 import {
@@ -123,6 +126,50 @@ describe("sanitizeForGitLab", () => {
   it("does not insert U+200B a second time for a slash or image opener it already defused", () => {
     const once = sanitizeForGitLab("/a\n![i](u)\n`/c`");
     expect(sanitizeForGitLab(once)).toBe(once);
+  });
+
+  it("code is only what GitLab surely renders as code: a backtick pair across a blank line is prose (security r1 HIGH-1)", () => {
+    expect(sanitizeForGitLab("See `\n\n@all ![t](https://evil/t.png)\n\n` end")).toBe(
+      `See \`\n\n@${Z}all !${Z}[t](https://evil/t.png)\n\n\` end`,
+    );
+    expect(sanitizeForGitLab("- ```\n@victim ![p](https://evil/p.png)\n```")).toBe(
+      `- \`\`\`\n@${Z}victim !${Z}[p](https://evil/p.png)\n\`\`\``,
+    );
+    expect(sanitizeForGitLab("~~~\n`\n~~~\n@victim <img src=x>\n`")).toBe(
+      `~~~\n\`\n~~~\n@${Z}victim &lt;img src=x&gt;\n\``,
+    );
+    expect(sanitizeForGitLab("    `\n\n@victim `")).toBe(`    \`\n\n@${Z}victim \``);
+    expect(sanitizeForGitLab("\\`@victim <b>x</b>\\`")).toBe(`\\\`@${Z}victim &lt;b&gt;x&lt;/b&gt;\\\``);
+  });
+
+  it("a closed fence at column 0 is code, an unclosed or list-nested or indented one is prose", () => {
+    expect(sanitizeForGitLab("```\n@a <b> ![c]\n```")).toBe("```\n@a <b> ![c]\n```");
+    expect(sanitizeForGitLab("~~~\n<b>\n~~~")).toBe("~~~\n<b>\n~~~");
+    expect(sanitizeForGitLab("```\n@a")).toBe(`\`\`\`\n@${Z}a`);
+    expect(sanitizeForGitLab("- x\n  ```\n@a\n  ```")).toBe(`- x\n  \`\`\`\n@${Z}a\n  \`\`\``);
+    expect(sanitizeForGitLab("    ```\n@a\n    ```")).toBe(`    \`\`\`\n@${Z}a\n    \`\`\``);
+    expect(sanitizeForGitLab("| a |\n|---|\n| `x | @all` |")).toBe(`| a |\n|---|\n| \`x | @${Z}all\` |`);
+  });
+
+  it("an entity that decodes to @ < ! [ loses its ampersand (D-new-2); other references stay", () => {
+    expect(sanitizeForGitLab("&#64;u &#x40;u &commat;u &#X40;u &CommAt;u")).toBe(
+      "&amp;#64;u &amp;#x40;u &amp;commat;u &amp;#X40;u &amp;CommAt;u",
+    );
+    expect(sanitizeForGitLab("&#60;img &#x3c;img &LT;img &#33;[x](u) &excl; &lsqb; &lbrack; &#0000064;")).toBe(
+      "&amp;#60;img &amp;#x3c;img &amp;LT;img &amp;#33;[x](u) &amp;excl; &amp;lsqb; &amp;lbrack; &amp;#0000064;",
+    );
+    expect(sanitizeForGitLab("&lt;img&gt; &amp;#64; &#65; &#64 &copy; `&#64;`")).toBe("&lt;img&gt; &amp;#64; &#65; &#64 &copy; `&#64;`");
+  });
+
+  it("matches the server's EC15 corpus for every case that does not hold the server-only sub line or marker", () => {
+    const corpusPath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      "../../../../../../../../../../../backend/internal/platform/gitlab/notebody/testdata/ec15.json",
+    );
+    const corpus = JSON.parse(readFileSync(corpusPath, "utf8")) as { name: string; in: string; want: string }[];
+    const comparable = corpus.filter((c) => !c.in.includes("<sub>DevDigest") && !c.in.includes("devdigest-finding"));
+    expect(comparable.length).toBeGreaterThan(80);
+    for (const c of comparable) expect({ name: c.name, got: sanitizeForGitLab(c.in) }).toEqual({ name: c.name, got: c.want });
   });
 });
 

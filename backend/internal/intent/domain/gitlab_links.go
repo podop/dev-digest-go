@@ -108,17 +108,35 @@ func isRefByte(b byte) bool {
 // non-empty segments of [A-Za-z0-9_.-], not preceded by a word character, "/" or ".". It takes the
 // leftmost start that fits, as a regex with a lookbehind would. floor is the end of the previous
 // reference. ok is false when there is none.
+//
+// It reads only text[floor:hash], one pass back from hash to find the leftmost start the "//" and
+// segment-count rules allow, one pass forward from there, so the total over a text is linear.
 func refBefore(text string, hash, floor int) (start int, ok bool) {
 	i := hash
 	for i > floor && isRefByte(text[i-1]) {
 		i--
 	}
-	for s := i; s < hash; s++ {
-		if text[s] == '/' || s > 0 && isWordOrSlash(text[s-1]) || s > 0 && text[s-1] == '.' {
+	if i == hash || text[hash-1] == '/' { // no "<p>", or an empty last segment
+		return 0, false
+	}
+	// A start s must leave no "//" and at most maxRefSegments-1 slashes in text[s:hash]: the
+	// nearest violation walking back from hash sets the leftmost allowed start.
+	lo, slashes := i, 0
+	for k := hash - 1; k >= i; k-- {
+		if text[k] != '/' {
 			continue
 		}
-		p := text[s:hash]
-		if strings.Contains(p, "//") || strings.HasSuffix(p, "/") || strings.Count(p, "/")+1 > maxRefSegments {
+		if text[k+1] == '/' {
+			lo = k + 1
+			break
+		}
+		if slashes++; slashes == maxRefSegments {
+			lo = k + 1
+			break
+		}
+	}
+	for s := lo; s < hash; s++ {
+		if text[s] == '/' || s > 0 && isWordOrSlash(text[s-1]) || s > 0 && text[s-1] == '.' {
 			continue
 		}
 		return s, true
@@ -195,13 +213,12 @@ func ExtractGitLabTickets(texts []string, repo Repo) TicketLinks {
 			})
 		}
 
+		// The spans never overlap, so sorted by start the one that can hold a position is found by
+		// bisection (a linear scan per reference made a text of many URLs and references quadratic).
+		sort.Slice(spans, func(i, j int) bool { return spans[i][0] < spans[j][0] })
 		inURL := func(at int) bool {
-			for _, s := range spans {
-				if at >= s[0] && at < s[1] {
-					return true
-				}
-			}
-			return false
+			k := sort.Search(len(spans), func(i int) bool { return spans[i][0] > at })
+			return k > 0 && at < spans[k-1][1]
 		}
 
 		floor := 0
