@@ -14,7 +14,8 @@
   "identity": {
     "label": "Comment identity",
     "owner": "Comments are posted as the token's owner.",
-    "login": "Comments are posted as @{login}."
+    "login": "Comments are posted as @{login}.",
+    "hint": "Findings are posted under this account."
   },
   "repos": {
     "title": "Connected repositories ({count})",

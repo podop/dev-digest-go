@@ -1,10 +1,11 @@
 /* ConnectionRow — one GitLab connection (FR33): name, base URL, the token badge, the repository count, Test, Edit
    and Delete, and its last test result. Badge states follow Settings A FR4: a failed test reads "Failed", a saved
-   token "Token saved", otherwise "No token". */
+   token "Token saved", otherwise "No token". Laid out as the prototype's repository rows. */
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Button } from "@devdigest/ui";
+import { Icon } from "@devdigest/ui";
+import { KitBadge, MonoAction, RowMeta } from "@/components/settings-kit";
 import type { GitLabConnection } from "@/lib/types";
 import type { TestEntry } from "../../useConnectionTests";
 import { TestResult } from "../TestResult";
@@ -17,6 +18,8 @@ function identityLine(test: TestEntry | undefined): { key: "identityReadOnly" | 
   if (result?.ok && result.login) return { key: "identityUser", login: result.login };
   return { key: "identityUnknown", login: "" };
 }
+
+const TONE_COLOR = { ok: "var(--ok)", muted: "var(--text-muted)", crit: "var(--crit)" } as const;
 
 interface Props {
   connection: GitLabConnection;
@@ -37,39 +40,36 @@ export function ConnectionRow({ connection, test, onTest, onEdit, onDelete }: Pr
   return (
     <li style={s.row}>
       <div style={s.head}>
+        <Icon.Globe size={13} style={s.icon} aria-hidden />
         <span style={s.name}>{connection.name}</span>
-        <span style={s.badge(tone)}>
-          <span aria-hidden style={s.badgeDot(tone)} />
+        <KitBadge color={TONE_COLOR[tone]} bg="transparent" dot>
           {badge}
-        </span>
-        <span style={s.meta}>{t("repos", { count: connection.repo_count })}</span>
+        </KitBadge>
+        <RowMeta>{t("repos", { count: connection.repo_count })}</RowMeta>
         <div style={s.actions}>
-          <Button
-            type="button"
-            kind="secondary"
-            size="sm"
-            onClick={onTest}
-            disabled={pending}
-            aria-label={t("testLabel", { name: connection.name })}
-          >
+          <MonoAction onClick={onTest} disabled={pending} aria-label={t("testLabel", { name: connection.name })}>
             {t("test")}
-          </Button>
-          <Button type="button" kind="ghost" size="sm" onClick={onEdit} aria-label={t("editLabel", { name: connection.name })}>
+          </MonoAction>
+          <MonoAction onClick={onEdit} aria-label={t("editLabel", { name: connection.name })}>
             {t("edit")}
-          </Button>
-          <Button type="button" kind="ghost" size="sm" onClick={onDelete} aria-label={t("deleteLabel", { name: connection.name })}>
+          </MonoAction>
+          <MonoAction tone="crit" onClick={onDelete} aria-label={t("deleteLabel", { name: connection.name })}>
             {t("delete")}
-          </Button>
+          </MonoAction>
         </div>
       </div>
-      <div style={s.url}>{connection.base_url}</div>
-      <div style={s.identity}>{t(identity.key, { login: identity.login })}</div>
-      {pending && (
-        <div role="status" style={s.testing}>
-          {t("testing")}
+      <div style={s.body}>
+        <div className="mono" style={s.url}>
+          {connection.base_url}
         </div>
-      )}
-      {!pending && test?.result && <TestResult result={test.result} />}
+        <div style={s.identity}>{t(identity.key, { login: identity.login })}</div>
+        {pending && (
+          <div role="status" style={s.testing}>
+            {t("testing")}
+          </div>
+        )}
+        {!pending && test?.result && <TestResult result={test.result} />}
+      </div>
     </li>
   );
 }

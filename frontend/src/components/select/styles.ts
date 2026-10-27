@@ -5,11 +5,11 @@ import type { PopupPosition } from "./helpers";
    mirrors SearchableSelect's (vendor/ui/kit/SearchableSelect.tsx) so both themes
    stay in sync with the rest of the kit — see styles.css for the tokens. */
 export const s = {
-  trigger: (disabled: boolean | undefined): CSSProperties => ({
+  trigger: (disabled: boolean | undefined, compact?: boolean): CSSProperties => ({
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    padding: "10px 12px",
+    gap: compact ? 8 : 10,
+    padding: compact ? "8px 11px" : "10px 12px",
     borderRadius: 7,
     border: "1px solid var(--border-strong)",
     background: "var(--bg-elevated)",
@@ -17,9 +17,9 @@ export const s = {
     opacity: disabled ? 0.6 : 1,
     outline: "none",
   }),
-  value: (muted: boolean): CSSProperties => ({
+  value: (muted: boolean, compact?: boolean): CSSProperties => ({
     flex: 1,
-    fontSize: 14,
+    fontSize: compact ? 13 : 14,
     color: muted ? "var(--text-muted)" : "var(--text-primary)",
     overflow: "hidden",
     textOverflow: "ellipsis",

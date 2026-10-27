@@ -64,3 +64,11 @@ describe("the repo switcher subtitle", () => {
     expect(blank.result.current.activeRepo?.syncedLabel).toBe("not synced");
   });
 });
+
+describe("repository removal", () => {
+  it("is not offered by the repo switcher (it lives in Settings › GitHub / GitLab Integration)", async () => {
+    const { result } = setup(INFO("acme"));
+    await waitFor(() => expect(result.current.activeRepo).not.toBeNull());
+    expect(result.current.onRemoveRepo).toBeUndefined();
+  });
+});

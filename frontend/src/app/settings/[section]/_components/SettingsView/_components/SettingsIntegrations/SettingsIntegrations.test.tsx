@@ -1,5 +1,5 @@
 /* SettingsIntegrations — the Integrations section composes the GitHub Action card, plugin export,
-   plugin import and the installed plugins list, in that order under one heading (FR19, A10), and
+   plugin import with the installed plugins list inside it, in that order under one heading (FR19, A10), and
    renders no hard-coded copy (NFR5, AC22). The real cards run against a stubbed fetch. */
 import { describe, it, expect, afterEach } from "vitest";
 import type { InstalledPlugin } from "@devdigest/shared";
@@ -45,8 +45,10 @@ describe("SettingsIntegrations", () => {
       "GitHub Action",
       "Export workspace as plugin",
       "Import plugin",
-      "Installed plugins",
     ]);
+    // The installed plugins sit inside the import card, as in the prototype.
+    const installed = screen.getByRole("heading", { level: 4, name: "Installed plugins" });
+    expect(installed.closest("section[aria-labelledby]")?.parentElement?.closest("section")).toHaveTextContent("Import plugin");
   });
 
   it("renders no hard-coded copy under the pseudo-locale", async () => {

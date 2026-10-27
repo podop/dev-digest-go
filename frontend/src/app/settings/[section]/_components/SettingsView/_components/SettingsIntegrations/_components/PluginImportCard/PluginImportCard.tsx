@@ -9,7 +9,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import type { PluginImportPreview as Preview, PluginImportResult } from "@devdigest/shared";
-import { Button } from "@devdigest/ui";
+import { Button, Icon } from "@devdigest/ui";
 import { useInstallPlugin, usePreviewPlugin } from "@/lib/hooks";
 import { PluginImportPreview } from "../PluginImportPreview";
 import { ImportDropZone } from "./_components/ImportDropZone";
@@ -25,7 +25,8 @@ type State =
 
 const IDLE: State = { phase: "idle", problem: null };
 
-export function PluginImportCard() {
+/** `children` renders under the import flow inside the card — the section passes the installed plugins (prototype). */
+export function PluginImportCard({ children }: { children?: React.ReactNode }) {
   const t = useTranslations("integrationsImport");
   const titleId = React.useId();
   const rootRef = React.useRef<HTMLElement>(null);
@@ -89,10 +90,17 @@ export function PluginImportCard() {
 
   return (
     <section ref={rootRef} aria-labelledby={titleId} style={s.card}>
-      <h3 id={titleId} style={s.title}>
-        {t("title")}
-      </h3>
-      <p style={s.body}>{t("body")}</p>
+      <div style={s.head}>
+        <div style={s.headIcon} aria-hidden>
+          <Icon.Boxes size={18} />
+        </div>
+        <div style={s.headText}>
+          <h3 id={titleId} style={s.title}>
+            {t("title")}
+          </h3>
+          <p style={s.body}>{t("body")}</p>
+        </div>
+      </div>
 
       {(state.phase === "idle" || state.phase === "checking") && (
         <>
@@ -130,12 +138,13 @@ export function PluginImportCard() {
           </div>
           <div style={s.hint}>{t("installed.enableHint")}</div>
           <div style={s.actions}>
-            <Button type="button" kind="secondary" onClick={reset}>
+            <Button type="button" kind="secondary" size="sm" onClick={reset}>
               {t("installed.another")}
             </Button>
           </div>
         </div>
       )}
+      {children}
     </section>
   );
 }

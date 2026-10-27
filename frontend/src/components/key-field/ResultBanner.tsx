@@ -3,7 +3,7 @@ import { Icon } from "@devdigest/ui";
 import type { ConnTestResult } from "@/lib/types";
 import { s } from "./styles";
 
-/** FR6: verified / not listed / failure banner for one test result. Success is a `status`, failure an `alert`. */
+/** FR6: verified / not listed / failure box (prototype "Connection verified" callout) for one test result. Success is a `status`, failure an `alert`. */
 export function ResultBanner({ result }: { result: ConnTestResult }) {
   const t = useTranslations("keyField");
   const { model } = result;
@@ -11,7 +11,7 @@ export function ResultBanner({ result }: { result: ConnTestResult }) {
   if (!result.ok) {
     return (
       <div role="alert" style={s.banner("crit")}>
-        <Icon.XCircle size={13} />
+        <Icon.XCircle size={15} style={s.bannerIcon("crit")} aria-hidden />
         {result.message}
       </div>
     );
@@ -19,7 +19,7 @@ export function ResultBanner({ result }: { result: ConnTestResult }) {
   if (model && result.model_reachable === false) {
     return (
       <div role="status" style={s.banner("warn")}>
-        <Icon.AlertTriangle size={13} />
+        <Icon.AlertTriangle size={15} style={s.bannerIcon("warn")} aria-hidden />
         {t("result.notListed", { model, provider: t(`providers.${result.provider}`) })}
       </div>
     );
@@ -32,7 +32,7 @@ export function ResultBanner({ result }: { result: ConnTestResult }) {
       : result.message;
   return (
     <div role="status" style={s.banner("ok")}>
-      <Icon.CheckCircle size={13} />
+      <Icon.CheckCircle size={15} style={s.bannerIcon("ok")} aria-hidden />
       {text}
     </div>
   );

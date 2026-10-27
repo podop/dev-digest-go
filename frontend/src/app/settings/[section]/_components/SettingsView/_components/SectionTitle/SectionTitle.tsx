@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { s } from "./styles";
 
 /** Section heading + lede used across the settings sections. */

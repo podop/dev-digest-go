@@ -35,12 +35,15 @@ export function MultiAgentRunView({
   const run = useMultiAgentRun(id);
   const url = useResultsUrl(id, view, traceRunId);
   const data = run.data;
-  const crumb = [{ label: tl("crumb"), href: "/multi-agent" }, { label: t("crumb") }];
+  const crumb = [
+    { label: tl("crumb"), href: "/multi-agent" },
+    data?.pr_number != null ? { label: `#${data.pr_number}`, mono: true } : { label: t("crumb") },
+  ];
 
   if (run.isError && run.error instanceof ApiError && run.error.status === 404) {
     return (
       <AppShell crumb={crumb}>
-        <div style={s.page}>
+        <div style={s.state}>
           <ErrorState title={t("notFound")} />
           <Link href="/multi-agent" style={s.back}>
             {t("backToList")}
@@ -69,7 +72,9 @@ export function MultiAgentRunView({
           </div>
         )}
         {run.isError && !data && (
-          <ErrorState title={t("loadError")} onRetry={() => run.refetch()} retryLabel={tc("actions.retry")} />
+          <div style={s.state}>
+            <ErrorState title={t("loadError")} onRetry={() => run.refetch()} retryLabel={tc("actions.retry")} />
+          </div>
         )}
         {data && (
           <>
@@ -80,7 +85,9 @@ export function MultiAgentRunView({
               <AgentColumns columns={data.columns} onViewTrace={url.openTrace} />
             )}
             {showDisagreement && (
-              <DisagreementBlock groups={data.conflicts} notComparedCount={countNotCompared(data.columns)} />
+              <div style={s.disagreement}>
+                <DisagreementBlock groups={data.conflicts} notComparedCount={countNotCompared(data.columns)} />
+              </div>
             )}
           </>
         )}

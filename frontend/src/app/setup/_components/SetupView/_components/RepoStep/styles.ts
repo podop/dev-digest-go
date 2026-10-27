@@ -1,14 +1,11 @@
 import type { CSSProperties } from "react";
+import { kit } from "@/components/settings-kit";
 
-/** Co-located styles for step 3 (existing repositories list). */
+/** Co-located styles for step 3 (existing repositories list, prototype repository rows). */
 export const s = {
-  heading: { fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 8px" } satisfies CSSProperties,
-  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
-  row: {
-    padding: "10px 12px",
-    borderRadius: 8,
-    border: "1px solid var(--border)",
-    fontSize: 14,
-    fontFamily: "var(--font-mono, monospace)",
-  } satisfies CSSProperties,
+  heading: { ...kit.label, margin: "0 0 7px" } satisfies CSSProperties,
+  list: { ...kit.list, listStyle: "none", margin: "0 0 18px", padding: 0 } satisfies CSSProperties,
+  row: kit.listRow,
+  rowIcon: kit.rowIcon,
+  rowName: kit.rowName,
 } as const;

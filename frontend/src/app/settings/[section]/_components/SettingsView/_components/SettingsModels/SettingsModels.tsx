@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Icon } from "@devdigest/ui";
+import { InfoNote, SectionPane } from "@/components/settings-kit";
 import { useSettings, useUpdateSettings } from "@/lib/hooks";
 import { useProviderModels } from "@/lib/hooks";
 import type { FeatureModelChoice, FeatureModelId } from "@devdigest/shared";
@@ -9,7 +9,6 @@ import type { FeatureModelChoice, FeatureModelId } from "@devdigest/shared";
 import { FEATURE_MODELS } from "@devdigest/shared/constants/feature-models";
 import { SectionTitle } from "../SectionTitle";
 import { FeatureModelRow } from "./FeatureModelRow";
-import { s } from "./styles";
 
 /**
  * Settings → Feature Models. One provider + model picker per system LLM feature; the model list (and, for
@@ -31,7 +30,7 @@ export function SettingsModels() {
     update.mutate({ feature_models: { ...chosen, [id]: choice } });
 
   return (
-    <div style={s.wrap}>
+    <SectionPane>
       <SectionTitle title={t("models.title")} body={t("models.body")} />
 
       {FEATURE_MODELS.map((f) => (
@@ -44,10 +43,7 @@ export function SettingsModels() {
         />
       ))}
 
-      <div style={s.note}>
-        <Icon.Info size={15} style={s.noteIcon} />
-        <span>{noModels ? t("models.noKeyNote") : t("models.liveNote")}</span>
-      </div>
-    </div>
+      <InfoNote>{noModels ? t("models.noKeyNote") : t("models.liveNote")}</InfoNote>
+    </SectionPane>
   );
 }

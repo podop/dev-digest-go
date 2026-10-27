@@ -1,25 +1,25 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for the SettingsView shell (left sub-nav + section pane). */
+/** Co-located styles for the SettingsView shell (left sub-nav + section pane), sized as the prototype's ScreenSettings. */
 export const s = {
-  layout: { display: "flex", minHeight: "calc(100vh - 52px)" } satisfies CSSProperties,
+  layout: { display: "flex", minHeight: "calc(100 * var(--app-vh) - 52px)" } satisfies CSSProperties,
   nav: {
     width: 210,
     flexShrink: 0,
     borderRight: "1px solid var(--border)",
-    padding: 16,
+    padding: 14,
     background: "var(--bg-surface)",
   } satisfies CSSProperties,
-  navTitle: { fontSize: 16, fontWeight: 700, padding: "2px 10px 14px" } satisfies CSSProperties,
+  navTitle: { fontSize: 15, fontWeight: 700, padding: "2px 8px 12px" } satisfies CSSProperties,
   navItem: (on: boolean): CSSProperties => ({
-    padding: "8px 12px",
+    padding: "7px 10px",
     borderRadius: 6,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: on ? 600 : 500,
     cursor: "pointer",
     color: on ? "var(--text-primary)" : "var(--text-secondary)",
     background: on ? "var(--bg-hover)" : "transparent",
     marginBottom: 2,
   }),
-  pane: { flex: 1, overflow: "auto", padding: "28px 32px" } satisfies CSSProperties,
+  pane: { flex: 1, minWidth: 0, overflow: "auto", padding: "24px 28px" } satisfies CSSProperties,
 } as const;

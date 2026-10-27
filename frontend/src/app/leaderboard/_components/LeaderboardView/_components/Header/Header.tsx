@@ -65,6 +65,7 @@ export function Header({ period, repo, repos, window, compared, syncRepos, onPer
               options={options}
               mono={false}
               chevron="down"
+              compact
               aria-label={t("header.repo.label")}
               disabled={repos === undefined}
               onChange={onRepoChange}

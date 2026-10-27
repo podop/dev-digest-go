@@ -2,14 +2,14 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Icon } from "@devdigest/ui";
+import { Callout } from "@/components/settings-kit";
 import type { ConnTestProvider, ConnTestResult, GitLabConnection, SecretsStatus } from "@/lib/types";
 import { CODE_HOSTS, type CodeHost } from "../../constants";
 import { gitlabTokenCount, initialHost } from "../../helpers";
+import { ChoiceGroup } from "../ChoiceGroup";
 import { StepFrame } from "../StepFrame";
 import { GithubPanel } from "./_components/GithubPanel";
 import { GitlabPanel } from "./_components/GitlabPanel";
-import { s } from "./styles";
 
 /** Step 2 (FR38): connect a code host — a GitHub token (FR24) or a GitLab connection. Continue needs a
  *  passing test of this view on either host, or a stored GitHub token / GitLab token that no test of this
@@ -50,28 +50,20 @@ export function CodeHostStep({
       onBack={onBack}
       primary={{ label: t("actions.continue"), onClick: () => onContinue?.(), disabled: !ready }}
     >
-      <fieldset style={s.group}>
-        <legend style={s.legend}>{t("codeHost.hostLegend")}</legend>
-        <div style={s.options}>
-          {CODE_HOSTS.map((h) => (
-            <label key={h} style={s.option(h === host)}>
-              <input type="radio" name="setup-code-host" value={h} checked={h === host} onChange={() => setHost(h)} />
-              {t(`codeHost.hosts.${h}`)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <ChoiceGroup
+        legend={t("codeHost.hostLegend")}
+        name="setup-code-host"
+        options={CODE_HOSTS}
+        value={host}
+        onChange={setHost}
+        labelOf={(h) => t(`codeHost.hosts.${h}`)}
+      />
       {host === "github" ? (
         <GithubPanel configured={secrets.github} result={results.github ?? null} onResult={onResult} />
       ) : (
         <GitlabPanel connections={gitlabConnections} result={results.gitlab ?? null} onResult={onResult} />
       )}
-      {alreadyConnected && (
-        <div style={s.connected}>
-          <Icon.CheckCircle size={14} />
-          {t("alreadyConnected")}
-        </div>
-      )}
+      {alreadyConnected && <Callout tone="ok">{t("alreadyConnected")}</Callout>}
     </StepFrame>
   );
 }

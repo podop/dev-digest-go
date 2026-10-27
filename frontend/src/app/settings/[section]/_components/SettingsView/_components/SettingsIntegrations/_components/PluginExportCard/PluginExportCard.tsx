@@ -6,7 +6,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button } from "@devdigest/ui";
+import { Button, Icon } from "@devdigest/ui";
 import { useAgents, useExportPlugin, usePlugins, useSkills } from "@/lib/hooks";
 import { PluginExportDialog } from "../PluginExportDialog";
 import { s } from "./styles";
@@ -31,14 +31,23 @@ export function PluginExportCard() {
 
   return (
     <section aria-labelledby={titleId} style={s.card}>
-      <h3 id={titleId} style={s.title}>
-        {t("title")}
-      </h3>
-      <p style={s.body}>{t("body")}</p>
+      <div style={s.head}>
+        <div style={s.headIcon} aria-hidden>
+          <Icon.Upload size={18} />
+        </div>
+        <div style={s.headText}>
+          <h3 id={titleId} style={s.title}>
+            {t("title")}
+          </h3>
+          <p style={s.body}>{t("body")}</p>
+        </div>
+      </div>
       <div style={s.actions}>
         <Button
           type="button"
           kind="secondary"
+          size="sm"
+          icon="Boxes"
           onClick={() => setOpen(true)}
           disabled={empty || exporter.isPending}
           aria-describedby={empty ? hintId : undefined}
@@ -54,7 +63,7 @@ export function PluginExportCard() {
       {last && (
         <p style={s.last}>
           <span>{t("lastExport.label")}</span>{" "}
-          <span title={last.file_name} style={s.file}>
+          <span title={last.file_name} className="mono" style={s.file}>
             {last.file_name}
           </span>{" "}
           <span>{t("lastExport.counts", { skills: last.counts.skills, agents: last.counts.agents })}</span>

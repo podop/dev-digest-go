@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Icon } from "@devdigest/ui";
 import { KeyField, KEY_PAGE_URLS } from "@/components/key-field";
+import { InfoNote, SectionPane } from "@/components/settings-kit";
 import { isGitLab } from "@/lib/code-host";
 import { useAbout, useRepos, useSecretsStatus } from "@/lib/hooks";
 import { sectionHref } from "../../constants";
@@ -20,9 +20,7 @@ function SecretsInfoBox({ secretsFile, ciHosts }: { secretsFile: string; ciHosts
   const t = useTranslations("apiKeys");
   const path = () => <span style={s.path}>{secretsFile}</span>;
   return (
-    <div style={s.infoBox}>
-      <Icon.Info size={14} style={s.infoIcon} />
-      <p>
+    <InfoNote>
         {ciHosts
           ? t.rich("infoBoxCiHosts", {
               path,
@@ -40,8 +38,7 @@ function SecretsInfoBox({ secretsFile, ciHosts }: { secretsFile: string; ciHosts
                 </Link>
               ),
             })}
-      </p>
-    </div>
+    </InfoNote>
   );
 }
 
@@ -54,7 +51,7 @@ export function SettingsApiKeys() {
   // FR47: the CI copy names GitLab only once a GitLab repository exists (a failed list keeps the GitHub copy).
   const hasGitLab = repos.data?.some(isGitLab) ?? false;
   return (
-    <div style={s.wrap}>
+    <SectionPane>
       <SectionTitle title={t("title")} body={t("body")} />
       {KEY_ROWS.map((row) => (
         <KeyField
@@ -71,6 +68,6 @@ export function SettingsApiKeys() {
       <DefaultModelField />
       <SpendCapField />
       {about && <SecretsInfoBox secretsFile={about.secrets_file} ciHosts={hasGitLab} />}
-    </div>
+    </SectionPane>
   );
 }

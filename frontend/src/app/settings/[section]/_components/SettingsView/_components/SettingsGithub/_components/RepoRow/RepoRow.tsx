@@ -1,13 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Button } from "@devdigest/ui";
+import { KitBadge, ListRow, MonoAction, RowMeta } from "@/components/settings-kit";
 import { useRepoIntelStatus } from "@/lib/hooks";
 import type { Repo } from "@/lib/types";
 import { indexedAge, isNotIndexed } from "../../../RepoIndex";
 import { s } from "./styles";
 
-/** One repository: full name, default branch and its index state (A4). */
+/** One repository (prototype row): branch icon, mono name, branch badge, index state and Remove (A4). */
 export function RepoRow({ repo, onRemove }: { repo: Repo; onRemove: () => void }) {
   const t = useTranslations("githubIntegration.repos");
   const index = useRepoIntelStatus(repo.id);
@@ -24,17 +24,14 @@ export function RepoRow({ repo, onRemove }: { repo: Repo; onRemove: () => void }
   }
 
   return (
-    <li style={s.row}>
-      <div style={s.main}>
-        <div style={s.name}>{repo.full_name}</div>
-        <div style={s.meta}>
-          <span style={s.branch}>{repo.default_branch}</span>
-          {indexText && <span>{indexText}</span>}
-        </div>
-      </div>
-      <Button kind="ghost" size="sm" onClick={onRemove} aria-label={t("removeLabel", { repo: repo.full_name })}>
-        {t("remove")}
-      </Button>
+    <li style={s.item}>
+      <ListRow name={repo.full_name}>
+        <KitBadge>{repo.default_branch}</KitBadge>
+        {indexText && <RowMeta>{indexText}</RowMeta>}
+        <MonoAction onClick={onRemove} aria-label={t("removeLabel", { repo: repo.full_name })}>
+          {t("remove")}
+        </MonoAction>
+      </ListRow>
     </li>
   );
 }

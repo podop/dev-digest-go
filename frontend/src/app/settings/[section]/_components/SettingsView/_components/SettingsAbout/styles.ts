@@ -1,32 +1,39 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for SettingsAbout. */
+const rowBorder = (last: boolean) => (last ? "none" : "1px solid var(--border)");
+
+/** Co-located styles for SettingsAbout — the prototype's SettingsAbout box (rows 11px 14px, 12.5px). */
 export const s = {
-  wrap: { maxWidth: 640 } satisfies CSSProperties,
-  table: {
-    width: "100%",
-    borderCollapse: "collapse",
+  box: {
     border: "1px solid var(--border)",
-    borderRadius: 8,
-    background: "var(--bg-surface)",
-    fontSize: 14,
+    borderRadius: 10,
+    background: "var(--bg-elevated)",
+    overflow: "hidden",
   } satisfies CSSProperties,
-  rowHead: {
-    width: 160,
-    padding: "12px 16px",
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 12.5 } satisfies CSSProperties,
+  rowHead: (last: boolean): CSSProperties => ({
+    width: 130,
+    padding: "11px 0 11px 14px",
     textAlign: "left",
-    fontWeight: 500,
-    color: "var(--text-muted)",
-    borderBottom: "1px solid var(--border)",
+    fontWeight: 400,
+    color: "var(--text-secondary)",
+    borderBottom: rowBorder(last),
     verticalAlign: "top",
-  } satisfies CSSProperties,
-  cell: {
-    padding: "12px 16px",
+  }),
+  cell: (last: boolean): CSSProperties => ({
+    padding: "11px 14px 11px 10px",
+    fontWeight: 600,
     color: "var(--text-primary)",
-    borderBottom: "1px solid var(--border)",
+    borderBottom: rowBorder(last),
     wordBreak: "break-all",
+  }),
+  skeletons: { display: "flex", flexDirection: "column", gap: 8 } satisfies CSSProperties,
+  link: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 3,
+    marginTop: 14,
+    fontSize: 12.5,
+    color: "var(--accent-text)",
   } satisfies CSSProperties,
-  mono: { fontFamily: "var(--font-mono, monospace)", fontSize: 13 } satisfies CSSProperties,
-  skeletons: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
-  link: { display: "inline-block", marginTop: 16, fontSize: 14, color: "var(--accent)" } satisfies CSSProperties,
 } as const;

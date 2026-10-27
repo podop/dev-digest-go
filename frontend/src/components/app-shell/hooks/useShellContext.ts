@@ -3,12 +3,11 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
 import { type ShellContext } from "@devdigest/ui";
 import { useTheme } from "@/lib/theme";
 import { useActiveRepo } from "@/lib/repo-context";
 import { useConfirmLeave } from "@/lib/leave-guard";
-import { usePulls, useDeleteRepo, useWorkspace } from "@/lib/hooks";
+import { usePulls, useWorkspace } from "@/lib/hooks";
 import { activeKeyFor, toShellRepo } from "../helpers";
 
 interface ShellContextOptions {
@@ -18,10 +17,10 @@ interface ShellContextOptions {
 /**
  * Assembles the `ShellContext` consumed by AppFrame: active nav key, the repo
  * list/active repo (mapped to the shell shape), theme, PR count, and the repo
- * selection / add / removal actions.
+ * selection / add actions. Removing a repository lives only in Settings › GitHub / GitLab
+ * Integration, so the switcher gets no `onRemoveRepo` and its menu shows no remove button.
  */
 export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): ShellContext {
-  const t = useTranslations("shell");
   const pathname = usePathname() ?? "/";
   const router = useRouter();
   const { theme, toggle } = useTheme();
@@ -30,7 +29,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
   // A failed name load leaves `data` undefined → the switcher shows no name.
   const { data: workspace } = useWorkspace();
   const workspaceName = workspace?.name;
-  const deleteRepo = useDeleteRepo();
   const confirmLeave = useConfirmLeave();
 
   const onSelectRepo = React.useCallback(
@@ -46,25 +44,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
     if (confirmLeave()) router.push("/onboarding");
   }, [router, confirmLeave]);
 
-  const onRemoveRepo = React.useCallback(
-    (id: string) => {
-      const target = repos.find((r) => r.id === id);
-      const ok = window.confirm(
-        t("removeRepo.confirm", { name: target?.full_name ?? t("removeRepo.fallbackName") }),
-      );
-      if (!ok) return;
-      deleteRepo.mutate(id, {
-        onSuccess: () => {
-          if (repoId === id) {
-            const next = repos.find((r) => r.id !== id);
-            router.push(next ? `/repos/${next.id}/pulls` : "/onboarding");
-          }
-        },
-      });
-    },
-    [repos, repoId, t, deleteRepo, router],
-  );
-
   return React.useMemo<ShellContext>(
     () => ({
       Link,
@@ -78,7 +57,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
       onOpenCommandPalette,
       onSelectRepo,
       onAddRepo,
-      onRemoveRepo,
       // Sidebar badge = PRs that still NEED review, not the total PR count.
       // 0 → undefined so the badge hides entirely when nothing needs review.
       prCount: pulls?.filter((p) => p.status === "needs_review").length || undefined,
@@ -94,7 +72,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
       onOpenCommandPalette,
       onSelectRepo,
       onAddRepo,
-      onRemoveRepo,
       pulls,
     ],
   );

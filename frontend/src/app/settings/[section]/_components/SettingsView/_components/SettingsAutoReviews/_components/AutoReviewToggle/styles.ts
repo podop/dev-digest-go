@@ -1,23 +1,23 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for AutoReviewToggle. */
+/** Co-located styles for AutoReviewToggle — the prototype's toggle box (switch left, title + subline right). */
 export const s = {
-  // A <fieldset> only to disable the vendored Toggle: reset its default border, padding and min-width.
+  // A <fieldset> only to disable the vendored Toggle: reset its default border and min-width. A 2-column grid
+  // puts the switch left of the title and the subline; the <label> is display:contents so it adds no box.
   card: {
-    margin: "0 0 20px",
+    margin: "0 0 18px",
     minWidth: 0,
-    padding: "14px 16px",
-    borderRadius: 8,
-    border: "1px solid var(--border)",
-    background: "var(--bg-surface)",
-  } satisfies CSSProperties,
-  row: {
-    display: "flex",
+    display: "grid",
+    gridTemplateColumns: "auto 1fr",
+    columnGap: 12,
     alignItems: "center",
-    justifyContent: "space-between",
-    gap: 16,
-    cursor: "pointer",
+    padding: "14px 16px",
+    borderRadius: 9,
+    border: "1px solid var(--border)",
+    background: "var(--bg-elevated)",
   } satisfies CSSProperties,
-  title: { fontSize: 14, fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
-  subline: { marginTop: 4, fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
+  label: { display: "contents", cursor: "pointer" } satisfies CSSProperties,
+  switch: { gridRow: "1 / span 2", display: "inline-flex" } satisfies CSSProperties,
+  title: { fontSize: 13.5, fontWeight: 600, color: "var(--text-primary)", cursor: "pointer" } satisfies CSSProperties,
+  subline: { gridColumn: 2, fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
 } as const;

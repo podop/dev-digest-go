@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Icon } from "@devdigest/ui";
+import { Callout } from "@/components/settings-kit";
 import { KEY_PAGE_URLS, KeyField } from "@/components/key-field";
 import type { ConnTestResult } from "@/lib/types";
 import { lacksRepoScope } from "../../../../helpers";
@@ -37,10 +37,9 @@ export function GithubPanel({
           {passed.login && <div style={s.login}>{t("codeHost.connectedAs", { login: passed.login })}</div>}
           <div>{scopesText(passed.scopes, t)}</div>
           {lacksRepoScope(passed.scopes) && (
-            <div style={s.warn}>
-              <Icon.AlertTriangle size={14} style={s.warnIcon} />
-              <span>{t("codeHost.github.missingRepo")}</span>
-            </div>
+            <Callout tone="warn" style={s.warn}>
+              {t("codeHost.github.missingRepo")}
+            </Callout>
           )}
         </div>
       )}

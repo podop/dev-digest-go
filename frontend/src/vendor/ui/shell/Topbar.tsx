@@ -16,17 +16,17 @@ export function Topbar({ ctx, crumb = [] }: { ctx: ShellContext; crumb?: Crumb[]
         display: "flex",
         alignItems: "center",
         gap: 16,
-        padding: "0 24px",
+        padding: "0 18px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0 }}>
         {crumb.map((c, i) => {
           const last = i === crumb.length - 1;
           const text = (
             <span
               className={c.mono ? "mono" : undefined}
               style={{
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: last ? 600 : 500,
                 color: last ? "var(--text-primary)" : "var(--text-secondary)",
                 whiteSpace: "nowrap",
@@ -51,14 +51,14 @@ export function Topbar({ ctx, crumb = [] }: { ctx: ShellContext; crumb?: Crumb[]
           marginLeft: "auto",
           display: "flex",
           alignItems: "center",
-          gap: 10,
+          gap: 8,
           width: 260,
-          padding: "8px 14px",
+          padding: "6px 10px",
           borderRadius: 7,
           border: "1px solid var(--border)",
           background: "var(--bg-surface)",
           color: "var(--text-muted)",
-          fontSize: 13,
+          fontSize: 12.5,
         }}
       >
         <Icon.Search size={14} />

@@ -4,6 +4,7 @@
 "use client";
 
 import React from "react";
+import { cssRect, cssViewport } from "@/lib/ui-zoom";
 import { moveActive, placePopup, typeaheadIndex, type NormalizedOption, type PopupPosition } from "./helpers";
 
 const TYPEAHEAD_MS = 500;
@@ -167,9 +168,10 @@ export function useSelectListbox<V extends string>({
     const update = () => {
       const trigger = triggerRef.current;
       if (!trigger) return;
-      const rect = trigger.getBoundingClientRect();
+      // CSS px under the root zoom (lib/ui-zoom); scrollHeight is already in CSS px.
+      const rect = cssRect(trigger);
       const listH = listRef.current?.scrollHeight ?? 0;
-      setPopupPosition(placePopup(rect, window.innerHeight, listH));
+      setPopupPosition(placePopup(rect, cssViewport().height, listH));
     };
     update();
     window.addEventListener("resize", update);

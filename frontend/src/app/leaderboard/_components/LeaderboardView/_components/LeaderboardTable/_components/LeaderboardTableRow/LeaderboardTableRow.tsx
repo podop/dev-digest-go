@@ -63,7 +63,7 @@ export function LeaderboardTableRow({ row, rank, open, onToggle, onOpen, repos =
         </td>
         <td style={{ ...s.td, ...s.prCell }}>
           <div style={s.prMeta}>
-            <Avatar name={row.author} size={18} />
+            <Avatar name={row.author} size={15} />
             <Link href={prDetailPath(encodeURIComponent(row.repo_id), row.number)} className="mono" style={s.repoNumber}>
               {pr}
             </Link>
@@ -75,7 +75,7 @@ export function LeaderboardTableRow({ row, rank, open, onToggle, onOpen, repos =
           </div>
         </td>
         <td style={s.td}>
-          <Badge dot color={status.c} bg="transparent">
+          <Badge dot color={status.c} bg="transparent" style={s.statusBadge}>
             {t(`status.${status.labelKey}`)}
           </Badge>
         </td>
@@ -105,7 +105,7 @@ export function LeaderboardTableRow({ row, rank, open, onToggle, onOpen, repos =
             {t(`risk.${row.risk}`)}
           </span>
         </td>
-        <td style={s.td}>{row.health === null ? dash : <HealthRing health={row.health} />}</td>
+        <td style={s.td}>{row.health === null ? dash : <HealthRing health={row.health} size={26} stroke={3} />}</td>
         <td style={s.td}>
           <FindingChips counts={row.findings} openCritical={row.open_critical} />
         </td>

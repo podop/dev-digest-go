@@ -22,19 +22,23 @@ export interface StatCardProps {
   trend?: readonly number[];
   /** Secondary lines under the value (denominators, estimate label, counts). */
   children?: React.ReactNode;
+  /** Small tile (PR Leaderboard KPI row): about half the padding and font sizes. */
+  compact?: boolean;
 }
 
-export function StatCard({ label, value, unit, delta, ring, trend, children }: StatCardProps) {
+export function StatCard({ label, value, unit, delta, ring, trend, children, compact }: StatCardProps) {
   const t = useTranslations("agentPerformance.metrics");
   const known = value != null;
   return (
-    <div role="group" aria-label={label} style={s.card}>
-      <div style={s.cardHead}>
-        <span style={s.cardLabel}>{label}</span>
+    <div role="group" aria-label={label} style={compact ? { ...s.card, ...s.compactCard } : s.card}>
+      <div style={compact ? { ...s.cardHead, ...s.compactHead } : s.cardHead}>
+        <span title={compact ? label : undefined} style={compact ? { ...s.cardLabel, ...s.compactLabel } : s.cardLabel}>
+          {label}
+        </span>
         {ring != null && <CircularScore score={ring} size={34} stroke={4} />}
       </div>
-      <div style={s.cardValueRow}>
-        <span className="tnum" style={{ ...s.cardValue, ...(known ? null : s.muted) }}>
+      <div style={compact ? { ...s.cardValueRow, ...s.compactValueRow } : s.cardValueRow}>
+        <span className="tnum" style={{ ...s.cardValue, ...(compact ? s.compactValue : null), ...(known ? null : s.muted) }}>
           {known ? value : t("noValue")}
           {known && unit && <span style={s.cardUnit}>{unit}</span>}
         </span>

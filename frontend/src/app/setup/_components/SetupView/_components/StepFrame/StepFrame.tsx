@@ -11,8 +11,8 @@ export interface StepAction {
   disabled?: boolean;
 }
 
-/** Title, sub, body and the Back / primary action row shared by the three steps. Without
- *  `onBack` there is no Back button (step 1, D15). */
+/** Title, sub, body and the Back / primary action row shared by the three steps. Back is always
+ *  shown as in the prototype; without `onBack` (step 1) it is disabled. */
 export function StepFrame({
   title,
   sub,
@@ -33,13 +33,11 @@ export function StepFrame({
       <p style={s.sub}>{sub}</p>
       {children}
       <div style={s.actions}>
-        {onBack && (
-          <Button kind="ghost" size="md" icon="ChevronLeft" onClick={onBack}>
-            {t("actions.back")}
-          </Button>
-        )}
+        <Button kind="ghost" size="md" onClick={onBack} disabled={!onBack}>
+          {t("actions.back")}
+        </Button>
         <div style={s.spacer} />
-        <Button kind="primary" size="md" onClick={primary.onClick} disabled={primary.disabled}>
+        <Button kind="primary" size="md" iconRight="ArrowRight" onClick={primary.onClick} disabled={primary.disabled}>
           {primary.label}
         </Button>
       </div>

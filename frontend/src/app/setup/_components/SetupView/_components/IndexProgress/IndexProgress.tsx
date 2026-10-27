@@ -14,22 +14,22 @@ export function IndexProgress({ repo }: { repo: Repo }) {
   const { state, indexed, timedOut } = useRepoIndexWait(repo.id, INDEX_POLL_MS, INDEX_POLL_MAX_MS);
 
   return (
-    <div style={s.box} aria-live="polite">
+    <div style={s.box(Boolean(indexed && state))} aria-live="polite">
       {indexed && state ? (
         <>
-          <div style={{ ...s.line, ...s.ok }}>
-            <Icon.CheckCircle size={14} />
+          <div style={s.line}>
+            <Icon.CheckCircle size={15} style={s.icon(true)} aria-hidden />
             {t("repo.indexed", { name: repo.full_name })}
           </div>
-          <div>{t(`repo.indexStatus.${state.status}`)}</div>
+          <div style={s.detail}>{t(`repo.indexStatus.${state.status}`)}</div>
         </>
       ) : (
         <>
           <div style={s.line}>
-            <Icon.Clock size={14} />
+            <Icon.Clock size={15} style={s.icon(false)} aria-hidden />
             {t("repo.indexing", { name: repo.full_name })}
           </div>
-          {timedOut && <div>{t("repo.background")}</div>}
+          {timedOut && <div style={s.detail}>{t("repo.background")}</div>}
         </>
       )}
     </div>

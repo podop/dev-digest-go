@@ -30,7 +30,7 @@ describe("ModelStep", () => {
     expect(screen.getByText("DevDigest uses your own key for every model call. Nothing runs through our servers.")).toBeInTheDocument();
     expect(screen.getByText("Stored locally on your machine — never uploaded.")).toBeInTheDocument();
     expect(cont()).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
 
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     await waitFor(() => expect(cont()).toBeEnabled());

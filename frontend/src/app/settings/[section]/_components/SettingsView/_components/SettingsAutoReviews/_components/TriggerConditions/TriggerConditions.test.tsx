@@ -18,8 +18,8 @@ describe("TriggerConditions", () => {
 
     expect(screen.getByText("Trigger conditions")).toBeInTheDocument();
     expect(screen.getByText(HINT)).toBeInTheDocument();
-    expect(newPr()).toHaveAttribute("aria-checked", "true");
-    expect(newCommits()).toHaveAttribute("aria-checked", "false");
+    expect(newPr()).toBeChecked();
+    expect(newCommits()).not.toBeChecked();
 
     await user.click(newCommits());
     expect(onChange).toHaveBeenLastCalledWith({ on_new_commits: true });
@@ -27,12 +27,12 @@ describe("TriggerConditions", () => {
     expect(onChange).toHaveBeenLastCalledWith({ on_new_pr: false });
 
     // Controlled: the boxes keep the stored value until the section feeds back the saved one.
-    expect(newPr()).toHaveAttribute("aria-checked", "true");
-    expect(newCommits()).toHaveAttribute("aria-checked", "false");
+    expect(newPr()).toBeChecked();
+    expect(newCommits()).not.toBeChecked();
 
     rerender(<TriggerConditions value={{ on_new_pr: false, on_new_commits: true }} onChange={onChange} />);
-    expect(newPr()).toHaveAttribute("aria-checked", "false");
-    expect(newCommits()).toHaveAttribute("aria-checked", "true");
+    expect(newPr()).not.toBeChecked();
+    expect(newCommits()).toBeChecked();
   });
 
   it("disables both boxes while a save is in flight (FR20)", async () => {

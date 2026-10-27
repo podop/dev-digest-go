@@ -2,7 +2,9 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
+import { Icon } from "@devdigest/ui";
 import { AddRepoForm } from "@/components/add-repo-form";
+import { KitBadge } from "@/components/settings-kit";
 import type { Repo } from "@/lib/types";
 import { IndexProgress } from "../IndexProgress";
 import { StepFrame } from "../StepFrame";
@@ -34,7 +36,11 @@ export function RepoStep({
         <ul style={s.list}>
           {repos.map((repo) => (
             <li key={repo.id} style={s.row}>
-              {repo.full_name}
+              <Icon.GitBranch size={13} style={s.rowIcon} aria-hidden />
+              <span className="mono" style={s.rowName}>
+                {repo.full_name}
+              </span>
+              {repo.default_branch && <KitBadge mono>{repo.default_branch}</KitBadge>}
             </li>
           ))}
         </ul>

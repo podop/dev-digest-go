@@ -15,7 +15,7 @@ export function TestResultBanner({ result, name }: { result: ConnTestResult; nam
   if (!result.ok) {
     return (
       <div role="alert" style={s.banner("crit")}>
-        <Icon.XCircle size={13} />
+        <Icon.XCircle size={15} style={s.bannerIcon("crit")} aria-hidden />
         {result.message}
       </div>
     );
@@ -23,7 +23,7 @@ export function TestResultBanner({ result, name }: { result: ConnTestResult; nam
   if (result.warning) {
     return (
       <div role="status" style={s.banner("warn")}>
-        <Icon.AlertTriangle size={13} />
+        <Icon.AlertTriangle size={15} style={s.bannerIcon("warn")} aria-hidden />
         {result.warning}
       </div>
     );
@@ -31,7 +31,7 @@ export function TestResultBanner({ result, name }: { result: ConnTestResult; nam
   if (model && result.model_reachable === false) {
     return (
       <div role="status" style={s.banner("warn")}>
-        <Icon.AlertTriangle size={13} />
+        <Icon.AlertTriangle size={15} style={s.bannerIcon("warn")} aria-hidden />
         {t("notListed", { model, provider: name })}
       </div>
     );
@@ -44,7 +44,7 @@ export function TestResultBanner({ result, name }: { result: ConnTestResult; nam
       : result.message;
   return (
     <div role="status" style={s.banner("ok")}>
-      <Icon.CheckCircle size={13} />
+      <Icon.CheckCircle size={15} style={s.bannerIcon("ok")} aria-hidden />
       {text}
     </div>
   );

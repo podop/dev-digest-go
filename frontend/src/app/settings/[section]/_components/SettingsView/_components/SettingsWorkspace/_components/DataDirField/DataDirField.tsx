@@ -2,14 +2,15 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, FormField, TextInput } from "@devdigest/ui";
+import { Icon } from "@devdigest/ui";
+import { Field, TextField } from "@/components/settings-kit";
 import { copyText } from "@/lib/clipboard";
 import { useWorkspace } from "@/lib/hooks";
 import { useToast } from "@/lib/toast";
 import { COPIED_MS } from "./constants";
 import { s } from "./styles";
 
-/** Workspace → "Data directory" (FR4): the absolute data dir, read-only, mono, with a copy button. */
+/** Workspace → "Data directory" (FR4): the absolute data dir, read-only, mono, with a copy action inside the box. */
 export function DataDirField() {
   const t = useTranslations("settingsWorkspace");
   const toast = useToast();
@@ -29,20 +30,26 @@ export function DataDirField() {
   };
 
   return (
-    <FormField label={t("dataDir.label")} hint={t("dataDir.hint")}>
-      <div style={s.row}>
-        <div style={s.input}>
-          <TextInput value={dataDir} mono readOnly aria-label={t("dataDir.inputAria")} />
-        </div>
-        {copied && (
-          <span role="status" style={s.copied}>
-            {t("dataDir.copied")}
-          </span>
-        )}
-        <Button kind="secondary" size="md" icon="Copy" type="button" disabled={dataDir === ""} onClick={() => void copy()}>
-          {t("dataDir.copy")}
-        </Button>
-      </div>
-    </FormField>
+    <Field label={t("dataDir.label")} hint={t("dataDir.hint")}>
+      <TextField
+        value={dataDir}
+        mono
+        readOnly
+        aria-label={t("dataDir.inputAria")}
+        suffix={
+          <>
+            {copied && (
+              <span role="status" style={s.copied}>
+                {t("dataDir.copied")}
+              </span>
+            )}
+            <button type="button" style={s.copy} disabled={dataDir === ""} onClick={() => void copy()}>
+              <Icon.Copy size={13} aria-hidden />
+              {t("dataDir.copy")}
+            </button>
+          </>
+        }
+      />
+    </Field>
   );
 }

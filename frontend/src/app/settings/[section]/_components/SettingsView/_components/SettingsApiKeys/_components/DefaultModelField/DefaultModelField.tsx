@@ -2,12 +2,14 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, FormField, Icon, SearchableSelect, TextInput } from "@devdigest/ui";
+import { Button, Icon } from "@devdigest/ui";
+import { Field, TextField } from "@/components/settings-kit";
 import { ProviderSelect, useProviderUndefined } from "@/components/provider-select";
 import { useCustomProviders, useProviderModels, useSecretsStatus, useSettings, useUpdateSettings } from "@/lib/hooks";
 import { toModelOptions } from "@/lib/model-label";
 import { isCustomId, providerName } from "@/lib/providers/custom";
 import type { Provider } from "@/lib/types";
+import { CompactSearchableSelect } from "../CompactSearchableSelect";
 import { s } from "./styles";
 
 /** Provider shown before any default model is saved. */
@@ -59,11 +61,11 @@ export function DefaultModelField() {
   };
 
   if (settings === undefined) {
-    return <FormField label={t("defaultModel.label")} hint={t("defaultModel.loading")} />;
+    return <Field label={t("defaultModel.label")} hint={t("defaultModel.loading")} />;
   }
 
   return (
-    <FormField label={t("defaultModel.label")} hint={t("defaultModel.hint")}>
+    <Field label={t("defaultModel.label")} hint={t("defaultModel.hint")}>
       <fieldset aria-label={t("defaultModel.label")} style={s.row}>
         <div style={s.provider}>
           <ProviderSelect
@@ -74,11 +76,12 @@ export function DefaultModelField() {
             }}
             aria-label={t("defaultModel.providerAria")}
             mono={false}
+            compact
           />
         </div>
         <div style={s.model}>
           {listUnavailable ? (
-            <TextInput
+            <TextField
               value={typed ?? savedModel}
               onChange={setTyped}
               mono
@@ -89,7 +92,7 @@ export function DefaultModelField() {
               }}
             />
           ) : (
-            <SearchableSelect
+            <CompactSearchableSelect
               value={savedModel}
               onChange={saveModel}
               options={options}
@@ -98,26 +101,26 @@ export function DefaultModelField() {
           )}
         </div>
         {listUnavailable && (
-          <Button kind="secondary" size="md" onClick={saveTyped} disabled={!canSaveTyped}>
+          <Button kind="secondary" size="sm" onClick={saveTyped} disabled={!canSaveTyped}>
             {update.isPending ? t("defaultModel.saving") : t("defaultModel.save")}
           </Button>
         )}
       </fieldset>
       {listUnavailable && (
         <div style={s.note}>
-          <Icon.Info size={14} />
+          <Icon.Info size={13} style={s.noteIcon} />
           <span>{t("defaultModel.freeTextHint", { provider: shownName })}</span>
         </div>
       )}
       {providerUndefined && (
         <div role="note" style={s.warn}>
-          <Icon.AlertTriangle size={14} />
+          <Icon.AlertTriangle size={13} style={s.noteIcon} />
           <span>{tp("blockedHint")}</span>
         </div>
       )}
       {!isCustomId(provider) && secrets?.[provider] === false && (
         <div role="note" style={s.warn}>
-          <Icon.AlertTriangle size={14} />
+          <Icon.AlertTriangle size={13} style={s.noteIcon} />
           <span>{t("defaultModel.noKey", { provider: shownName })}</span>
         </div>
       )}
@@ -126,6 +129,6 @@ export function DefaultModelField() {
           {t("defaultModel.saveFailed")}
         </div>
       )}
-    </FormField>
+    </Field>
   );
 }

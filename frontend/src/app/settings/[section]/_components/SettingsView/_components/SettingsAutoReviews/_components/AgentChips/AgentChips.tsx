@@ -3,7 +3,8 @@
 import React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { FormField, Icon } from "@devdigest/ui";
+import { Icon } from "@devdigest/ui";
+import { Field } from "@/components/settings-kit";
 // Zod-free subpath: the barrel would pull zod + every schema into /settings.
 import { AUTO_REVIEW_MAX_AGENTS } from "@devdigest/shared/constants/settings";
 import type { Agent } from "@devdigest/shared";
@@ -39,7 +40,7 @@ export function AgentChips({ agents, selected, disabled = false, onChange }: Age
   };
 
   return (
-    <FormField label={t("label")} hint={t("hint")}>
+    <Field label={t("label")} hint={t("hint")}>
       {agents.length === 0 ? (
         <div style={s.empty}>
           <span>{t("empty")}</span>
@@ -79,6 +80,6 @@ export function AgentChips({ agents, selected, disabled = false, onChange }: Age
           {t("limit", { max: AUTO_REVIEW_MAX_AGENTS })}
         </div>
       )}
-    </FormField>
+    </Field>
   );
 }

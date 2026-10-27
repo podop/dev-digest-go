@@ -22,14 +22,14 @@ describe("StepFrame", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it("has no Back without onBack and keeps a disabled primary action inert", async () => {
+  it("shows a disabled Back without onBack and keeps a disabled primary action inert", async () => {
     const onClick = vi.fn();
     const { user } = renderWithProviders(
       <StepFrame title="T" sub="S" primary={{ label: "Go", onClick, disabled: true }}>
         <p>body</p>
       </StepFrame>,
     );
-    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Go" }));
     expect(onClick).not.toHaveBeenCalled();
   });

@@ -27,6 +27,8 @@ export function Select<V extends string>({
   formatValue,
   icon,
   chevron = "updown",
+  compact,
+  id,
 }: {
   value: V;
   onChange?: (v: V) => void;
@@ -39,6 +41,10 @@ export function Select<V extends string>({
   /** Decorative icon before the label, on the trigger and on every option. */
   icon?: IconName;
   chevron?: SelectChevron;
+  /** Design-prototype size (8px 11px, 13px) used by Settings and Setup. */
+  compact?: boolean;
+  /** Id of the trigger, so a `<label htmlFor>` names it. */
+  id?: string;
 }) {
   const normalized = React.useMemo(() => normalizeOptions(options), [options]);
   const {
@@ -61,6 +67,7 @@ export function Select<V extends string>({
   return (
     <div
       ref={triggerRef}
+      id={id}
       role="combobox"
       tabIndex={disabled ? -1 : 0}
       aria-haspopup="listbox"
@@ -73,10 +80,10 @@ export function Select<V extends string>({
       onKeyDown={triggerKeyDown}
       onBlur={close}
       className={mono ? "mono" : undefined}
-      style={s.trigger(disabled)}
+      style={s.trigger(disabled, compact)}
     >
       {icon && <OptionIcon name={icon} testId="select-trigger-icon" />}
-      <span style={s.value(!normalized.some((o) => o.value === value))}>{formatValue ? formatValue(currentLabel) : currentLabel}</span>
+      <span style={s.value(!normalized.some((o) => o.value === value), compact)}>{formatValue ? formatValue(currentLabel) : currentLabel}</span>
       {chevron === "updown" && <Icon.ChevronsUpDown size={14} style={s.chevron} />}
       {chevron === "down" && <Icon.ChevronDown size={14} style={s.chevron} />}
       {open &&

@@ -27,12 +27,15 @@ export function ProviderSelect({
   "aria-label": ariaLabel,
   mono = true,
   disabled,
+  compact,
 }: {
   value: Provider;
   onChange: (provider: Provider) => void;
   "aria-label": string;
   mono?: boolean;
   disabled?: boolean;
+  /** Design-prototype trigger size (Settings, Setup). */
+  compact?: boolean;
 }) {
   const t = useTranslations("providerSelect");
   const { data: custom, isError, refetch } = useCustomProviders();
@@ -61,6 +64,7 @@ export function ProviderSelect({
         aria-label={ariaLabel}
         mono={mono}
         disabled={disabled}
+        compact={compact}
       />
       {isError && (
         <div aria-live="polite" style={s.error}>

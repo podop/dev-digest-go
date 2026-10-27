@@ -6,7 +6,8 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ErrorState, FormField, Icon, Skeleton } from "@devdigest/ui";
+import { ErrorState, Skeleton } from "@devdigest/ui";
+import { Field, InfoNote, SectionPane } from "@/components/settings-kit";
 import { isGitLab } from "@/lib/code-host";
 import { useAgents, useRepos, useSettings, useUpdateSettings } from "@/lib/hooks";
 import { sectionHref } from "../../constants";
@@ -34,20 +35,22 @@ export function SettingsAutoReviews() {
 
   if (settings.isError) {
     return (
-      <div style={s.wrap}>
+      <SectionPane>
         {title}
         <ErrorState title={t("loadError")} onRetry={() => void settings.refetch()} retryLabel={tc("actions.retry")} />
-      </div>
+      </SectionPane>
     );
   }
   if (!settings.data) {
     return (
-      <div style={s.wrap} role="status" aria-label={t("loading")}>
-        {title}
-        <Skeleton height={64} />
-        <Skeleton height={36} />
-        <Skeleton height={36} />
-      </div>
+      <SectionPane>
+        <div style={s.loading} role="status" aria-label={t("loading")}>
+          {title}
+          <Skeleton height={64} />
+          <Skeleton height={34} />
+          <Skeleton height={34} />
+        </div>
+      </SectionPane>
     );
   }
 
@@ -55,7 +58,7 @@ export function SettingsAutoReviews() {
   const saving = update.isPending;
 
   return (
-    <div style={s.wrap}>
+    <SectionPane>
       {title}
       <AutoReviewToggle
         value={automatic.enabled}
@@ -68,17 +71,17 @@ export function SettingsAutoReviews() {
         onChange={(polling_interval_min) => update.mutate({ polling_interval_min })}
       />
       {agents.isError ? (
-        <FormField label={ta("label")}>
+        <Field label={ta("label")}>
           <ErrorState title={t("agentsLoadError")} onRetry={() => void agents.refetch()} retryLabel={tc("actions.retry")} />
-        </FormField>
+        </Field>
       ) : !agents.data ? (
-        <FormField label={ta("label")}>
+        <Field label={ta("label")}>
           <div style={s.chipsSkeleton} role="status" aria-label={t("agentsLoading")}>
-            <Skeleton width={96} height={30} />
-            <Skeleton width={96} height={30} />
-            <Skeleton width={96} height={30} />
+            <Skeleton width={96} height={26} />
+            <Skeleton width={96} height={26} />
+            <Skeleton width={96} height={26} />
           </div>
-        </FormField>
+        </Field>
       ) : (
         <AgentChips
           agents={agents.data}
@@ -93,18 +96,15 @@ export function SettingsAutoReviews() {
         onChange={(patch) => update.mutate({ automatic_reviews: patch })}
       />
       <AutoReviewStatus />
-      <div style={s.info}>
-        <Icon.Info size={14} aria-hidden />
-        <span>
-          {t.rich(pollsGitLab ? "infoCiHosts" : "info", {
-            integrations: (chunks) => (
-              <Link href={sectionHref("integrations")} style={s.link}>
-                {chunks}
-              </Link>
-            ),
-          })}
-        </span>
-      </div>
-    </div>
+      <InfoNote>
+        {t.rich(pollsGitLab ? "infoCiHosts" : "info", {
+          integrations: (chunks) => (
+            <Link href={sectionHref("integrations")} style={s.link}>
+              {chunks}
+            </Link>
+          ),
+        })}
+      </InfoNote>
+    </SectionPane>
   );
 }

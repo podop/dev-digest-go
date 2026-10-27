@@ -20,16 +20,16 @@ export function RepoSwitcher({ ctx }: { ctx: ShellContext }) {
   return (
     <Dropdown
       align="left"
-      width={240}
+      width={204}
       items={items}
       trigger={
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 10,
-            padding: "10px 14px",
-            margin: "0 0 8px",
+            gap: 9,
+            padding: "7px 9px",
+            margin: "0 0 6px",
             borderRadius: 7,
             border: "1px solid var(--border)",
             background: "var(--bg-elevated)",
@@ -53,7 +53,7 @@ export function RepoSwitcher({ ctx }: { ctx: ShellContext }) {
             <div
               className="mono"
               style={{
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: 600,
                 whiteSpace: "nowrap",
                 overflow: "hidden",
@@ -62,7 +62,7 @@ export function RepoSwitcher({ ctx }: { ctx: ShellContext }) {
             >
               {active?.full_name ?? "No repo selected"}
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            <div style={{ fontSize: 10.5, color: "var(--text-muted)" }}>
               {active ? `${active.default_branch ?? "main"} · ${active.syncedLabel ?? "not synced"}` : "Add a repo to begin"}
             </div>
           </div>

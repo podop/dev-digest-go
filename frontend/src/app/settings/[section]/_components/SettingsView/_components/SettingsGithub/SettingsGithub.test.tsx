@@ -200,7 +200,7 @@ describe("SettingsGithub repositories", () => {
     await user.click(within(screen.getByRole("dialog")).getByRole("button", { name: /^Remove/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Disk busy");
     expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(screen.getByText("acme/api", { selector: "div" })).toBeInTheDocument();
+    expect(screen.getByText("acme/api", { selector: "li span" })).toBeInTheDocument();
   });
 });
 

@@ -1,11 +1,12 @@
 import type { CSSProperties } from "react";
+import { kit } from "@/components/settings-kit";
 
-/** Co-located styles for SettingsGitlab. */
+/** Co-located styles for SettingsGitlab: the connection list as a prototype field, "Add GitLab connection" under it. */
 export const s = {
-  wrap: { maxWidth: 640 } satisfies CSSProperties,
-  head: { display: "flex", alignItems: "center", gap: 10, marginTop: 20, marginBottom: 12 } satisfies CSSProperties,
-  spacer: { flex: 1 } satisfies CSSProperties,
-  empty: { fontSize: 13, color: "var(--text-muted)", padding: "12px 0" } satisfies CSSProperties,
-  list: { listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
-  skeletons: { display: "flex", flexDirection: "column", gap: 10 } satisfies CSSProperties,
+  field: kit.field,
+  title: { ...kit.label, display: "block", marginBottom: 7 } satisfies CSSProperties,
+  empty: { fontSize: 12.5, color: "var(--text-muted)", margin: 0 } satisfies CSSProperties,
+  list: { ...kit.list, listStyle: "none", margin: 0, padding: 0 } satisfies CSSProperties,
+  skeletons: { display: "flex", flexDirection: "column", gap: 6 } satisfies CSSProperties,
+  add: { marginTop: 8 } satisfies CSSProperties,
 } as const;

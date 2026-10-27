@@ -60,6 +60,7 @@ export function KpiTiles({ summary, previous }: KpiTilesProps) {
         return (
           <StatCard
             key={spec.key}
+            compact
             label={t(`kpi.${spec.key}`)}
             value={alert ? <span style={s.alert}>{shown}</span> : shown}
             delta={delta && <KpiDelta delta={delta} amount={amountText(spec, delta.amount)} />}

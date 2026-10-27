@@ -8,6 +8,8 @@ import { KEY_PAGE_URLS, KeyField } from "@/components/key-field";
 import type { ConnTestProvider, ConnTestResult, SecretsStatus } from "@/lib/types";
 import { MODEL_PROVIDERS, type ModelProvider } from "../../constants";
 import { initialProvider } from "../../helpers";
+import { Callout } from "@/components/settings-kit";
+import { ChoiceGroup } from "../ChoiceGroup";
 import { StepFrame } from "../StepFrame";
 import { s } from "./styles";
 
@@ -47,17 +49,20 @@ export function ModelStep({
       sub={t("model.sub")}
       primary={{ label: t("actions.continue"), onClick: () => onContinue?.(), disabled: !ready }}
     >
-      <fieldset style={s.group}>
-        <legend style={s.legend}>{t("model.providerLegend")}</legend>
-        <div style={s.options}>
-          {MODEL_PROVIDERS.map((p) => (
-            <label key={p} style={s.option(p === provider)}>
-              <input type="radio" name="setup-provider" value={p} checked={p === provider} onChange={() => setProvider(p)} />
-              {t(`model.providers.${p}`)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <ChoiceGroup
+        legend={t("model.providerLegend")}
+        name="setup-provider"
+        options={MODEL_PROVIDERS}
+        value={provider}
+        onChange={setProvider}
+        labelOf={(p) => t(`model.providers.${p}`)}
+        right={
+          <Link href={CUSTOM_PROVIDERS_HREF} style={s.customLink}>
+            {t("model.customLink")}
+            <Icon.ArrowRight size={11} aria-hidden />
+          </Link>
+        }
+      />
       <KeyField
         key={provider}
         provider={provider}
@@ -67,15 +72,7 @@ export function ModelStep({
         configured={secrets[provider]}
         onResult={onResult}
       />
-      <Link href={CUSTOM_PROVIDERS_HREF} style={s.customLink}>
-        {t("model.customLink")}
-      </Link>
-      {alreadyConnected && (
-        <div style={s.connected}>
-          <Icon.CheckCircle size={14} />
-          {t("alreadyConnected")}
-        </div>
-      )}
+      {alreadyConnected && <Callout tone="ok">{t("alreadyConnected")}</Callout>}
     </StepFrame>
   );
 }

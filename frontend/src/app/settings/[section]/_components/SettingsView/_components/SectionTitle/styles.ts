@@ -1,7 +1,7 @@
-import type { CSSProperties } from "react";
+import { kit } from "@/components/settings-kit";
 
-/** Co-located styles for SectionTitle. */
+/** Co-located styles for SectionTitle (prototype: h2 18/700, lede 13 secondary, 22px gap). */
 export const s = {
-  h2: { fontSize: 20, fontWeight: 700, marginBottom: 5 } satisfies CSSProperties,
-  body: { fontSize: 14, color: "var(--text-secondary)", marginBottom: 24 } satisfies CSSProperties,
+  h2: kit.h2,
+  body: kit.lede,
 } as const;

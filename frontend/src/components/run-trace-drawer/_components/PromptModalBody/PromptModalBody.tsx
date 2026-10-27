@@ -41,7 +41,7 @@ export function PromptModalBody({ text }: { text: string }) {
     ? lines.flatMap((line, lineNo) => (line.toLowerCase().includes(ql) ? [{ line, lineNo }] : []))
     : [];
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "70vh" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(70 * var(--app-vh))" }}>
       <div style={{ padding: "12px 24px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <TextInput
           value={q}

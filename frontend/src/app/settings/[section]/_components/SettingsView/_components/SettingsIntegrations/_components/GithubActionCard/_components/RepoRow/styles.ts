@@ -1,47 +1,23 @@
 import type { CSSProperties } from "react";
+import { kit } from "@/components/settings-kit";
 
-/** Co-located styles for RepoRow. */
+/** Co-located styles for RepoRow — a row inside the prototype's integration card. */
 export const s = {
-  row: {
-    display: "flex",
-    alignItems: "center",
-    gap: 14,
-    padding: "11px 16px",
-    borderTop: "1px solid var(--border)",
-  } satisfies CSSProperties,
-  repo: {
-    flex: 1,
-    minWidth: 0,
-    fontSize: 13.5,
-    fontWeight: 600,
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  } satisfies CSSProperties,
-  target: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 8 } satisfies CSSProperties,
-  host: { fontSize: 12, color: "var(--text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
-  mr: { flexShrink: 0, fontSize: 12.5, color: "var(--text-secondary)" } satisfies CSSProperties,
-  run: {
-    flexShrink: 0,
-    maxWidth: 220,
-    fontSize: 12.5,
-    color: "var(--text-secondary)",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-    whiteSpace: "nowrap",
-  } satisfies CSSProperties,
-  runLink: { color: "var(--accent)", textDecoration: "none" } satisfies CSSProperties,
+  row: { ...kit.cardRow, listStyle: "none" } satisfies CSSProperties,
+  icon: kit.rowIcon,
+  repo: kit.rowName,
+  target: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 6 } satisfies CSSProperties,
+  host: { fontSize: 11.5, color: "var(--text-muted)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
+  mr: { flexShrink: 0, fontSize: 11.5, color: "var(--text-muted)" } satisfies CSSProperties,
+  run: { ...kit.rowMeta, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" } satisfies CSSProperties,
+  runLink: { color: "var(--accent-text)", textDecoration: "none" } satisfies CSSProperties,
+  /** The prototype's MonoLink "Manage" as a real link. */
   manageLink: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "5px 9px",
-    fontSize: 12.5,
-    fontWeight: 500,
-    borderRadius: 6,
-    border: "1px solid var(--border-strong)",
-    background: "var(--bg-elevated)",
-    color: "var(--text-primary)",
+    flexShrink: 0,
+    fontSize: 12,
+    color: "var(--text-secondary)",
     textDecoration: "none",
     whiteSpace: "nowrap",
   } satisfies CSSProperties,
+  chevron: { marginLeft: 2, verticalAlign: "-1px" } satisfies CSSProperties,
 } as const;

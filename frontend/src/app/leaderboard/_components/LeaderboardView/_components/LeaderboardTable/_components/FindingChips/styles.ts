@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 export const s = {
-  chips: { display: "inline-flex", gap: 6, fontSize: 11.5, fontWeight: 600 } satisfies CSSProperties,
+  chips: { display: "inline-flex", gap: 5, fontSize: 10.5, fontWeight: 600 } satisfies CSSProperties,
   /** `color` null ⇒ muted (no findings of that severity); `outlined` draws the red ring of a CRITICAL chip with open findings. */
   chip: (color: string | null, outlined = false): CSSProperties => ({
     color: color ?? "var(--text-muted)",

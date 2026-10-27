@@ -45,9 +45,11 @@ export function AwardCard({ spec, award, repos = NO_REPOS }: AwardCardProps) {
     <div role="group" aria-label={title} style={s.card}>
       <div style={s.head}>
         <span style={{ ...s.chip, background: spec.bg, color: spec.color }}>
-          <AwardIcon size={16} />
+          <AwardIcon size={11} />
         </span>
-        <span style={s.title}>{title}</span>
+        <span title={title} style={s.title}>
+          {title}
+        </span>
       </div>
       {award ? (
         <>

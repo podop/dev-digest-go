@@ -1,10 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { FormField } from "@devdigest/ui";
+import React from "react";
+import { Field } from "@/components/settings-kit";
 import { Select } from "@/components/select";
 import { intervalChoices, parseMinutes } from "./helpers";
-import { s } from "./styles";
 
 interface IntervalSelectProps {
   /** Stored `polling_interval_min`, in minutes. */
@@ -21,6 +21,7 @@ interface IntervalSelectProps {
  */
 export function IntervalSelect({ value, disabled = false, onChange }: IntervalSelectProps) {
   const t = useTranslations("autoReviewControls");
+  const id = React.useId();
 
   const label = (minutes: number) => {
     if (minutes === 1) return t("interval.everyMinute");
@@ -35,17 +36,16 @@ export function IntervalSelect({ value, disabled = false, onChange }: IntervalSe
   };
 
   return (
-    <FormField label={t("interval.label")} hint={t("interval.hint")}>
-      <div style={s.select}>
-        <Select
+    <Field label={t("interval.label")} htmlFor={id} hint={t("interval.hint")}>
+      <Select
+          id={id}
+          compact
           value={String(value)}
           onChange={pick}
           options={options}
           aria-label={t("interval.selectAria")}
           disabled={disabled}
-          mono={false}
         />
-      </div>
-    </FormField>
+    </Field>
   );
 }

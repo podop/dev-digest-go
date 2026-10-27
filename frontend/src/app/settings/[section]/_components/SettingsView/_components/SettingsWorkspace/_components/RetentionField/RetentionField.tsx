@@ -2,7 +2,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { FormField, Icon } from "@devdigest/ui";
+import { Icon } from "@devdigest/ui";
+import { Field } from "@/components/settings-kit";
 import { Select } from "@/components/select";
 import { useSettings, useUpdateSettings } from "@/lib/hooks";
 import { DAY_VALUES, FOREVER, NO_CHOICE, toRetentionDays, toSelectValue } from "./helpers";
@@ -17,9 +18,10 @@ export function RetentionField() {
   const t = useTranslations("workspaceRetention");
   const { data: settings } = useSettings();
   const update = useUpdateSettings();
+  const id = React.useId();
 
   if (settings === undefined) {
-    return <FormField label={t("label")} hint={t("loading")} />;
+    return <Field label={t("label")} hint={t("loading")} />;
   }
 
   const stored = toSelectValue(settings.retention_days as unknown);
@@ -38,21 +40,20 @@ export function RetentionField() {
   ];
 
   return (
-    <FormField label={t("label")} hint={t("hint")}>
-      <div style={s.select}>
-        <Select
+    <Field label={t("label")} htmlFor={id} hint={t("hint")}>
+      <Select
+          id={id}
+          compact
           value={value}
           onChange={save}
           options={options}
           aria-label={t("selectAria")}
           disabled={update.isPending}
-          mono={false}
           formatValue={(label) => (value === NO_CHOICE ? t("choose") : label)}
         />
-      </div>
       {stored === NO_CHOICE && (
         <div role="note" style={s.warn}>
-          <Icon.AlertTriangle size={14} />
+          <Icon.AlertTriangle size={13} aria-hidden />
           <span>{t("invalid")}</span>
         </div>
       )}
@@ -61,6 +62,6 @@ export function RetentionField() {
           {t("saveFailed")}
         </div>
       )}
-    </FormField>
+    </Field>
   );
 }

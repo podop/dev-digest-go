@@ -26,7 +26,7 @@ export function AutoReviewStatus() {
 
   if (isError) {
     return (
-      <div role="status" style={s.line}>
+      <div role="status" style={s.line("warn")}>
         <span aria-hidden style={s.dot("warn")} />
         <span>{t("unavailable")}</span>
         <Button kind="ghost" size="sm" onClick={() => void status.refetch()}>
@@ -37,7 +37,7 @@ export function AutoReviewStatus() {
   }
   if (!data) {
     return (
-      <div role="status" style={{ ...s.line, ...s.muted }}>
+      <div role="status" style={{ ...s.line("muted"), ...s.muted }}>
         {t("checking")}
       </div>
     );
@@ -47,14 +47,14 @@ export function AutoReviewStatus() {
   const text =
     data.state === "active"
       ? t.rich("states.active", {
-          b: (chunks) => <strong>{chunks}</strong>,
+          b: (chunks) => <strong style={s.strong}>{chunks}</strong>,
           when: agePart(t, pollAge(data.last_poll_at, dataUpdatedAt)),
           count: data.prs_tracked,
         })
       : t(`states.${data.state}`);
 
   return (
-    <div role="status" style={s.line}>
+    <div role="status" style={s.line(toneOf(data.state))}>
       <span aria-hidden style={s.dot(toneOf(data.state))} />
       <span>{text}</span>
       {fixes.map((fix) => (

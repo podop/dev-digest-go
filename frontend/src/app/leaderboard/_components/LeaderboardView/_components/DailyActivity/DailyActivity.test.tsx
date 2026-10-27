@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { LeaderboardActivity, LeaderboardActivityPoint } from "@devdigest/shared";
 import { renderWithProviders, screen, within } from "@/test/render";
 import { DailyActivity } from "./DailyActivity";
+import { BAR_AREA } from "./styles";
 import { formatDay, formatMonthDay } from "./helpers";
 
 const point = (day: string, opened: number, merged: number, critical: number): LeaderboardActivityPoint => ({
@@ -40,15 +41,15 @@ describe("DailyActivity", () => {
     expect(monQ.getByText("4")).toBeInTheDocument();
     expect(monQ.getByText("2")).toBeInTheDocument();
     expect(monQ.getByText("3")).toBeInTheDocument();
-    expect(mon.querySelector("[data-bar=opened]")).toHaveStyle({ height: "100px", background: "var(--accent)" });
-    expect(mon.querySelector("[data-bar=merged]")).toHaveStyle({ height: "50px", background: "var(--ok)" });
+    expect(mon.querySelector("[data-bar=opened]")).toHaveStyle({ height: `${BAR_AREA}px`, background: "var(--accent)" });
+    expect(mon.querySelector("[data-bar=merged]")).toHaveStyle({ height: `${BAR_AREA / 2}px`, background: "var(--ok)" });
 
     const tue = screen.getByRole("img", { name: "Tue 20: 0 opened, 0 merged, 0 critical" });
     expect(tue.querySelector("[data-bar=opened]")).toHaveStyle({ height: "0px" });
     expect(within(tue).queryByText("0")).not.toBeInTheDocument();
 
     const wed = screen.getByRole("img", { name: "Wed 21: 2 opened, 4 merged, 0 critical" });
-    expect(wed.querySelector("[data-bar=merged]")).toHaveStyle({ height: "100px" });
+    expect(wed.querySelector("[data-bar=merged]")).toHaveStyle({ height: `${BAR_AREA}px` });
 
     expect(screen.getByText("Opened")).toBeInTheDocument();
     expect(screen.getByText("Merged")).toBeInTheDocument();
@@ -63,7 +64,7 @@ describe("DailyActivity", () => {
     const second = screen.getByRole("img", { name: "Wk of Oct 5: 6 opened, 5 merged, 2 critical" });
     expect(within(second).getByText("Wk of Oct 5")).toBeInTheDocument();
     expect(screen.getByText("Wk of Sep 25")).toBeInTheDocument();
-    expect(second.querySelector("[data-bar=opened]")).toHaveStyle({ height: "100px" });
+    expect(second.querySelector("[data-bar=opened]")).toHaveStyle({ height: `${BAR_AREA}px` });
     expect(screen.queryByText(/Mon|Tue|Wed|Thu|Fri|Sat|Sun/)).not.toBeInTheDocument();
   });
 

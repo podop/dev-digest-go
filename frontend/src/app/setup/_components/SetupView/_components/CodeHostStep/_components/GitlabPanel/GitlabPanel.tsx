@@ -2,7 +2,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, Icon, TextInput } from "@devdigest/ui";
+import { Button, Icon } from "@devdigest/ui";
+import { Callout, Field, HeadLink, RevealButton, TextField } from "@/components/settings-kit";
 import { applyMaskedEdit, maskKey } from "@/components/key-field";
 import { ApiError } from "@/lib/api";
 import { useSaveGitLabConnection, useTestConnection } from "@/lib/hooks";
@@ -82,79 +83,57 @@ export function GitlabPanel({
         void submit();
       }}
     >
-      <div style={s.field}>
-        <div style={s.head}>
-          <label htmlFor={baseId} style={s.label}>
-            {t("codeHost.gitlab.baseUrlLabel")}
-          </label>
-        </div>
-        <TextInput
+      <Field label={t("codeHost.gitlab.baseUrlLabel")} htmlFor={baseId} hint={t("codeHost.gitlab.baseUrlHint")}>
+        <TextField
           id={baseId}
           mono
           value={baseUrl}
           onChange={setBaseUrl}
           autoComplete="off"
           spellCheck={false}
-          aria-invalid={error?.field === "base"}
+          invalid={error?.field === "base"}
         />
-        <div style={s.hint}>{t("codeHost.gitlab.baseUrlHint")}</div>
-      </div>
+      </Field>
 
       <div style={s.field}>
         <div style={s.head}>
           <label htmlFor={tokenId} style={s.label}>
             {t("codeHost.gitlab.tokenLabel")}
           </label>
-          {tokenPage && (
-            <a href={tokenPage} target="_blank" rel="noopener noreferrer" style={s.docs}>
-              {t("codeHost.gitlab.createToken")}
-              <Icon.ExternalLink size={12} />
-            </a>
-          )}
+          {tokenPage && <HeadLink href={tokenPage}>{t("codeHost.gitlab.createToken")}</HeadLink>}
         </div>
-        <div style={s.row}>
-          <div style={s.grow}>
-            <TextInput
-              id={tokenId}
-              mono
-              value={reveal ? token : maskKey(token)}
-              onChange={(v) => setToken(reveal ? v : applyMaskedEdit(token, v))}
-              placeholder={existing?.token_configured ? t("codeHost.gitlab.tokenSaved") : t("codeHost.gitlab.tokenEmpty")}
-              autoComplete="off"
-              autoCapitalize="off"
-              autoCorrect="off"
-              spellCheck={false}
-              data-1p-ignore
-              data-lpignore="true"
-              aria-invalid={error?.field === "token"}
-              suffix={
-                <button
-                  type="button"
-                  style={s.toggle}
-                  aria-label={t("codeHost.gitlab.reveal")}
-                  aria-pressed={reveal}
-                  onClick={() => setReveal((r) => !r)}
-                >
-                  {reveal ? <Icon.Eye size={14} /> : <Icon.EyeOff size={14} />}
-                </button>
-              }
-            />
+        <TextField
+          id={tokenId}
+          variant="surface"
+          mono
+          value={reveal ? token : maskKey(token)}
+          onChange={(v) => setToken(reveal ? v : applyMaskedEdit(token, v))}
+          placeholder={existing?.token_configured ? t("codeHost.gitlab.tokenSaved") : t("codeHost.gitlab.tokenEmpty")}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          data-1p-ignore
+          data-lpignore="true"
+          invalid={error?.field === "token"}
+          suffix={<RevealButton revealed={reveal} onToggle={() => setReveal((r) => !r)} label={t("codeHost.gitlab.reveal")} />}
+        />
+        <div style={s.foot}>
+          <span style={s.hint}>
+            <Icon.Lock size={11} style={s.hintIcon} aria-hidden />
+            <span>
+              {t("codeHost.gitlab.scopesHint")} {t("storedLocally")}
+            </span>
+          </span>
+          <div style={s.submit}>
+            <Button kind="secondary" size="sm" type="submit" icon={busy ? "RefreshCw" : "Play"} disabled={busy}>
+              {busy ? t("codeHost.gitlab.saving") : t("codeHost.gitlab.saveAndTest")}
+            </Button>
           </div>
-          <Button kind="secondary" size="md" type="submit" disabled={busy}>
-            {busy ? t("codeHost.gitlab.saving") : t("codeHost.gitlab.saveAndTest")}
-          </Button>
-        </div>
-        <div style={s.hint}>
-          {t("codeHost.gitlab.scopesHint")} {t("storedLocally")}
         </div>
       </div>
 
-      {error && (
-        <div role="alert" style={s.error}>
-          <Icon.XCircle size={13} />
-          {error.text}
-        </div>
-      )}
+      {error && <Callout tone="crit">{error.text}</Callout>}
       {result && !busy && <GitlabResult result={result} />}
     </form>
   );
@@ -163,31 +142,25 @@ export function GitlabPanel({
 /** FR34: who the token belongs to, its scopes, expiry and instance version, and one line per warning. */
 function GitlabResult({ result }: { result: ConnTestResult }) {
   const t = useTranslations("setup");
-  if (!result.ok) {
-    return (
-      <div role="alert" style={s.error}>
-        <Icon.XCircle size={13} />
-        {result.message}
-      </div>
-    );
-  }
+  if (!result.ok) return <Callout tone="crit">{result.message}</Callout>;
   const scopes = result.scopes;
   return (
-    <div role="status" style={s.who}>
-      <div style={s.login}>
-        {result.login ? t("codeHost.connectedAs", { login: result.login }) : result.message}
-      </div>
-      <div>{scopes == null ? t("codeHost.gitlab.scopesNotReported") : t("codeHost.gitlab.scopes", { scopes: scopes.join(" · ") })}</div>
-      <div>{result.expires_at ? t("codeHost.gitlab.expires", { date: result.expires_at }) : t("codeHost.gitlab.noExpiry")}</div>
-      <div>
-        {result.instance_version ? t("codeHost.gitlab.version", { version: result.instance_version }) : t("codeHost.gitlab.versionUnknown")}
-      </div>
-      {(result.warnings ?? []).map((w) => (
-        <div key={w.code} style={s.warn}>
-          <Icon.AlertTriangle size={14} style={s.warnIcon} />
-          <span>{w.message}</span>
+    <>
+      <Callout tone="ok" style={s.result}>
+        <div style={s.login}>
+          {result.login ? t("codeHost.connectedAs", { login: result.login }) : result.message}
         </div>
+        <div>{scopes == null ? t("codeHost.gitlab.scopesNotReported") : t("codeHost.gitlab.scopes", { scopes: scopes.join(" · ") })}</div>
+        <div>{result.expires_at ? t("codeHost.gitlab.expires", { date: result.expires_at }) : t("codeHost.gitlab.noExpiry")}</div>
+        <div>
+          {result.instance_version ? t("codeHost.gitlab.version", { version: result.instance_version }) : t("codeHost.gitlab.versionUnknown")}
+        </div>
+      </Callout>
+      {(result.warnings ?? []).map((w) => (
+        <Callout key={w.code} tone="warn" style={s.result}>
+          {w.message}
+        </Callout>
       ))}
-    </div>
+    </>
   );
 }

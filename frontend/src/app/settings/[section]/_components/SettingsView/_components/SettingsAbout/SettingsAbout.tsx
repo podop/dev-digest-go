@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ErrorState, Skeleton } from "@devdigest/ui";
+import { ErrorState, Icon, Skeleton } from "@devdigest/ui";
+import { SectionPane } from "@/components/settings-kit";
 import { useAbout } from "@/lib/hooks";
 import { SectionTitle } from "../SectionTitle";
 import { s } from "./styles";
@@ -21,7 +22,7 @@ export function SettingsAbout() {
   const { data, isLoading, isError, refetch } = useAbout();
 
   return (
-    <div style={s.wrap}>
+    <SectionPane maxWidth={560}>
       <SectionTitle title={t("title")} body={t("body")} />
 
       {isLoading && (
@@ -33,31 +34,37 @@ export function SettingsAbout() {
       )}
       {isError && <ErrorState title={t("loadError")} onRetry={() => refetch()} retryLabel={t("retry")} />}
       {data && (
-        <table style={s.table} aria-label={t("tableLabel")}>
-          <tbody>
-            <Row label={t("rows.version")} value={data.version} mono />
-            <Row label={t("rows.build")} value={data.build_id} mono />
-            <Row label={t("rows.runner")} value={t("runnerValue", { version: data.runner.version })} />
-            <Row label={t("rows.configFormat")} value={data.config_format} mono />
-            <Row label={t("rows.dataDir")} value={data.data_dir} mono />
-          </tbody>
-        </table>
+        <div style={s.box}>
+          <table style={s.table} aria-label={t("tableLabel")}>
+            <tbody>
+              <Row label={t("rows.version")} value={data.version} />
+              <Row label={t("rows.build")} value={data.build_id} />
+              <Row label={t("rows.runner")} value={t("runnerValue", { version: data.runner.version })} />
+              <Row label={t("rows.configFormat")} value={data.config_format} />
+              <Row label={t("rows.dataDir")} value={data.data_dir} last />
+            </tbody>
+          </table>
+        </div>
       )}
 
       <Link href={SETUP_HREF} style={s.link}>
         {t("setupAgain")}
+        <Icon.ArrowRight size={11} aria-hidden />
       </Link>
-    </div>
+    </SectionPane>
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+/** One row of the prototype's About box: 130px label column, mono 600 value. */
+function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
     <tr>
-      <th scope="row" style={s.rowHead}>
+      <th scope="row" style={s.rowHead(!!last)}>
         {label}
       </th>
-      <td style={mono ? { ...s.cell, ...s.mono } : s.cell}>{value}</td>
+      <td className="mono" style={s.cell(!!last)}>
+        {value}
+      </td>
     </tr>
   );
 }

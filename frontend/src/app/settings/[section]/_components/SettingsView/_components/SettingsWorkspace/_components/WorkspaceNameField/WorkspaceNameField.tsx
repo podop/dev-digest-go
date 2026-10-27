@@ -2,8 +2,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { FormField, TextInput } from "@devdigest/ui";
 import { WORKSPACE_NAME_MAX, normalizeWorkspaceName, workspaceNameProblem } from "@devdigest/shared/constants/workspace";
+import { Field, TextField } from "@/components/settings-kit";
 import { ApiError } from "@/lib/api";
 import { useRenameWorkspace, useWorkspace } from "@/lib/hooks";
 import { s } from "./styles";
@@ -61,31 +61,33 @@ export function WorkspaceNameField() {
   };
 
   return (
-    <FormField label={t("name.label")}>
+    <Field label={t("name.label")}>
       <form onSubmit={submit} noValidate>
-        <TextInput
+        <TextField
           value={text}
+          invalid={error !== null}
           onChange={edit}
           onBlur={commit}
           disabled={workspace === undefined}
           aria-label={t("name.inputAria")}
-          aria-invalid={error !== null}
           aria-describedby={error ? errorId : undefined}
         />
       </form>
-      <div style={s.notes}>
-        {error && (
-          <span id={errorId} role="alert" style={s.error}>
-            {error}
-          </span>
-        )}
-        {rename.isPending && <span style={s.saved}>{t("name.saving")}</span>}
-        {saved && !error && (
-          <span role="status" style={s.saved}>
-            {t("name.saved")}
-          </span>
-        )}
-      </div>
-    </FormField>
+      {(error || rename.isPending || saved) && (
+        <div style={s.notes}>
+          {error && (
+            <span id={errorId} role="alert" style={s.error}>
+              {error}
+            </span>
+          )}
+          {rename.isPending && <span style={s.saved}>{t("name.saving")}</span>}
+          {saved && !error && (
+            <span role="status" style={s.saved}>
+              {t("name.saved")}
+            </span>
+          )}
+        </div>
+      )}
+    </Field>
   );
 }

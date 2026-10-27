@@ -14,7 +14,8 @@
 import React from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Button, FormField, Icon, TextInput } from "@devdigest/ui";
+import { Button } from "@devdigest/ui";
+import { Callout, Field, TextField } from "@/components/settings-kit";
 import { parseRepoUrl, REPO_URL_INVALID_MESSAGE } from "@devdigest/shared";
 import { GITLAB_ERROR_CODES, codeHostName, isGitLab } from "@/lib/code-host";
 import { useToast } from "@/lib/toast";
@@ -48,6 +49,7 @@ export function AddRepoForm({ onAdded, onCancel, section = "github" }: AddRepoFo
   const [repoUrl, setRepoUrl] = React.useState("");
   const [error, setError] = React.useState<AddError | null>(null);
   const formRef = React.useRef<HTMLFormElement>(null);
+  const urlId = React.useId();
   const addRepo = useAddRepo();
   const url = repoUrl.trim();
 
@@ -92,54 +94,39 @@ export function AddRepoForm({ onAdded, onCancel, section = "github" }: AddRepoFo
 
   return (
     <form ref={formRef} onSubmit={submit} noValidate>
-      <FormField label={t("urlLabel")} hint={t("urlHint")}>
-        <TextInput
+      <Field label={t("urlLabel")} htmlFor={urlId} hint={t("urlHint")} style={{ marginBottom: 12 }}>
+        <TextField
+          id={urlId}
           value={repoUrl}
           onChange={setRepoUrl}
           mono
-          aria-label={t("urlLabel")}
-          aria-invalid={error != null}
+          invalid={error != null}
           placeholder={t("urlPlaceholder")}
         />
-      </FormField>
+      </Field>
 
       {error && (
-        <div
-          role="alert"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            padding: "12px 14px",
-            borderRadius: 8,
-            background: "var(--crit-bg)",
-            border: "1px solid rgba(239,68,68,0.25)",
-            marginTop: 16,
-          }}
-        >
-          <Icon.XCircle size={16} style={{ color: "var(--crit)" }} />
-          <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-            {error.kind === "notConnected" && error.host ? t("hostNotConnected", { host: error.host }) : error.text}
-            {error.kind === "notConnected" && (
-              <>
-                {" "}
-                <Link href={GITLAB_SETTINGS_HREF} style={{ color: "var(--accent)", textDecoration: "underline" }}>
-                  {t("addConnection")}
-                </Link>
-              </>
-            )}
-          </span>
-        </div>
+        <Callout tone="crit" style={{ marginBottom: 12 }}>
+          {error.kind === "notConnected" && error.host ? t("hostNotConnected", { host: error.host }) : error.text}
+          {error.kind === "notConnected" && (
+            <>
+              {" "}
+              <Link href={GITLAB_SETTINGS_HREF} style={{ color: "var(--accent-text)", textDecoration: "underline" }}>
+                {t("addConnection")}
+              </Link>
+            </>
+          )}
+        </Callout>
       )}
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 24 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 18 }}>
+        <div style={{ flex: 1 }} />
         {onCancel && (
-          <Button kind="ghost" size="md" type="button" onClick={onCancel}>
+          <Button kind="ghost" size="sm" type="button" onClick={onCancel}>
             {t("cancel")}
           </Button>
         )}
-        <div style={{ flex: 1 }} />
-        <Button kind="primary" size="md" icon="Plus" type="submit" disabled={!url || addRepo.isPending}>
+        <Button kind="secondary" size="sm" icon="Plus" type="submit" disabled={!url || addRepo.isPending}>
           {addRepo.isPending ? t("submitting") : t("submit")}
         </Button>
       </div>

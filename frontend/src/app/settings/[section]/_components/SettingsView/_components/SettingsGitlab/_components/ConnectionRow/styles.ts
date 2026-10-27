@@ -1,36 +1,24 @@
 import type { CSSProperties } from "react";
+import { kit } from "@/components/settings-kit";
 
-/** Co-located styles for ConnectionRow. */
+/** Co-located styles for ConnectionRow: the prototype's bordered list row, with the details indented under the name. */
 export const s = {
-  row: {
-    padding: "12px 14px",
-    border: "1px solid var(--border)",
-    borderRadius: 8,
-    background: "var(--bg-elevated)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  } satisfies CSSProperties,
-  head: { display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" } satisfies CSSProperties,
-  name: { fontSize: 13, fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
-  spacer: { flex: 1 } satisfies CSSProperties,
-  url: { fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--text-muted)", wordBreak: "break-all" } satisfies CSSProperties,
-  meta: { display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center", fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
-  actions: { display: "flex", gap: 8, marginLeft: "auto" } satisfies CSSProperties,
-  badge: (tone: "ok" | "muted" | "crit"): CSSProperties => ({
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 6,
-    fontSize: 12,
+  row: { ...kit.listRow, flexDirection: "column", alignItems: "stretch", gap: 5, listStyle: "none" } satisfies CSSProperties,
+  head: { display: "flex", alignItems: "center", gap: 9, minWidth: 0 } satisfies CSSProperties,
+  icon: kit.rowIcon,
+  name: {
+    fontSize: 12.5,
     fontWeight: 600,
-    color: `var(--${tone === "muted" ? "text-muted" : tone})`,
-  }),
-  badgeDot: (tone: "ok" | "muted" | "crit"): CSSProperties => ({
-    width: 7,
-    height: 7,
-    borderRadius: "50%",
-    background: `var(--${tone === "muted" ? "text-muted" : tone})`,
-  }),
-  identity: { fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
-  testing: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
+    color: "var(--text-primary)",
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  actions: { display: "flex", alignItems: "center", gap: 12, marginLeft: "auto", flexShrink: 0 } satisfies CSSProperties,
+  /** Details line up with the name (13px icon + 9px gap). */
+  body: { display: "flex", flexDirection: "column", gap: 4, paddingLeft: 22, minWidth: 0 } satisfies CSSProperties,
+  url: { fontSize: 11.5, color: "var(--text-muted)", wordBreak: "break-all" } satisfies CSSProperties,
+  identity: { fontSize: 11.5, color: "var(--text-secondary)" } satisfies CSSProperties,
+  testing: { fontSize: 11.5, color: "var(--text-muted)" } satisfies CSSProperties,
 } as const;

@@ -131,9 +131,9 @@ function LoadingSkeleton({ label }: { label: string }) {
   return (
     <div role="status" aria-busy="true" aria-label={label} style={s.section}>
       <div style={s.skeletonTiles}>
-        {[0, 1, 2, 3].map((i) => (
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
           <div key={i} style={s.skeletonTile}>
-            <Skeleton height={96} />
+            <Skeleton height={52} />
           </div>
         ))}
       </div>

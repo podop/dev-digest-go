@@ -23,9 +23,9 @@ export function CustomProviders() {
   return (
     <section style={s.wrap} aria-labelledby="custom-providers-title">
       <div style={s.head}>
-        <h2 id="custom-providers-title" style={s.title}>
+        <h3 id="custom-providers-title" style={s.title}>
           {t("title")}
-        </h2>
+        </h3>
         <span style={s.spacer} />
         <Button type="button" kind="secondary" size="sm" icon="Plus" onClick={() => setDialog({ kind: "add" })}>
           {t("add")}
@@ -36,8 +36,8 @@ export function CustomProviders() {
         <ErrorState title={t("loadFailedTitle")} body={t("loadFailedBody")} retryLabel={t("retry")} onRetry={() => void list.refetch()} />
       ) : list.isPending ? (
         <div style={s.skeletons} aria-hidden>
-          <Skeleton height={72} />
-          <Skeleton height={72} />
+          <Skeleton height={40} />
+          <Skeleton height={40} />
         </div>
       ) : list.data.length === 0 ? (
         <p style={s.empty}>{t("empty")}</p>

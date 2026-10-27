@@ -1,5 +1,5 @@
-/* GitLabRepos — the workspace's GitLab repositories (FR37): GET /repos filtered to GitLab, "Add repository" in
-   place, Remove behind the shared confirm dialog (it names the host and says "Nothing changes on GitLab."). */
+/* GitLabRepos — the workspace's GitLab repositories (FR37): GET /repos filtered to GitLab, "Add repository" under
+   the list (in place), Remove behind the shared confirm dialog — the only place a GitLab repository is removed (it names the host and says "Nothing changes on GitLab."). */
 "use client";
 
 import React from "react";
@@ -21,23 +21,10 @@ export function GitLabRepos() {
   const list = (repos.data ?? []).filter((repo) => isGitLab(repo));
 
   return (
-    <section aria-labelledby="gl-repos-title">
-      <div style={s.head}>
-        <h3 id="gl-repos-title" style={s.title}>
-          {t("title", { count: list.length })}
-        </h3>
-        {!adding && (
-          <Button type="button" kind="secondary" size="sm" icon="Plus" onClick={() => setAdding(true)}>
-            {t("add")}
-          </Button>
-        )}
-      </div>
-
-      {adding && (
-        <div style={s.form}>
-          <AddRepoForm section="gitlab" onAdded={() => setAdding(false)} onCancel={() => setAdding(false)} />
-        </div>
-      )}
+    <section aria-labelledby="gl-repos-title" style={s.field}>
+      <h3 id="gl-repos-title" style={s.title}>
+        {t("title", { count: list.length })}
+      </h3>
 
       {repos.isPending ? (
         <div role="status" style={s.muted}>
@@ -53,6 +40,18 @@ export function GitLabRepos() {
             <GitLabRepoRow key={repo.id} repo={repo} onRemove={() => setRemoving(repo)} />
           ))}
         </ul>
+      )}
+
+      {adding ? (
+        <div style={s.form}>
+          <AddRepoForm section="gitlab" onAdded={() => setAdding(false)} onCancel={() => setAdding(false)} />
+        </div>
+      ) : (
+        <div style={s.add}>
+          <Button type="button" kind="secondary" size="sm" icon="Plus" onClick={() => setAdding(true)}>
+            {t("add")}
+          </Button>
+        </div>
       )}
 
       {removing && <RemoveRepoDialog repo={removing} onClose={() => setRemoving(null)} />}

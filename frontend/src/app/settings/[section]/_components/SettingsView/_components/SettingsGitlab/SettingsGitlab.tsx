@@ -6,6 +6,7 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, ErrorState, Skeleton } from "@devdigest/ui";
+import { SectionPane } from "@/components/settings-kit";
 import { useGitLabConnections } from "@/lib/hooks";
 import type { GitLabConnection } from "@/lib/types";
 import { SectionTitle } from "../SectionTitle";
@@ -29,43 +30,47 @@ export function SettingsGitlab() {
   const close = () => setDialog(null);
 
   return (
-    <div style={s.wrap}>
+    <SectionPane>
       <SectionTitle title={t("title")} body={t("body")} />
-      <div style={s.head}>
-        <span style={s.spacer} />
-        <Button type="button" kind="secondary" size="sm" icon="Plus" onClick={() => setDialog({ kind: "add" })}>
-          {t("add")}
-        </Button>
-      </div>
-      {list.isError ? (
-        <ErrorState title={t("loadFailedTitle")} retryLabel={t("retry")} onRetry={() => void list.refetch()} />
-      ) : list.isPending ? (
-        <div style={s.skeletons} aria-hidden>
-          <Skeleton height={72} />
-          <Skeleton height={72} />
+      <section aria-labelledby="gl-connections-title" style={s.field}>
+        <h3 id="gl-connections-title" style={s.title}>
+          {t("listLabel")}
+        </h3>
+        {list.isError ? (
+          <ErrorState title={t("loadFailedTitle")} retryLabel={t("retry")} onRetry={() => void list.refetch()} />
+        ) : list.isPending ? (
+          <div style={s.skeletons} aria-hidden>
+            <Skeleton height={58} />
+            <Skeleton height={58} />
+          </div>
+        ) : list.data.length === 0 ? (
+          <p style={s.empty}>{t("empty")}</p>
+        ) : (
+          <ul style={s.list} aria-label={t("listLabel")}>
+            {list.data.map((c) => (
+              <ConnectionRow
+                key={c.id}
+                connection={c}
+                test={tests.entries[c.id]}
+                onTest={() => void tests.run(c.id)}
+                onEdit={() => setDialog({ kind: "edit", connection: c })}
+                onDelete={() => setDialog({ kind: "delete", connection: c })}
+              />
+            ))}
+          </ul>
+        )}
+        <div style={s.add}>
+          <Button type="button" kind="secondary" size="sm" icon="Plus" onClick={() => setDialog({ kind: "add" })}>
+            {t("add")}
+          </Button>
         </div>
-      ) : list.data.length === 0 ? (
-        <p style={s.empty}>{t("empty")}</p>
-      ) : (
-        <ul style={s.list} aria-label={t("listLabel")}>
-          {list.data.map((c) => (
-            <ConnectionRow
-              key={c.id}
-              connection={c}
-              test={tests.entries[c.id]}
-              onTest={() => void tests.run(c.id)}
-              onEdit={() => setDialog({ kind: "edit", connection: c })}
-              onDelete={() => setDialog({ kind: "delete", connection: c })}
-            />
-          ))}
-        </ul>
-      )}
+      </section>
       <GitLabRepos />
       {dialog?.kind === "add" && <ConnectionDialog onClose={close} onTested={tests.record} />}
       {dialog?.kind === "edit" && (
         <ConnectionDialog key={dialog.connection.id} connection={dialog.connection} onClose={close} onTested={tests.record} />
       )}
       {dialog?.kind === "delete" && <DeleteConnectionDialog connection={dialog.connection} onClose={close} />}
-    </div>
+    </SectionPane>
   );
 }

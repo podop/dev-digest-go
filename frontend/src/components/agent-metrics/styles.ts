@@ -20,6 +20,12 @@ export const s = {
   cardValue: { fontSize: 28, fontWeight: 700, letterSpacing: "-0.02em" } satisfies CSSProperties,
   cardUnit: { fontSize: 15, color: "var(--text-muted)", marginLeft: 1 } satisfies CSSProperties,
   cardTrend: { marginTop: 4 } satisfies CSSProperties,
+  /* `compact` overrides (PR Leaderboard: eight tiles in one row). */
+  compactCard: { flex: "1 1 0", minWidth: 0, padding: "8px 10px", gap: 3, borderRadius: 8 } satisfies CSSProperties,
+  compactHead: { minHeight: 0 } satisfies CSSProperties,
+  compactLabel: { fontSize: 9.5, letterSpacing: "0.02em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
+  compactValueRow: { gap: 5, flexWrap: "nowrap", minWidth: 0 } satisfies CSSProperties,
+  compactValue: { fontSize: 16, whiteSpace: "nowrap" } satisfies CSSProperties,
   cardHint: { fontSize: 12, color: "var(--text-muted)", lineHeight: 1.4 } satisfies CSSProperties,
   delta: { fontSize: 12, fontWeight: 600 } satisfies CSSProperties,
   acceptRate: { display: "inline-flex", alignItems: "center", gap: 6 } satisfies CSSProperties,

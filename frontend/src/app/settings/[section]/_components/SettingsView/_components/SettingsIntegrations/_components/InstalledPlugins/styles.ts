@@ -1,31 +1,20 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for InstalledPlugins. */
+/** Co-located styles for InstalledPlugins (rows inside the Plugin Import card). */
 export const s = {
-  head: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 } satisfies CSSProperties,
-  title: { fontSize: 15, fontWeight: 700, flex: 1 } satisfies CSSProperties,
-  list: {
-    border: "1px solid var(--border)",
-    borderRadius: 10,
-    overflow: "hidden",
-    listStyle: "none",
-    margin: 0,
-    padding: 0,
-  } satisfies CSSProperties,
-  skeletons: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    border: "1px solid var(--border)",
-    borderRadius: 10,
-    padding: 16,
-  } satisfies CSSProperties,
+  title: { fontSize: 12.5, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 2px" } satisfies CSSProperties,
+  list: { listStyle: "none", margin: 0, padding: 0 } satisfies CSSProperties,
+  skeletons: { marginTop: 6 } satisfies CSSProperties,
   empty: {
-    border: "1px dashed var(--border)",
-    borderRadius: 10,
-    padding: "18px 16px",
-    textAlign: "center",
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "2px 6px",
+    marginTop: 6,
+    padding: "8px 11px",
+    borderRadius: 6,
+    background: "var(--bg-surface)",
+    fontSize: 11.5,
+    color: "var(--text-muted)",
   } satisfies CSSProperties,
-  emptyTitle: { fontSize: 14, fontWeight: 600 } satisfies CSSProperties,
-  emptyHint: { fontSize: 13, color: "var(--text-muted)", marginTop: 4 } satisfies CSSProperties,
+  emptyTitle: { fontWeight: 600, color: "var(--text-secondary)" } satisfies CSSProperties,
 } as const;

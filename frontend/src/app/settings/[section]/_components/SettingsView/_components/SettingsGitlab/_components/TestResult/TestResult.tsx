@@ -1,5 +1,5 @@
 /* TestResult — one GitLab connection test (FR34): "Connected as @user", scopes, expiry, version, token access and
-   one warning banner per returned warning (the server's FR11 copy). A failed test is an alert with its message.
+   one warning box per returned warning (the server's FR11 copy). A failed test is an alert with its message.
    Every state has text, never colour alone (NFR12). */
 "use client";
 
@@ -15,7 +15,7 @@ export function TestResult({ result }: { result: ConnTestResult }) {
   if (!result.ok) {
     return (
       <div role="alert" style={s.crit}>
-        <Icon.XCircle size={13} />
+        <Icon.XCircle size={15} style={s.icon("crit")} aria-hidden />
         {result.message}
       </div>
     );
@@ -25,7 +25,7 @@ export function TestResult({ result }: { result: ConnTestResult }) {
   return (
     <div style={s.wrap}>
       <div role="status" style={s.ok}>
-        <Icon.CheckCircle size={13} />
+        <Icon.CheckCircle size={13} aria-hidden />
         {t("connectedAs", { login: result.login ?? "" })}
       </div>
       <ul style={s.facts}>
@@ -36,7 +36,7 @@ export function TestResult({ result }: { result: ConnTestResult }) {
       </ul>
       {(result.warnings ?? []).map((w) => (
         <div key={w.code} role="status" style={s.warn}>
-          <Icon.AlertTriangle size={13} />
+          <Icon.AlertTriangle size={15} style={s.icon("warn")} aria-hidden />
           {w.message}
         </div>
       ))}

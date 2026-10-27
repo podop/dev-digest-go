@@ -3,9 +3,8 @@
   "body": "Add a plugin from a .zip or a bundle .json file. You review what it contains before anything is installed, and it arrives disabled.",
   "zone": {
     "label": "Plugin file drop zone",
-    "prompt": "Drop a .zip or .json plugin file here",
-    "or": "or",
-    "browse": "Browse files…",
+    "prompt": "Drop a <mono>.zip</mono> or <mono>.json</mono> plugin here, or",
+    "browse": "browse files…",
     "fileInputAria": "Plugin file",
     "checking": "Checking…"
   },

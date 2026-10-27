@@ -6,7 +6,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, Card, ErrorState, Skeleton } from "@devdigest/ui";
+import { Button, ErrorState, Skeleton } from "@devdigest/ui";
+import { KitBadge, SettingsCard } from "@/components/settings-kit";
 import { ApiError } from "@/lib/api";
 import { isGitLab } from "@/lib/code-host";
 import { useRepos, useWorkspaceCiInstallations } from "@/lib/hooks";
@@ -25,17 +26,19 @@ export function GithubActionCard() {
   const ciReviews = workspaceRepos.data?.some(isGitLab) ?? false;
 
   return (
-    <Card style={s.card}>
-      <div style={s.head}>
-        <div style={s.headText}>
-          <div style={s.titleRow}>
-            <h3 id="gha-card-title" style={s.title}>
-              {t(ciReviews ? "titleCiReviews" : "title")}
-            </h3>
-            {list && <span style={s.count}>{t("repoCount", { count: list.length })}</span>}
-          </div>
-          <div style={s.subtitle}>{t(ciReviews ? "subtitleCiReviews" : "subtitle")}</div>
-        </div>
+    <SettingsCard
+      icon="Workflow"
+      title={<span id="gha-card-title">{t(ciReviews ? "titleCiReviews" : "title")}</span>}
+      desc={t(ciReviews ? "subtitleCiReviews" : "subtitle")}
+      status={
+        list && (
+          <KitBadge color={list.length > 0 ? "var(--ok)" : "var(--text-muted)"} bg="transparent" dot>
+            {t("repoCount", { count: list.length })}
+          </KitBadge>
+        )
+      }
+    >
+      <div style={s.actions}>
         <Button type="button" kind="secondary" size="sm" icon="Plus" onClick={() => setInstalling(true)}>
           {t("install")}
         </Button>
@@ -68,6 +71,6 @@ export function GithubActionCard() {
       )}
 
       {installing && <InstallActionDialog onClose={() => setInstalling(false)} />}
-    </Card>
+    </SettingsCard>
   );
 }

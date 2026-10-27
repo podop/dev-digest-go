@@ -184,23 +184,22 @@
       "runsLabel": "Recent multi-agent runs"
     },
     "configure": {
-      "title": "Configure run",
-      "subtitle": "Choose a pull request and the agents to run on it in parallel.",
-      "crumb": "New multi-agent review",
+      "title": "Run a Multi-Agent Review",
+      "subtitle": "Pick a pull request and choose which agents to fan out — they run in parallel and you compare their findings side by side.",
+      "crumb": "Configure run",
       "prStep": "Pull request",
       "prSelectLabel": "Pull request",
-      "prPlaceholder": "Select a pull request",
+      "prPlaceholder": "Select a pull request…",
       "prItem": "#{number} · {title}",
       "noPulls": "No pull requests",
       "noPullsBody": "This repository has no pull requests to review yet.",
       "pullsError": "Could not load pull requests.",
-      "agentsStep": "Agents",
+      "agentsStep": "Agents to run",
       "pickPrFirst": "Pick a pull request first",
       "noAgents": "No agents yet — create one",
       "agentsError": "Could not load agents.",
       "agentDisabled": "disabled",
       "selectAll": "Select all",
-      "clear": "Clear",
       "estimate": "{time} · {cost}",
       "noEstimate": "—",
       "footer": "≈ {time} · {cost} · parallel fan-out",
@@ -211,14 +210,16 @@
       "minAgents": "Select at least 2 agents.",
       "noRepoTitle": "Import a repository",
       "noRepoBody": "Multi-agent review works on the pull requests of an imported repository.",
-      "noRepoCta": "Import a repository"
+      "noRepoCta": "Import a repository",
+      "clearAll": "Clear all",
+      "pickPrFirstBody": "Choose which PR to review above, then select the agents to run on it.",
+      "selectAgents": "Select agents"
     },
     "results": {
       "title": "Multi-Agent Results",
       "crumb": "Results",
       "prLabel": "#{number} · {title}",
       "unknownPr": "Pull request unavailable",
-      "agentsParallel": "{count, plural, one {# agent} other {# agents}} · parallel",
       "configureRun": "Configure run",
       "viewLabel": "Layout",
       "view": {
@@ -239,7 +240,12 @@
       "notCompared": "{count, plural, one {# agent} other {# agents}} not finished or failed — not compared.",
       "notFound": "Multi-agent run not found",
       "backToList": "Back to multi-agent runs",
-      "loadError": "Could not load this multi-agent run."
+      "loadError": "Could not load this multi-agent run.",
+      "heading": "Multi-Agent Review",
+      "selectedAgents": "{count, plural, one {# selected agent} other {# selected agents}} · parallel",
+      "fanOut": "{count, plural, one {# agent} other {# agents}} · fan-out via worktrees · {time} total · {cost}",
+      "changeRun": "Change PR or agents",
+      "blocker": "blocker"
     }
   }
 }

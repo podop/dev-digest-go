@@ -4,18 +4,18 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { SectionPane } from "@/components/settings-kit";
 import { SectionTitle } from "../SectionTitle";
 import { ConnectedRepos } from "./_components/ConnectedRepos";
 import { TokenSection } from "./_components/TokenSection";
-import { s } from "./styles";
 
 export function SettingsGithub() {
   const t = useTranslations("githubIntegration");
   return (
-    <div style={s.wrap}>
+    <SectionPane>
       <SectionTitle title={t("title")} body={t("body")} />
       <TokenSection />
       <ConnectedRepos />
-    </div>
+    </SectionPane>
   );
 }

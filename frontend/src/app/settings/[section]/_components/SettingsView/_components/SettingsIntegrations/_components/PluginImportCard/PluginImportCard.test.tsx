@@ -91,7 +91,7 @@ describe("PluginImportCard", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a .zip or .json plugin file");
     expect(api.fetch).not.toHaveBeenCalled();
     // The zone stays.
-    expect(screen.getByRole("button", { name: "Browse files…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "browse files…" })).toBeInTheDocument();
   });
 
   it("refuses an oversized zip on the client without a request", async () => {
@@ -223,7 +223,7 @@ describe("PluginImportCard", () => {
       "agents[0].name is empty",
       "skills[1].body is too long",
     ]);
-    expect(screen.getByRole("button", { name: "Browse files…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "browse files…" })).toBeInTheDocument();
   });
 
   it.each([
@@ -235,7 +235,7 @@ describe("PluginImportCard", () => {
 
     await uploader().upload(fileInput(), zip());
     expect(await screen.findByRole("alert")).toHaveTextContent(message);
-    expect(screen.getByRole("button", { name: "Browse files…" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "browse files…" })).toBeInTheDocument();
   });
 
   it("says 'Import failed — try again' for a 5xx on preview and on install, and for a network error", async () => {
@@ -282,14 +282,14 @@ describe("PluginImportCard", () => {
     await screen.findByRole("region", { name: /Review plugin/ });
     await user.keyboard("{Escape}");
 
-    await waitFor(() => expect(screen.getByRole("button", { name: "Browse files…" })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole("button", { name: "browse files…" })).toHaveFocus());
     expect(screen.queryByRole("region", { name: /Review plugin/ })).not.toBeInTheDocument();
   });
 
   it("opens the file chooser from the focusable Browse files… button", async () => {
     mockFetch({});
     const { user } = renderWithProviders(<PluginImportCard />);
-    const browse = screen.getByRole("button", { name: "Browse files…" });
+    const browse = screen.getByRole("button", { name: "browse files…" });
     const input = fileInput() as HTMLInputElement;
     let clicks = 0;
     input.addEventListener("click", () => clicks++);

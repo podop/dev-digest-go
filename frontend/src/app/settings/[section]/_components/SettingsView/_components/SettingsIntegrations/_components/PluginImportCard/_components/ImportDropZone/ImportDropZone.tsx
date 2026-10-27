@@ -1,10 +1,11 @@
-/* ImportDropZone — drop a file or "Browse files…" (hidden file input behind a focusable button).
+/* ImportDropZone — drop a file or "browse files…" (hidden file input behind a focusable button), laid out as the
+   prototype's dashed drop zone: Upload icon, then one line of text that ends in the browse link-button.
    It only hands the first file to `onFile`; the type and size checks belong to the card. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button } from "@devdigest/ui";
+import { Icon } from "@devdigest/ui";
 import { PLUGIN_ACCEPT } from "../../constants";
 import { s } from "./styles";
 
@@ -45,11 +46,17 @@ export function ImportDropZone({ checking, onFile }: { checking: boolean; onFile
         </div>
       ) : (
         <>
-          <div style={s.prompt}>{t("prompt")}</div>
-          <div style={s.or}>{t("or")}</div>
-          <Button type="button" kind="secondary" data-browse onClick={() => inputRef.current?.click()}>
-            {t("browse")}
-          </Button>
+          <Icon.Upload size={22} style={s.icon} aria-hidden />
+          <div style={s.prompt}>
+            <span>
+              {t.rich("prompt", {
+                mono: (chunks) => <span className="mono">{chunks}</span>,
+              })}
+            </span>{" "}
+            <button type="button" data-browse style={s.browse} onClick={() => inputRef.current?.click()}>
+              {t("browse")}
+            </button>
+          </div>
         </>
       )}
       <input

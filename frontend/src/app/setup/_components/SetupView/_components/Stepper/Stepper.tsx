@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import { SETUP_STEPS, type SetupStep } from "../../constants";
@@ -14,18 +15,16 @@ export function Stepper({ current, done }: { current: SetupStep; done: StepDone 
       {SETUP_STEPS.map((step, i) => {
         const state = step === current ? "current" : done[step] ? "done" : "future";
         return (
-          <li
-            key={step}
-            aria-current={state === "current" ? "step" : undefined}
-            style={s.item(state, i < SETUP_STEPS.length - 1)}
-          >
-            <span style={s.dot(state)} aria-hidden="true">
-              {state === "done" ? <Icon.Check size={13} /> : i + 1}
-            </span>
-            {t(`stepper.${step}`)}
-            {state === "done" && <span style={s.srOnly}>{t("stepper.done")}</span>}
-            {i < SETUP_STEPS.length - 1 && <span style={s.line} aria-hidden="true" />}
-          </li>
+          <React.Fragment key={step}>
+            <li aria-current={state === "current" ? "step" : undefined} style={s.item(state)}>
+              <span style={s.dot(state)} aria-hidden="true">
+                {state === "done" ? <Icon.Check size={14} /> : i + 1}
+              </span>
+              {t(`stepper.${step}`)}
+              {state === "done" && <span style={s.srOnly}>{t("stepper.done")}</span>}
+            </li>
+            {i < SETUP_STEPS.length - 1 && <li role="presentation" aria-hidden="true" style={s.line} />}
+          </React.Fragment>
         );
       })}
     </ol>

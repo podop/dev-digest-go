@@ -1,22 +1,21 @@
 import type { CSSProperties } from "react";
+import { kit } from "@/components/settings-kit";
 
-/** Co-located styles for PluginImportCard. */
+/** Co-located styles for PluginImportCard — the prototype's IntegrationCard "Plugin Import". */
 export const s = {
-  card: {
-    border: "1px solid var(--border-strong)",
-    borderRadius: 10,
-    padding: "16px 18px",
-    background: "var(--bg-elevated)",
-    marginTop: 20,
-  } satisfies CSSProperties,
-  title: { fontSize: 14, fontWeight: 700, color: "var(--text-primary)", margin: 0 } satisfies CSSProperties,
-  body: { fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5, margin: "8px 0 0" } satisfies CSSProperties,
+  card: kit.card,
+  head: kit.cardHead,
+  headIcon: kit.cardIcon,
+  headText: { flex: 1, minWidth: 0 } satisfies CSSProperties,
+  title: { ...kit.cardTitle, margin: 0 } satisfies CSSProperties,
+  body: { ...kit.cardDesc, margin: "2px 0 0" } satisfies CSSProperties,
   installed: {
-    marginTop: 14,
-    padding: "12px 14px",
-    border: "1px solid var(--border-strong)",
+    margin: "0 0 12px",
+    padding: "11px 14px",
+    border: "1px solid rgba(16,185,129,0.25)",
+    background: "var(--ok-bg)",
     borderRadius: 8,
-    fontSize: 13,
+    fontSize: 12.5,
     color: "var(--text-secondary)",
     lineHeight: 1.5,
   } satisfies CSSProperties,
@@ -29,6 +28,6 @@ export const s = {
     whiteSpace: "nowrap",
     verticalAlign: "bottom",
   } satisfies CSSProperties,
-  hint: { marginTop: 6, fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
-  actions: { display: "flex", justifyContent: "flex-end", marginTop: 12 } satisfies CSSProperties,
+  hint: { marginTop: 4, fontWeight: 600, color: "var(--text-primary)" } satisfies CSSProperties,
+  actions: { display: "flex", justifyContent: "flex-end", marginTop: 10 } satisfies CSSProperties,
 } as const;

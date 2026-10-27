@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 /** Co-located styles for AgentEditorView (agent list sidebar + editor pane). */
 export const s = {
-  layout: { display: "flex", height: "calc(100vh - 52px)" } satisfies CSSProperties,
+  layout: { display: "flex", height: "calc(100 * var(--app-vh) - 52px)" } satisfies CSSProperties,
   sidebar: {
     width: 280,
     flexShrink: 0,

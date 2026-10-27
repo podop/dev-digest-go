@@ -16,16 +16,19 @@ interface AutoReviewToggleProps {
 /**
  * Automatic Reviews → on/off card (FR13). Controlled: the section owns the saved value and the
  * PUT. The vendored `Toggle` has no accessible name and no `disabled` prop, so it sits in a
- * `<label>` (the name) inside a `<fieldset disabled>` (disables its button natively).
+ * `<label>` (the name) inside a `<fieldset disabled>` (disables its button natively). Prototype layout: the
+ * switch on the left, title and subline to its right.
  */
 export function AutoReviewToggle({ value, disabled = false, onChange }: AutoReviewToggleProps) {
   const t = useTranslations("autoReviewControls");
 
   return (
     <fieldset disabled={disabled} style={s.card}>
-      <label style={s.row}>
+      <label style={s.label}>
+        <span style={s.switch}>
+          <Toggle on={value} onChange={onChange} size={18} />
+        </span>
         <span style={s.title}>{t("toggle.title")}</span>
-        <Toggle on={value} onChange={onChange} />
       </label>
       <div style={s.subline}>{value ? t("toggle.on") : t("toggle.off")}</div>
     </fieldset>

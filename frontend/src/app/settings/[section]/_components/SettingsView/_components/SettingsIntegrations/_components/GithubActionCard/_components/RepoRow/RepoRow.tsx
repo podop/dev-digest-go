@@ -7,7 +7,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Badge, Button, Dropdown } from "@devdigest/ui";
+import { Dropdown, Icon } from "@devdigest/ui";
+import { KitBadge, MonoAction } from "@/components/settings-kit";
 import type { CiRepoEntry } from "@devdigest/shared";
 import { installedAgents, isGitLabEntry, lastRunMergeRequest, lastRunView, manageHref } from "../../helpers";
 import { s } from "./styles";
@@ -20,12 +21,13 @@ export function RepoRow({ entry, now }: { entry: CiRepoEntry; now?: number }) {
 
   return (
     <li style={s.row}>
+      <Icon.GitBranch size={13} style={s.icon} aria-hidden />
       <span className="mono" style={s.repo} title={entry.repo}>
         {entry.repo}
       </span>
       {isGitLabEntry(entry) && (
         <span style={s.target}>
-          <Badge>{t("targetGitlab")}</Badge>
+          <KitBadge>{t("targetGitlab")}</KitBadge>
           {entry.host && (
             <span className="mono" style={s.host} title={entry.host}>
               {entry.host}
@@ -73,7 +75,7 @@ function Manage({ entry }: { entry: CiRepoEntry }) {
 
   if (agents.length === 1) {
     return (
-      <Link href={manageHref(first.id)} aria-label={t("manageRepo", { repo: entry.repo })} style={s.manageLink}>
+      <Link href={manageHref(first.id)} className="mono" aria-label={t("manageRepo", { repo: entry.repo })} style={s.manageLink}>
         {t("manage")}
       </Link>
     );
@@ -82,15 +84,10 @@ function Manage({ entry }: { entry: CiRepoEntry }) {
     <Dropdown
       align="right"
       trigger={
-        <Button
-          type="button"
-          kind="secondary"
-          size="sm"
-          iconRight="ChevronDown"
-          aria-haspopup="menu"
-          aria-label={t("manageRepo", { repo: entry.repo })}>
+        <MonoAction aria-haspopup="menu" aria-label={t("manageRepo", { repo: entry.repo })}>
           {t("manage")}
-        </Button>
+          <Icon.ChevronDown size={11} style={s.chevron} aria-hidden />
+        </MonoAction>
       }
       items={agents.map((a) => ({ label: a.name, onClick: () => router.push(manageHref(a.id)) }))}
     />

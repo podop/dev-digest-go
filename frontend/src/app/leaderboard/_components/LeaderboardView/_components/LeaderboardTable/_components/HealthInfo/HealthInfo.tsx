@@ -1,11 +1,12 @@
 /* HealthInfo — the "How health is scored" info button of the Health column (FR21). A tooltip with the
    formula opens on hover and on keyboard focus and closes on blur, mouse-leave and Escape. It is
-   positioned from the button (position: fixed), because the table's scroll container would clip it. */
+   positioned from the button (position: fixed, in zoomed CSS px via cssRect), because the table's scroll container would clip it. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
+import { cssRect } from "@/lib/ui-zoom";
 import { s } from "./styles";
 
 const TOOLTIP_WIDTH = 280;
@@ -18,7 +19,7 @@ export function HealthInfo() {
   const [anchor, setAnchor] = React.useState<{ top: number; left: number } | null>(null);
 
   const show = (button: HTMLElement) => {
-    const box = button.getBoundingClientRect();
+    const box = cssRect(button);
     setAnchor({ top: box.bottom + 8, left: Math.max(8, box.right + OVERHANG - TOOLTIP_WIDTH) });
   };
   const hide = () => setAnchor(null);

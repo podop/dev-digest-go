@@ -4,7 +4,8 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { Badge, Button } from "@devdigest/ui";
+import { Icon } from "@devdigest/ui";
+import { KitBadge, MonoAction } from "@/components/settings-kit";
 import { useSetPluginEnabled } from "@/lib/hooks";
 import type { InstalledPlugin } from "@/lib/types";
 import { s } from "./styles";
@@ -12,7 +13,6 @@ import { s } from "./styles";
 export function PluginRow({ plugin, onRemove }: { plugin: InstalledPlugin; onRemove: () => void }) {
   const t = useTranslations("integrationsPlugins.row");
   const setEnabled = useSetPluginEnabled();
-  const badge = plugin.enabled ? s.enabledBadge : s.disabledBadge;
 
   const toggle = () => {
     if (setEnabled.isPending) return;
@@ -21,15 +21,17 @@ export function PluginRow({ plugin, onRemove }: { plugin: InstalledPlugin; onRem
 
   return (
     <li style={s.row}>
+      <Icon.Boxes size={13} style={s.icon} aria-hidden />
       <div style={s.main}>
         <div style={s.top}>
-          <span style={s.name} title={plugin.name}>
+          <span className="mono" style={s.name} title={plugin.name}>
             {plugin.name}
           </span>
-          {plugin.version && <span style={s.version}>{plugin.version}</span>}
-          <Badge color={badge.color} bg={badge.bg}>
-            {plugin.enabled ? t("status.enabled") : t("status.disabled")}
-          </Badge>
+          {plugin.version && (
+            <span className="mono" style={s.version}>
+              {plugin.version}
+            </span>
+          )}
         </div>
         <div style={s.meta}>
           <span>{t("counts.agents", { count: plugin.counts.agents })}</span>
@@ -38,28 +40,24 @@ export function PluginRow({ plugin, onRemove }: { plugin: InstalledPlugin; onRem
           <span>{t("counts.learnings", { count: plugin.counts.learnings })}</span>
         </div>
       </div>
-      <div style={s.actions}>
-        <Button
-          type="button"
-          kind="secondary"
-          size="sm"
-          onClick={toggle}
-          disabled={setEnabled.isPending}
-          aria-label={plugin.enabled ? t("disableLabel", { name: plugin.name }) : t("enableLabel", { name: plugin.name })}
-        >
-          {plugin.enabled ? t("disable") : t("enable")}
-        </Button>
-        <Button
-          type="button"
-          kind="ghost"
-          size="sm"
-          onClick={onRemove}
-          disabled={setEnabled.isPending}
-          aria-label={t("removeLabel", { name: plugin.name })}
-        >
-          {t("remove")}
-        </Button>
-      </div>
+      <KitBadge color={plugin.enabled ? "var(--ok)" : "var(--text-muted)"} dot>
+        {plugin.enabled ? t("status.enabled") : t("status.disabled")}
+      </KitBadge>
+      <MonoAction
+        onClick={toggle}
+        disabled={setEnabled.isPending}
+        aria-label={plugin.enabled ? t("disableLabel", { name: plugin.name }) : t("enableLabel", { name: plugin.name })}
+      >
+        {plugin.enabled ? t("disable") : t("enable")}
+      </MonoAction>
+      <MonoAction
+        tone="crit"
+        onClick={onRemove}
+        disabled={setEnabled.isPending}
+        aria-label={t("removeLabel", { name: plugin.name })}
+      >
+        {t("remove")}
+      </MonoAction>
     </li>
   );
 }

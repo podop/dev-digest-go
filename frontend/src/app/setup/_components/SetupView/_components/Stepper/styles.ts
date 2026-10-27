@@ -1,39 +1,48 @@
 import type { CSSProperties } from "react";
 
-/** Co-located styles for the setup stepper. */
+type State = "done" | "current" | "future";
+
+/** Co-located styles for the setup stepper (prototype Stepper: 26px dots, 40px connectors). */
 export const s = {
   list: {
     display: "flex",
     alignItems: "center",
-    gap: 0,
     listStyle: "none",
-    margin: "0 0 28px",
+    margin: "0 0 30px",
     padding: 0,
   } satisfies CSSProperties,
-  item: (state: "done" | "current" | "future", grows: boolean): CSSProperties => ({
-    flex: grows ? 1 : undefined,
+  item: (state: State): CSSProperties => ({
     position: "relative",
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    fontSize: 13,
+    gap: 9,
+    flexShrink: 0,
+    whiteSpace: "nowrap",
+    fontSize: 12.5,
     fontWeight: state === "current" ? 600 : 500,
     color: state === "future" ? "var(--text-muted)" : "var(--text-primary)",
   }),
-  dot: (state: "done" | "current" | "future"): CSSProperties => ({
-    width: 22,
-    height: 22,
-    borderRadius: "50%",
+  dot: (state: State): CSSProperties => ({
+    width: 26,
+    height: 26,
+    borderRadius: 99,
     display: "grid",
     placeItems: "center",
     fontSize: 12,
     fontWeight: 700,
     flexShrink: 0,
-    color: state === "current" ? "var(--bg-primary)" : state === "done" ? "var(--ok)" : "var(--text-muted)",
-    background: state === "current" ? "var(--accent)" : "transparent",
-    border: `1px solid ${state === "current" ? "var(--accent)" : state === "done" ? "var(--ok)" : "var(--border-strong)"}`,
+    color: state === "future" ? "var(--text-muted)" : "#fff",
+    background: state === "done" ? "var(--ok)" : state === "current" ? "var(--accent)" : "var(--bg-elevated)",
+    border: state === "future" ? "1px solid var(--border-strong)" : "none",
   }),
-  line: { flex: 1, height: 1, background: "var(--border)", minWidth: 12, marginLeft: 6 } satisfies CSSProperties,
+  /** 40px like the prototype, shrinking when the labels need the room. */
+  line: {
+    flex: "0 1 40px",
+    minWidth: 12,
+    height: 1,
+    background: "var(--border-strong)",
+    margin: "0 14px",
+  } satisfies CSSProperties,
   srOnly: {
     position: "absolute",
     width: 1,

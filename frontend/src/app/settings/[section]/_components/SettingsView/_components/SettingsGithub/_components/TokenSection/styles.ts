@@ -1,16 +1,9 @@
 import type { CSSProperties } from "react";
+import { kit } from "@/components/settings-kit";
 
-/** Co-located styles for TokenSection. */
+/** Co-located styles for TokenSection (prototype: read-only identity box sized as SelectInput). */
 export const s = {
-  line: { fontSize: 13, color: "var(--text-secondary)", marginTop: -8, marginBottom: 16 } satisfies CSSProperties,
-  warn: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    fontSize: 13,
-    color: "var(--warn)",
-    fontWeight: 600,
-    marginBottom: 16,
-  } satisfies CSSProperties,
-  identity: { fontSize: 14, color: "var(--text-primary)" } satisfies CSSProperties,
+  /** Scopes from the last test: a muted helper line tucked under the token field. */
+  line: { fontSize: 11.5, color: "var(--text-muted)", marginTop: -10, marginBottom: 18, lineHeight: 1.45 } satisfies CSSProperties,
+  identity: { ...kit.inputBox("elevated"), fontSize: 13, color: "var(--text-primary)" } satisfies CSSProperties,
 } as const;

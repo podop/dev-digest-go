@@ -11,19 +11,19 @@ export function Sidebar({ ctx }: { ctx: ShellContext }) {
   return (
     <aside
       style={{
-        width: 264,
+        width: 224,
         flexShrink: 0,
         background: "var(--bg-surface)",
         borderRight: "1px solid var(--border)",
         display: "flex",
         flexDirection: "column",
-        padding: "24px 14px 16px",
+        padding: "12px 10px 8px",
         gap: 2,
         overflow: "hidden",
       }}
     >
       <Link href="/">
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "2px 5px 14px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "2px 4px 10px" }}>
           <div
             style={{
               width: 26,
@@ -37,21 +37,21 @@ export function Sidebar({ ctx }: { ctx: ShellContext }) {
           >
             <Icon.Layers size={15} style={{ color: "var(--bg-primary)" }} />
           </div>
-          <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.02em" }}>DevDigest</span>
+          <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: "-0.02em" }}>DevDigest</span>
         </div>
       </Link>
       <RepoSwitcher ctx={ctx} />
-      <div style={{ overflowY: "auto", flex: 1, margin: "5px -5px 0", padding: "0 5px" }}>
+      <div style={{ overflowY: "auto", flex: 1, margin: "4px -4px 0", padding: "0 4px" }}>
         {NAV.map((grp, gi) => (
-          <div key={gi} style={{ marginBottom: 16 }}>
+          <div key={gi} style={{ marginBottom: 10 }}>
             <div
               style={{
-                fontSize: 12,
+                fontSize: 10,
                 fontWeight: 700,
                 letterSpacing: "0.08em",
                 color: "var(--text-muted)",
-                padding: "0 14px",
-                marginBottom: 8,
+                padding: "0 9px",
+                marginBottom: 4,
               }}
             >
               {grp.section}
@@ -68,7 +68,7 @@ export function Sidebar({ ctx }: { ctx: ShellContext }) {
           </div>
         ))}
       </div>
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 2 }}>
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 6, marginTop: 2 }}>
         <NavItem item={SETTINGS_ITEM} active={ctx.activeKey === "settings"} repoId={ctx.repoId} Link={Link} />
       </div>
     </aside>

@@ -2,7 +2,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, FormField, Icon, TextInput } from "@devdigest/ui";
+import { Button, Icon } from "@devdigest/ui";
+import { Field, TextField } from "@/components/settings-kit";
 import { useSettings, useSpend, useUpdateSettings } from "@/lib/hooks";
 import {
   SPEND_CAP_MAX_DECIMALS,
@@ -64,21 +65,21 @@ export function SpendCapField() {
       : null;
 
   return (
-    <FormField label={t("spendCap.label")} hint={hint}>
+    <Field label={t("spendCap.label")} hint={hint}>
       <form onSubmit={save} style={s.row} noValidate>
         <div style={s.input}>
-          <TextInput
+          <TextField
             value={text}
             onChange={setDraft}
             mono
             inputMode="decimal"
             placeholder={t("spendCap.placeholder")}
             aria-label={t("spendCap.inputAria")}
-            aria-invalid={inputError !== null}
+            invalid={inputError !== null}
             aria-describedby={inputError ? errorId : undefined}
           />
         </div>
-        <Button kind="secondary" size="md" type="submit" disabled={!canSave}>
+        <Button kind="secondary" size="sm" type="submit" disabled={!canSave}>
           {update.isPending ? t("spendCap.saving") : t("spendCap.save")}
         </Button>
       </form>
@@ -120,6 +121,6 @@ export function SpendCapField() {
           </span>
         </div>
       )}
-    </FormField>
+    </Field>
   );
 }

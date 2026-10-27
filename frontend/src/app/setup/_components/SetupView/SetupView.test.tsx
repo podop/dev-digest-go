@@ -154,11 +154,11 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
     });
     const { user } = renderWithProviders(<Host />);
 
-    // Step 1: stepper, no Back, OpenRouter selected, Continue off until a test passes.
+    // Step 1: stepper, Back shown but disabled (prototype), OpenRouter selected, Continue off until a test passes.
     await screen.findByRole("heading", { name: "Connect a model provider" });
     expect(current()).toHaveTextContent("Model provider");
     expect(screen.getByText("Step 1 of 3 · You can change keys later in Settings")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Back" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "OpenRouter" })).toBeChecked();
     expect(cont()).toBeDisabled();
     await user.type(screen.getByRole("textbox", { name: "OpenRouter API key" }), "sk-or-v1-abcdefgh1234");

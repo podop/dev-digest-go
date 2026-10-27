@@ -2,7 +2,8 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { Button, Icon, TextInput } from "@devdigest/ui";
+import { Button, Icon } from "@devdigest/ui";
+import { RevealButton, TextField } from "@/components/settings-kit";
 import type { ConnTestProvider, ConnTestResult } from "@/lib/types";
 import { applyMaskedEdit, maskKey } from "./helpers";
 import { ResultBanner } from "./ResultBanner";
@@ -68,43 +69,48 @@ export function KeyField({ provider, label, hint, docsHref, configured, optional
         {optional && <span style={s.optional}>{t("optional")}</span>}
         <a href={docsHref} target="_blank" rel="noopener noreferrer" style={s.docs}>
           {t(provider === "github" ? "docs.token" : "docs.key")}
-          <Icon.ExternalLink size={12} />
+          <Icon.ArrowRight size={11} aria-hidden />
         </a>
-        <div style={s.spacer} />
-        {configured !== undefined && <StatusBadge status={statusOf(configured, result)} />}
       </div>
-      <div style={s.row}>
-        <div style={s.input}>
-          <TextInput
-            id={id}
-            mono
-            value={reveal ? key : maskKey(key)}
-            onChange={(v) => setKey(reveal ? v : applyMaskedEdit(key, v))}
-            placeholder={placeholder}
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            data-1p-ignore
-            data-lpignore="true"
-            suffix={
-              <button
-                type="button"
-                style={s.toggle}
-                aria-label={t("reveal")}
-                aria-pressed={reveal}
-                onClick={() => setReveal((r) => !r)}
-              >
-                {reveal ? <Icon.Eye size={14} /> : <Icon.EyeOff size={14} />}
-              </button>
-            }
-          />
+      <TextField
+        id={id}
+        variant="surface"
+        mono
+        value={reveal ? key : maskKey(key)}
+        onChange={(v) => setKey(reveal ? v : applyMaskedEdit(key, v))}
+        placeholder={placeholder}
+        autoComplete="off"
+        autoCapitalize="off"
+        autoCorrect="off"
+        spellCheck={false}
+        data-1p-ignore
+        data-lpignore="true"
+        suffix={
+          <>
+            <RevealButton revealed={reveal} onToggle={() => setReveal((r) => !r)} label={t("reveal")} />
+            {configured !== undefined && <StatusBadge status={statusOf(configured, result)} />}
+          </>
+        }
+      />
+      <div style={s.foot}>
+        {hint && (
+          <span style={s.hint}>
+            <Icon.Lock size={11} style={s.hintIcon} aria-hidden />
+            <span>{hint}</span>
+          </span>
+        )}
+        <div style={s.testButton}>
+          <Button
+            kind="secondary"
+            size="sm"
+            icon={pending ? "RefreshCw" : "Play"}
+            onClick={() => void test(key)}
+            disabled={pending}
+          >
+            {pending ? t("testing") : t("test")}
+          </Button>
         </div>
-        <Button kind="secondary" size="md" onClick={() => void test(key)} disabled={pending}>
-          {pending ? t("testing") : t("test")}
-        </Button>
       </div>
-      {hint && <div style={s.hint}>{hint}</div>}
       {result && !pending && <ResultBanner result={result} />}
     </div>
   );

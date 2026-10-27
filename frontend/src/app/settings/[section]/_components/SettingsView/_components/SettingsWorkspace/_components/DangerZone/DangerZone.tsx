@@ -36,12 +36,14 @@ export function DangerZone() {
       <p style={s.body}>{t("body")}</p>
       <p style={s.note}>{t("runHistoryNote")}</p>
       <div style={s.actions}>
-        <Button type="button" kind="secondary" onClick={exportWorkspace} disabled={exporter.isPending}>
+        <Button type="button" kind="secondary" size="sm" icon="Upload" onClick={exportWorkspace} disabled={exporter.isPending}>
           {exporter.isPending ? t("export.exporting") : t("export.label")}
         </Button>
         <Button
           type="button"
-          kind="danger"
+          kind="secondary"
+          size="sm"
+          icon="Trash"
           onClick={() => setResetOpen(true)}
           disabled={name === undefined}
           aria-describedby={name === undefined ? reasonId : undefined}
