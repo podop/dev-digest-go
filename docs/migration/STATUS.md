@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-27 (see ▶ Resume here; GitLab B done, GitLab C in its review gate) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-27 (see ▶ Resume here; GitLab B and C done) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -19,17 +19,33 @@ frontend contract test 148/148.
 Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user's standing orders:
 - run features autonomously in multi-agent waves and lanes;
 - approve plans by default and escalate only CRITICAL items (spec contradictions that change behaviour, destructive or irreversible choices, security, an NFR failure that needs a spec change);
-- GitLab B is done; GitLab C is implemented (dacc9d0) and in its review gate (reports `.sdd/review/2026-10-27-gitlab-c-ci/`); then C's S27 manual run and close.
-- open for the user: GitLab A AC36 (`.sdd/review/2026-10-26-gitlab-a-connection-sync/s38-manual.md`) and GitLab B AC34 (`.sdd/review/2026-10-27-gitlab-b-comments-context/s25-manual.md`) with real gitlab.com tokens; AC34 has STOP-IF-FAIL items (a quick action or mention firing means FR15 moves to the backslash form of D29).
+- GitLab B and C are done (all GitLab slices A–C implemented); the stand still runs migrations up to 0010 — rebuild it (`docker compose up -d --build`) to get 0011/0012.
+- open for the user: GitLab A AC36 (`.sdd/review/2026-10-26-gitlab-a-connection-sync/s38-manual.md`) GitLab B AC34 (`.sdd/review/2026-10-27-gitlab-b-comments-context/s25-manual.md`) and GitLab C AC37/AC48 (`.sdd/review/2026-10-27-gitlab-c-ci/s27-manual.md`) with real gitlab.com tokens; AC34 has STOP-IF-FAIL items (a quick action or mention firing means FR15 moves to the backslash form of D29).
 
 | Feature | State |
 |---|---|
 | PR Leaderboard, Settings A, B, Cost ledger, Settings C | done and committed (specs `implemented`, plans `done`) |
 | **GitLab B** (MR comments + context peers) | **done** — plan `63e45fb`, `e0e58b4` (S1 notebody), `76e32dd` (W1–W3), `b19dcd1` (W4), `8e990e9` (S24), fix rounds `41d2ce3`, `5b08094`, `a6ebe77`; spec `implemented` (D31–D40), plan `done`; migration **0011** (stand not rebuilt yet) |
-| **GitLab C** (GitLab CI) | **implemented, in review** — plan `e94f583`, `11b1c81` (W1–W3), `05253c9` (W4 + fixes), `5f41e63` (S26), `dacc9d0` (race fix); migration **0012**; user SCR1: GitLab ledger key `ci:<host>:<job id>:<attempt>` |
+| **GitLab C** (GitLab CI) | **done** — plan `e94f583`, `11b1c81` (W1–W3), `05253c9` (W4 + fixes), `5f41e63` (S26), `dacc9d0` (race fix), fix rounds `c2a8bc2`, `1a8bffc`, `621ba72`, close commit (CiTab labels); spec `implemented` (D29–D37), plan `done`; migration **0012**; user SCR1: GitLab ledger key `ci:<host>:<job id>:<attempt>` |
 | **GitLab A** (connections + MR sync) | **done** — plan `d181249`, `9cbf097` (W1–W3), `f9682c3` (W4), `d56ddf3` (W5 + fix r1); spec `implemented` (D36–D44), plan `done`; the stand runs it (rebuilt, migrations up to **0010**) |
 | **Custom model providers** | **done** — plan `84c2f39`, `e10495f` (W1–W4), `67549cd` (W5), fix rounds `0f108b8`, `f86f362`; spec `implemented` (D30–D37), plan `done`; the stand runs it (rebuilt, migrations up to **0009**) |
 | **Settings D** (integrations / plugins) | **done** — `ebaceb5` (W1–W3), `00c0ecd` (W4 + D19/D21), `fd90f3d` (fix r1), `4a31756` (fix r2); spec `implemented` (D19–D22), plan `done`; the stand runs it (rebuilt, migrations up to **0008**) |
+
+**GitLab C gate** (reports in `.sdd/review/2026-10-27-gitlab-c-ci/`, git-ignored):
+| Reviewer | r1 (`5b08094..dacc9d0`) | r2 (`..c2a8bc2`) | r3 (`..1a8bffc`) |
+|---|---|---|---|
+| Architecture | **PASS**, 0 findings | — | — |
+| Security | **PASS**; L1 job-file lint misses indirect reads, L2 GitLab-mode stray log lines, L3 artifact metadata → fixed | **PASS**; N1/N2 (lint gaps, alias timing) → fixed | **PASS**; N3 + P1/P2 (quoted `#`, `$@`, assignment values) → fixed in `621ba72` |
+| Plan verification | 128 PASS / 3 declared FAIL (AC10 order, AC43 axe → D32/D30; FR45 `!n` → fixed) | 138 PASS / 2 FAIL (lint beyond FR14 text → D33; `last_run.pr_number` → D34) | — |
+- W4 tests found the glapi secret-before-cut leak (AC29) and the concurrent first-export race (D35, D36); the CI-tab GitLab labels (S27 O1) are fixed in the close commit. S27 stub run clean (real embedded runner in the pinned image, ingest via the storage hop, 0 secret hits in 195 files); throwaway stack removed.
+- The `make backend-check` timeout is now 45 m: `cmd/server` (~15 min quiet) passed 25 m under load once B/C added component tests with real 30 s client timeouts.
+
+**GitLab C follow-ups (not fixed):**
+- AC37 / AC48 live on gitlab.com (user; STOP-IF-FAIL items in the checklist): `include:`, job rules, masked variables, "Pipelines must succeed", quick actions via review drafts, real model output, the 4.8 MB commit (X1).
+- A wrong `DEVDIGEST_GITLAB_TOKEN` is detected only after the paid model call (S27 O2).
+- CI tab "Update" preselects the repository by full name only (`CiInstallation` has no repo id) — wrong only when two hosts share a name.
+- The job-file lint is a lint, not a sandbox: globs, interpreters and concatenation through an allowed variable stay out of scope (D33).
+- `POST /ci/refresh` with no installation and no `GITHUB_TOKEN` answers 500 `config_error` (pre-existing GitHub behaviour).
 
 **GitLab B gate** (reports in `.sdd/review/2026-10-27-gitlab-b-comments-context/`, git-ignored):
 | Reviewer | r1 (`21a3ce4..8e990e9`) | r2 (`..41d2ce3`) | r3 (`..5b08094`) | r4 (`..a6ebe77`) |

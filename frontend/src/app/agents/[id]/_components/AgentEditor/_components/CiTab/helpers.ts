@@ -1,3 +1,5 @@
+import type { CiInstallation } from "@devdigest/shared";
+
 const PLACEHOLDER = "—";
 
 const MINUTE = 60;
@@ -5,6 +7,11 @@ const HOUR = 3600;
 const DAY = 86400;
 const MONTH = 30 * DAY;
 const YEAR = 365 * DAY;
+
+/** A GitLab CI installation: by its target (`gitlab_ci`) or its provider; absent fields on older payloads read as GitHub. */
+export function isGitLabInstallation(inst: Pick<CiInstallation, "target_type" | "provider">): boolean {
+  return inst.target_type === "gitlab_ci" || inst.provider === "gitlab";
+}
 
 /** True when the agent moved past the manifest deployed to a repository (unknown deployed version → false). */
 export function isOutdated(agentVersion: number, deployedVersion: number | null | undefined): boolean {

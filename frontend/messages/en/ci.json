@@ -187,6 +187,7 @@
     "notDeployedBody": "Use “Add to CI” to open a PR that adds this agent's workflow to a repository.",
     "installationsLoadError": "Could not load CI installations",
     "target": "GitHub Actions",
+    "targetGitlab": "GitLab CI",
     "noRunsYet": "No runs yet",
     "deployedVersion": "v{version}",
     "outdated": "outdated",

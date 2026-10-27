@@ -1,4 +1,4 @@
-/* CiTab — the agent's CI deployment: the repositories it is exported to (GitHub Actions),
+/* CiTab — the agent's CI deployment: the repositories it is exported to (GitHub Actions or GitLab CI),
    "outdated" when the agent moved past the deployed manifest, Add / Update (opens the Export
    wizard), a manual Refresh that pulls results from GitHub, the newest CI runs and the
    "Fail CI on" gate. Artifact-derived text and repo names render as plain text. */
@@ -9,11 +9,20 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, ErrorState, Skeleton } from "@devdigest/ui";
 import type { Agent, CiInstallation, CiRun } from "@devdigest/shared";
 import { Select } from "@/components/select";
-import { formatRanAt, pullRequestHref, refreshFailures, safeRunHref, statusKey } from "@/lib/ci-runs";
+import { codeHostName, isGitLab, repoLabel } from "@/lib/code-host";
+import {
+  formatRanAt,
+  pullRequestHref,
+  pullRequestRef,
+  refreshFailures,
+  runRepoLabel,
+  safeRunHref,
+  statusKey,
+} from "@/lib/ci-runs";
 import { CI_TAB_RUNS_LIMIT, useCiInstallations, useCiRuns, useRefreshCi, useUpdateAgent } from "@/lib/hooks";
 import { ExportWizard } from "./_components/ExportWizard";
 import { CI_FAIL_ON_VALUES } from "./constants";
-import { formatRelativeTime, isOutdated } from "./helpers";
+import { formatRelativeTime, isGitLabInstallation, isOutdated } from "./helpers";
 import { s } from "./styles";
 
 /** What opens the Export wizard: a row's "Update" preselects its repo; "Add" leaves it to the wizard. */
@@ -136,11 +145,12 @@ function InstallationRow({ inst, agentVersion, onUpdate }: { inst: CiInstallatio
   const tr = useTranslations("ci.runs");
   const last = inst.last_run;
   const status = statusKey(last?.status);
+  const gitlab = isGitLabInstallation(inst);
   return (
     <div style={s.row}>
       <div style={s.rowMain}>
-        <span style={s.repo}>{inst.repo}</span>
-        <span style={s.meta}>{t("target")}</span>
+        <span style={s.repo}>{gitlab ? repoLabel({ provider: "gitlab", host: inst.host, full_name: inst.repo }) : inst.repo}</span>
+        <span style={s.meta}>{gitlab ? t("targetGitlab") : t("target")}</span>
       </div>
       <span style={s.meta} title={last?.ran_at ? formatRanAt(last.ran_at) : undefined}>
         {last ? `${status ? tr(`status.${status}`) : "—"} · ${formatRelativeTime(last.ran_at)}` : t("noRunsYet")}
@@ -189,7 +199,10 @@ function RunsTable({ runs }: { runs: readonly CiRun[] }) {
 
 function RunRow({ run }: { run: CiRun }) {
   const t = useTranslations("ci.runs");
+  const tr = useTranslations("runs.ciRuns");
   const prHref = pullRequestHref(run);
+  // A GitLab run keeps its `!<n>` as text when the host is not connected (no link); GitHub shows "—" without a link.
+  const prLabel = isGitLab(run) || prHref ? pullRequestRef(run) : null;
   const runHref = safeRunHref(run.github_url);
   const status = statusKey(run.status);
   return (
@@ -197,14 +210,16 @@ function RunRow({ run }: { run: CiRun }) {
       <td className="mono tnum" style={{ ...s.td, ...s.stamp }}>
         {formatRanAt(run.ran_at)}
       </td>
-      <td style={s.td}>{run.repo ?? "—"}</td>
+      <td style={s.td}>{runRepoLabel(run) ?? "—"}</td>
       <td style={s.td}>
-        {prHref ? (
+        {prLabel == null ? (
+          <span style={s.muted}>—</span>
+        ) : prHref ? (
           <a href={prHref} target="_blank" rel="noopener noreferrer" style={s.link}>
-            #{run.pr_number}
+            {prLabel}
           </a>
         ) : (
-          <span style={s.muted}>—</span>
+          <span style={s.muted}>{prLabel}</span>
         )}
       </td>
       <td style={s.td}>
@@ -223,7 +238,7 @@ function RunRow({ run }: { run: CiRun }) {
       <td style={s.td}>
         {runHref ? (
           <a href={runHref} target="_blank" rel="noopener noreferrer" style={s.link}>
-            {t("view")}
+            {isGitLab(run) ? tr("viewOn", { host: codeHostName(run) }) : t("view")}
           </a>
         ) : (
           <span style={s.muted}>—</span>

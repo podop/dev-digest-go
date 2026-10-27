@@ -1,5 +1,5 @@
 # GitLab C — GitLab CI export, runner and ingest
-Spec: GitLab slice C (export target `gitlab_ci`, GitLab CI rule checker, the CI runner on GitLab CI, MR review posting from CI, ingest of GitLab job artifacts, host-aware CI UI) · Status: ready-for-planning · Date: 2026-10-24
+Spec: GitLab slice C (export target `gitlab_ci`, GitLab CI rule checker, the CI runner on GitLab CI, MR review posting from CI, ingest of GitLab job artifacts, host-aware CI UI) · Status: implemented (2026-10-27, e94f583..621ba72; D29–D37; AC37/AC48 live gitlab.com part pending the user) · Date: 2026-10-24
 Areas: api, ci, runner, db, ui
 Design sources: the user's request of 2026-10-24 (full GitLab parity, CI included) and the user's CI decisions of
 2026-10-24 relayed with this run (D1–D12 below); the first spec-creator run's research and slicing report (facts 3, 5,
@@ -1295,6 +1295,35 @@ GitLab endpoints used by the backend (connection token, `PRIVATE-TOKEN`): `GET /
 - D27 — Q13 `artifacts:expire_in` → the default stands: `30 days` (user, 2026-10-25).
 - D28 — The user approved this spec with D14–D27; Status set to ready-for-planning; planning waits for the Settings A
   review gate (user, 2026-10-25).
+- D29 — (SCR1, user 2026-10-27) The cost-ledger dedupe key of a GitLab CI run is `ci:<host key>:<job id>:<attempt>`;
+  GitHub keys stay `ci:<run id>:<attempt>`; no migration. Every run-key read names its host (EC30).
+- D30 — Plan SCRs adopted as planned (pre-approval): EC14/EC15 warnings are static text (SCR3); AC43 is checked with
+  role/name assertions, no axe dependency (SCR4); FR47 links Integrations (SCR5); 409 `plugin_disabled` stays right
+  after the agent check (SCR6); `DEVDIGEST_LLM_HEADER_n` only for n ≤ the provider's header count (SCR7); the strip
+  set is exactly `.devdigest/` and `.gitlab/devdigest/` (SCR8); `repo` stays required beside `repo_id` (SCR10).
+- D31 — (SCR9) `JobImage` = `buildpack-deps:trixie-scm@sha256:57c2de9a151180bf9ba8eea8bbebf8c546ccaa629f4fec8ea9b18330226af31b`
+  (linux/amd64 manifest, read 2026-10-27).
+- D32 — AC10's request order follows FR11: project, root `.gitlab-ci.yml` metadata at the default branch, branch
+  lookup, then the other file metadata, commit, MR lookup/create.
+- D33 — FR14 rule 6 is extended by a shell lint over `script` and `image.entrypoint` (security r1–r3): backslash-newline
+  continuations are removed first; refused: `$(`, backticks, `$'`, `<(`, `>(`, brace expansion with `,`/`..`, the word
+  `environ` (also when quoted/escaped), `$@`/`$*`, NUL, and the command words printenv, env, eval, declare, typeset,
+  set, export, readonly, compgen, alias (also as an assignment value or a path basename); allowed: `set` with option
+  flag clusters only (`set -e`, `-euo pipefail`, `+x`) and `export NAME[=value]` as the first word; comments are decided
+  on the raw text. It is a lint on the user's own file, not a sandbox (globs, interpreters and concatenation through
+  an allowed variable stay out of scope).
+- D34 — §7.1 / NFR8 additive fields also include `CiRepoLastRun.pr_number` and `pr_url` (FR45's `!<n>` link; GitLab only
+  gets a URL, from the stored `web_url` of a connected host).
+- D35 — A lost first-commit race (GitLab answers 400 "branch already exists" to a commit with `start_branch`) repeats
+  the publish sequence once; a race and a transient failure share the one repeat (≤ 2 sequences).
+- D36 — Runner hardening found by the tests and reviews: the GitLab API client masks every §7.5 secret before cutting
+  an error body (AC29); a client that cannot be built fails before the diff and the model call; in GitLab mode every
+  line printed outside the use case (panic, extra-CA, model log) is redacted, log-sanitised and capped; the artifact's
+  metadata strings are redacted (it never holds finding text).
+- D37 — Accepted lane deviations: the export wizard picks a repository with a radio group (the Select has no disabled
+  option); the triggers note is the static FR4 text; not-connected repos in the install dialog are listed below the
+  Select; the fork check uses the "head is a fork" flag (same result as comparing source project ids); existing drafts of
+  the token user are foreign and never deleted; the runner honours the environment proxy.
 
 ## 17. Open questions
 None — Q1–Q13 were answered on 2026-10-25 (D14–D27). The two documented fallbacks (D14 if AC48 fails, D18 if AC37

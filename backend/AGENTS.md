@@ -270,7 +270,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
 - JSON field names follow the contracts exactly (snake_case, plus the documented camelCase
   exceptions); timestamps are ISO-8601 UTC with milliseconds (`…000Z`).
 - Secrets only via `internal/platform/secrets` (`$DEVDIGEST_DATA_DIR/secrets.json`, env fallback);
-  never logged, never in errors. Git only via `internal/platform/gitcli`; the token goes through
+  never logged, never in errors. Git only via `internal/platform/gitcli` (the one exception is the CI runner's `ci/runner/adapters/gitdiff`, a local
+  `git diff` with no token, because the runner's import closure forbids gitcli); the token goes through
   `GIT_CONFIG_*` env, never argv or `.git/config`.
 - Request bodies only through `httpx.ReadJSONBody` (JSON parsed only for `application/json`).
   State-changing requests with a foreign `Origin` → 403; `Host` must be in `ALLOWED_HOSTS`
