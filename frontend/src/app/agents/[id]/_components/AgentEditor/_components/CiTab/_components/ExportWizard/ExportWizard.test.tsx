@@ -92,22 +92,31 @@ async function toConfigure(user: ReturnType<typeof open>["user"]) {
 const exportBodies = (http: ReturnType<typeof mockFetch>) =>
   http.requests("POST", "/agents/a1/export-ci").map((r) => r.body as Record<string, unknown>);
 
-describe("ExportWizard — repository picker (SCR3)", () => {
-  it("offers GitHub repositories only and says to connect one when the workspace has GitLab ones only", async () => {
-    mockFetch({ "GET /repos": [GITLAB_REPO, REPO], "GET /settings/custom-providers": [] });
+describe("ExportWizard — repository picker", () => {
+  it("lists the repositories as radios keyed by id and sends the unchanged GitHub body (no repo_id)", async () => {
+    const http = mockFetch({
+      "GET /repos": [REPO, GITLAB_REPO],
+      "GET /settings/custom-providers": [],
+      "POST /agents/:id/export-ci": exported(["OPENROUTER_API_KEY"], []),
+    });
     const { user } = renderWithProviders(
       <ExportWizard agentId="a1" agentName="Bot" provider="openrouter" onClose={() => {}} />,
     );
 
-    await user.click(await screen.findByRole("combobox", { name: "Target repository" }));
-    expect(screen.getByRole("option", { name: "acme/api" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "grp/svc" })).not.toBeInTheDocument();
+    const group = await screen.findByRole("group", { name: "Target repository" });
+    expect(within(group).getAllByRole("radio").map((r) => r.getAttribute("value"))).toEqual(["r1", "r2"]);
+    await user.click(within(group).getByRole("radio", { name: "acme/api" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
 
-    cleanup();
-    mockFetch({ "GET /repos": [GITLAB_REPO], "GET /settings/custom-providers": [] });
-    renderWithProviders(<ExportWizard agentId="a1" agentName="Bot" provider="openrouter" onClose={() => {}} />);
-    expect(await screen.findByText("Connect a repository first")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox", { name: "Target repository" })).not.toBeInTheDocument();
+    await waitFor(() => expect(exportBodies(http)).toHaveLength(1));
+    expect(exportBodies(http)[0]).toEqual({
+      repo: "acme/api",
+      target: "gha",
+      action: "files",
+      post_as: "github_review",
+      triggers: ["opened", "synchronize"],
+      runner: "github_hosted",
+    });
   });
 });
 

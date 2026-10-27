@@ -97,21 +97,115 @@ async function openDialog(user: ReturnType<typeof renderWithProviders>["user"]) 
 }
 
 describe("InstallActionDialog", () => {
-  it("offers GitHub repositories only (SCR3) and says no repository is connected when only GitLab ones exist", async () => {
-    mockFetch({ "GET /repos": [GITLAB_REPO, REPO], "GET /agents": [A1], "GET /settings/custom-providers": [] });
+  it("lists GitHub and connected GitLab repositories with the host, and the not-connected ones disabled with the reason (GitLab C FR45, AC42)", async () => {
+    const NOT_CONNECTED: Repo = { ...GITLAB_REPO, id: "r3", full_name: "grp/lonely", host: "git.corp.test", connection_id: null };
+    mockFetch({ "GET /repos": [GITLAB_REPO, REPO, NOT_CONNECTED], "GET /agents": [A1], "GET /settings/custom-providers": [] });
     const { user } = renderWithProviders(<Harness />);
     await openDialog(user);
 
     await user.click(await screen.findByRole("combobox", { name: "Repository" }));
     expect(screen.getByRole("option", { name: "acme/api" })).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "grp/svc" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "grp/svc · gitlab.com" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /grp\/lonely/ })).not.toBeInTheDocument();
+    await user.keyboard("{Escape}");
 
-    cleanup();
-    mockFetch({ "GET /repos": [GITLAB_REPO], "GET /agents": [A1], "GET /settings/custom-providers": [] });
-    const again = renderWithProviders(<Harness />);
-    await openDialog(again.user);
+    const unavailable = within(screen.getByRole("list", { name: "Not connected" }));
+    const row = unavailable.getByRole("listitem");
+    expect(row).toHaveAttribute("aria-disabled", "true");
+    expect(row).toHaveTextContent("grp/lonely · git.corp.test");
+    expect(row).toHaveTextContent("Not connected — add a GitLab connection for git.corp.test");
+  });
+
+  it("says no repository is connected when only not-connected GitLab ones exist", async () => {
+    mockFetch({
+      "GET /repos": [{ ...GITLAB_REPO, connection_id: null }],
+      "GET /agents": [A1],
+      "GET /settings/custom-providers": [],
+    });
+    const { user } = renderWithProviders(<Harness />);
+    await openDialog(user);
     expect(await screen.findByText(/No repository is connected yet/)).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "Repository" })).not.toBeInTheDocument();
+    expect(within(screen.getByRole("list", { name: "Not connected" })).getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("installs into a GitLab repository with repo_id and gitlab_ci, GitLab runner labels and merge-request next steps (FR9, FR43, FR45, AC42, AC43)", async () => {
+    const api = mockFetch({
+      "GET /repos": [REPO, GITLAB_REPO],
+      "GET /agents": [A1, GHOST_AGENT],
+      "GET /settings/custom-providers": [],
+      "POST /agents/:id/export-ci": jsonResponse(
+        {
+          installation: null,
+          files: [],
+          pr_url: "https://gitlab.com/grp/svc/-/merge_requests/4",
+          required_secrets: ["OPENROUTER_API_KEY", "DEVDIGEST_GITLAB_TOKEN"],
+          required_variables: [],
+          gitlab_ci: {
+            job_file: ".gitlab/devdigest/review-security.yml",
+            root_config: "keep_existing",
+            config_path: ".gitlab-ci.yml",
+            include_snippet: "include:\n  - local: .gitlab/devdigest/review-security.yml\n",
+            triggers_note: null,
+          },
+        },
+        201,
+      ),
+    });
+    const { user } = renderWithProviders(<Harness />);
+    await openDialog(user);
+
+    // GitHub labels until a GitLab repository is chosen.
+    expect(await screen.findByRole("radio", { name: "GitHub-hosted" })).toBeChecked();
+    await pickOption(user, await screen.findByRole("combobox", { name: "Repository" }), "grp/svc · gitlab.com");
+    expect(screen.getByRole("group", { name: "Runner" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "GitLab shared runners" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Self-managed runner (tag devdigest)" })).not.toBeChecked();
+    expect(screen.queryByRole("radio", { name: "GitHub-hosted" })).not.toBeInTheDocument();
+    expect(screen.getByText("Opens a merge request that adds the CI job for each selected agent.")).toBeInTheDocument();
+
+    await user.click(await screen.findByRole("checkbox", { name: "Security Reviewer" }));
+    // The reason of an unselectable agent names GitLab CI, not GitHub Actions.
+    expect(screen.getByRole("checkbox", { name: "Ghost Reviewer" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Install" }));
+
+    const link = await screen.findByRole("link", { name: "View merge request" });
+    expect(link).toHaveAttribute("href", "https://gitlab.com/grp/svc/-/merge_requests/4");
+    expect(screen.getByText("Merge request opened")).toBeInTheDocument();
+    expect(screen.getByText("CI/CD variables to add (masked, not protected):")).toBeInTheDocument();
+    expect(screen.getByText(/DEVDIGEST_GITLAB_TOKEN: scope api\. A project access token with the Reporter role/)).toBeInTheDocument();
+    expect(screen.getByText("Your project already has .gitlab-ci.yml. Add this include to it:")).toBeInTheDocument();
+    expect(screen.getByText(/local: \.gitlab\/devdigest\/review-security\.yml/)).toBeInTheDocument();
+    expect(screen.getByText(/Enable Settings › Merge requests › Pipelines must succeed/)).toBeInTheDocument();
+    expect(api.requests("POST")[0]!.body).toEqual({
+      repo: "grp/svc",
+      repo_id: "r2",
+      target: "gitlab_ci",
+      action: "open_pr",
+      runner: "github_hosted",
+    });
+  });
+
+  it("gives every control of the dialog an accessible name (GitLab C AC43)", async () => {
+    mockFetch({
+      "GET /repos": [REPO, GITLAB_REPO, { ...GITLAB_REPO, id: "r3", full_name: "grp/lonely", connection_id: null }],
+      "GET /agents": [A1, GHOST_AGENT],
+      "GET /settings/custom-providers": [],
+    });
+    const { user } = renderWithProviders(<Harness />);
+    await openDialog(user);
+    await pickOption(user, await screen.findByRole("combobox", { name: "Repository" }), "grp/svc · gitlab.com");
+    await screen.findByRole("checkbox", { name: "Security Reviewer" });
+
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByText("Install in a repo")).toBeInTheDocument();
+    expect(within(dialog).getByRole("combobox", { name: "Repository" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("group", { name: "Runner" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("group", { name: "Agents" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("list", { name: "Not connected" })).toBeInTheDocument();
+    for (const control of [...within(dialog).getAllByRole("radio"), ...within(dialog).getAllByRole("checkbox"), ...within(dialog).getAllByRole("button")]) {
+      expect(control).toHaveAccessibleName();
+    }
   });
 
   it("lists agents with reasons for the unselectable ones, hides disabled-plugin agents, and keeps Install off until repo + agent", async () => {
@@ -406,6 +500,56 @@ describe("InstallActionDialog messages (AC22)", () => {
         "Ghost Reviewer",
         "OPENROUTER_API_KEY",
         "DEVDIGEST_X_BASE_URL",
+      ]),
+    ).toEqual([]);
+  });
+
+  it("takes the GitLab strings from the message files too (pseudo bundle, GitLab C AC43)", async () => {
+    mockFetch({
+      "GET /repos": [GITLAB_REPO, { ...GITLAB_REPO, id: "r3", full_name: "grp/lonely", host: "git.corp.test", connection_id: null }],
+      "GET /agents": [A1, GHOST_AGENT],
+      "GET /settings/custom-providers": [],
+      "POST /agents/:id/export-ci": jsonResponse(
+        {
+          installation: null,
+          files: [],
+          pr_url: "https://gitlab.com/grp/svc/-/merge_requests/4",
+          required_secrets: ["OPENROUTER_API_KEY", "DEVDIGEST_GITLAB_TOKEN"],
+          required_variables: [],
+          gitlab_ci: {
+            job_file: ".gitlab/devdigest/review-security.yml",
+            root_config: "custom_path",
+            config_path: "ci/main.yml",
+            include_snippet: "include:",
+            triggers_note: null,
+          },
+        },
+        201,
+      ),
+    });
+    const { user } = renderWithProviders(<Harness />, { messages: pseudoMessages() });
+    await user.click(screen.getByRole("button", { name: "open dialog" }));
+    await screen.findByRole("dialog");
+
+    await pickOption(user, await screen.findByRole("combobox", { name: "⟦integrationsGithubAction.dialog.repoLabel⟧" }), "grp/svc · gitlab.com");
+    await user.click(await screen.findByRole("checkbox", { name: "Security Reviewer" }));
+    await user.click(screen.getByRole("button", { name: "⟦integrationsGithubAction.dialog.actions.install⟧" }));
+    await screen.findByText("⟦integrationsGithubAction.dialog.progressGitlab.done⟧");
+
+    expect(screen.getByRole("radio", { name: "⟦integrationsGithubAction.dialog.runnerGitlab.github_hosted⟧" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Ghost Reviewer" })).toHaveAccessibleDescription(
+      "⟦integrationsGithubAction.dialog.reasonGitlab.custom_not_configured⟧",
+    );
+    expect(
+      strayText(document.body, [
+        "open dialog",
+        "grp/svc · gitlab.com",
+        "grp/lonely · git.corp.test",
+        "Security Reviewer",
+        "Ghost Reviewer",
+        "OPENROUTER_API_KEY",
+        "DEVDIGEST_GITLAB_TOKEN",
+        "include:",
       ]),
     ).toEqual([]);
   });

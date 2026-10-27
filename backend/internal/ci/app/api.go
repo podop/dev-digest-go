@@ -7,12 +7,17 @@ import (
 )
 
 // ExportRequest is a validated POST /agents/:id/export-ci body after the schema defaults:
-// Target "gha", Action open_pr, PostAs github_review, Triggers opened, synchronize, reopened.
-// Base of the body is dropped (the repository's default branch is used).
+// Action open_pr, PostAs github_review, Triggers opened, synchronize, reopened. Target has no
+// default: omitted, the use case picks it by the repository's host (GitLab C FR2). Base of the body
+// is dropped (the repository's default branch is used).
 type ExportRequest struct {
 	// Repo is the exact "owner/name".
 	Repo string
-	// Target is checked by the use case (422 unsupported_target).
+	// RepoID is the UUID of a repository of the workspace; when set it wins and Repo is ignored
+	// (GitLab C FR1); "" = resolve Repo.
+	RepoID string
+	// Target is "gha", "gitlab_ci" or "" (by the repository's host); any other value is 422
+	// unsupported_target, checked by the use case.
 	Target   string
 	Action   domain.ExportAction
 	PostAs   domain.PostAs
@@ -28,15 +33,24 @@ type ExportRequest struct {
 // Exporter is the export use cases as transport sees them; *ExportService implements it. Failures
 // are apperr errors that httpx renders; ids are UUIDs by the time they get here.
 type Exporter interface {
-	// Export runs the checks of spec 7.6.1 in order (404 agent_not_found, 422 unsupported_target,
+	// Export runs the checks of spec 7.6.1 in order (404 agent_not_found, 409 plugin_disabled, 422
+	// unsupported_target for a target other than gha / gitlab_ci,
 	// 422 provider_not_configured for an undefined custom provider (every other provider is
-	// exportable, FR24), 422 invalid_triggers, 404 repo_not_found, 409 ci_slug_conflict, 422
+	// exportable, FR24), 422 invalid_triggers, 404 repo_not_found, 422 repo_ambiguous, 422
+	// unsupported_target for a target that does not fit the repository's host, 409
+	// ci_slug_conflict, 422
 	// skill_slug_conflict, 422 workflow_insecure, 500 runner_bundle_missing, 422
 	// manifest_invalid), then answers the files (action files: no GitHub call, no write) or, for
 	// open_pr, checks the token (500 config_error), publishes (422 github_permission_denied, 502
 	// github_unavailable), upserts the installation with the agent's provider (409
 	// ci_slug_conflict) and answers with it. Both actions answer RequiredSecrets and
 	// RequiredVariables (FR29).
+	//
+	// A GitLab repository (target gitlab_ci, GitLab C FR3) follows the same order with 422
+	// repo_host_not_connected right after the host match, the GitLab job file checked by the GitLab
+	// rules, 500 config_error "GitLab connection <name> has no token" for open_pr without a token,
+	// 422 gitlab_permission_denied / 502 gitlab_unavailable for publish failures, and
+	// Export.GitLab set.
 	Export(ctx context.Context, workspaceID, agentID string, req ExportRequest) (domain.Export, error)
 	// ListInstallations returns the agent's installations, newest first, each with its last run;
 	// 404 agent_not_found.

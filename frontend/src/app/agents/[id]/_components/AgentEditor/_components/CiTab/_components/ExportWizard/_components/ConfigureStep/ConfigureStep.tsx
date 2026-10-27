@@ -1,7 +1,9 @@
 /* ConfigureStep — workflow options: trigger chips (at least one), the Runner (with the
    custom provider's self-hosted note), the secrets and variables the workflow needs (from the
    export response), "Post results as", and how to block merges. Once the workflow was edited
-   the options are locked, since changing one would regenerate and drop the edit. */
+   the options are locked, since changing one would regenerate and drop the edit. For GitLab the
+   trigger chips are replaced by the note that MR pipelines run on every push, and the labels
+   say MR / GitLab runners (GitLab C FR42). */
 "use client";
 
 import { useTranslations } from "next-intl";
@@ -20,6 +22,7 @@ import { Requirements } from "../Requirements";
 import { s } from "./styles";
 
 export function ConfigureStep({
+  gitlab,
   triggers,
   onToggleTrigger,
   postAs,
@@ -30,6 +33,8 @@ export function ConfigureStep({
   locked,
   slug,
 }: {
+  /** The repository is on GitLab. */
+  gitlab: boolean;
   triggers: TriggerState;
   onToggleTrigger: (trigger: Trigger) => void;
   postAs: PostAs;
@@ -43,7 +48,8 @@ export function ConfigureStep({
   slug: string | null;
 }) {
   const t = useTranslations("ci.exportWizard");
-  const noneSelected = TRIGGERS.every((tr) => !triggers[tr]);
+  const noneSelected = !gitlab && TRIGGERS.every((tr) => !triggers[tr]);
+  const host = gitlab ? "gitlab." : "";
 
   return (
     <div style={s.body}>
@@ -55,21 +61,25 @@ export function ConfigureStep({
 
       <fieldset style={s.group} disabled={locked}>
         <legend style={s.legend}>{t("triggerLabel")}</legend>
-        <div style={s.chips}>
-          {TRIGGERS.map((tr) => (
-            <button
-              key={tr}
-              type="button"
-              className="mono"
-              aria-pressed={triggers[tr]}
-              disabled={locked}
-              onClick={() => onToggleTrigger(tr)}
-              style={triggers[tr] ? { ...s.chip, ...s.chipOn } : s.chip}
-            >
-              {`pull_request:${tr}`}
-            </button>
-          ))}
-        </div>
+        {gitlab ? (
+          <p style={s.muted}>{t("gitlab.triggersNote")}</p>
+        ) : (
+          <div style={s.chips}>
+            {TRIGGERS.map((tr) => (
+              <button
+                key={tr}
+                type="button"
+                className="mono"
+                aria-pressed={triggers[tr]}
+                disabled={locked}
+                onClick={() => onToggleTrigger(tr)}
+                style={triggers[tr] ? { ...s.chip, ...s.chipOn } : s.chip}
+              >
+                {`pull_request:${tr}`}
+              </button>
+            ))}
+          </div>
+        )}
         {noneSelected && (
           <p role="alert" style={s.invalid}>
             {t("triggerRequired")}
@@ -89,7 +99,7 @@ export function ConfigureStep({
               disabled={locked}
               onChange={() => onRunnerChange(opt.value)}
             />
-            {t(`runner.${opt.labelKey}`)}
+            {t(`${host}runner.${opt.labelKey}`)}
           </label>
         ))}
         {requirements.custom && (
@@ -113,7 +123,7 @@ export function ConfigureStep({
               disabled={locked}
               onChange={() => onPostAsChange(opt.value)}
             />
-            {t(`postAs.${opt.labelKey}`)}
+            {t(`${host}postAs.${opt.labelKey}`)}
             {opt.value === "github_review" && (
               <Badge color="var(--ok)" bg="var(--bg-hover)">
                 {t("recommended")}
@@ -123,7 +133,11 @@ export function ConfigureStep({
         ))}
       </fieldset>
 
-      <p style={s.muted}>{t("requiredCheckNote", { check: t("checkName", { slug: slug ?? "<slug>" }) })}</p>
+      <p style={s.muted}>
+        {gitlab
+          ? t("gitlab.requiredCheckNote")
+          : t("requiredCheckNote", { check: t("checkName", { slug: slug ?? "<slug>" }) })}
+      </p>
     </div>
   );
 }

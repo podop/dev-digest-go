@@ -24,6 +24,10 @@ type Deps struct {
 	Env    Env
 	Files  Files
 	GitHub GitHub
+	// GitLab and GitDiff serve GitLab mode (DEVDIGEST_PLATFORM=gitlab_ci) only; GitHub mode never
+	// reads them. GitLab may be nil when post_as is none; GitDiff is always needed in GitLab mode.
+	GitLab  GitLab
+	GitDiff GitDiff
 	// LLM serves an openrouter manifest.
 	LLM LLM
 	// Providers serves an openai, anthropic or custom manifest; nil fails those runs before any

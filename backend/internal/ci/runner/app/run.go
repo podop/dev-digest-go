@@ -13,6 +13,7 @@ import (
 	"dev-digest-go/backend/internal/ci/runner/domain"
 	"dev-digest-go/backend/internal/llm/custom"
 	reviewerapp "dev-digest-go/backend/internal/reviewer/app"
+	reviewer "dev-digest-go/backend/internal/reviewer/domain"
 )
 
 // RunFunc is satisfied by Run.
@@ -41,7 +42,11 @@ const minRedactLen = 8
 func Run(ctx context.Context, cfg Config, deps Deps) int {
 	res, err := run(ctx, cfg, deps)
 	if err != nil {
-		deps.Out.Stderr(FailureLine(redact(deps.Env, err.Error())))
+		if domain.GitLabModeRequested(deps.Env.Lookup) {
+			deps.Out.Stderr(gitLabFailureLine(deps.Env, err.Error()))
+		} else {
+			deps.Out.Stderr(FailureLine(redact(deps.Env, err.Error())))
+		}
 		return ExitFailed
 	}
 	deps.Out.Stdout(fmt.Sprintf("[agent-runner] findings=%d blockers=%d gateTriggered=%t posted=%s",
@@ -105,6 +110,14 @@ func run(ctx context.Context, cfg Config, deps Deps) (result, error) {
 		return result{}, err
 	}
 
+	// GitLab mode (spec FR16): the merge request, diff and posting differ; the manifest, the
+	// provider and the review engine above and below are the same.
+	if domain.GitLabModeRequested(env.Lookup) {
+		return runGitLab(ctx, cfg, deps, glRun{
+			engine: engine, now: now, manifest: manifest, llm: reviewLLM, skills: skills, resultPath: resultPath,
+		})
+	}
+
 	// 2. The pull request, from the environment and the event payload (read only when the
 	// repository is usable, as Node does).
 	repository := envValue(env, "GITHUB_REPOSITORY")
@@ -144,22 +157,11 @@ func run(ctx context.Context, cfg Config, deps Deps) (result, error) {
 	diff := domain.ParseDiff(domain.StripIgnoredFiles(rawDiff))
 
 	// 4. The one review engine. The model's own verdict is discarded below.
-	var skillInput []string
-	if len(skills) > 0 {
-		skillInput = skills
-	}
 	start := now()
-	outcome, err := engine(ctx, reviewerapp.Input{
-		SystemPrompt:  manifest.SystemPrompt,
-		Diff:          diff,
-		Strategy:      manifest.Strategy,
-		Skills:        skillInput,
-		PRDescription: prc.Body,
-		Task:          "Review PR #" + strconv.Itoa(prc.Number) + ": " + prc.Title,
-	}, reviewLLM, nil, reviewerapp.Options{})
+	outcome, err := reviewWith(ctx, engine, reviewLLM, manifest, skills, diff, prc.Body,
+		"Review PR #"+strconv.Itoa(prc.Number)+": "+prc.Title)
 	if err != nil {
-		class := modelCallClass(err)
-		return result{}, &ModelCallError{Class: class, cause: err, Hint: strictModeHint(manifest, class)}
+		return result{}, err
 	}
 	durationMS := now().Sub(start).Milliseconds()
 
@@ -204,6 +206,28 @@ func run(ctx context.Context, cfg Config, deps Deps) (result, error) {
 		}
 	}
 	return result{findings: len(findings), blockers: blockers, triggered: triggered, posted: postAs}, nil
+}
+
+// reviewWith runs the review engine on the diff for the manifest (the one engine of GitHub and
+// GitLab mode). A failure is a *ModelCallError. The model's own verdict stays with the caller.
+func reviewWith(ctx context.Context, engine Engine, llm reviewerapp.LLM, m Manifest, skills []string, diff reviewer.Diff, description, task string) (reviewer.Outcome, error) {
+	var skillInput []string
+	if len(skills) > 0 {
+		skillInput = skills
+	}
+	outcome, err := engine(ctx, reviewerapp.Input{
+		SystemPrompt:  m.SystemPrompt,
+		Diff:          diff,
+		Strategy:      m.Strategy,
+		Skills:        skillInput,
+		PRDescription: description,
+		Task:          task,
+	}, llm, nil, reviewerapp.Options{})
+	if err != nil {
+		class := modelCallClass(err)
+		return reviewer.Outcome{}, &ModelCallError{Class: class, cause: err, Hint: strictModeHint(m, class)}
+	}
+	return outcome, nil
 }
 
 // PostReview posts the review. GitHub's Actions token may not approve a pull request (422), so

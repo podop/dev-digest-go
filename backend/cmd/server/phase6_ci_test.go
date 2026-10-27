@@ -681,7 +681,7 @@ func TestCiExport_FilesActionReturnsTheSevenFiles(t *testing.T) { // AC6028, EC6
 	if resp.Status != http.StatusOK {
 		t.Fatalf("export files = %d %s, want 200", resp.Status, resp.Body)
 	}
-	if diff := cmp.Diff([]string{"installation", "files", "pr_url", "required_secrets", "required_variables"}, ciKeyOrder(t, resp.Body)); diff != "" {
+	if diff := cmp.Diff([]string{"installation", "files", "pr_url", "required_secrets", "required_variables", "gitlab_ci"}, ciKeyOrder(t, resp.Body)); diff != "" {
 		t.Errorf("CiExport key order mismatch (-want +got):\n%s", diff)
 	}
 	var out ciExportResult

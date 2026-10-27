@@ -23,9 +23,6 @@ var (
 	// ErrSlugTaken is returned by Store.UpsertInstallation when (repo, slug) belongs to another
 	// agent: a lost race against the pre-check.
 	ErrSlugTaken = errors.New("ci slug taken")
-	// ErrUnsupportedHost is returned by RepoDirectory.FindByFullName when the name is carried only
-	// by a repository that is not on GitHub (slice A: GitLab CI export is not available, FR29).
-	ErrUnsupportedHost = errors.New("repository host not supported for CI export")
 	// ErrNotStorable is returned by Store.RecordRun and Store.UpsertInstallation, before any
 	// write, when a value cannot be held by its column: an integer outside the column's range, a
 	// cost that overflows numeric(12,6), or text with a NUL or invalid UTF-8. The ingest maps it
@@ -51,12 +48,90 @@ type AgentDirectory interface {
 	Exists(ctx context.Context, workspaceID, agentID string) (bool, error)
 }
 
+// RepoProvider says which code host a repository lives on.
+type RepoProvider string
+
+// The providers of ExportRepo.
+const (
+	ProviderGitHub RepoProvider = "github"
+	ProviderGitLab RepoProvider = "gitlab"
+)
+
+// RepoQuery is how an export names its repository (GitLab C FR1). A non-empty ID wins and FullName
+// is then ignored.
+type RepoQuery struct {
+	// ID is the UUID of a repository of the workspace; "" = resolve FullName.
+	ID string
+	// FullName is the exact "owner/name" (a GitLab path keeps its groups in Owner).
+	FullName string
+}
+
+// ExportRepo is a repository of the workspace as an export needs it, on either host. Its text
+// forms carry no secret (the struct holds none).
+type ExportRepo struct {
+	ID       string
+	Provider RepoProvider
+	// Host is the host key ("github.com" for GitHub, the connection's host key for GitLab).
+	Host                  string
+	Owner, Name, FullName string
+	DefaultBranch         string
+	// ProjectID is the GitLab project id; 0 for GitHub.
+	ProjectID int64
+	// WebURL is the stored browser address of a GitLab repository ("" for GitHub). pr_url is built
+	// from it, never from a response URL (FR12).
+	WebURL string
+	// ClonePath is the absolute directory of the local clone; "" = no clone yet.
+	ClonePath string
+}
+
+// AmbiguousRepoError is returned by RepoDirectory.Find when FullName matches GitLab repositories
+// on several hosts and no GitHub one (FR1): the export answers 422 repo_ambiguous with IDs.
+type AmbiguousRepoError struct {
+	// IDs are the repository ids of the candidates, in the directory's order.
+	IDs []string
+}
+
+func (e *AmbiguousRepoError) Error() string { return "repository name exists on several hosts" }
+
 // RepoDirectory reads the repositories imported into the workspace (peer adapter).
 type RepoDirectory interface {
-	// FindByFullName matches the exact "owner/name" among the workspace's GitHub repositories;
-	// false = not imported. A name that only a repository of another host carries answers
-	// ErrUnsupportedHost, so a same-named GitLab project is never taken for the GitHub one.
-	FindByFullName(ctx context.Context, workspaceID, fullName string) (domain.ImportedRepo, bool, error)
+	// Find resolves q (FR1). ID present: that repository of the workspace, whatever its host;
+	// false = not in the workspace. Otherwise FullName: a GitHub repository with that exact
+	// full_name wins; else the one GitLab repository with it; several GitLab repositories on
+	// different hosts are an *AmbiguousRepoError; none is false. A GitLab repository is returned
+	// whether or not its host has a connection (the export asks GitLabConns).
+	Find(ctx context.Context, workspaceID string, q RepoQuery) (ExportRepo, bool, error)
+	// FollowGitLabPath stores the project's current path_with_namespace and the web address built
+	// from the connection (A FR47: full_name, owner, name, web_url; the project id is the
+	// identity) and returns the repository as stored afterwards. A path another repository of the
+	// workspace already holds is not stored and the repository is returned unchanged. It refuses
+	// (returns an error) a path that is not a plain GitLab path.
+	FollowGitLabPath(ctx context.Context, workspaceID string, repo ExportRepo, pathWithNamespace string) (ExportRepo, error)
+}
+
+// GitLabConn is the connection of a GitLab host as an export needs it: no address, no token.
+type GitLabConn struct {
+	// Name is the connection's name (the text of the 500 config_error).
+	Name string
+	// HasToken reports whether a token is stored for the connection.
+	HasToken bool
+}
+
+// GitLabConns finds the GitLab connection of a host key (A FR48). It reads local settings only and
+// never calls GitLab.
+type GitLabConns interface {
+	// Resolve returns the connection whose host key is host; false = the host has none (the
+	// export answers 422 repo_host_not_connected). An error is a failure to read the connections.
+	Resolve(ctx context.Context, host string) (GitLabConn, bool, error)
+}
+
+// CloneFiles asks a repository's local clone about files (the files preview of a gitlab_ci
+// export, FR5). It makes no network call.
+type CloneFiles interface {
+	// Exists reports whether the regular file at rel (slash-separated, relative to the clone
+	// directory clonePath) exists; an unreadable or missing clone is false, nil. An error is
+	// reserved for failures that make the answer unknown.
+	Exists(ctx context.Context, clonePath, rel string) (bool, error)
 }
 
 // CustomExport is what an export needs of a defined custom provider (FR24, FR27, FR29): the
@@ -122,7 +197,8 @@ type RunFilter struct {
 // Store persists installations and CI runs. Every method joins the transaction of its ctx when
 // there is one. Failures are database errors; the use cases surface them as 500 internal_error.
 type Store interface {
-	// ListInstallations returns the workspace's gha installations of its agents, newest
+	// ListInstallations returns the workspace's gha and gitlab_ci installations of its agents (GitLab rows carry
+	// Host, ProjectID and the bound repository's current path), newest
 	// installed_at first, each with its newest run (by ran_at) of the workspace.
 	ListInstallations(ctx context.Context, workspaceID string, f InstallationFilter) ([]domain.Installation, error)
 	// FindInstallation returns the agent's installation in repo with its newest run.
@@ -133,6 +209,18 @@ type Store interface {
 	// manifest_version and provider (FR37: the agent's provider at export time, overwritten by a
 	// re-export); a unique violation on (repo, slug) is ErrSlugTaken.
 	UpsertInstallation(ctx context.Context, in domain.NewInstallation) error
+	// FindGitLabInstallation returns the agent's gitlab_ci installation of the project (host key
+	// and project id: the identity of a GitLab repository, FR13) with its newest run, with Host,
+	// ProjectID and TargetType set.
+	FindGitLabInstallation(ctx context.Context, workspaceID, agentID, host string, projectID int64) (domain.Installation, bool, error)
+	// GitLabSlugOwner returns the agent that owns slug in the project (host key, project id);
+	// false when nobody does.
+	GitLabSlugOwner(ctx context.Context, host string, projectID int64, slug string) (agentID string, found bool, err error)
+	// UpsertGitLabInstallation inserts or updates on (agent_id, host, project_id, target
+	// gitlab_ci), setting repo (the current full_name), slug, manifest_version and provider; the
+	// row always names its host and project id. A unique violation on (host, project_id, slug)
+	// is ErrSlugTaken. ErrNotStorable as for UpsertInstallation.
+	UpsertGitLabInstallation(ctx context.Context, in NewGitLabInstallation) error
 	// StoredRunKeys returns which of keys are already stored.
 	StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[domain.RunKey]bool, error)
 	// RecordRun writes the ci_runs and agent_runs rows in one transaction with ON CONFLICT
@@ -143,6 +231,21 @@ type Store interface {
 	RecordRun(ctx context.Context, run domain.NewRun) (Recorded, error)
 	// ListRuns returns the runs of the workspace, newest ran_at first, at most f.Limit.
 	ListRuns(ctx context.Context, workspaceID string, f RunFilter) ([]domain.Run, error)
+}
+
+// NewGitLabInstallation is the upsert of an installation on (agent, host, project id, target
+// gitlab_ci) after an open_pr export (FR13).
+type NewGitLabInstallation struct {
+	AgentID string
+	// Host is the host key of the repository; ProjectID is the GitLab project id.
+	Host      string
+	ProjectID int64
+	// Repo is the repository's current full_name (path_with_namespace).
+	Repo            string
+	Slug            string
+	ManifestVersion int
+	// Provider is the agent's provider at export time (custom providers FR37).
+	Provider string
 }
 
 // Recorded is the outcome of Store.RecordRun.
@@ -271,4 +374,107 @@ type ArtifactReader interface {
 	// size or its inflated size exceeds maxBytes; ErrEntryInvalid when the ZIP is unreadable or
 	// has no entry or more than one entry of that name.
 	Entry(zip []byte, name string, maxBytes int64) ([]byte, error)
+}
+
+// The steps of a GitLab publish, as GitLabError.Step names them (log field `step`).
+const (
+	StepProject  = "project"
+	StepBranch   = "branch"
+	StepFileMeta = "file_meta"
+	StepCommit   = "commit"
+	StepOpenMRs  = "open_merge_requests"
+	StepCreateMR = "create_merge_request"
+)
+
+// GitLabError is a failed GitLab call as the ports report it. Its text never carries the token, a
+// response body or request details.
+type GitLabError struct {
+	// Status is the HTTP status; 0 for a failure without a response.
+	Status int
+	// Transport is true for a failure before a response (dial, TLS, timeout, truncated body); a
+	// cancelled context is not reported as Transport.
+	Transport bool
+	// Step is the publish step that failed (one of the Step constants).
+	Step string
+	// Cause is the underlying error, already scrubbed of the token; may be nil.
+	Cause error
+}
+
+func (e *GitLabError) Error() string {
+	if e.Transport {
+		return "gitlab " + e.Step + ": transport error"
+	}
+	return fmt.Sprintf("gitlab %s: HTTP %d", e.Step, e.Status)
+}
+
+// Unwrap returns the cause.
+func (e *GitLabError) Unwrap() error { return e.Cause }
+
+// GitLabRef names a GitLab project by the host key of its connection and its project id. The
+// adapter reads the connection (and its token) per call, so a rotated token applies to the next
+// call; a connection or token that vanished since the export's check is a *GitLabError with
+// Status 401 and no request is sent.
+type GitLabRef struct {
+	Host      string
+	ProjectID int64
+}
+
+// GitLabProject is what an export reads of the project (FR11 step 1).
+type GitLabProject struct {
+	// PathWithNamespace is the project's current path.
+	PathWithNamespace string
+	// DefaultBranch is "" when GitLab reports none.
+	DefaultBranch string
+	// CIConfigPath is "" when the project uses the default `.gitlab-ci.yml`.
+	CIConfigPath string
+}
+
+// GitLabBranch is a repository branch and the commit it points at.
+type GitLabBranch struct {
+	Name, HeadSHA string
+}
+
+// GitLabCommitAction is one file of a commit; Action is "create" or "update", the content is sent
+// as text.
+type GitLabCommitAction struct {
+	Action, Path, Content string
+}
+
+// GitLabCommit is one Commits-API commit (FR11 step 5).
+type GitLabCommit struct {
+	// Branch is the branch to commit to.
+	Branch string
+	// StartBranch is the branch Branch is created from when it does not exist; "" when it exists.
+	StartBranch string
+	Message     string
+	Actions     []GitLabCommitAction
+}
+
+// GitLabNewMR is a new merge request (FR12).
+type GitLabNewMR struct {
+	SourceBranch, TargetBranch, Title, Description string
+	RemoveSourceBranch                             bool
+}
+
+// GitLabPublisher is the part of the GitLab REST API a gitlab_ci export calls (spec C FR11, FR12)
+// over platform/gitlab: no redirect is followed, the token goes only to the connection's origin
+// and every failure is a *GitLabError carrying the Step. Each method makes exactly one attempt
+// (writes are never retried here); the use case repeats the whole sequence once on a transient
+// failure (A4).
+type GitLabPublisher interface {
+	// Project reads GET /projects/:id.
+	Project(ctx context.Context, ref GitLabRef) (GitLabProject, error)
+	// Branch reads a branch; false = it does not exist.
+	Branch(ctx context.Context, ref GitLabRef, name string) (GitLabBranch, bool, error)
+	// FileSHA256 reads the lower-case hex SHA-256 of the content of path at gitRef (a branch name
+	// or a commit SHA) from the headers of a HEAD request; false = the file (or the ref) is
+	// absent.
+	FileSHA256(ctx context.Context, ref GitLabRef, path, gitRef string) (sha256 string, found bool, err error)
+	// Commit makes one commit through the Commits API.
+	Commit(ctx context.Context, ref GitLabRef, in GitLabCommit) error
+	// OpenMR returns the iid of the first open merge request from source to target; false = none.
+	OpenMR(ctx context.Context, ref GitLabRef, source, target string) (iid int, found bool, err error)
+	// CreateMR creates a merge request and returns its iid. A 409 (a merge request for the
+	// branches opened meanwhile) is a *GitLabError with Status 409.
+	CreateMR(ctx context.Context, ref GitLabRef, in GitLabNewMR) (iid int, err error)
 }

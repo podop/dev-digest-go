@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -30,7 +31,14 @@ import (
 	"dev-digest-go/backend/migrations"
 )
 
-func TestMain(m *testing.M) { os.Exit(pgtest.Main(m)) }
+func TestMain(m *testing.M) {
+	// Go loads the system root pool once, on first use, honouring SSL_CERT_FILE at that moment.
+	// GitLab tests t.Setenv SSL_CERT_FILE to the shared httptest certificate (for the git CA bundle),
+	// so a pool first loaded inside such a test would trust every httptest server for the rest of the
+	// process. Load it here, before any test changes the environment.
+	_, _ = x509.SystemCertPool()
+	os.Exit(pgtest.Main(m))
+}
 
 // syncBuffer is a log sink that the server and the test can use concurrently.
 type syncBuffer struct {

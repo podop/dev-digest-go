@@ -3,7 +3,7 @@ import type { CSSProperties } from "react";
 /** Co-located styles of the Target step. */
 export const s = {
   body: { padding: 24 } satisfies CSSProperties,
-  cards: { margin: "0 0 24px", padding: 0, border: "none" } satisfies CSSProperties,
+  cards: { margin: "0 0 24px", padding: 0, border: "none", display: "flex", flexWrap: "wrap", gap: 12 } satisfies CSSProperties,
   card: {
     display: "flex",
     flexDirection: "column",
@@ -18,6 +18,7 @@ export const s = {
     textAlign: "left",
     cursor: "default",
   } satisfies CSSProperties,
+  cardOff: { opacity: 0.6, borderColor: "var(--border)" } satisfies CSSProperties,
   srOnly: { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } satisfies CSSProperties,
   cardHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 } satisfies CSSProperties,
   cardTitle: { display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 600 } satisfies CSSProperties,

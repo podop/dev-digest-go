@@ -15,11 +15,21 @@ type RepoInstallation struct {
 	Slug        *string
 	InstalledAt time.Time
 	NewestRun   *Run
+	// TargetType is "gha" or "gitlab_ci" ("" = gha); Host is the host key of the repository
+	// ("" = github.com); ProjectID is the GitLab project id, 0 for GitHub (spec C FR46).
+	TargetType string
+	Host       string
+	ProjectID  int64
 }
 
 // RepoGroup is one repository with its installations and the newest run of any of them.
 type RepoGroup struct {
 	Repo string
+	// TargetType, Host and ProjectID are those of the installations of the group (they share the
+	// repository identity); see RepoInstallation.
+	TargetType string
+	Host       string
+	ProjectID  int64
 	// Installations are ordered by agent name (byte order), then installed_at, then id.
 	Installations []RepoInstallation
 	// LastRun is the run with the newest RanAt among the installations' newest runs (a run without
@@ -27,21 +37,47 @@ type RepoGroup struct {
 	LastRun *Run
 }
 
-// GroupByRepo groups installations by repository. Repositories come in byte order of the name
-// (the order of PostgreSQL's COLLATE "C"); the order of the input does not matter. A nil or empty
-// input gives a nil result.
+// GroupByRepo groups installations by repository identity: host + name for GitHub, host + project
+// id for GitLab (spec C FR46; a GitHub installation without a host is on github.com). Groups come
+// ordered by name in byte order (the order of PostgreSQL's COLLATE "C"), then by host; the order of
+// the input does not matter. A nil or empty input gives a nil result.
 func GroupByRepo(list []RepoInstallation) []RepoGroup {
-	byRepo := make(map[string][]RepoInstallation)
+	type identity struct {
+		host      string
+		repo      string
+		projectID int64
+	}
+	byIdentity := make(map[identity][]RepoInstallation)
 	for _, in := range list {
-		byRepo[in.Repo] = append(byRepo[in.Repo], in)
+		id := identity{host: repoHost(in.Host)}
+		if in.TargetType == TargetGitLabCI {
+			id.projectID = in.ProjectID
+		} else {
+			id.repo = in.Repo
+		}
+		byIdentity[id] = append(byIdentity[id], in)
 	}
 	var out []RepoGroup
-	for repo, items := range byRepo {
+	for _, items := range byIdentity {
 		slices.SortFunc(items, compareInstallations)
-		out = append(out, RepoGroup{Repo: repo, Installations: items, LastRun: newestRun(items)})
+		first := items[0]
+		out = append(out, RepoGroup{
+			Repo: first.Repo, TargetType: first.TargetType, Host: repoHost(first.Host), ProjectID: first.ProjectID,
+			Installations: items, LastRun: newestRun(items),
+		})
 	}
-	slices.SortFunc(out, func(a, b RepoGroup) int { return strings.Compare(a.Repo, b.Repo) })
+	slices.SortFunc(out, func(a, b RepoGroup) int {
+		return cmp.Or(strings.Compare(a.Repo, b.Repo), strings.Compare(a.Host, b.Host), cmp.Compare(a.ProjectID, b.ProjectID))
+	})
 	return out
+}
+
+// repoHost is the host key of a repository: "" is github.com.
+func repoHost(host string) string {
+	if host == "" {
+		return "github.com"
+	}
+	return host
 }
 
 func compareInstallations(a, b RepoInstallation) int {

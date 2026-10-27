@@ -119,7 +119,7 @@ func TestUpsertInstallation(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("FindInstallation() = _, %v, %v, want found", ok, err)
 	}
-	want := domain.Installation{ID: id, AgentID: f.agentA, Repo: "acme/api", TargetType: "gha", InstalledAt: first.UTC(), Slug: ptr("alpha-2"), ManifestVersion: ptr(2), Provider: domain.ProviderOpenRouter}
+	want := domain.Installation{ID: id, AgentID: f.agentA, Repo: "acme/api", TargetType: "gha", InstalledAt: first.UTC(), Slug: ptr("alpha-2"), ManifestVersion: ptr(2), Provider: domain.ProviderOpenRouter, Host: "github.com"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindInstallation() mismatch (-want +got):\n%s", diff)
 	}
@@ -412,7 +412,7 @@ func TestListRuns(t *testing.T) {
 		InstallationID: &instA, PRNumber: ptr(7), RanAt: ptr(t0.Add(2 * time.Hour)), Status: ptr("succeeded"), FindingsCount: ptr(2),
 		CostUSD: ptr(0.123456), GithubURL: ptr("https://github.com/acme/api/actions/runs/2"), Source: ptr("gha"),
 		AgentName: ptr("alpha"), DurationMS: ptr(4321), AgentID: &f.agentA, Repo: ptr("acme/api"), Blockers: ptr(1),
-		HeadSHA: ptr("abc123"), ManifestVersion: ptr(3),
+		HeadSHA: ptr("abc123"), ManifestVersion: ptr(3), Host: "github.com",
 	}
 	if diff := cmp.Diff(want, runs[0], cmpopts.IgnoreFields(domain.Run{}, "ID")); diff != "" {
 		t.Errorf("ListRuns()[0] mismatch (-want +got):\n%s", diff)

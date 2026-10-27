@@ -11,6 +11,7 @@ import type {
   CiRefreshResult,
   CiRepoInstallations,
   CiRun,
+  CiTarget,
 } from "@devdigest/shared";
 import { api } from "../api";
 import { ciKeys } from "./keys";
@@ -20,7 +21,12 @@ export const CI_TAB_RUNS_LIMIT = 20;
 
 /** What the wizard chooses; the same options drive the preview and the PR. */
 export interface CiExportOptions {
+  /** "owner/name" (a GitLab `full_name` too); the server ignores it when `repo_id` is sent. */
   repo: string;
+  /** UUID of the repository of the workspace; picks the GitLab repository unambiguously (GitLab C FR1). */
+  repo_id?: string;
+  /** Omitted → "gha" (GitHub bodies are unchanged); a GitLab repository sends "gitlab_ci". */
+  target?: CiTarget;
   triggers: readonly string[];
   post_as: NonNullable<CiExportInputBody["post_as"]>;
   /** `runs-on` of the generated job; omitted → the server default (GitHub-hosted). */
@@ -30,6 +36,11 @@ export interface CiExportOptions {
 /** Input of the "open PR" export: the options plus the workflow edited in Preview (omitted → generated). */
 export interface OpenCiPrInput extends CiExportOptions {
   workflow?: string | null;
+}
+
+/** The repository and target part of an export request body: `repo_id` only when given, `target` defaults to "gha". */
+function exportRepoBody(o: { repo: string; repo_id?: string; target?: CiTarget }) {
+  return { repo: o.repo, ...(o.repo_id ? { repo_id: o.repo_id } : {}), target: o.target ?? "gha" };
 }
 
 /** GET /ci/runs — newest first; `agentId` narrows to one agent. */
@@ -72,11 +83,17 @@ export function useWorkspaceCiInstallations() {
  *  the wizard shows its error inline, and a 422 is not worth a retry. */
 export function useCiExportFiles(agentId: string | null | undefined, opts: CiExportOptions | null) {
   return useQuery({
-    queryKey: ciKeys.exportFiles(agentId, opts?.repo, opts?.triggers ?? [], opts?.post_as, opts?.runner),
+    // The key's repo slot carries the repository identity and the target: two hosts can share a name.
+    queryKey: ciKeys.exportFiles(
+      agentId,
+      opts ? `${opts.repo_id ?? opts.repo}|${opts.target ?? "gha"}` : undefined,
+      opts?.triggers ?? [],
+      opts?.post_as,
+      opts?.runner,
+    ),
     queryFn: () =>
       api.post<CiExport>(`/agents/${agentId}/export-ci`, {
-        repo: opts?.repo,
-        target: "gha",
+        ...(opts ? exportRepoBody(opts) : {}),
         action: "files",
         post_as: opts?.post_as,
         triggers: opts?.triggers,
@@ -94,8 +111,7 @@ export function useOpenCiPr(agentId: string) {
   return useMutation({
     mutationFn: (input: OpenCiPrInput) =>
       api.post<CiExport>(`/agents/${agentId}/export-ci`, {
-        repo: input.repo,
-        target: "gha",
+        ...exportRepoBody(input),
         action: "open_pr",
         post_as: input.post_as,
         triggers: input.triggers,
@@ -128,7 +144,11 @@ export interface InstallCiInput {
   agentId: string;
   /** "owner/name". */
   repo: string;
-  /** `runs-on` of the generated job; omitted = the server default (GitHub-hosted). */
+  /** UUID of the repository of the workspace (GitLab C FR1); omitted for GitHub as before. */
+  repo_id?: string;
+  /** Omitted → "gha"; a GitLab repository sends "gitlab_ci". */
+  target?: CiTarget;
+  /** `runs-on` of the generated job (GitHub) or the runner tag choice (GitLab); omitted = the server default. */
   runner?: CiExportInputBody["runner"];
 }
 
@@ -138,10 +158,9 @@ export interface InstallCiInput {
 export function useInstallCi() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ agentId, repo, runner }: InstallCiInput) =>
+    mutationFn: ({ agentId, runner, ...repoRef }: InstallCiInput) =>
       api.post<CiExport>(`/agents/${agentId}/export-ci`, {
-        repo,
-        target: "gha",
+        ...exportRepoBody(repoRef),
         action: "open_pr",
         ...(runner ? { runner } : {}),
       }),

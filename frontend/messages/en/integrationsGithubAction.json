@@ -1,12 +1,15 @@
 {
   "card": {
     "title": "GitHub Action",
+    "titleCiReviews": "CI reviews",
     "subtitle": "Run your agents on pull requests from a workflow in the repository.",
+    "subtitleCiReviews": "Run your agents on pull requests and merge requests from a CI job in the repository.",
     "repoCount": "{count, plural, one {# repo} other {# repos}}",
     "install": "Install in a repo",
     "loading": "Loading installations",
     "empty": "Not installed in any repository yet",
     "loadError": "Could not load the GitHub Action installations",
+    "loadErrorCiReviews": "Could not load the CI installations",
     "retry": "Retry",
     "noRuns": "no runs yet",
     "lastRun": "{status} {time}",
@@ -18,11 +21,13 @@
       "failed": "failed",
       "running": "running",
       "unknown": "unknown status"
-    }
+    },
+    "targetGitlab": "GitLab CI"
   },
   "dialog": {
     "title": "Install in a repo",
     "subtitle": "Opens a pull request that adds the workflow for each selected agent.",
+    "subtitleGitlab": "Opens a merge request that adds the CI job for each selected agent.",
     "repoLabel": "Repository",
     "repoPlaceholder": "Choose a repository",
     "reposLoading": "Loading repositories",
@@ -38,9 +43,19 @@
       "github_hosted": "GitHub-hosted",
       "self_hosted": "Self-hosted (linux x64)"
     },
+    "runnerGitlab": {
+      "legend": "Runner",
+      "github_hosted": "GitLab shared runners",
+      "self_hosted": "Self-managed runner (tag devdigest)"
+    },
     "retry": "Retry",
     "reason": {
       "provider_not_supported": "This agent's provider cannot run in GitHub Actions.",
+      "custom_not_configured": "Custom provider {provider} is not configured",
+      "plugin_disabled": "The plugin of this agent is disabled."
+    },
+    "reasonGitlab": {
+      "provider_not_supported": "This agent's provider cannot run in GitLab CI.",
       "custom_not_configured": "Custom provider {provider} is not configured",
       "plugin_disabled": "The plugin of this agent is disabled."
     },
@@ -61,6 +76,17 @@
       "retryFailed": "Retry failed",
       "cancel": "Cancel",
       "done": "Done"
+    },
+    "notConnectedLegend": "Not connected",
+    "notConnected": "Not connected — add a GitLab connection for {host}",
+    "progressGitlab": {
+      "done": "Merge request opened",
+      "viewPr": "View merge request",
+      "secrets": "CI/CD variables to add (masked, not protected):",
+      "variables": "CI/CD variables to add (visible):",
+      "tokenHint": "{name}: scope api. A project access token with the Reporter role is recommended (on gitlab.com project access tokens need Premium or Ultimate; otherwise use a personal access token of a dedicated user).",
+      "includeHint": "Your project already has {path}. Add this include to it:",
+      "pipelinesMustSucceed": "Enable Settings › Merge requests › Pipelines must succeed to block merges on blockers."
     }
   }
 }

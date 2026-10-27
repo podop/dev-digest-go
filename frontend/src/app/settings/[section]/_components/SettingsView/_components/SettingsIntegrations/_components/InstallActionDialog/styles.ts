@@ -8,6 +8,15 @@ export const s = {
   label: { fontSize: 12.5, fontWeight: 600, color: "var(--text-secondary)", padding: 0 } satisfies CSSProperties,
   muted: { fontSize: 13, color: "var(--text-muted)" } satisfies CSSProperties,
   link: { color: "var(--accent)", fontSize: 13, fontWeight: 500 } satisfies CSSProperties,
+  unavailable: { listStyle: "none", margin: "4px 0 0", padding: 0, display: "flex", flexDirection: "column", gap: 4 } satisfies CSSProperties,
+  unavailableRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "2px 10px",
+    fontSize: 12.5,
+    color: "var(--text-muted)",
+    cursor: "not-allowed",
+  } satisfies CSSProperties,
   agents: {
     listStyle: "none",
     margin: 0,

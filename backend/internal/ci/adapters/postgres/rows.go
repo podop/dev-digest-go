@@ -1,6 +1,8 @@
 // Package postgres is the GORM-backed store of the ci context: the installations of an agent in a
-// repository (ci_installations) and the CI runs ingested from GitHub (ci_runs, plus the
-// agent_runs row each one links to). ci_runs has no workspace column: runs are scoped through
+// repository (ci_installations) and the CI runs ingested from GitHub or GitLab (ci_runs, plus the
+// agent_runs row each one links to). A row's repository identity is host + repo for GitHub and host
+// + project id for GitLab (migration 0012): every GitLab write names its host, every GitHub one
+// names github.com. ci_runs has no workspace column: runs are scoped through
 // their agent_runs row and installations through their agent. Every method takes its handle from
 // platformpg.Conn, so a store called inside Tx.InTx joins the caller's transaction.
 //
@@ -25,7 +27,15 @@ type Store struct {
 	db *gorm.DB
 }
 
-var _ app.Store = (*Store)(nil)
+var (
+	_ app.Store             = (*Store)(nil)
+	_ app.GitLabIngestStore = (*Store)(nil)
+)
+
+// githubHost is the host key of every GitHub row. The columns default to it, but the store names it
+// in every GitHub write and filter, so a GitLab row never shares an identity with a GitHub one
+// (spec C FR39, EC30).
+const githubHost = "github.com"
 
 // NewStore builds a Store on a GORM handle.
 func NewStore(db *gorm.DB) *Store { return &Store{db: db} }
@@ -51,10 +61,18 @@ type installationRow struct {
 	Slug            *string   `gorm:"column:slug"`
 	ManifestVersion *int      `gorm:"column:manifest_version"`
 	Provider        string    `gorm:"column:provider"`
+	Host            string    `gorm:"column:host"`
+	ProjectID       *int64    `gorm:"column:project_id"`
 }
 
 func (r installationRow) toDomain(last *domain.Run) domain.Installation {
+	var projectID int64
+	if r.ProjectID != nil {
+		projectID = *r.ProjectID
+	}
 	return domain.Installation{
+		Host:            r.Host,
+		ProjectID:       projectID,
 		ID:              r.ID,
 		AgentID:         r.AgentID,
 		Repo:            r.Repo,
@@ -78,6 +96,8 @@ type installationInsertRow struct {
 	Slug            string    `gorm:"column:slug"`
 	ManifestVersion int       `gorm:"column:manifest_version"`
 	Provider        string    `gorm:"column:provider"`
+	Host            string    `gorm:"column:host"`
+	ProjectID       *int64    `gorm:"column:project_id"`
 }
 
 func (installationInsertRow) TableName() string { return "ci_installations" }
@@ -100,10 +120,14 @@ type runRow struct {
 	Blockers        *int       `gorm:"column:blockers"`
 	HeadSHA         *string    `gorm:"column:head_sha"`
 	ManifestVersion *int       `gorm:"column:manifest_version"`
+	Host            string     `gorm:"column:host"`
+	PRURL           *string    `gorm:"column:pr_url"`
 }
 
 func (r runRow) toDomain() domain.Run {
 	run := domain.Run{
+		Host:            r.Host,
+		PRURL:           r.PRURL,
 		ID:              r.ID,
 		InstallationID:  r.InstallationID,
 		PRNumber:        r.PRNumber,
@@ -143,6 +167,7 @@ type ciRunInsertRow struct {
 	RunAttempt      int       `gorm:"column:run_attempt"`
 	HeadSHA         string    `gorm:"column:head_sha"`
 	ManifestVersion *int      `gorm:"column:manifest_version"`
+	Host            string    `gorm:"column:host"`
 }
 
 func (ciRunInsertRow) TableName() string { return "ci_runs" }

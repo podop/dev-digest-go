@@ -170,3 +170,60 @@ func TestMonthBoundary_Entry(t *testing.T) {
 		}
 	}
 }
+
+func TestCIDedupeKeyFor(t *testing.T) {
+	tests := []struct {
+		name    string
+		host    string
+		id      int64
+		attempt int
+		want    string
+	}{
+		{"github keeps the original key", "github.com", 123456789, 2, "ci:123456789:2"},
+		{"empty host is a legacy github caller", "", 123456789, 2, "ci:123456789:2"},
+		{"github host is case-insensitive", "GitHub.com", 9_000_000_000_000, 10, "ci:9000000000000:10"},
+		{"gitlab.com", "gitlab.com", 555, 1, "ci:gitlab.com:555:1"},
+		{"self-managed host with port", "GitLab.Example.com:8443", 555, 3, "ci:gitlab.example.com:8443:555:3"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := domain.CIDedupeKeyFor(tc.host, tc.id, tc.attempt); got != tc.want {
+				t.Errorf("CIDedupeKeyFor(%q, %d, %d) = %q, want %q", tc.host, tc.id, tc.attempt, got, tc.want)
+			}
+		})
+	}
+}
+
+// The GitHub key must stay byte-identical to CIDedupeKey: stored ledger rows carry it (SCR1).
+func TestCIDedupeKeyFor_GitHubEqualsLegacyKey(t *testing.T) {
+	for _, host := range []string{"", "github.com"} {
+		for _, id := range []int64{1, 99, 123456789, 9_000_000_000_000} {
+			for _, attempt := range []int{1, 2, 12} {
+				if got, want := domain.CIDedupeKeyFor(host, id, attempt), domain.CIDedupeKey(id, attempt); got != want {
+					t.Errorf("CIDedupeKeyFor(%q, %d, %d) = %q, want %q", host, id, attempt, got, want)
+				}
+			}
+		}
+	}
+}
+
+// EC30: a GitLab job id equal to a GitHub run id, and one id on two GitLab hosts, never collide.
+func TestCIDedupeKeyFor_DistinctAcrossHosts(t *testing.T) {
+	const id, attempt = 4242, 1
+	keys := map[string]string{
+		"github.com":         domain.CIDedupeKeyFor("github.com", id, attempt),
+		"gitlab.com":         domain.CIDedupeKeyFor("gitlab.com", id, attempt),
+		"gitlab.example.com": domain.CIDedupeKeyFor("gitlab.example.com", id, attempt),
+		"other.example.com":  domain.CIDedupeKeyFor("other.example.com", id, attempt),
+	}
+	seen := map[string]string{}
+	for host, key := range keys {
+		if prev, ok := seen[key]; ok {
+			t.Errorf("CIDedupeKeyFor(%q, %d, %d) = %q, same as host %q", host, id, attempt, key, prev)
+		}
+		seen[key] = host
+	}
+	if a, b := domain.CIDedupeKeyFor("gitlab.com", 1, 12), domain.CIDedupeKeyFor("gitlab.com", 11, 2); a == b {
+		t.Errorf("CIDedupeKeyFor(gitlab.com, 1, 12) equals (11, 2): %q", a)
+	}
+}

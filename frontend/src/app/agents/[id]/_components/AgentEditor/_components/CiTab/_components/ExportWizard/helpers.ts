@@ -2,6 +2,8 @@ import type { CiFile } from "@devdigest/shared";
 import { ApiError } from "@/lib/api";
 import { isCustomId } from "@/lib/providers/custom";
 import {
+  GITLAB_JOB_PATH_PATTERN,
+  GITLAB_RUNNER_BUNDLE_PATH,
   RUNNER_BUNDLE_PATH,
   TRIGGERS,
   WORKFLOW_PATH_PATTERN,
@@ -29,17 +31,17 @@ export function withEditedWorkflow(files: readonly CiFile[], edited: string | nu
   return files.map((f) => (f.editable ? { ...f, contents: edited } : f));
 }
 
-/** The agent slug the server chose, read back from the workflow's path; null until files exist. */
+/** The agent slug the server chose, read back from the workflow's (GitHub) or job file's (GitLab) path; null until files exist. */
 export function slugFromFiles(files: readonly CiFile[] | undefined): string | null {
   for (const f of files ?? []) {
-    const m = WORKFLOW_PATH_PATTERN.exec(f.path);
+    const m = WORKFLOW_PATH_PATTERN.exec(f.path) ?? GITLAB_JOB_PATH_PATTERN.exec(f.path);
     if (m?.[1]) return m[1];
   }
   return null;
 }
 
 export function isRunnerBundle(path: string): boolean {
-  return path === RUNNER_BUNDLE_PATH;
+  return path === RUNNER_BUNDLE_PATH || path === GITLAB_RUNNER_BUNDLE_PATH;
 }
 
 export function byteSize(text: string): number {
@@ -103,6 +105,8 @@ export interface CustomInfo {
 
 /** What the workflow needs in the repository settings, from the export response (FR31). */
 export interface Requirements {
+  /** A GitLab export: CI/CD variables instead of Actions secrets, and no `GITHUB_TOKEN`. */
+  gitlab: boolean;
   secrets: readonly string[];
   variables: readonly string[];
   /** Set for a custom-provider agent: its base URL is the value of the variable. */

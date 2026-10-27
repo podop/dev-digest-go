@@ -78,33 +78,46 @@ var (
 // well-formed document within the limits is an error: a syntax error, a second document,
 // duplicate mapping keys, an alias to an unknown, enclosing or over-used anchor, too deep or too
 // large an expansion, or a tag on a collection that does not match its kind.
-func parse(text string) (root value, err error) {
+func parse(text string) (value, error) {
+	root, _, err := parseDocument(text, false)
+	return root, err
+}
+
+// parseDocument is parse with one switch. With allowTags false (the GitHub rules) a tag that gives a
+// collection another kind is a syntax error. With allowTags true (the GitLab rules, whose `include`
+// rule refuses every tag, `!reference` first of all) such a tag is accepted and, like any other
+// explicit tag, reported through tagged: the checker must name the tag, not a syntax error.
+func parseDocument(text string, allowTags bool) (root value, tagged bool, err error) {
 	// yaml.v3 reports malformed input as errors; a panic would be a parser bug on hostile input.
 	// Either way the answer for the caller is the same, so it never escapes this package.
 	defer func() {
 		if r := recover(); r != nil {
-			root, err = nil, fmt.Errorf("parse workflow YAML: %v", r)
+			root, tagged, err = nil, false, fmt.Errorf("parse workflow YAML: %v", r)
 		}
 	}()
 
 	dec := yaml.NewDecoder(strings.NewReader(text))
 	var doc yaml.Node
 	if err := dec.Decode(&doc); err != nil {
-		return nil, fmt.Errorf("parse workflow YAML: %w", err)
+		return nil, false, fmt.Errorf("parse workflow YAML: %w", err)
 	}
 	var extra yaml.Node
 	switch err := dec.Decode(&extra); {
 	case err == nil:
-		return nil, fmt.Errorf("parse workflow YAML: %w: more than one document", errInvalid)
+		return nil, false, fmt.Errorf("parse workflow YAML: %w: more than one document", errInvalid)
 	case !errors.Is(err, io.EOF):
-		return nil, fmt.Errorf("parse workflow YAML: %w", err)
+		return nil, false, fmt.Errorf("parse workflow YAML: %w", err)
 	}
 	if doc.Kind != yaml.DocumentNode || len(doc.Content) != 1 {
-		return nil, fmt.Errorf("parse workflow YAML: %w: no document", errInvalid)
+		return nil, false, fmt.Errorf("parse workflow YAML: %w: no document", errInvalid)
 	}
 
-	c := &converter{anchors: map[*yaml.Node]*anchorData{}, active: map[*yaml.Node]bool{}}
-	return c.node(doc.Content[0], 0)
+	c := &converter{anchors: map[*yaml.Node]*anchorData{}, active: map[*yaml.Node]bool{}, allowTags: allowTags}
+	root, err = c.node(doc.Content[0], 0)
+	if err != nil {
+		return nil, false, err
+	}
+	return root, c.tagged, nil
 }
 
 // anchorData is the bookkeeping of the Node package's alias limit for one anchored node.
@@ -119,6 +132,9 @@ type converter struct {
 	anchors   map[*yaml.Node]*anchorData
 	active    map[*yaml.Node]bool // anchored nodes being converted
 	complexes int
+	// allowTags and tagged: see parseDocument.
+	allowTags bool
+	tagged    bool
 }
 
 func (c *converter) tick() error {
@@ -138,6 +154,9 @@ func (c *converter) node(n *yaml.Node, depth int) (value, error) {
 	}
 	if n.Kind == yaml.AliasNode {
 		return c.alias(n)
+	}
+	if n.Style&yaml.TaggedStyle != 0 {
+		c.tagged = true
 	}
 
 	var data *anchorData
@@ -223,7 +242,7 @@ func (c *converter) aliasCount(n *yaml.Node) (int, error) {
 }
 
 func (c *converter) sequence(n *yaml.Node, depth int) (value, error) {
-	if err := checkCollectionTag(n, "!!seq"); err != nil {
+	if err := c.checkCollectionTag(n, "!!seq"); err != nil {
 		return nil, err
 	}
 	items := make([]value, 0, len(n.Content))
@@ -246,7 +265,7 @@ type dupKey struct {
 }
 
 func (c *converter) mapping(n *yaml.Node, depth int) (value, error) {
-	if err := checkCollectionTag(n, "!!map"); err != nil {
+	if err := c.checkCollectionTag(n, "!!map"); err != nil {
 		return nil, err
 	}
 	obj := &object{vals: map[string]value{}}
@@ -276,9 +295,10 @@ func (c *converter) mapping(n *yaml.Node, depth int) (value, error) {
 
 // checkCollectionTag rejects an explicit tag that gives a collection another kind (!!set, !!omap,
 // a local tag, ...). The Node package would silently read such a node as something else, and a
-// reader that does not (GitHub's) would then see a different document than the rules did.
-func checkCollectionTag(n *yaml.Node, want string) error {
-	if n.Style&yaml.TaggedStyle != 0 && n.Tag != want {
+// reader that does not (GitHub's) would then see a different document than the rules did. With
+// allowTags the caller refuses every tag itself, so the node is read as its own kind.
+func (c *converter) checkCollectionTag(n *yaml.Node, want string) error {
+	if !c.allowTags && n.Style&yaml.TaggedStyle != 0 && n.Tag != want {
 		return fmt.Errorf("%w: tag %q on a collection", errInvalid, n.Tag)
 	}
 	return nil

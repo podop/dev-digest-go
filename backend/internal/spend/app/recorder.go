@@ -99,7 +99,11 @@ type CIRun struct {
 	WorkspaceID string
 	// AgentRunID is the id of the stored run record; it becomes the entry's RefID.
 	AgentRunID string
-	// GithubRunID and Attempt identify the workflow run attempt; they make the dedupe key (FR6).
+	// Host is the repository's host key (lower case, ":port" unless 443). "" and github.com give
+	// the original GitHub key; any other host namespaces the key (FR36, SCR1).
+	Host string
+	// GithubRunID and Attempt identify the run attempt (for GitLab: the job id and its attempt);
+	// with Host they make the dedupe key (FR6, FR36).
 	GithubRunID int64
 	Attempt     int
 	// OccurredAt is the run time the ingest stores for the run.
@@ -121,6 +125,7 @@ func (r *Recorder) RecordCIRun(ctx context.Context, run CIRun) error {
 	if cost != nil && *cost > maxCIRunCost {
 		r.log.WarnContext(context.WithoutCancel(ctx), "cost ledger: ci run reports an implausible cost; recorded as unknown",
 			"workspace_id", run.WorkspaceID,
+			"host", run.Host,
 			"github_run_id", run.GithubRunID,
 			"attempt", run.Attempt,
 		)
@@ -135,7 +140,7 @@ func (r *Recorder) RecordCIRun(ctx context.Context, run CIRun) error {
 		Model:       deref(run.Model),
 		Cost:        cost,
 		RefID:       refID(run.AgentRunID),
-		DedupeKey:   domain.CIDedupeKey(run.GithubRunID, run.Attempt),
+		DedupeKey:   domain.CIDedupeKeyFor(run.Host, run.GithubRunID, run.Attempt),
 	}
 	if _, err := r.entries.Append(ctx, e); err != nil {
 		return fmt.Errorf("record ci run entry: %w", err)

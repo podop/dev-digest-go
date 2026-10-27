@@ -31,7 +31,8 @@ const (
 )
 
 var (
-	targets  = []string{"gha", "circle", "jenkins", "cli"}
+	// targets is CiTarget of the contract, in its order (the issue text of an unknown value lists them).
+	targets  = []string{"gha", "circle", "jenkins", "cli", domain.TargetGitLabCI}
 	actions  = []string{string(domain.ActionOpenPR), string(domain.ActionFiles)}
 	postAses = []string{string(domain.PostAsGitHubReview), string(domain.PostAsPRComment), string(domain.PostAsNone)}
 	runners  = []string{string(domain.RunnerGitHubHosted), string(domain.RunnerSelfHosted)}
@@ -40,8 +41,14 @@ var (
 	jsNumber    = regexp.MustCompile(`^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$`)
 )
 
+// githubHost is the host key of github.com, which the wire omits (refresh) or sends as the default
+// host of a GitHub repository.
+const githubHost = "github.com"
+
 // parseExportBody validates a POST /agents/:id/export-ci body (CiExportBody): repo (non-empty
-// string), target, action, post_as and runner (enums with defaults), triggers (array of strings, default
+// string, required even when repo_id is given), repo_id (optional UUID; it wins over repo in the
+// use case), target (optional enum without a default: omitted, the use case picks it by the
+// repository's host), action, post_as and runner (enums with defaults), triggers (array of strings, default
 // all three), base (string, accepted and dropped: the repository's default branch is used) and
 // workflow (string up to 1,048,576 units, null or absent). Unknown keys are ignored. The default
 // triggers are applied here; the use case checks their values.
@@ -51,7 +58,6 @@ func parseExportBody(body []byte) (app.ExportRequest, []httpx.Issue) {
 		return app.ExportRequest{}, issues
 	}
 	req := app.ExportRequest{
-		Target:   "gha",
 		Action:   domain.ActionOpenPR,
 		PostAs:   domain.PostAsGitHubReview,
 		Runner:   domain.RunnerGitHubHosted,
@@ -65,6 +71,11 @@ func parseExportBody(body []byte) (app.ExportRequest, []httpx.Issue) {
 		issues = append(issues, is...)
 	} else if req.Repo == "" {
 		issues = append(issues, httpx.Issue{Code: httpx.CodeTooSmall, Path: []any{"repo"}, Message: "String must contain at least 1 character(s)"})
+	}
+	if raw, ok := obj["repo_id"]; ok {
+		id, is := readUUID(raw, "repo_id")
+		issues = append(issues, is...)
+		req.RepoID = id
 	}
 	if v, present, is := readEnum(obj, "target", targets); present {
 		issues = append(issues, is...)
@@ -341,6 +352,16 @@ type exportDTO struct {
 	// must add (FR29); always arrays.
 	RequiredSecrets   []string `json:"required_secrets"`
 	RequiredVariables []string `json:"required_variables"`
+	// GitLab is the gitlab_ci object (spec C 7.1): null for every other target.
+	GitLab *gitlabExportDTO `json:"gitlab_ci"`
+}
+
+type gitlabExportDTO struct {
+	JobFile        string  `json:"job_file"`
+	RootConfig     string  `json:"root_config"`
+	ConfigPath     string  `json:"config_path"`
+	IncludeSnippet string  `json:"include_snippet"`
+	TriggersNote   *string `json:"triggers_note"`
 }
 
 type fileDTO struct {
@@ -363,6 +384,10 @@ type installationDTO struct {
 	WorkflowPath    *string    `json:"workflow_path"`
 	ManifestVersion *int       `json:"manifest_version"`
 	LastRun         *runDTO    `json:"last_run"`
+	// Provider ("github" | "gitlab") is the CI platform of the repository, not the agent's LLM
+	// provider; Host is its host key (spec C 7.1).
+	Provider string `json:"provider"`
+	Host     string `json:"host"`
 }
 
 // repoInstallationsDTO is the contract CiRepoInstallations (eval-ci.ts).
@@ -374,6 +399,10 @@ type repoEntryDTO struct {
 	Repo          string                `json:"repo"`
 	Installations []repoInstallationDTO `json:"installations"`
 	LastRun       *repoLastRunDTO       `json:"last_run"`
+	// Provider, Host and TargetType identify the repository of the entry (spec C FR46).
+	Provider   string `json:"provider"`
+	Host       string `json:"host"`
+	TargetType string `json:"target_type"`
 }
 
 type repoInstallationDTO struct {
@@ -413,6 +442,11 @@ type runDTO struct {
 	Blockers        *int        `json:"blockers"`
 	HeadSHA         *string     `json:"head_sha"`
 	ManifestVersion *int        `json:"manifest_version"`
+	// Provider and Host as in installationDTO; PRURL is the merge request link of a GitLab run,
+	// null for GitHub (whose link the UI builds) and for a host that is not connected.
+	Provider string  `json:"provider"`
+	Host     string  `json:"host"`
+	PRURL    *string `json:"pr_url"`
 }
 
 type refreshDTO struct {
@@ -424,6 +458,7 @@ type refreshDTO struct {
 type refreshInstallation struct {
 	InstallationID string       `json:"installation_id"`
 	Repo           string       `json:"repo"`
+	Host           string       `json:"host,omitempty"` // GitLab hosts only: GitHub results keep today's shape
 	State          string       `json:"state"`
 	ErrorCode      string       `json:"error_code,omitempty"`
 	Ingested       int          `json:"ingested"`
@@ -448,6 +483,15 @@ func toExport(e domain.Export) exportDTO {
 		inst := toInstallation(*e.Installation)
 		out.Installation = &inst
 	}
+	if g := e.GitLab; g != nil {
+		out.GitLab = &gitlabExportDTO{
+			JobFile: g.JobFile, RootConfig: string(g.RootConfig), ConfigPath: g.ConfigPath, IncludeSnippet: g.IncludeSnippet,
+		}
+		if g.TriggersNote != "" {
+			note := g.TriggersNote
+			out.GitLab.TriggersNote = &note
+		}
+	}
 	return out
 }
 
@@ -467,8 +511,10 @@ func toInstallation(in domain.Installation) installationDTO {
 		TargetType:      in.TargetType,
 		InstalledAt:     httpx.NewTime(in.InstalledAt),
 		Slug:            in.Slug,
-		WorkflowPath:    domain.WorkflowPathOf(in),
+		WorkflowPath:    installationPath(in),
 		ManifestVersion: in.ManifestVersion,
+		Provider:        platformOf(in.TargetType),
+		Host:            hostOf(in.Host),
 	}
 	if in.LastRun != nil {
 		r := toRun(*in.LastRun)
@@ -477,10 +523,44 @@ func toInstallation(in domain.Installation) installationDTO {
 	return dto
 }
 
+// installationPath is the workflow path of an installation: the GitHub workflow file, or the
+// GitLab job file (spec C FR37); nil for a row without a slug.
+func installationPath(in domain.Installation) *string {
+	if in.TargetType != domain.TargetGitLabCI || in.Slug == nil || *in.Slug == "" {
+		return domain.WorkflowPathOf(in)
+	}
+	p := domain.GitLabJobPath(*in.Slug)
+	return &p
+}
+
+// platformOf is the CI platform of a target type: "gitlab" for gitlab_ci, "github" otherwise (a
+// target type that is not set is a gha installation).
+func platformOf(targetType string) string {
+	if targetType == domain.TargetGitLabCI {
+		return "gitlab"
+	}
+	return "github"
+}
+
+// hostOf is the host key a store reports; "" is github.com.
+func hostOf(host string) string {
+	if host == "" {
+		return githubHost
+	}
+	return host
+}
+
 func toRepoInstallations(groups []domain.RepoGroup) repoInstallationsDTO {
 	out := repoInstallationsDTO{Repos: make([]repoEntryDTO, len(groups))}
 	for i, g := range groups {
-		entry := repoEntryDTO{Repo: g.Repo, Installations: make([]repoInstallationDTO, len(g.Installations))}
+		targetType := g.TargetType
+		if targetType == "" {
+			targetType = domain.TargetGHA
+		}
+		entry := repoEntryDTO{
+			Repo: g.Repo, Installations: make([]repoInstallationDTO, len(g.Installations)),
+			Provider: platformOf(targetType), Host: hostOf(g.Host), TargetType: targetType,
+		}
 		for j, in := range g.Installations {
 			entry.Installations[j] = repoInstallationDTO{
 				ID: in.ID, AgentID: in.AgentID, AgentName: in.AgentName, Slug: in.Slug,
@@ -526,12 +606,23 @@ func toRun(r domain.Run) runDTO {
 		Blockers:        r.Blockers,
 		HeadSHA:         r.HeadSHA,
 		ManifestVersion: r.ManifestVersion,
+		Provider:        platformOfRun(r),
+		Host:            hostOf(r.Host),
+		PRURL:           r.PRURL,
 	}
 	if r.RanAt != nil {
 		t := httpx.NewTime(*r.RanAt)
 		dto.RanAt = &t
 	}
 	return dto
+}
+
+// platformOfRun is "gitlab" for a run ingested from GitLab CI (source gitlab_ci), else "github".
+func platformOfRun(r domain.Run) string {
+	if r.Source != nil && *r.Source == domain.RunSourceGitLab {
+		return "gitlab"
+	}
+	return "github"
 }
 
 func toRefresh(r domain.RefreshResult) refreshDTO {
@@ -543,6 +634,9 @@ func toRefresh(r domain.RefreshResult) refreshDTO {
 			State:          string(in.State),
 			Ingested:       in.Ingested,
 			Skipped:        make([]skippedDTO, len(in.Skipped)),
+		}
+		if in.Host != githubHost {
+			item.Host = in.Host
 		}
 		if in.State == domain.StateError {
 			item.ErrorCode = string(in.ErrorCode)

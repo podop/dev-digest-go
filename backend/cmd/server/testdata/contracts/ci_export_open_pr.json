@@ -31,12 +31,15 @@
       "path": ".github/workflows/devdigest-review-ci-reviewer.yml"
     }
   ],
+  "gitlab_ci": null,
   "installation": {
     "agent_id": "00000000-0000-4000-8000-000000000002",
+    "host": "github.com",
     "id": "00000000-0000-4000-8000-000000000001",
     "installed_at": "2026-01-01T00:00:00.000Z",
     "last_run": null,
     "manifest_version": 2,
+    "provider": "github",
     "repo": "acme/payments-api",
     "slug": "ci-reviewer",
     "target_type": "gha",

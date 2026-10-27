@@ -7,5 +7,6 @@
   "openaiHint": "Used only when an agent or feature uses an OpenAI model.",
   "anthropicLabel": "Anthropic API key",
   "anthropicHint": "Used for Claude-backed agents.",
-  "infoBox": "Keys live in <path>file</path> on this machine. For CI, add the same key as a repository secret — see <github>GitHub Integration</github>."
+  "infoBox": "Keys live in <path>file</path> on this machine. For CI, add the same key as a repository secret — see <github>GitHub Integration</github>.",
+  "infoBoxCiHosts": "Keys live in <path>file</path> on this machine. For CI, add the same key as a repository secret or GitLab CI/CD variable — see <integrations>Integrations</integrations>."
 }

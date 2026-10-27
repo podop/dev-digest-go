@@ -35,7 +35,6 @@ export function ExportWizard({
   const fallback = t("unknownError");
   const { step, openPr } = w;
 
-  const repoNames = (w.repos.data ?? []).map((r) => r.full_name);
   const previewError = w.preview.isError ? describeError(w.preview.error, fallback) : null;
   const installError = openPr.isError ? describeError(openPr.error, fallback) : null;
   const edited = w.edited != null;
@@ -43,6 +42,7 @@ export function ExportWizard({
   // The PR response lists the same names as the preview; either one is the server's answer.
   const exported = openPr.data ?? w.preview.data;
   const requirements: Requirements = {
+    gitlab: w.gitlab,
     secrets: exported?.required_secrets ?? [],
     variables: exported?.required_variables ?? [],
     custom: w.custom,
@@ -91,11 +91,12 @@ export function ExportWizard({
 
         {step === 0 && (
           <TargetStep
-            repoNames={repoNames}
+            repos={w.repos.data ?? []}
             loading={w.repos.isLoading}
             loadFailed={w.repos.isError}
             onRetry={() => w.repos.refetch()}
-            repo={w.repo}
+            repoId={w.repoId}
+            gitlab={w.gitlab}
             onRepoChange={w.chooseRepo}
           />
         )}
@@ -104,6 +105,7 @@ export function ExportWizard({
             loading={w.preview.isLoading}
             error={previewError}
             noTriggers={w.noTriggers}
+            gitlabCi={w.gitlabCi}
             files={w.files}
             selected={w.selectedFile}
             edited={edited}
@@ -114,6 +116,7 @@ export function ExportWizard({
         )}
         {step === 2 && (
           <ConfigureStep
+            gitlab={w.gitlab}
             triggers={w.triggers}
             onToggleTrigger={w.toggleTrigger}
             postAs={w.postAs}
@@ -136,6 +139,8 @@ export function ExportWizard({
             error={installError}
             prDone={installed}
             prUrl={openPr.data?.pr_url ?? null}
+            gitlab={w.gitlab}
+            gitlabCi={w.gitlabCi}
             zipName={w.zipName}
             requirements={requirements}
           />

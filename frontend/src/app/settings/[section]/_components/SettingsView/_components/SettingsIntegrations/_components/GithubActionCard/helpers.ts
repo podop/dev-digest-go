@@ -1,4 +1,4 @@
-import type { CiRepoInstallation, CiRepoLastRun } from "@devdigest/shared";
+import type { CiRepoEntry, CiRepoInstallation, CiRepoLastRun } from "@devdigest/shared";
 import { safeRunHref } from "@/lib/ci-runs";
 
 const MINUTE = 60;
@@ -62,6 +62,16 @@ export function lastRunView(run: CiRepoLastRun | null, now: number = Date.now())
     absolute: new Date(run.ran_at).toLocaleString(),
     href: safeRunHref(run.github_url),
   };
+}
+
+/** Whether the entry is a GitLab CI repository (FR46: `target_type` / `provider`, absent on pre-GitLab payloads). */
+export function isGitLabEntry(entry: Pick<CiRepoEntry, "provider" | "target_type">): boolean {
+  return entry.target_type === "gitlab_ci" || entry.provider === "gitlab";
+}
+
+/** React key of a row: a repository is identified by host + name (two hosts can share a name, FR46). */
+export function entryKey(entry: Pick<CiRepoEntry, "repo" | "host" | "target_type">): string {
+  return `${entry.host ?? ""}|${entry.target_type ?? ""}|${entry.repo}`;
 }
 
 /** The agent editor's CI tab (`/agents/:id?tab=ci`). */

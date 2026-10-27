@@ -2,6 +2,7 @@
   "installations": [
     {
       "agent_id": "00000000-0000-4000-8000-000000000002",
+      "host": "github.com",
       "id": "00000000-0000-4000-8000-000000000001",
       "installed_at": "2026-01-01T00:00:00.000Z",
       "last_run": {
@@ -14,9 +15,12 @@
         "findings_count": 5,
         "github_url": "https://github.com/acme/payments-api/actions/runs/1002",
         "head_sha": "aaa2",
+        "host": "github.com",
         "id": "00000000-0000-4000-8000-000000000003",
         "manifest_version": 2,
         "pr_number": 8,
+        "pr_url": null,
+        "provider": "github",
         "ran_at": "2026-01-01T00:00:00.000Z",
         "repo": "acme/payments-api",
         "source": "gha",
@@ -24,6 +28,7 @@
         "verdict": "blocked"
       },
       "manifest_version": 2,
+      "provider": "github",
       "repo": "acme/payments-api",
       "slug": "alpha-reviewer",
       "target_type": "gha",
@@ -31,6 +36,7 @@
     },
     {
       "agent_id": "00000000-0000-4000-8000-000000000002",
+      "host": "github.com",
       "id": "00000000-0000-4000-8000-000000000004",
       "installed_at": "2026-01-01T00:00:00.000Z",
       "last_run": {
@@ -43,9 +49,12 @@
         "findings_count": 0,
         "github_url": "https://github.com/acme/other-repo/actions/runs/1003",
         "head_sha": "aaa3",
+        "host": "github.com",
         "id": "00000000-0000-4000-8000-000000000005",
         "manifest_version": 1,
         "pr_number": null,
+        "pr_url": null,
+        "provider": "github",
         "ran_at": "2026-01-01T00:00:00.000Z",
         "repo": "acme/other-repo",
         "source": "gha",
@@ -53,6 +62,7 @@
         "verdict": "passed"
       },
       "manifest_version": 1,
+      "provider": "github",
       "repo": "acme/other-repo",
       "slug": "alpha-reviewer",
       "target_type": "gha",

@@ -232,7 +232,7 @@ func wantRunJSON() map[string]any {
 		"id": "run-1", "ci_installation_id": instID, "pr_number": 7.0, "ran_at": "2026-10-20T12:30:15.123Z", "status": "succeeded",
 		"findings_count": 3.0, "cost_usd": 0.0123, "github_url": "https://github.com/acme/widgets/actions/runs/9", "source": "gha",
 		"agent": "Reviewer", "duration_s": 4.321, "agent_id": agentID, "repo": "acme/widgets", "verdict": "blocked", "blockers": 1.0,
-		"head_sha": "abc123", "manifest_version": 2.0,
+		"head_sha": "abc123", "manifest_version": 2.0, "provider": "github", "host": "github.com", "pr_url": nil,
 	}
 }
 
@@ -257,6 +257,7 @@ func TestExport_Statuses(t *testing.T) {
 		"installation": map[string]any{
 			"id": instID, "agent_id": agentID, "repo": "acme/widgets", "target_type": "gha", "installed_at": "2026-10-19T08:00:00.000Z",
 			"slug": "reviewer", "workflow_path": ".github/workflows/devdigest-review-reviewer.yml", "manifest_version": 2.0, "last_run": nil,
+			"provider": "github", "host": "github.com",
 		},
 		"files": []any{
 			map[string]any{"path": ".github/workflows/devdigest-review-reviewer.yml", "contents": "on: x\n", "editable": true},
@@ -265,11 +266,12 @@ func TestExport_Statuses(t *testing.T) {
 		"pr_url":             "https://github.com/acme/widgets/pull/1",
 		"required_secrets":   []any{"DEVDIGEST_MY_GW_API_KEY", "DEVDIGEST_MY_GW_HEADER_1"},
 		"required_variables": []any{"DEVDIGEST_MY_GW_BASE_URL"},
+		"gitlab_ci":          nil,
 	}
 	if diff := cmp.Diff(want, decode(t, r)); diff != "" {
 		t.Errorf("open_pr body mismatch (-want +got):\n%s", diff)
 	}
-	if !strings.HasPrefix(r.Body, `{"installation":{"id":`) || !strings.Contains(r.Body, `"files":[`) || !strings.HasSuffix(strings.TrimSpace(r.Body), `"pr_url":"https://github.com/acme/widgets/pull/1","required_secrets":["DEVDIGEST_MY_GW_API_KEY","DEVDIGEST_MY_GW_HEADER_1"],"required_variables":["DEVDIGEST_MY_GW_BASE_URL"]}`) {
+	if !strings.HasPrefix(r.Body, `{"installation":{"id":`) || !strings.Contains(r.Body, `"files":[`) || !strings.HasSuffix(strings.TrimSpace(r.Body), `"pr_url":"https://github.com/acme/widgets/pull/1","required_secrets":["DEVDIGEST_MY_GW_API_KEY","DEVDIGEST_MY_GW_HEADER_1"],"required_variables":["DEVDIGEST_MY_GW_BASE_URL"],"gitlab_ci":null}`) {
 		t.Errorf("keys are not in contract order: %s", r.Body)
 	}
 
@@ -278,7 +280,7 @@ func TestExport_Statuses(t *testing.T) {
 	if r.Status != http.StatusOK {
 		t.Fatalf("files status = %d, want 200 (%s)", r.Status, r.Body)
 	}
-	if diff := cmp.Diff(map[string]any{"installation": nil, "files": []any{map[string]any{"path": "w", "contents": "c", "editable": true}}, "pr_url": nil, "required_secrets": []any{"OPENAI_API_KEY"}, "required_variables": []any{}}, decode(t, r)); diff != "" {
+	if diff := cmp.Diff(map[string]any{"installation": nil, "files": []any{map[string]any{"path": "w", "contents": "c", "editable": true}}, "pr_url": nil, "required_secrets": []any{"OPENAI_API_KEY"}, "required_variables": []any{}, "gitlab_ci": nil}, decode(t, r)); diff != "" {
 		t.Errorf("files body mismatch (-want +got):\n%s", diff)
 	}
 
@@ -300,25 +302,25 @@ func TestExport_RequestMapping(t *testing.T) {
 		want app.ExportRequest
 	}{
 		{"defaults", `{"repo":"acme/widgets"}`, app.ExportRequest{
-			Repo: "acme/widgets", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
+			Repo: "acme/widgets", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}}},
 		{"all fields", `{"repo":"acme/widgets","target":"gha","action":"files","post_as":"none","runner":"self_hosted","triggers":["reopened","opened"],"base":"x","workflow":"on: y\n","extra":1}`, app.ExportRequest{
 			Repo: "acme/widgets", Target: "gha", Action: domain.ActionFiles, PostAs: domain.PostAsNone, Runner: domain.RunnerSelfHosted,
 			Triggers: []string{"reopened", "opened"}, Workflow: ptr("on: y\n")}},
 		{"runner github_hosted", `{"repo":"r","runner":"github_hosted"}`, app.ExportRequest{
-			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
+			Repo: "r", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}}},
 		{"null workflow", `{"repo":"r","workflow":null}`, app.ExportRequest{
-			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
+			Repo: "r", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}}},
 		{"empty workflow stays empty", `{"repo":"r","workflow":""}`, app.ExportRequest{
-			Repo: "r", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
+			Repo: "r", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}, Workflow: ptr("")}},
 		{"unsupported target reaches the use case", `{"repo":"r","target":"circle"}`, app.ExportRequest{
 			Repo: "r", Target: "circle", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{"opened", "synchronize", "reopened"}}},
 		{"empty triggers reach the use case", `{"repo":" a/b/c ","triggers":[]}`, app.ExportRequest{
-			Repo: " a/b/c ", Target: "gha", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
+			Repo: " a/b/c ", Action: domain.ActionOpenPR, PostAs: domain.PostAsGitHubReview, Runner: domain.RunnerGitHubHosted,
 			Triggers: []string{}}},
 	}
 	for _, tc := range tests {
@@ -354,7 +356,7 @@ func TestExport_ValidationIssues(t *testing.T) {
 		{"enum wrong type", `{"repo":"a/b","post_as":1}`, []issueDetail{{"invalid_type", "/post_as", "Expected 'github_review' | 'pr_comment' | 'none', received number"}}},
 		{"runner enum", `{"repo":"a/b","runner":"windows"}`, []issueDetail{{"invalid_enum_value", "/runner", "Invalid enum value. Expected 'github_hosted' | 'self_hosted', received 'windows'"}}},
 		{"runner wrong type", `{"repo":"a/b","runner":1}`, []issueDetail{{"invalid_type", "/runner", "Expected 'github_hosted' | 'self_hosted', received number"}}},
-		{"target null", `{"repo":"a/b","target":null}`, []issueDetail{{"invalid_type", "/target", "Expected 'gha' | 'circle' | 'jenkins' | 'cli', received null"}}},
+		{"target null", `{"repo":"a/b","target":null}`, []issueDetail{{"invalid_type", "/target", "Expected 'gha' | 'circle' | 'jenkins' | 'cli' | 'gitlab_ci', received null"}}},
 		{"triggers not array", `{"repo":"a/b","triggers":"opened"}`, []issueDetail{{"invalid_type", "/triggers", "Expected array, received string"}}},
 		{"trigger element", `{"repo":"a/b","triggers":["opened",1]}`, []issueDetail{{"invalid_type", "/triggers/1", "Expected string, received number"}}},
 		{"base type", `{"repo":"a/b","base":false}`, []issueDetail{{"invalid_type", "/base", "Expected string, received boolean"}}},
@@ -483,10 +485,12 @@ func TestInstallations(t *testing.T) {
 		map[string]any{
 			"id": instID, "agent_id": agentID, "repo": "acme/widgets", "target_type": "gha", "installed_at": "2026-10-19T08:00:00.000Z",
 			"slug": "reviewer", "workflow_path": ".github/workflows/devdigest-review-reviewer.yml", "manifest_version": 2.0, "last_run": wantRunJSON(),
+			"provider": "github", "host": "github.com",
 		},
 		map[string]any{
 			"id": "old", "agent_id": agentID, "repo": "acme/old", "target_type": "gha", "installed_at": "2026-10-19T08:00:00.000Z",
 			"slug": nil, "workflow_path": nil, "manifest_version": nil, "last_run": nil,
+			"provider": "github", "host": "github.com",
 		},
 	}}
 	if diff := cmp.Diff(want, decode(t, r)); diff != "" {
@@ -522,6 +526,7 @@ func TestRuns_QueryAndShape(t *testing.T) {
 		"id": "run-2", "ci_installation_id": nil, "pr_number": nil, "ran_at": nil, "status": "failed", "findings_count": nil, "cost_usd": nil,
 		"github_url": "https://github.com/acme/gone/actions/runs/1", "source": nil, "agent": nil, "duration_s": nil, "agent_id": nil,
 		"repo": "acme/gone", "verdict": nil, "blockers": nil, "head_sha": nil, "manifest_version": nil,
+		"provider": "github", "host": "github.com", "pr_url": nil,
 	}
 	if diff := cmp.Diff(map[string]any{"runs": []any{wantRunJSON(), wantFailed}}, decode(t, r)); diff != "" {
 		t.Errorf("body mismatch (-want +got):\n%s", diff)
@@ -767,7 +772,7 @@ func TestRepoInstallations_Shape(t *testing.T) {
 	}
 	want := map[string]any{"repos": []any{
 		map[string]any{
-			"repo": "acme/api",
+			"repo": "acme/api", "provider": "github", "host": "github.com", "target_type": "gha",
 			"installations": []any{
 				map[string]any{"id": instID, "agent_id": agentID, "agent_name": "alpha", "slug": "alpha", "installed_at": "2026-10-19T08:00:00.000Z"},
 				map[string]any{"id": "i2", "agent_id": "a2", "agent_name": "beta", "slug": nil, "installed_at": "2026-10-19T08:00:00.000Z"},
@@ -778,14 +783,14 @@ func TestRepoInstallations_Shape(t *testing.T) {
 			},
 		},
 		map[string]any{
-			"repo": "acme/web",
+			"repo": "acme/web", "provider": "github", "host": "github.com", "target_type": "gha",
 			"installations": []any{
 				map[string]any{"id": "i3", "agent_id": agentID, "agent_name": "alpha", "slug": nil, "installed_at": "2026-10-19T08:00:00.000Z"},
 			},
 			"last_run": nil,
 		},
 		map[string]any{
-			"repo": "acme/bare",
+			"repo": "acme/bare", "provider": "github", "host": "github.com", "target_type": "gha",
 			"installations": []any{
 				map[string]any{"id": "i4", "agent_id": agentID, "agent_name": "alpha", "slug": nil, "installed_at": "2026-10-19T08:00:00.000Z"},
 			},

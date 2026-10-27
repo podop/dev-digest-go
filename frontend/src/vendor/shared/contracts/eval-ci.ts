@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import { Verdict, Finding } from './findings.js';
 import { EvalRun, EvalOwnerKind, Conformance, Provider, CiFailOn, ModelPricing } from './knowledge.js';
-import { CustomProviderAuthMode, CustomProviderProtocol, CustomProviderStructuredOutput } from './platform.js';
+import {
+  CustomProviderAuthMode,
+  CustomProviderProtocol,
+  CustomProviderStructuredOutput,
+  RepoProvider,
+} from './platform.js';
 
 /**
  * A4 — Eval / CI / Compose / Conformance API contracts (L06).
@@ -131,7 +136,7 @@ export type ComposeReviewPreview = z.infer<typeof ComposeReviewPreview>;
 // Export-to-CI + CI Runs
 // ===========================================================================
 
-export const CiTarget = z.enum(['gha', 'circle', 'jenkins', 'cli']);
+export const CiTarget = z.enum(['gha', 'circle', 'jenkins', 'cli', 'gitlab_ci']);
 export type CiTarget = z.infer<typeof CiTarget>;
 
 /** One generated file in the CI bundle (path + editable contents). */
@@ -193,7 +198,10 @@ export type AgentManifestInput = z.input<typeof AgentManifest>;
 /** Request body for `POST /agents/:id/export-ci`. */
 export const CiExportInput = z.object({
   repo: z.string().min(1), // "owner/name"
-  target: CiTarget.default('gha'),
+  /** UUID of a repository of the workspace; wins over `repo` (GitLab C FR1). */
+  repo_id: z.string().uuid().optional(),
+  /** Omitted → by the repository host: `gha` for GitHub, `gitlab_ci` for GitLab (GitLab C FR2). */
+  target: CiTarget.optional(),
   /** "open_pr" opens a PR with the files; "files" just returns/persists them. */
   action: z.enum(['open_pr', 'files']).default('open_pr'),
   post_as: z.enum(['github_review', 'pr_comment', 'none']).default('github_review'),
@@ -233,6 +241,11 @@ export const CiRun = z.object({
   blockers: z.number().int().nullish(),
   head_sha: z.string().nullish(),
   manifest_version: z.number().int().nullish(),
+  // GitLab C FR37 — always sent by the Go API. GitLab: `github_run_id` = job id, `github_url` = job URL.
+  provider: RepoProvider.optional(),
+  host: z.string().optional(),
+  /** GitLab: the merge request URL; null for GitHub (the UI builds that link) and for a host not connected. */
+  pr_url: z.string().nullish(),
 });
 export type CiRun = z.infer<typeof CiRun>;
 
@@ -248,6 +261,9 @@ export const CiInstallation = z.object({
   workflow_path: z.string().nullish(),
   manifest_version: z.number().int().nullish(),
   last_run: CiRun.nullish(),
+  // GitLab C FR37 — always sent by the Go API.
+  provider: RepoProvider.optional(),
+  host: z.string().optional(),
 });
 export type CiInstallation = z.infer<typeof CiInstallation>;
 
@@ -276,6 +292,10 @@ export const CiRepoEntry = z.object({
   repo: z.string(),
   installations: z.array(CiRepoInstallation),
   last_run: CiRepoLastRun.nullable(),
+  // GitLab C FR46 — always sent by the Go API; entries are grouped by repository identity.
+  provider: RepoProvider.optional(),
+  host: z.string().optional(),
+  target_type: CiTarget.optional(),
 });
 export type CiRepoEntry = z.infer<typeof CiRepoEntry>;
 
@@ -295,6 +315,19 @@ export const CiExport = z.object({
   required_secrets: z.array(z.string()).default([]),
   /** Names of the repository Actions variables the workflow needs. */
   required_variables: z.array(z.string()).default([]),
+  /** Present (non-null) only for target `gitlab_ci` (GitLab C §7.1). */
+  gitlab_ci: z
+    .object({
+      /** `.gitlab/devdigest/review-<slug>.yml`. */
+      job_file: z.string(),
+      root_config: z.enum(['create', 'keep_existing', 'custom_path']),
+      /** `.gitlab-ci.yml` or the project's `ci_config_path`. */
+      config_path: z.string(),
+      /** `include:\n  - local: .gitlab/devdigest/review-<slug>.yml\n`. */
+      include_snippet: z.string(),
+      triggers_note: z.string().nullable(),
+    })
+    .nullish(),
 });
 export type CiExport = z.infer<typeof CiExport>;
 
@@ -348,9 +381,20 @@ export const CiRefreshResult = z.object({
     z.object({
       installation_id: z.string(),
       repo: z.string(),
+      /** GitLab C §7.1 — the installation's host. */
+      host: z.string().optional(),
       state: z.enum(['ok', 'not_installed', 'error', 'not_checked']),
       error_code: z
-        .enum(['github_permission_denied', 'github_rate_limited', 'github_unavailable'])
+        .enum([
+          'github_permission_denied',
+          'github_rate_limited',
+          'github_unavailable',
+          'gitlab_permission_denied',
+          'gitlab_rate_limited',
+          'gitlab_unavailable',
+          'repo_host_not_connected',
+          'gitlab_token_missing',
+        ])
         .optional(),
       ingested: z.number().int(),
       skipped: z.array(z.object({ github_run_id: z.number().int(), reason: CiRefreshSkipReason })),

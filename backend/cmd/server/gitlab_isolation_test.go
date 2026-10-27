@@ -528,17 +528,25 @@ func TestGitLabIsolation_AC22_GitLabPRFeaturesNeverReachGitHub(t *testing.T) {
 	}
 	glBefore, ghBefore = e.lookups()
 
-	t.Run("CI export of a GitLab-only name is unsupported_host", func(t *testing.T) {
+	t.Run("CI export of a GitLab-only name is the GitLab export and sends no GitHub request", func(t *testing.T) {
 		agent := cxAgent(t, e.s, "gi-agent", "openrouter", ciModel)
-		for _, action := range []string{"files", "open_pr"} {
-			resp := e.s.post("/agents/"+agent+"/export-ci", ciExportBody(giPath, action, nil))
-			if resp.Status != http.StatusUnprocessableEntity || resp.errorCode(t) != "unsupported_host" ||
-				message(t, resp) != "GitLab CI export is not available yet" {
-				t.Errorf("export-ci %s of the GitLab-only %s = %d %s, want 422 unsupported_host", action, giPath, resp.Status, resp.Body)
-			}
+		// GitLab C: the repository is found on the GitLab host, whose connection is set, so the
+		// export is supported (the former 422 unsupported_host is gone). The open_pr sequence is
+		// covered by the GitLab CI export component tests.
+		resp := e.s.post("/agents/"+agent+"/export-ci", ciExportBody(giPath, "files", nil))
+		if resp.Status != http.StatusOK {
+			t.Fatalf("export-ci files of the GitLab-only %s = %d %s, want 200", giPath, resp.Status, resp.Body)
 		}
-		if gl, gh := e.lookups(); gl != glBefore || gh != ghBefore {
-			t.Errorf("the refused export sent %d GitLab and %d GitHub request(s), want none", gl-glBefore, gh-ghBefore)
+		var files struct {
+			GitLabCI *struct {
+				JobFile string `json:"job_file"`
+			} `json:"gitlab_ci"`
+		}
+		if err := json.Unmarshal(resp.Body, &files); err != nil || files.GitLabCI == nil {
+			t.Errorf("export-ci files of the GitLab-only %s = %s (%v), want a gitlab_ci block", giPath, resp.Body, err)
+		}
+		if _, gh := e.lookups(); gh != ghBefore {
+			t.Errorf("the GitLab export sent %d GitHub request(s), want none", gh-ghBefore)
 		}
 
 		// A GitHub repository of the same name is the one exported.

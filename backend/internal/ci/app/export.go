@@ -21,7 +21,7 @@ const (
 	codeProviderNotConfigured = "provider_not_configured"
 	codeInvalidTriggers       = "invalid_triggers"
 	codeRepoNotFound          = "repo_not_found"
-	codeUnsupportedHost       = "unsupported_host"
+	codeRepoAmbiguous         = "repo_ambiguous"
 	codeSlugConflict          = "ci_slug_conflict"
 	codeSkillSlugConflict     = "skill_slug_conflict"
 	codeWorkflowInsecure      = "workflow_insecure"
@@ -33,8 +33,6 @@ const (
 
 	msgRunnerMissing = "The runner binary is missing: rebuild the backend image (docker compose build backend)"
 	msgNoToken       = "GITHUB_TOKEN is not configured"
-	// msgUnsupportedHost is the 422 text for a GitLab repository (FR29); GitLab CI is slice C.
-	msgUnsupportedHost = "GitLab CI export is not available yet"
 )
 
 // ExportDeps are the ports of ExportService; every field except Log is required.
@@ -50,6 +48,15 @@ type ExportDeps struct {
 	// Prices is the price book for the `pricing` key of openai / anthropic manifests (FR35); nil =
 	// no built-in model has a price.
 	Prices ModelPrices
+	// GitLabConns, Clones and GitLab serve a gitlab_ci export (GitLab C). A nil GitLabConns makes
+	// every GitLab repository not connected (422 repo_host_not_connected); a nil Clones means no
+	// repository has a clone; a nil GitLab fails an open_pr of a GitLab repository with 500.
+	GitLabConns GitLabConns
+	Clones      CloneFiles
+	GitLab      GitLabPublisher
+	// RetryPause waits between the two attempts of a GitLab publish sequence (A4); nil waits
+	// 500 ms. It returns the context's error when ctx ends first.
+	RetryPause func(ctx context.Context) error
 	// Log receives the content-free publish failure line; nil discards it.
 	Log *slog.Logger
 }
@@ -89,7 +96,7 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 		return domain.Export{}, apperr.Conflict(fmt.Sprintf("Agent %q belongs to the disabled plugin %q", agent.Name, p.Name)).
 			WithCode(CodePluginDisabled)
 	}
-	if req.Target != domain.TargetGHA {
+	if req.Target != "" && req.Target != domain.TargetGHA && req.Target != domain.TargetGitLabCI {
 		return domain.Export{}, apperr.Validation("Only GitHub Actions can be exported").WithCode(codeUnsupportedTarget)
 	}
 	prov, err := s.resolveProvider(ctx, workspaceID, &agent)
@@ -100,17 +107,18 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 	if !ok {
 		return domain.Export{}, apperr.Validation("Select at least one valid pull_request trigger").WithCode(codeInvalidTriggers)
 	}
-	repo, ok, err := s.d.Repos.FindByFullName(ctx, workspaceID, req.Repo)
-	if errors.Is(err, ErrUnsupportedHost) {
-		// Before any GitHub call: a GitLab repository never causes a GitHub request (FR29).
-		return domain.Export{}, apperr.Validation(msgUnsupportedHost).WithCode(codeUnsupportedHost)
-	}
+	located, err := s.findRepo(ctx, workspaceID, req)
 	if err != nil {
-		return domain.Export{}, fmt.Errorf("find repository: %w", err)
+		return domain.Export{}, err
 	}
-	if !ok {
-		return domain.Export{}, apperr.NotFound("Repository is not imported in this workspace").WithCode(codeRepoNotFound)
+	target, err := targetFor(req.Target, located)
+	if err != nil {
+		return domain.Export{}, err
 	}
+	if target == domain.TargetGitLabCI {
+		return s.exportGitLab(ctx, workspaceID, agent, located, prov, triggers, req)
+	}
+	repo := domain.ImportedRepo{Owner: located.Owner, Name: located.Name, FullName: located.FullName, DefaultBranch: located.DefaultBranch}
 
 	slug, err := s.slugFor(ctx, workspaceID, agent, repo)
 	if err != nil {
@@ -130,27 +138,11 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 		return domain.Export{}, apperr.Internal(msgRunnerMissing).WithCode(codeRunnerMissing)
 	}
 
-	slugs := make([]string, len(skills))
-	for i, sk := range skills {
-		slugs[i] = sk.slug
-	}
-	s.priceBuiltIn(&agent)
-	manifest, err := domain.BuildManifest(agent, slugs)
+	files, err := s.baseFiles(&agent, skills, slug, runner)
 	if err != nil {
-		return domain.Export{}, manifestError(err)
+		return domain.Export{}, err
 	}
-
-	files := make([]domain.File, 0, len(skills)+5)
-	files = append(files, domain.File{Path: domain.ManifestPath(slug), Contents: manifest.YAML()})
-	for _, sk := range skills {
-		files = append(files, domain.File{Path: domain.SkillPath(sk.slug), Contents: sk.body})
-	}
-	files = append(files,
-		domain.File{Path: domain.MemoryPath},
-		domain.File{Path: domain.RunnerPath, Contents: runner.Encoded},
-		domain.File{Path: domain.RunnerSumPath, Contents: domain.RunnerSumFile(runner.SHA256)},
-		domain.File{Path: domain.WorkflowPath(slug), Contents: workflow, Editable: true},
-	)
+	files = append(files, domain.File{Path: domain.WorkflowPath(slug), Contents: workflow, Editable: true})
 	required := domain.Export{
 		Files:             files,
 		RequiredSecrets:   domain.RequiredSecrets(agent.Provider, prov.keyConfigured, prov.headerCount),
@@ -186,6 +178,31 @@ func (s *ExportService) Export(ctx context.Context, workspaceID, agentID string,
 	}
 	required.Installation, required.PRURL = &inst, &prURL
 	return required, nil
+}
+
+// baseFiles are the files both targets share, in order: the manifest, the skills, the memory and
+// the runner with its checksum. It prices a built-in model first (FR35) and refuses an agent that
+// cannot be a manifest (422 manifest_invalid).
+func (s *ExportService) baseFiles(agent *domain.ExportAgent, skills []skillFile, slug string, runner RunnerArtifact) ([]domain.File, error) {
+	slugs := make([]string, len(skills))
+	for i, sk := range skills {
+		slugs[i] = sk.slug
+	}
+	s.priceBuiltIn(agent)
+	manifest, err := domain.BuildManifest(*agent, slugs)
+	if err != nil {
+		return nil, manifestError(err)
+	}
+	files := make([]domain.File, 0, len(skills)+6)
+	files = append(files, domain.File{Path: domain.ManifestPath(slug), Contents: manifest.YAML()})
+	for _, sk := range skills {
+		files = append(files, domain.File{Path: domain.SkillPath(sk.slug), Contents: sk.body})
+	}
+	return append(files,
+		domain.File{Path: domain.MemoryPath},
+		domain.File{Path: domain.RunnerPath, Contents: runner.Encoded},
+		domain.File{Path: domain.RunnerSumPath, Contents: domain.RunnerSumFile(runner.SHA256)},
+	), nil
 }
 
 // providerInfo is what the provider step learned for the rest of the export.

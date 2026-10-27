@@ -135,6 +135,21 @@ describe("SettingsApiKeys", () => {
     expect(within(box).getByRole("link", { name: "GitHub Integration" })).toHaveAttribute("href", "/settings/github");
   });
 
+  it("names GitLab CI/CD variables and links Integrations once a GitLab repository exists (GitLab C FR47, AC42, SCR5)", async () => {
+    stubApi({ "GET /repos": [{ id: "r2", full_name: "acme/platform/api", provider: "gitlab", host: "gitlab.com" }] });
+    renderWithProviders(<SettingsApiKeys />);
+
+    const box = await screen.findByText(/Keys live in/);
+    await waitFor(() =>
+      expect(box).toHaveTextContent(
+        "For CI, add the same key as a repository secret or GitLab CI/CD variable — see Integrations.",
+      ),
+    );
+    expect(box).toHaveTextContent(`Keys live in ${SECRETS_FILE} on this machine.`);
+    expect(within(box).getByRole("link", { name: "Integrations" })).toHaveAttribute("href", "/settings/integrations");
+    expect(within(box).queryByRole("link", { name: "GitHub Integration" })).toBeNull();
+  });
+
   it("shows the custom providers block below the built-in rows, above the default model (FR16, AC21)", async () => {
     stubApi({
       "GET /settings/custom-providers": [
@@ -185,5 +200,13 @@ describe("SettingsApiKeys", () => {
     expect(screen.getByText("⟦customProviders.empty⟧")).toBeInTheDocument();
     expect(screen.getAllByText("⟦keyField.badge.notConnected⟧")).toHaveLength(2);
     expect(screen.getByText("⟦keyField.optional⟧")).toBeInTheDocument();
+  });
+
+  it("takes the GitLab CI copy of the info box from the message files too (pseudo bundle, GitLab C AC43)", async () => {
+    stubApi({ "GET /repos": [{ id: "r2", full_name: "acme/platform/api", provider: "gitlab", host: "gitlab.com" }] });
+    const { container } = renderWithProviders(<SettingsApiKeys />, { messages: pseudoMessages() });
+    await screen.findByText("⟦apiKeys.infoBoxCiHosts⟧");
+    await screen.findAllByText("⟦keyField.badge.connected⟧");
+    expect(strayText(container)).toEqual([]);
   });
 });

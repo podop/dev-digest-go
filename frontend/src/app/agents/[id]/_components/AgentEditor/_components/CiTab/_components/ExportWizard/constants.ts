@@ -38,3 +38,9 @@ export const RUNNER_OPTIONS: readonly { value: Runner; labelKey: "githubHosted" 
 /** Paths the export always contains (FR6). */
 export const RUNNER_BUNDLE_PATH = ".devdigest/runner/index.js";
 export const WORKFLOW_PATH_PATTERN = /^\.github\/workflows\/devdigest-review-(.+)\.yml$/;
+
+/** GitLab CI export (GitLab C FR6, FR41): the editable job file and the read-only runner bundle (large base64, never rendered). */
+export const GITLAB_JOB_PATH_PATTERN = /^\.gitlab\/devdigest\/review-(.+)\.yml$/;
+export const GITLAB_RUNNER_BUNDLE_PATH = ".devdigest/runner/devdigest-runner-linux-amd64.gz.b64";
+/** The posting token the GitLab job reads; listed by the server in `required_secrets` unless "Don't post" (FR43). */
+export const GITLAB_TOKEN_VARIABLE = "DEVDIGEST_GITLAB_TOKEN";

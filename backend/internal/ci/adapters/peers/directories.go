@@ -2,13 +2,18 @@ package peers
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	agentsdomain "dev-digest-go/backend/internal/agents/domain"
 	"dev-digest-go/backend/internal/ci/app"
 	"dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/platform/apperr"
 	"dev-digest-go/backend/internal/platform/codehost"
+	glclient "dev-digest-go/backend/internal/platform/gitlab"
+	reposapp "dev-digest-go/backend/internal/repos/app"
 	reposdomain "dev-digest-go/backend/internal/repos/domain"
 	skillsdomain "dev-digest-go/backend/internal/skills/domain"
 )
@@ -102,37 +107,147 @@ func isNotFound(err error) bool {
 	return ok && ae.Kind == apperr.KindNotFound
 }
 
+// RepoPathStore stores a GitLab project's current path on its repository (spec A FR47). The repos
+// context's store implements it; a path another repository of the workspace and host already holds
+// is not stored and that repository's id comes back as skippedFor.
+type RepoPathStore interface {
+	UpdatePath(ctx context.Context, workspaceID, id string, p reposapp.ProjectPath) (skippedFor string, err error)
+}
+
 // Repos implements app.RepoDirectory over the repos use cases.
-type Repos struct{ repos RepoService }
+type Repos struct {
+	repos   RepoService
+	paths   RepoPathStore
+	resolve glclient.ResolveFunc
+	log     *slog.Logger
+}
 
 var _ app.RepoDirectory = (*Repos)(nil)
 
-// NewRepos builds the directory.
-func NewRepos(repos RepoService) *Repos { return &Repos{repos: repos} }
+// NewRepos builds the directory. Without WithGitLab it cannot follow a GitLab path.
+func NewRepos(repos RepoService) *Repos {
+	return &Repos{repos: repos, log: slog.New(slog.DiscardHandler)}
+}
 
-// FindByFullName matches the exact "owner/name" among the workspace's GitHub repositories (host
-// github.com); GitHub is the only CI export target in slice A. A name that only a GitLab
-// repository carries answers app.ErrUnsupportedHost, so the export never picks a same-named
-// GitLab project (FR29, EC25). With both, the GitHub repository is used.
-func (d *Repos) FindByFullName(ctx context.Context, workspaceID, fullName string) (domain.ImportedRepo, bool, error) {
+// WithGitLab enables FollowGitLabPath: paths stores the path, resolve finds the connection whose
+// base URL the stored web address is built from (never from a GitLab response). log receives the
+// one warning of a skipped path; nil discards. It returns d.
+func (d *Repos) WithGitLab(paths RepoPathStore, resolve glclient.ResolveFunc, log *slog.Logger) *Repos {
+	d.paths, d.resolve = paths, resolve
+	if log != nil {
+		d.log = log
+	}
+	return d
+}
+
+// Find resolves q (spec C FR1). A non-empty ID wins: that repository of the workspace on any host,
+// false when it is not in the workspace. Otherwise the exact FullName: a GitHub repository wins;
+// else the one GitLab repository; GitLab repositories on several hosts are an
+// *app.AmbiguousRepoError (their ids in list order); none is false. A GitLab repository is
+// returned whether or not its host has a connection.
+func (d *Repos) Find(ctx context.Context, workspaceID string, q app.RepoQuery) (app.ExportRepo, bool, error) {
 	list, err := d.repos.List(ctx, workspaceID)
 	if err != nil {
-		return domain.ImportedRepo{}, false, fmt.Errorf("list repos: %w", err)
+		return app.ExportRepo{}, false, fmt.Errorf("list repos: %w", err)
 	}
-	otherHost := false
+	if q.ID != "" {
+		for _, r := range list {
+			if r.ID == q.ID {
+				return exportRepo(r), true, nil
+			}
+		}
+		return app.ExportRepo{}, false, nil
+	}
+	var gitlab []reposdomain.Repo
 	for _, r := range list {
-		if r.FullName != fullName {
+		if r.FullName != q.FullName {
 			continue
 		}
 		if isGitHub(r) {
-			return domain.ImportedRepo{Owner: r.Owner, Name: r.Name, FullName: r.FullName, DefaultBranch: r.DefaultBranch}, true, nil
+			return exportRepo(r), true, nil
 		}
-		otherHost = true
+		if r.Provider == codehost.GitLab {
+			gitlab = append(gitlab, r)
+		}
 	}
-	if otherHost {
-		return domain.ImportedRepo{}, false, app.ErrUnsupportedHost
+	switch len(gitlab) {
+	case 0:
+		return app.ExportRepo{}, false, nil
+	case 1:
+		return exportRepo(gitlab[0]), true, nil
 	}
-	return domain.ImportedRepo{}, false, nil
+	ids := make([]string, len(gitlab))
+	for i, r := range gitlab {
+		ids[i] = r.ID
+	}
+	return app.ExportRepo{}, false, &app.AmbiguousRepoError{IDs: ids}
+}
+
+// FollowGitLabPath stores the project's current path_with_namespace and the web address built from
+// the connection on the repository (spec A FR47) and returns the repository as stored afterwards. A
+// path another repository of the workspace holds is not stored: one warning, the repository comes
+// back unchanged. A path that is not a plain GitLab path (codehost.ProjectRef), a repository that
+// is not a GitLab one and a missing connection are errors.
+func (d *Repos) FollowGitLabPath(ctx context.Context, workspaceID string, repo app.ExportRepo, pathWithNamespace string) (app.ExportRepo, error) {
+	if repo.Provider != app.ProviderGitLab {
+		return app.ExportRepo{}, errors.New("not a gitlab repository")
+	}
+	owner, name, err := ownerName(pathWithNamespace)
+	if err != nil {
+		return app.ExportRepo{}, err
+	}
+	if repo.FullName == pathWithNamespace && repo.WebURL != "" {
+		return repo, nil
+	}
+	if d.paths == nil || d.resolve == nil {
+		return app.ExportRepo{}, errors.New("gitlab path following is not configured")
+	}
+	b, ok, err := d.resolve(ctx, repo.Host)
+	if err != nil {
+		return app.ExportRepo{}, fmt.Errorf("resolve gitlab connection: %w", err)
+	}
+	if !ok {
+		return app.ExportRepo{}, errors.New("gitlab connection of the repository is gone")
+	}
+	p := reposapp.ProjectPath{
+		FullName: pathWithNamespace, Owner: owner, Name: name, WebURL: codehost.WebURL(b.BaseURL, pathWithNamespace),
+	}
+	heldBy, err := d.paths.UpdatePath(ctx, workspaceID, repo.ID, p)
+	if err != nil {
+		return app.ExportRepo{}, fmt.Errorf("update path of repo %s: %w", repo.ID, err)
+	}
+	if heldBy != "" {
+		d.log.WarnContext(ctx, "gitlab project path not stored: another repo of the workspace has it",
+			"repo", repo.ID, "other", heldBy, "host", repo.Host)
+		return repo, nil
+	}
+	repo.FullName, repo.Owner, repo.Name, repo.WebURL = p.FullName, p.Owner, p.Name, p.WebURL
+	return repo, nil
+}
+
+// ownerName splits a path_with_namespace after the plain-path check of the add.
+func ownerName(full string) (owner, name string, err error) {
+	i := strings.LastIndex(full, "/")
+	if i < 0 {
+		return "", "", codehost.ErrInvalidProjectPath
+	}
+	return codehost.ProjectRef(full, full[i+1:], "")
+}
+
+// exportRepo maps a repository of the repos context. A row that predates the provider columns is
+// a GitHub one.
+func exportRepo(r reposdomain.Repo) app.ExportRepo {
+	out := app.ExportRepo{
+		ID: r.ID, Provider: app.ProviderGitHub, Host: codehost.GitHubHost,
+		Owner: r.Owner, Name: r.Name, FullName: r.FullName, DefaultBranch: r.DefaultBranch,
+	}
+	if r.ClonePath != nil {
+		out.ClonePath = *r.ClonePath
+	}
+	if r.Provider == codehost.GitLab {
+		out.Provider, out.Host, out.ProjectID, out.WebURL = app.ProviderGitLab, r.Host, r.ProjectID, r.WebURL
+	}
+	return out
 }
 
 // isGitHub reports whether the repository is on github.com; an empty provider is a GitHub row

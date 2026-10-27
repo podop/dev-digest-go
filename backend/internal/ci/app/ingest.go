@@ -25,6 +25,9 @@ type IngestDeps struct {
 	// that stores the run; nil = ledger off. Tx is required whenever Ledger is set.
 	Ledger Ledger
 	Tx     Tx
+	// GitLab holds the ports of the GitLab CI ingest (FR31-FR36); the zero value leaves GitLab
+	// installations out of a refresh. Its Ledger, when set, needs Tx as well.
+	GitLab GitLabIngestDeps
 	// Clock measures the refresh budget and stands in for an unparsable run time; nil = time.Now.
 	Clock Clock
 	// Log receives the per-installation failure and per-run skip lines; nil discards them.
@@ -45,7 +48,8 @@ func NewIngestService(d IngestDeps) *IngestService {
 	if d.Agents == nil || d.Store == nil || d.GitHub == nil || d.Zip == nil {
 		panic("ci/app: NewIngestService needs every dependency")
 	}
-	if d.Ledger != nil && d.Tx == nil {
+	d.GitLab.validate()
+	if (d.Ledger != nil || d.GitLab.Ledger != nil) && d.Tx == nil {
 		panic("ci/app: NewIngestService needs a Tx with a Ledger")
 	}
 	s := &IngestService{d: d, now: d.Clock, log: d.Log}
@@ -78,11 +82,14 @@ type storeFailure struct{ err error }
 func (e *storeFailure) Error() string { return "ci store: " + e.err.Error() }
 func (e *storeFailure) Unwrap() error { return e.err }
 
-// refresh is one Refresh call: the workspace and the deadline after which no GitHub call starts.
+// refresh is one Refresh call: the workspace and the deadline after which no GitHub or GitLab call
+// starts.
 type refresh struct {
 	s           *IngestService
 	workspaceID string
 	deadline    time.Time
+	// mrSource caches the source project of the merge requests read in this refresh (A7).
+	mrSource map[mrKey]int64
 }
 
 // callGitHub runs one GitHub call. The deadline is checked before the call starts (spec 7.7.1) and the
@@ -110,24 +117,41 @@ func (s *IngestService) Refresh(ctx context.Context, workspaceID, agentID string
 			return domain.RefreshResult{}, apperr.NotFound("Agent not found").WithCode(codeAgentNotFound)
 		}
 	}
-	if !s.d.GitHub.Configured() {
+	githubOn, gitlabOn := s.d.GitHub.Configured(), s.d.GitLab.enabled()
+	if !githubOn && !gitlabOn {
 		return domain.RefreshResult{}, apperr.Config(msgNoToken)
 	}
 	installations, err := s.d.Store.ListInstallations(ctx, workspaceID, InstallationFilter{AgentID: agentID})
 	if err != nil {
 		return domain.RefreshResult{}, fmt.Errorf("list installations: %w", err)
 	}
+	var gitlabInstallations []domain.Installation
+	if gitlabOn {
+		gitlabInstallations, err = s.d.GitLab.Store.ListGitLabInstallations(ctx, workspaceID, InstallationFilter{AgentID: agentID})
+		if err != nil {
+			return domain.RefreshResult{}, fmt.Errorf("list gitlab installations: %w", err)
+		}
+	}
+	targets := refreshTargets(installations, gitlabInstallations)
+	// GitHub token first, but only for GitHub installations (FR31): a workspace with GitLab ones
+	// only needs none. Nothing to walk at all keeps the answer of a refresh without GitLab.
+	if !githubOn && (len(targets) == 0 || hasGitHub(targets)) {
+		return domain.RefreshResult{}, apperr.Config(msgNoToken)
+	}
 
 	r := &refresh{s: s, workspaceID: workspaceID, deadline: s.now().Add(domain.RefreshBudget)}
 	out := domain.RefreshResult{Installations: []domain.InstallationResult{}}
-	for _, inst := range installations {
-		if inst.Slug == nil || *inst.Slug == "" {
-			continue
-		}
+	for _, t := range targets {
+		inst := t.inst
 		res := domain.InstallationResult{
-			InstallationID: inst.ID, Repo: inst.Repo, State: domain.StateOK, Skipped: []domain.SkippedRun{},
+			InstallationID: inst.ID, Repo: inst.Repo, Host: inst.Host, State: domain.StateOK, Skipped: []domain.SkippedRun{},
 		}
-		err := r.installation(ctx, inst, *inst.Slug, &res)
+		var err error
+		if t.gitlab {
+			err = r.gitlabInstallation(ctx, inst, &res)
+		} else {
+			err = r.installation(ctx, inst, *inst.Slug, &res)
+		}
 		switch {
 		case err == nil:
 		case errors.Is(err, errBudget):
@@ -140,7 +164,11 @@ func (s *IngestService) Refresh(ctx context.Context, workspaceID, agentID string
 			if ctx.Err() != nil { // the caller is gone: stop instead of failing every installation
 				return domain.RefreshResult{}, fmt.Errorf("refresh %s: %w", inst.Repo, ctx.Err())
 			}
-			r.fail(ctx, inst, &res, err)
+			if t.gitlab {
+				r.failGitLab(ctx, inst, &res, err)
+			} else {
+				r.fail(ctx, inst, &res, err)
+			}
 		}
 		out.Ingested += res.Ingested
 		if res.State == domain.StateError || res.State == domain.StateNotChecked {

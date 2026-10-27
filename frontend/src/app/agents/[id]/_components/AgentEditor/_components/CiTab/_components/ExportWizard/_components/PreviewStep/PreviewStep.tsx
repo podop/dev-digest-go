@@ -1,13 +1,15 @@
 /* PreviewStep — the files the export will create and the selected file's contents. Only the
    workflow is editable; the runner bundle is listed by path and size, never rendered (FR10).
-   File contents are plain text, never markup. */
+   File contents are plain text, never markup. For GitLab, an existing root configuration adds
+   the include box above the viewer (GitLab C FR41). */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Badge, Button, SectionLabel, Skeleton } from "@devdigest/ui";
-import type { CiFile } from "@devdigest/shared";
+import type { CiExport, CiFile } from "@devdigest/shared";
 import { byteSize, formatBytes, isRunnerBundle, type WizardError } from "../../helpers";
+import { IncludeSnippet } from "../IncludeSnippet";
 import { WizardErrorBox } from "../WizardErrorBox";
 import { s } from "./styles";
 
@@ -15,6 +17,7 @@ export function PreviewStep({
   loading,
   error,
   noTriggers,
+  gitlabCi,
   files,
   selected,
   edited,
@@ -25,6 +28,8 @@ export function PreviewStep({
   loading: boolean;
   error: WizardError | null;
   noTriggers: boolean;
+  /** The `gitlab_ci` block of the answer; null for GitHub. */
+  gitlabCi: CiExport["gitlab_ci"];
   files: readonly CiFile[] | undefined;
   selected: CiFile | undefined;
   /** True once the user changed the workflow. */
@@ -93,6 +98,9 @@ export function PreviewStep({
       </nav>
 
       <div style={s.viewer}>
+        {gitlabCi && gitlabCi.root_config !== "create" && (
+          <IncludeSnippet configPath={gitlabCi.config_path} snippet={gitlabCi.include_snippet} />
+        )}
         <div style={s.viewerHead}>
           <span className="mono" style={s.viewerPath}>
             {selected.path}

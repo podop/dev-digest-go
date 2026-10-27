@@ -1,7 +1,8 @@
 // Command devdigest-runner is the DevDigest CI runner: a static linux/amd64 executable that the
-// exported GitHub Actions workflow runs in someone else's repository to review a pull request
-// with the backend's review engine. It reads secrets from the environment only, never links the
-// secrets-file store, a database, Echo, git or cgo (see closure_test.go), and has no price book:
+// exported GitHub Actions workflow or GitLab CI job runs in someone else's repository to review a
+// pull or merge request with the backend's review engine. It reads secrets from the environment
+// only, never links the secrets-file store, a database, Echo, the server's GitLab client or cgo
+// (it runs the image's git program for the GitLab diff; see closure_test.go), and has no price book:
 // the cost of a call is what the provider reports or, for an openai, anthropic or custom manifest,
 // the manifest price.
 package main
@@ -25,6 +26,7 @@ import (
 	"dev-digest-go/backend/internal/ci/runner/adapters/env"
 	"dev-digest-go/backend/internal/ci/runner/adapters/ghapi"
 	runnerapp "dev-digest-go/backend/internal/ci/runner/app"
+	runnerdomain "dev-digest-go/backend/internal/ci/runner/domain"
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/llm/adapters/anthropic"
 	"dev-digest-go/backend/internal/llm/adapters/openaicompat"
@@ -71,11 +73,20 @@ var builtInPolicy = llm.Policy{
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	code := withCommandsStopped(os.Stdout, func() int {
-		return run(ctx, os.LookupEnv, os.Stdout, os.Stderr, defaultEndpoints())
-	})
+	code := runProcess(ctx, os.LookupEnv, os.Stdout, os.Stderr, defaultEndpoints())
 	stop()
 	os.Exit(code)
+}
+
+// runProcess is main without the process: GitHub mode runs with workflow commands stopped, GitLab
+// mode (DEVDIGEST_PLATFORM=gitlab_ci) without the stop token. A GitLab job log does not interpret
+// GitHub workflow commands, and every line printed there has already passed domain.GitLabLogText
+// (FR29), so a "::stop-commands::" line would only be noise in the log.
+func runProcess(ctx context.Context, lookup func(string) (string, bool), stdout, stderr io.Writer, ep endpoints) int {
+	if runnerdomain.GitLabModeRequested(lookup) {
+		return run(ctx, lookup, stdout, stderr, ep)
+	}
+	return withCommandsStopped(stdout, func() int { return run(ctx, lookup, stdout, stderr, ep) })
 }
 
 // withCommandsStopped runs body with workflow-command processing switched off for the job log
@@ -288,12 +299,16 @@ func run(ctx context.Context, lookup func(string) (string, bool), stdout, stderr
 
 	client := newClient(getenv, stderr, ep)
 	defer client.Close()
-	return runnerapp.Run(ctx, runnerapp.Config{BuildID: buildID}, runnerapp.Deps{
+	deps := runnerapp.Deps{
 		Env:       env.Process{LookupEnv: lookup},
 		Files:     env.Files{},
 		GitHub:    ghapi.New(ghapi.Options{BaseURL: ep.GitHub}),
 		LLM:       reviewLLM{client: client},
 		Providers: providers{ep: ep, stderr: stderr, rootCAs: rootCAs},
 		Out:       out,
-	})
+	}
+	if runnerdomain.GitLabModeRequested(lookup) {
+		deps.GitLab, deps.GitDiff = gitLabDeps(lookup)
+	}
+	return runnerapp.Run(ctx, runnerapp.Config{BuildID: buildID}, deps)
 }

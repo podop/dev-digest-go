@@ -16,7 +16,10 @@ import (
 // spend never imports ci: only this composition root knows both (cost ledger FR6).
 type ciLedger struct{ recorder *spendapp.Recorder }
 
-var _ ciapp.Ledger = ciLedger{}
+var (
+	_ ciapp.Ledger       = ciLedger{}
+	_ ciapp.GitLabLedger = ciLedger{}
+)
 
 // RecordCIRun maps the stored run field by field and appends its entry on ctx, the transaction
 // that stores the run. The recorder builds the dedupe key from the run id and attempt and treats
@@ -25,6 +28,23 @@ func (l ciLedger) RecordCIRun(ctx context.Context, run ciapp.CIRun) error {
 	return l.recorder.RecordCIRun(ctx, spendapp.CIRun{
 		WorkspaceID: run.WorkspaceID,
 		AgentRunID:  run.AgentRunID,
+		GithubRunID: run.GithubRunID,
+		Attempt:     run.Attempt,
+		OccurredAt:  run.OccurredAt,
+		Provider:    &run.Provider,
+		Model:       run.Model,
+		CostUSD:     run.CostUSD,
+	})
+}
+
+// RecordGitLabCIRun appends the entry of a stored GitLab run with the same contract. The host key
+// goes to the recorder, which builds the dedupe key ci:<host>:<job id>:<attempt> (SCR1); GithubRunID
+// carries the job id.
+func (l ciLedger) RecordGitLabCIRun(ctx context.Context, run ciapp.GitLabCIRun) error {
+	return l.recorder.RecordCIRun(ctx, spendapp.CIRun{
+		WorkspaceID: run.WorkspaceID,
+		AgentRunID:  run.AgentRunID,
+		Host:        run.Host,
 		GithubRunID: run.GithubRunID,
 		Attempt:     run.Attempt,
 		OccurredAt:  run.OccurredAt,

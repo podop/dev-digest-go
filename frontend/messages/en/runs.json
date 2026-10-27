@@ -1,4 +1,14 @@
 {
+  "ciRuns": {
+    "viewOn": "View on {host}",
+    "refreshError": {
+      "gitlab_permission_denied": "GitLab refused the connection token (no access to this project). Check the token in Settings.",
+      "gitlab_rate_limited": "GitLab rate limit reached. Try again in a minute.",
+      "gitlab_unavailable": "GitLab did not answer. Try again later.",
+      "repo_host_not_connected": "No GitLab connection for this host. Connect it in Settings.",
+      "gitlab_token_missing": "The connection for this host has no token. Add one in Settings."
+    }
+  },
   "viewTrace": "View trace",
   "finding": {
     "trifecta": "trifecta"

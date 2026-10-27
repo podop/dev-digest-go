@@ -644,13 +644,19 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	if runnerBundle == nil {
 		runnerBundle = runnerbin.Default()
 	}
-	ciExport := ciapp.NewExportService(ciapp.ExportDeps{
-		Agents: ciAgents, Repos: cipeers.NewRepos(reposSvc), Store: ciStore, Runner: runnerBundle, GitHub: ciGitHub, Log: log,
+	// GitLab CI (GitLab C): the same connection lookup and egress client as the other GitLab
+	// contexts; the artifact storage hop uses the test seam's client when set, else the client's own.
+	ciGL := newCIGitLab(glClient, glResolve, o.artifactClient)
+	ciLedgerPort := ciLedger{recorder: ledgerRecorder}
+	ciExport := ciapp.NewExportService(ciGL.export(ciapp.ExportDeps{
+		Agents: ciAgents, Repos: cipeers.NewRepos(reposSvc).WithGitLab(reposStore, glResolve, log), Store: ciStore,
+		Runner: runnerBundle, GitHub: ciGitHub, Log: log,
 		Custom: ciCustom{svc: cpSvc}, Prices: ciPrices{book: llmClient},
-	})
+	}))
 	ciIngest := ciapp.NewIngestService(ciapp.IngestDeps{
 		Agents: ciAgents, Store: ciStore, GitHub: ciGitHub, Zip: zipentry.New(), Clock: now, Log: log,
-		Ledger: ciLedger{recorder: ledgerRecorder}, Tx: tx,
+		Ledger: ciLedgerPort, Tx: tx,
+		GitLab: ciGL.ingestDeps(ciStore, ciLedgerPort),
 	})
 
 	limits := skillshttp.BodyLimits()

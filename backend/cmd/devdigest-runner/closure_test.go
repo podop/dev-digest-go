@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -29,6 +30,13 @@ var forbidden = []string{
 	"dev-digest-go/backend/internal/agents",
 }
 
+// forbiddenExact lists import paths the closure must not contain, matched exactly (not as a
+// prefix): the server's GitLab client. Its sub-package platform/gitlab/notebody is the note body
+// rules the runner shares with the server and is required below, so a prefix would hit it too.
+var forbiddenExact = []string{
+	"dev-digest-go/backend/internal/platform/gitlab",
+}
+
 // required lists the packages the runner must link now: the review engine, the three LLM adapters
 // the manifests can name, the custom-provider rules and the guarded outbound client.
 var required = []string{
@@ -37,6 +45,9 @@ var required = []string{
 	"dev-digest-go/backend/internal/llm/adapters/anthropic",
 	"dev-digest-go/backend/internal/llm/custom",
 	"dev-digest-go/backend/internal/platform/egress",
+	"dev-digest-go/backend/internal/platform/gitlab/notebody",
+	"dev-digest-go/backend/internal/ci/runner/adapters/glapi",
+	"dev-digest-go/backend/internal/ci/runner/adapters/gitdiff",
 }
 
 func goTool(t *testing.T) string {
@@ -74,6 +85,9 @@ func TestRunnerClosure(t *testing.T) {
 			if strings.HasPrefix(path, bad) {
 				t.Errorf("runner closure contains %s (forbidden prefix %s)", path, bad)
 			}
+		}
+		if slices.Contains(forbiddenExact, path) {
+			t.Errorf("runner closure contains %s (forbidden package)", path)
 		}
 		if cgo && !std {
 			t.Errorf("runner closure contains cgo package %s", path)

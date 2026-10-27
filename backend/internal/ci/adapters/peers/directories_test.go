@@ -3,6 +3,8 @@ package peers_test
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -12,6 +14,8 @@ import (
 	"dev-digest-go/backend/internal/ci/app"
 	"dev-digest-go/backend/internal/ci/domain"
 	"dev-digest-go/backend/internal/platform/apperr"
+	glclient "dev-digest-go/backend/internal/platform/gitlab"
+	reposapp "dev-digest-go/backend/internal/repos/app"
 	reposdomain "dev-digest-go/backend/internal/repos/domain"
 	skillsdomain "dev-digest-go/backend/internal/skills/domain"
 )
@@ -128,28 +132,6 @@ func (f fakeRepoService) List(context.Context, string) ([]reposdomain.Repo, erro
 	return f.repos, f.err
 }
 
-func TestRepos_FindByFullName(t *testing.T) {
-	d := peers.NewRepos(fakeRepoService{repos: []reposdomain.Repo{
-		{Owner: "acme", Name: "other", FullName: "acme/other", DefaultBranch: "dev"},
-		{Owner: "acme", Name: "widgets", FullName: "acme/widgets", DefaultBranch: "main"},
-	}})
-	got, ok, err := d.FindByFullName(t.Context(), "w", "acme/widgets")
-	if err != nil || !ok {
-		t.Fatalf("FindByFullName(acme/widgets) = ok %v, err %v", ok, err)
-	}
-	want := domain.ImportedRepo{Owner: "acme", Name: "widgets", FullName: "acme/widgets", DefaultBranch: "main"}
-	if diff := cmp.Diff(want, got); diff != "" {
-		t.Errorf("FindByFullName(acme/widgets) mismatch (-want +got):\n%s", diff)
-	}
-	if _, ok, err := d.FindByFullName(t.Context(), "w", "Acme/Widgets"); ok || err != nil {
-		t.Errorf("FindByFullName(Acme/Widgets) = ok %v, err %v, want false, nil (exact match)", ok, err)
-	}
-	boom := errors.New("db down")
-	if _, _, err := peers.NewRepos(fakeRepoService{err: boom}).FindByFullName(t.Context(), "w", "a/b"); !errors.Is(err, boom) {
-		t.Errorf("FindByFullName error = %v, want %v", err, boom)
-	}
-}
-
 func TestAgents_Get_PluginGating(t *testing.T) {
 	off := &skillsdomain.PluginRef{ID: "p1", Name: "Pack", Enabled: false}
 	on := &skillsdomain.PluginRef{ID: "p2", Name: "Live", Enabled: true}
@@ -190,38 +172,205 @@ func TestAgents_Get_PluginGating(t *testing.T) {
 	}
 }
 
-func TestRepos_FindByFullName_HostIsolation(t *testing.T) {
-	github := reposdomain.Repo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "main", Provider: "github", Host: "github.com"}
-	legacy := reposdomain.Repo{Owner: "acme", Name: "old", FullName: "acme/old", DefaultBranch: "main"}
-	gitlab := reposdomain.Repo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "trunk", Provider: "gitlab", Host: "gitlab.com"}
+func strp(s string) *string { return &s }
+
+var (
+	ghRepo = reposdomain.Repo{ID: "r-gh", Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "main",
+		Provider: "github", Host: "github.com", ClonePath: strp("/clones/acme/web")}
+	legacyRepo = reposdomain.Repo{ID: "r-old", Owner: "acme", Name: "old", FullName: "acme/old", DefaultBranch: "main"}
+	glRepo     = reposdomain.Repo{ID: "r-gl", Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "trunk",
+		Provider: "gitlab", Host: "gitlab.com", ProjectID: 42, WebURL: "https://gitlab.com/acme/web"}
+	glOther = reposdomain.Repo{ID: "r-gl2", Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "dev",
+		Provider: "gitlab", Host: "git.corp.example:8443", ProjectID: 7, WebURL: "https://git.corp.example:8443/acme/web",
+		ClonePath: strp("/clones/@gitlab/git.corp.example_8443/7")}
+)
+
+func TestRepos_Find(t *testing.T) {
 	tests := []struct {
 		name    string
 		repos   []reposdomain.Repo
-		find    string
-		want    domain.ImportedRepo
+		q       app.RepoQuery
+		want    app.ExportRepo
 		found   bool
-		wantErr error
+		wantIDs []string
 	}{
-		{name: "only gitlab", repos: []reposdomain.Repo{gitlab}, find: "acme/web", wantErr: app.ErrUnsupportedHost},
-		{name: "both, gitlab first", repos: []reposdomain.Repo{gitlab, github}, find: "acme/web",
-			want: domain.ImportedRepo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "main"}, found: true},
-		{name: "both, github first", repos: []reposdomain.Repo{github, gitlab}, find: "acme/web",
-			want: domain.ImportedRepo{Owner: "acme", Name: "web", FullName: "acme/web", DefaultBranch: "main"}, found: true},
-		{name: "empty provider is github", repos: []reposdomain.Repo{legacy}, find: "acme/old",
-			want: domain.ImportedRepo{Owner: "acme", Name: "old", FullName: "acme/old", DefaultBranch: "main"}, found: true},
-		{name: "gitlab elsewhere does not match another name", repos: []reposdomain.Repo{gitlab}, find: "acme/other"},
+		{name: "by id, github", repos: []reposdomain.Repo{glRepo, ghRepo}, q: app.RepoQuery{ID: "r-gh"}, found: true,
+			want: app.ExportRepo{ID: "r-gh", Provider: app.ProviderGitHub, Host: "github.com", Owner: "acme", Name: "web",
+				FullName: "acme/web", DefaultBranch: "main", ClonePath: "/clones/acme/web"}},
+		{name: "by id, gitlab", repos: []reposdomain.Repo{ghRepo, glOther}, q: app.RepoQuery{ID: "r-gl2"}, found: true,
+			want: app.ExportRepo{ID: "r-gl2", Provider: app.ProviderGitLab, Host: "git.corp.example:8443", Owner: "acme",
+				Name: "web", FullName: "acme/web", DefaultBranch: "dev", ProjectID: 7,
+				WebURL: "https://git.corp.example:8443/acme/web", ClonePath: "/clones/@gitlab/git.corp.example_8443/7"}},
+		{name: "id wins over full name", repos: []reposdomain.Repo{ghRepo, glRepo}, q: app.RepoQuery{ID: "r-gl", FullName: "acme/web"},
+			found: true, want: app.ExportRepo{ID: "r-gl", Provider: app.ProviderGitLab, Host: "gitlab.com", Owner: "acme",
+				Name: "web", FullName: "acme/web", DefaultBranch: "trunk", ProjectID: 42, WebURL: "https://gitlab.com/acme/web"}},
+		{name: "unknown id is not another repo's name", repos: []reposdomain.Repo{ghRepo}, q: app.RepoQuery{ID: "nope", FullName: "acme/web"}},
+		{name: "legacy empty provider is github", repos: []reposdomain.Repo{legacyRepo}, q: app.RepoQuery{FullName: "acme/old"},
+			found: true, want: app.ExportRepo{ID: "r-old", Provider: app.ProviderGitHub, Host: "github.com", Owner: "acme",
+				Name: "old", FullName: "acme/old", DefaultBranch: "main"}},
+		{name: "github wins over gitlab, either order", repos: []reposdomain.Repo{glRepo, glOther, ghRepo}, q: app.RepoQuery{FullName: "acme/web"},
+			found: true, want: app.ExportRepo{ID: "r-gh", Provider: app.ProviderGitHub, Host: "github.com", Owner: "acme",
+				Name: "web", FullName: "acme/web", DefaultBranch: "main", ClonePath: "/clones/acme/web"}},
+		{name: "github beats a gitlab one", repos: []reposdomain.Repo{ghRepo, glRepo}, q: app.RepoQuery{FullName: "acme/web"}, found: true,
+			want: app.ExportRepo{ID: "r-gh", Provider: app.ProviderGitHub, Host: "github.com", Owner: "acme", Name: "web",
+				FullName: "acme/web", DefaultBranch: "main", ClonePath: "/clones/acme/web"}},
+		{name: "only gitlab", repos: []reposdomain.Repo{glRepo}, q: app.RepoQuery{FullName: "acme/web"}, found: true,
+			want: app.ExportRepo{ID: "r-gl", Provider: app.ProviderGitLab, Host: "gitlab.com", Owner: "acme", Name: "web",
+				FullName: "acme/web", DefaultBranch: "trunk", ProjectID: 42, WebURL: "https://gitlab.com/acme/web"}},
+		{name: "gitlab on two hosts is ambiguous", repos: []reposdomain.Repo{glRepo, glOther}, q: app.RepoQuery{FullName: "acme/web"},
+			wantIDs: []string{"r-gl", "r-gl2"}},
+		{name: "exact match only", repos: []reposdomain.Repo{ghRepo}, q: app.RepoQuery{FullName: "Acme/Web"}},
+		{name: "other name", repos: []reposdomain.Repo{glRepo}, q: app.RepoQuery{FullName: "acme/other"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok, err := peers.NewRepos(fakeRepoService{repos: tc.repos}).FindByFullName(t.Context(), "w", tc.find)
-			if !errors.Is(err, tc.wantErr) {
-				t.Fatalf("FindByFullName(%s) error = %v, want %v", tc.find, err, tc.wantErr)
+			got, ok, err := peers.NewRepos(fakeRepoService{repos: tc.repos}).Find(t.Context(), "w", tc.q)
+			if tc.wantIDs != nil {
+				var amb *app.AmbiguousRepoError
+				if !errors.As(err, &amb) {
+					t.Fatalf("Find(%+v) error = %v, want *AmbiguousRepoError", tc.q, err)
+				}
+				if diff := cmp.Diff(tc.wantIDs, amb.IDs); diff != "" {
+					t.Errorf("Find(%+v) ids mismatch (-want +got):\n%s", tc.q, diff)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Find(%+v) error = %v", tc.q, err)
 			}
 			if ok != tc.found {
-				t.Errorf("FindByFullName(%s) found = %v, want %v", tc.find, ok, tc.found)
+				t.Errorf("Find(%+v) found = %v, want %v", tc.q, ok, tc.found)
 			}
 			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("FindByFullName(%s) mismatch (-want +got):\n%s", tc.find, diff)
+				t.Errorf("Find(%+v) mismatch (-want +got):\n%s", tc.q, diff)
+			}
+		})
+	}
+}
+
+func TestRepos_Find_ListError(t *testing.T) {
+	boom := errors.New("db down")
+	if _, _, err := peers.NewRepos(fakeRepoService{err: boom}).Find(t.Context(), "w", app.RepoQuery{FullName: "a/b"}); !errors.Is(err, boom) {
+		t.Errorf("Find error = %v, want %v", err, boom)
+	}
+}
+
+type pathCall struct {
+	Workspace, ID string
+	P             reposapp.ProjectPath
+}
+
+type fakePathStore struct {
+	calls      []pathCall
+	skippedFor string
+	err        error
+}
+
+func (f *fakePathStore) UpdatePath(_ context.Context, ws, id string, p reposapp.ProjectPath) (string, error) {
+	f.calls = append(f.calls, pathCall{ws, id, p})
+	return f.skippedFor, f.err
+}
+
+func resolveTo(base string) glclient.ResolveFunc {
+	return func(_ context.Context, host string) (glclient.Binding, bool, error) {
+		if host == "" {
+			return glclient.Binding{}, false, nil
+		}
+		return glclient.Binding{Host: host, BaseURL: base, Token: "glpat-secret-token-value"}, true, nil
+	}
+}
+
+func exportGL() app.ExportRepo {
+	return app.ExportRepo{ID: "r-gl", Provider: app.ProviderGitLab, Host: "gitlab.com", Owner: "acme", Name: "web",
+		FullName: "acme/web", ProjectID: 42, WebURL: "https://gitlab.com/acme/web"}
+}
+
+func TestRepos_FollowGitLabPath(t *testing.T) {
+	t.Run("renamed", func(t *testing.T) {
+		store := &fakePathStore{}
+		d := peers.NewRepos(fakeRepoService{}).WithGitLab(store, resolveTo("https://gitlab.com/"), nil)
+		got, err := d.FollowGitLabPath(t.Context(), "w", exportGL(), "acme/team/web2")
+		if err != nil {
+			t.Fatalf("FollowGitLabPath() error = %v", err)
+		}
+		want := exportGL()
+		want.FullName, want.Owner, want.Name, want.WebURL = "acme/team/web2", "acme/team", "web2", "https://gitlab.com/acme/team/web2"
+		if diff := cmp.Diff(want, got); diff != "" {
+			t.Errorf("FollowGitLabPath() mismatch (-want +got):\n%s", diff)
+		}
+		wantCalls := []pathCall{{"w", "r-gl", reposapp.ProjectPath{FullName: "acme/team/web2", Owner: "acme/team", Name: "web2",
+			WebURL: "https://gitlab.com/acme/team/web2"}}}
+		if diff := cmp.Diff(wantCalls, store.calls); diff != "" {
+			t.Errorf("UpdatePath calls mismatch (-want +got):\n%s", diff)
+		}
+	})
+	t.Run("web address is built from the connection's prefix", func(t *testing.T) {
+		store := &fakePathStore{}
+		d := peers.NewRepos(fakeRepoService{}).WithGitLab(store, resolveTo("https://git.corp.example/gitlab"), nil)
+		repo := exportGL()
+		repo.Host, repo.WebURL = "git.corp.example", ""
+		got, err := d.FollowGitLabPath(t.Context(), "w", repo, "acme/web")
+		if err != nil || got.WebURL != "https://git.corp.example/gitlab/acme/web" {
+			t.Errorf("FollowGitLabPath() = %+v, %v, want web_url from the connection (a missing address is filled)", got, err)
+		}
+	})
+	t.Run("unchanged path is not stored", func(t *testing.T) {
+		store := &fakePathStore{}
+		d := peers.NewRepos(fakeRepoService{}).WithGitLab(store, resolveTo("https://gitlab.com"), nil)
+		got, err := d.FollowGitLabPath(t.Context(), "w", exportGL(), "acme/web")
+		if err != nil || len(store.calls) != 0 {
+			t.Errorf("FollowGitLabPath(same) = %+v, %v, %d store calls, want none", got, err, len(store.calls))
+		}
+	})
+	t.Run("path held by another repo", func(t *testing.T) {
+		var buf strings.Builder
+		store := &fakePathStore{skippedFor: "r-other"}
+		d := peers.NewRepos(fakeRepoService{}).WithGitLab(store, resolveTo("https://gitlab.com"),
+			slog.New(slog.NewTextHandler(&buf, nil)))
+		got, err := d.FollowGitLabPath(t.Context(), "w", exportGL(), "acme/taken")
+		if err != nil {
+			t.Fatalf("FollowGitLabPath() error = %v", err)
+		}
+		if diff := cmp.Diff(exportGL(), got); diff != "" {
+			t.Errorf("FollowGitLabPath(taken) mismatch (-want +got):\n%s", diff)
+		}
+		if !strings.Contains(buf.String(), "r-other") || strings.Contains(buf.String(), "glpat") {
+			t.Errorf("log = %q, want one warning naming the other repo and no token", buf.String())
+		}
+	})
+}
+
+func TestRepos_FollowGitLabPath_Refusals(t *testing.T) {
+	boom := errors.New("db down")
+	tests := []struct {
+		name    string
+		d       *peers.Repos
+		repo    app.ExportRepo
+		path    string
+		wantErr error
+	}{
+		{name: "not a plain path", d: peers.NewRepos(nil).WithGitLab(&fakePathStore{}, resolveTo("https://gitlab.com"), nil),
+			repo: exportGL(), path: "acme/../etc"},
+		{name: "one segment", d: peers.NewRepos(nil).WithGitLab(&fakePathStore{}, resolveTo("https://gitlab.com"), nil),
+			repo: exportGL(), path: "web"},
+		{name: "percent sign", d: peers.NewRepos(nil).WithGitLab(&fakePathStore{}, resolveTo("https://gitlab.com"), nil),
+			repo: exportGL(), path: "acme/we%62"},
+		{name: "github repository", d: peers.NewRepos(nil).WithGitLab(&fakePathStore{}, resolveTo("https://gitlab.com"), nil),
+			repo: app.ExportRepo{ID: "r-gh", Provider: app.ProviderGitHub, Host: "github.com", FullName: "acme/web"}, path: "acme/web2"},
+		{name: "not configured", d: peers.NewRepos(nil), repo: exportGL(), path: "acme/web2"},
+		{name: "connection gone", d: peers.NewRepos(nil).WithGitLab(&fakePathStore{}, resolveTo("https://gitlab.com"), nil),
+			repo: app.ExportRepo{ID: "r", Provider: app.ProviderGitLab, FullName: "acme/web"}, path: "acme/web2"},
+		{name: "store fails", d: peers.NewRepos(nil).WithGitLab(&fakePathStore{err: boom}, resolveTo("https://gitlab.com"), nil),
+			repo: exportGL(), path: "acme/web2", wantErr: boom},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := tc.d.FollowGitLabPath(t.Context(), "w", tc.repo, tc.path)
+			if err == nil {
+				t.Fatalf("FollowGitLabPath(%q) = %+v, nil, want an error", tc.path, got)
+			}
+			if tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+				t.Errorf("FollowGitLabPath(%q) error = %v, want %v", tc.path, err, tc.wantErr)
 			}
 		})
 	}

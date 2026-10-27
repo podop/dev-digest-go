@@ -26,6 +26,7 @@
       "path": ".github/workflows/devdigest-review-anthropic-reviewer.yml"
     }
   ],
+  "gitlab_ci": null,
   "installation": null,
   "pr_url": null,
   "required_secrets": [

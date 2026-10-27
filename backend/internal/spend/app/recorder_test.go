@@ -587,3 +587,46 @@ func TestRecorder_ReportBackfill_NothingToCopy(t *testing.T) {
 		t.Errorf("ReportBackfill(empty) log = %v, want one INFO line with zero counts", lines)
 	}
 }
+
+func TestRecorder_RecordCIRun_DedupeKeyByHost(t *testing.T) {
+	tests := []struct {
+		name string
+		host string
+		want string
+	}{
+		{"no host keeps the github key", "", "ci:9001:2"},
+		{"github.com keeps the github key", "github.com", "ci:9001:2"},
+		{"gitlab.com", "gitlab.com", "ci:gitlab.com:9001:2"},
+		{"self-managed gitlab", "gitlab.example.com:8443", "ci:gitlab.example.com:8443:9001:2"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			entries := &fakeEntries{}
+			rec, _ := newRecorder(entries)
+			run := ciRun()
+			run.Host = tc.host
+			if err := rec.RecordCIRun(t.Context(), run); err != nil {
+				t.Fatalf("RecordCIRun(host %q) = %v, want nil", tc.host, err)
+			}
+			if got := entries.entries(); len(got) != 1 || got[0].DedupeKey != tc.want {
+				t.Errorf("RecordCIRun(host %q) stored %+v, want one entry with key %q", tc.host, got, tc.want)
+			}
+		})
+	}
+}
+
+// EC30: the same id on GitHub and on two GitLab hosts is three entries, not one.
+func TestRecorder_RecordCIRun_SameIDOnDifferentHostsIsNotDeduped(t *testing.T) {
+	entries := &fakeEntries{}
+	rec, _ := newRecorder(entries)
+	for _, host := range []string{"github.com", "gitlab.com", "gitlab.example.com"} {
+		run := ciRun()
+		run.Host = host
+		if err := rec.RecordCIRun(t.Context(), run); err != nil {
+			t.Fatalf("RecordCIRun(host %q) = %v, want nil", host, err)
+		}
+	}
+	if len(entries.seen) != 3 {
+		t.Errorf("RecordCIRun() on 3 hosts stored keys %v, want 3 distinct", entries.seen)
+	}
+}

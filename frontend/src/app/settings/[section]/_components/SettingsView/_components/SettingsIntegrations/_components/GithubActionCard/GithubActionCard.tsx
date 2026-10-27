@@ -1,15 +1,18 @@
 /* GithubActionCard — Settings › Integrations: where the workspace's agents run as a GitHub
-   Action (FR2). Skeleton / empty / error + Retry / one row per repository. The status UI is
-   gated on `data`, not on isError, so a failed background refetch keeps the rows. */
+   Action (FR2) or a GitLab CI job (GitLab C FR45). Skeleton / empty / error + Retry / one row per repository
+   identity (host + repository). The status UI is gated on `data`, not on isError, so a failed background refetch
+   keeps the rows. The copy says "GitHub Action" until the workspace has a GitLab repository, "CI reviews" after. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Button, Card, ErrorState, Skeleton } from "@devdigest/ui";
 import { ApiError } from "@/lib/api";
-import { useWorkspaceCiInstallations } from "@/lib/hooks";
+import { isGitLab } from "@/lib/code-host";
+import { useRepos, useWorkspaceCiInstallations } from "@/lib/hooks";
 import { InstallActionDialog } from "../InstallActionDialog";
 import { RepoRow } from "./_components/RepoRow";
+import { entryKey } from "./helpers";
 import { s } from "./styles";
 
 export function GithubActionCard() {
@@ -17,6 +20,9 @@ export function GithubActionCard() {
   const repos = useWorkspaceCiInstallations();
   const [installing, setInstalling] = React.useState(false);
   const list = repos.data;
+  // FR45: a failed or pending repository list keeps the GitHub copy.
+  const workspaceRepos = useRepos();
+  const ciReviews = workspaceRepos.data?.some(isGitLab) ?? false;
 
   return (
     <Card style={s.card}>
@@ -24,11 +30,11 @@ export function GithubActionCard() {
         <div style={s.headText}>
           <div style={s.titleRow}>
             <h3 id="gha-card-title" style={s.title}>
-              {t("title")}
+              {t(ciReviews ? "titleCiReviews" : "title")}
             </h3>
             {list && <span style={s.count}>{t("repoCount", { count: list.length })}</span>}
           </div>
-          <div style={s.subtitle}>{t("subtitle")}</div>
+          <div style={s.subtitle}>{t(ciReviews ? "subtitleCiReviews" : "subtitle")}</div>
         </div>
         <Button type="button" kind="secondary" size="sm" icon="Plus" onClick={() => setInstalling(true)}>
           {t("install")}
@@ -41,13 +47,13 @@ export function GithubActionCard() {
         ) : (
           <ul aria-labelledby="gha-card-title" style={s.list}>
             {list.map((entry) => (
-              <RepoRow key={entry.repo} entry={entry} />
+              <RepoRow key={entryKey(entry)} entry={entry} />
             ))}
           </ul>
         )
       ) : repos.isError ? (
         <ErrorState
-          title={t("loadError")}
+          title={t(ciReviews ? "loadErrorCiReviews" : "loadError")}
           body={repos.error instanceof ApiError ? repos.error.message : undefined}
           onRetry={() => void repos.refetch()} retryLabel={t("retry")}
         />

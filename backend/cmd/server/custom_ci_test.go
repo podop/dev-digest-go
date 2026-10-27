@@ -243,7 +243,7 @@ func TestCiExport_CustomProviderFiles(t *testing.T) {
 
 	t.Run("self-hosted runner", func(t *testing.T) {
 		out, resp := cxExport(t, s, agent, ciExportBody(ciRepoFull, "files", map[string]any{"runner": "self_hosted"}), http.StatusOK)
-		if diff := cmp.Diff([]string{"installation", "files", "pr_url", "required_secrets", "required_variables"}, ciKeyOrder(t, resp.Body)); diff != "" {
+		if diff := cmp.Diff([]string{"installation", "files", "pr_url", "required_secrets", "required_variables", "gitlab_ci"}, ciKeyOrder(t, resp.Body)); diff != "" {
 			t.Errorf("CiExport key order mismatch (-want +got):\n%s", diff)
 		}
 		want := cxWorkflow(t, "gw-reviewer", cxSelfHost, cxCustomEnv("MY_GW", 2)...)

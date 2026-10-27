@@ -170,6 +170,22 @@ type Export struct {
 	// RequiredSecrets and RequiredVariables are the repository secrets and variables the user
 	// must add (FR29); see RequiredSecrets and RequiredVariables.
 	RequiredSecrets, RequiredVariables []string
+	// GitLab is the gitlab_ci object of the answer (spec C 7.1); nil for a gha export.
+	GitLab *GitLabExport
+}
+
+// GitLabExport is what a gitlab_ci export tells besides its files (spec C 7.1 `gitlab_ci`).
+type GitLabExport struct {
+	// JobFile is the path of the job file, GitLabJobPath(slug).
+	JobFile string
+	// RootConfig is what the export does about the root CI configuration.
+	RootConfig RootConfig
+	// ConfigPath is ".gitlab-ci.yml" or the project's ci_config_path.
+	ConfigPath string
+	// IncludeSnippet is IncludeSnippet(slug).
+	IncludeSnippet string
+	// TriggersNote is the FR4 note; "" is sent as null.
+	TriggersNote string
 }
 
 // ManifestIssue is one validation problem of a manifest (details.issues of manifest_invalid).
@@ -200,6 +216,11 @@ type Installation struct {
 	// "custom:<slug>". The ingest records its runs with it.
 	Provider string
 	LastRun  *Run
+	// Host is the host key of the repository ("github.com" for GitHub); "" = a store that does not
+	// report it (the wire then sends "github.com"). ProjectID is the GitLab project id, 0 for a
+	// GitHub installation (spec C FR13).
+	Host      string
+	ProjectID int64
 }
 
 // Run is a ci_runs row joined to its agent run, installation and agent, as the lists read it.
@@ -222,6 +243,10 @@ type Run struct {
 	Blockers        *int
 	HeadSHA         *string
 	ManifestVersion *int
+	// Host is the host key of the run's repository ("" = github.com); PRURL is the merge request
+	// link of a GitLab run (spec C FR37), nil for GitHub and for a host that is not connected.
+	Host  string
+	PRURL *string
 }
 
 // NewInstallation is the upsert of an installation on (agent, repo, target gha).
@@ -331,10 +356,12 @@ type SkippedRun struct {
 // is StateError.
 type InstallationResult struct {
 	InstallationID, Repo string
-	State                RefreshState
-	ErrorCode            ErrorCode
-	Ingested             int
-	Skipped              []SkippedRun
+	// Host is the host key of the installation's repository (spec C 7.1).
+	Host      string
+	State     RefreshState
+	ErrorCode ErrorCode
+	Ingested  int
+	Skipped   []SkippedRun
 }
 
 // RefreshResult is the outcome of a refresh: Ingested is the sum over the installations and

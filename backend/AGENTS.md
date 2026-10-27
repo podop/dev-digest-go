@@ -93,7 +93,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   prod) is called once per answered attempt, detached from cancellation with a 3 s bound, and a
   failed append logs one ERROR and loses only that cost. CI ingest records `ci_run` through
   `cmd/server/ledger.go` (`ciLedger`) inside the transaction that stores the run (`IngestDeps.Ledger`
-  needs `IngestDeps.Tx`); its dedupe key `ci:<github run id>:<attempt>` makes a re-ingest after a
+  needs `IngestDeps.Tx`); its dedupe key `ci:<github run id>:<attempt>` (GitLab runs:
+  `ci:<host>:<job id>:<attempt>`, built by `spendapp.CIRun.Host`, never by hand) makes a re-ingest after a
   history reset a no-op. The migration backfills the pre-ledger costs (origin `backfill`, dedupe
   `backfill:<source>:<id>`) and leaves a summary row in `cost_ledger_backfill`;
   `reportLedgerBackfill` logs it once after migrating (server start and `server migrate up`) and sets
@@ -207,8 +208,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
     `pullsapp.WithGitLab`, and `PollerDeps.GitLab`, a `glClient.WithRetry(retry.Options{})` copy so a repo poll stays
     within its request bound), settings (`settingsGitLab`: connection test, `provider: "gitlab"` + `connection_id`),
     auto reviews (`autoTokens`: GitLab repos + the connection tokens decide `no_code_host_token`) and repo-intel
-    (`intelGit`, below). Comments, posting and the context peers also work for GitLab (GitLab B, below); the CI export
-    stays GitHub only (`422 unsupported_host`) until slice C.
+    (`intelGit`, below). Comments, posting and the context peers also work for GitLab (GitLab B, below), and the CI
+    export and ingest too (GitLab C, below).
   - Outbound: `platform/gitlab.Client` over `egress.Client{Guard: custom.ForbiddenAddr, RootCAs}` (no proxy, SCR2; no
     redirects; the token goes only to the connection's own address). git (`gitcli.Options.AddrGuard =
     custom.ForbiddenAddr`) drops the proxy and SSL environment, resolves the host once, checks the address and pins
@@ -243,6 +244,17 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   stdlib-only leaf (note body rules, shared with the CI runner of slice C). Migration 0011 adds
   `pull_requests.diff_head` (CHECK 40/64 lower hex; the position the comment is anchored to) and `pr_files.previous_path`,
   both refilled by the next detail fetch (its down does not refuse).
+- GitLab CI (GitLab C, migration 0012): export target `gitlab_ci` (job file `.gitlab/devdigest/review-<slug>.yml`, root
+  `.gitlab-ci.yml` include or a snippet, branch + commit + MR; no `repo_id`/`target` = chosen by the repo's host),
+  checked by `wfrules.CheckGitLab`; the job runs the pinned public `domain.JobImage` (digest, not a tag). Ingest reads
+  the MR pipelines' job artifacts through a credential-free storage hop (`platform/gitlab.JobArtifactFile`: the token
+  never reaches the storage host, no redirect with it). Installations and runs are host-qualified (unique per host +
+  repo/project id, `ci_runs` per host + job id + attempt); the ledger key is `ci:<host>:<job id>:<attempt>`. Wiring:
+  `cmd/server/ci_gitlab.go` (`newCIGitLab`: `ExportDeps.GitLabConns/Clones/GitLab`, `IngestDeps.GitLab`, the repo
+  directory's `WithGitLab`) over the same `bindingResolver` and egress `glClient` as GitLab B; `ciLedger` implements
+  `RecordGitLabCIRun`; `options.artifactClient` also stands in for the GitLab storage hop. Runner GitLab mode
+  (`DEVDIGEST_PLATFORM=gitlab_ci`, `ci/runner` + `adapters/glapi` + `adapters/gitdiff`): drafts + bulk publish, at most
+  50 inline threads, B's `notebody` rules, and NO `::stop-commands::` wrapping of the log in GitLab mode.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

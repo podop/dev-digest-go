@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { installedAgents, lastRunView, manageHref, relativeTime, runStatusKey } from "./helpers";
+import { entryKey, installedAgents, isGitLabEntry, lastRunView, manageHref, relativeTime, runStatusKey } from "./helpers";
 
 const NOW = Date.parse("2026-10-26T12:00:00.000Z");
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -40,5 +40,15 @@ describe("GithubActionCard helpers", () => {
       { id: "a1", name: "One" },
       { id: "a2", name: "Two" },
     ]);
+  });
+
+  it("isGitLabEntry reads target_type or provider (absent on pre-GitLab payloads) and entryKey tells hosts apart", () => {
+    expect(isGitLabEntry({ target_type: "gitlab_ci" })).toBe(true);
+    expect(isGitLabEntry({ provider: "gitlab" })).toBe(true);
+    expect(isGitLabEntry({ provider: "github", target_type: "gha" })).toBe(false);
+    expect(isGitLabEntry({})).toBe(false);
+    expect(entryKey({ repo: "a/b", host: "gitlab.com", target_type: "gitlab_ci" })).not.toBe(
+      entryKey({ repo: "a/b", host: "github.com", target_type: "gha" }),
+    );
   });
 });

@@ -1,14 +1,16 @@
 /* RepoRow — one repository of the GitHub Action card: the name, the last run as text
    ("<status> <relative time>" or "no runs yet") and Manage (FR2, EC15). The run link comes
-   from GitHub data, so it is only rendered through safeRunHref (inside lastRunView). */
+   from GitHub or GitLab data, so it is only rendered through safeRunHref (inside lastRunView). A GitLab row also
+   shows its host and "GitLab CI" (GitLab C FR45); the card's last run has no merge request number, so the link
+   is the job link as for GitHub. */
 "use client";
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Dropdown } from "@devdigest/ui";
+import { Badge, Button, Dropdown } from "@devdigest/ui";
 import type { CiRepoEntry } from "@devdigest/shared";
-import { installedAgents, lastRunView, manageHref } from "../../helpers";
+import { installedAgents, isGitLabEntry, lastRunView, manageHref } from "../../helpers";
 import { s } from "./styles";
 
 export function RepoRow({ entry, now }: { entry: CiRepoEntry; now?: number }) {
@@ -21,6 +23,16 @@ export function RepoRow({ entry, now }: { entry: CiRepoEntry; now?: number }) {
       <span className="mono" style={s.repo} title={entry.repo}>
         {entry.repo}
       </span>
+      {isGitLabEntry(entry) && (
+        <span style={s.target}>
+          <Badge>{t("targetGitlab")}</Badge>
+          {entry.host && (
+            <span className="mono" style={s.host} title={entry.host}>
+              {entry.host}
+            </span>
+          )}
+        </span>
+      )}
       <span style={s.run} title={run?.absolute ?? runText}>
         {run?.href ? (
           <a href={run.href} target="_blank" rel="noopener noreferrer" style={s.runLink}>

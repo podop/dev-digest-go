@@ -74,6 +74,20 @@ describe("SettingsAutoReviews", () => {
     expect(screen.queryByText("Poll GitHub for new PRs and run agents without manual triggering.")).not.toBeInTheDocument();
   });
 
+  it("names the GitLab CI review in the info box once a GitLab repository exists (GitLab C FR47, AC42)", async () => {
+    const stored = { polling_interval_min: 5, automatic_reviews: automatic() };
+    stub(stored, { "GET /repos": [{ id: "r2", full_name: "acme/platform/api", provider: "gitlab", host: "gitlab.com" }] });
+    renderWithProviders(<SettingsAutoReviews />);
+
+    const link = await screen.findByRole("link", { name: "Integrations" });
+    await waitFor(() =>
+      expect(link.parentElement).toHaveTextContent(
+        "Polling is the default. For instant triggers and CI execution, install the GitHub Action or GitLab CI review under Integrations.",
+      ),
+    );
+    expect(link).toHaveAttribute("href", "/settings/integrations");
+  });
+
   it("composes title, toggle, interval, chips, triggers, status and the Integrations link; each control saves its own patch (FR13, FR18, FR20, AC17, NFR6)", async () => {
     // Like the server: the answer carries the full stored object with the patch merged in.
     let stored: Record<string, unknown> = { polling_interval_min: 7, automatic_reviews: automatic() };

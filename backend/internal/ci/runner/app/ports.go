@@ -82,6 +82,84 @@ type GitHub interface {
 	PostComment(ctx context.Context, token string, pr PullRef, body string) error
 }
 
+// MRRef names the merge request under review: the project by its numeric id (digits only, the
+// API addresses the project by CI_PROJECT_ID) and the merge request iid.
+type MRRef struct {
+	ProjectID string
+	IID       int
+}
+
+// DiffRefs are the three commits a positioned draft note is anchored to (GitLab diff_refs).
+type DiffRefs struct {
+	BaseSHA, StartSHA, HeadSHA string
+}
+
+// MergeRequest is the part of a merge request the runner reads. DiffRefs is nil when GitLab has
+// not computed them (yet) or answered incompletely.
+type MergeRequest struct {
+	IID      int
+	DiffRefs *DiffRefs
+}
+
+// DraftPosition anchors a draft note to a line of the merge request diff (position_type text).
+// OldLine is 0 (omitted) unless the new-side line is an unchanged context line.
+type DraftPosition struct {
+	Refs             DiffRefs
+	NewPath, OldPath string
+	NewLine, OldLine int
+}
+
+// NewDraft is a draft note to create; a nil Position is a note on the whole merge request.
+type NewDraft struct {
+	Note     string
+	Position *DraftPosition
+}
+
+// Draft is a draft note (pending, unpublished) of the token user.
+type Draft struct {
+	ID int
+}
+
+// GitLabAPIError is a non-2xx GitLab answer. Its text is the complete job-log message of spec FR28,
+// "GitLab API error posting MR review|MR comment (<path>): <status> <body cut to 1,000 bytes, token
+// redacted>". Only a 400 on a positioned draft changes the use case's course (FR26).
+type GitLabAPIError struct {
+	Status  int
+	Message string
+}
+
+func (e *GitLabAPIError) Error() string { return e.Message }
+
+// GitLab is the part of the GitLab REST API the runner calls in GitLab mode (spec 7.5; the runner
+// binary wires adapters/glapi through a thin adapter that maps these types). The token travels with
+// every call and never appears in a returned error. Redirects are not followed, writes are not
+// retried, and nothing is ever sent as reviewer_state, an approval or a quick action. A non-2xx
+// answer is a *GitLabAPIError.
+type GitLab interface {
+	// MR reads the merge request (diff_refs).
+	MR(ctx context.Context, token string, ref MRRef) (MergeRequest, error)
+	// ListDrafts lists the token user's pending draft notes on the merge request (first page of 100).
+	ListDrafts(ctx context.Context, token string, ref MRRef) ([]Draft, error)
+	// CreateDraft creates a draft note (not yet visible to anyone).
+	CreateDraft(ctx context.Context, token string, ref MRRef, d NewDraft) (Draft, error)
+	// DeleteDraft deletes a pending draft note.
+	DeleteDraft(ctx context.Context, token string, ref MRRef, id int) error
+	// PublishDraft publishes one draft note.
+	PublishDraft(ctx context.Context, token string, ref MRRef, id int) error
+	// BulkPublish publishes every pending draft of the token user on the merge request as one review.
+	BulkPublish(ctx context.Context, token string, ref MRRef) error
+	// CreateNote posts one note on the merge request (post_as pr_comment).
+	CreateNote(ctx context.Context, token string, ref MRRef, body string) error
+}
+
+// GitDiff computes the unified diff from base to head in the job's checkout (spec FR20) without
+// any network request or token. A commit absent from the checkout is an error that satisfies
+// interface{ CommitMissing() string } (the missing sha) and whose text is the job-log message of
+// FR20; the use case recognises it with errors.As and adds nothing to it.
+type GitDiff interface {
+	Diff(ctx context.Context, base, head string) (string, error)
+}
+
 // LLM builds the engine's LLM port for a model of an openrouter manifest (adapters over the
 // OpenRouter client, with the runner's fixed endpoint, retries and timeouts). It is bound to the
 // OPENROUTER_API_KEY of the environment; an empty key fails at the first call, not here. Other

@@ -18,6 +18,8 @@ export const s = {
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
   } satisfies CSSProperties,
+  target: { flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 8 } satisfies CSSProperties,
+  host: { fontSize: 12, color: "var(--text-secondary)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
   run: {
     flexShrink: 0,
     maxWidth: 220,

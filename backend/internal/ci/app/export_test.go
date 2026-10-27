@@ -37,7 +37,7 @@ type rigOpts struct {
 	openPR     string // URL of an open pull request; "" = none
 	custom     app.CustomProviders
 	prices     app.ModelPrices
-	otherHost  map[string]bool // names only a non-GitHub repository carries
+	gitlab     []app.ExportRepo // GitLab repositories of the workspace
 }
 
 func defaultAgent() domain.ExportAgent {
@@ -67,7 +67,7 @@ func newExportRig(t *testing.T, o rigOpts) *exportRig {
 		Agents: agents,
 		Repos: fakeRepos{repos: map[string]domain.ImportedRepo{
 			"acme/widgets": {Owner: "acme", Name: "widgets", FullName: "acme/widgets", DefaultBranch: "main"},
-		}, otherHost: o.otherHost},
+		}, gitlab: o.gitlab},
 		Store:  store,
 		Runner: fakeRunner{artifact: testRunner, ok: o.runner},
 		GitHub: gh,

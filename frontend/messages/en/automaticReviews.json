@@ -6,5 +6,6 @@
   "loadError": "Could not load the automatic review settings.",
   "agentsLoading": "Loading agents…",
   "agentsLoadError": "Could not load the agents.",
-  "info": "Polling is the default. For instant triggers and CI execution, install the GitHub Action under <integrations>Integrations</integrations>."
+  "info": "Polling is the default. For instant triggers and CI execution, install the GitHub Action under <integrations>Integrations</integrations>.",
+  "infoCiHosts": "Polling is the default. For instant triggers and CI execution, install the GitHub Action or GitLab CI review under <integrations>Integrations</integrations>."
 }

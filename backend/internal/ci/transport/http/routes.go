@@ -1,5 +1,5 @@
-// Package cihttp serves the four ci routes (spec 7.2): export an agent to GitHub Actions, list an
-// agent's installations, list CI runs and pull new results from GitHub. It is the only place of
+// Package cihttp serves the four ci routes (spec 7.2): export an agent to GitHub Actions or GitLab
+// CI, list an agent's installations, list CI runs and pull new results from GitHub and GitLab. It is the only place of
 // the context that knows Echo and status codes; it validates every request before any use case
 // runs, depends on the use cases only through app.Exporter and app.Ingest and owns the wire
 // shapes (dto.go). Failures of the use cases are apperr errors that httpx renders.

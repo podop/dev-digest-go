@@ -30,6 +30,17 @@ export const s = {
     alignItems: "center",
     gap: 6,
   } satisfies CSSProperties,
+  hint: { fontSize: 12, color: "var(--text-secondary)", marginTop: 4, marginLeft: 26, lineHeight: 1.4 } satisfies CSSProperties,
+  snippet: {
+    margin: "4px 0 0",
+    padding: "6px 8px",
+    background: "var(--bg-hover)",
+    borderRadius: 6,
+    fontFamily: "var(--font-mono, monospace)",
+    fontSize: 11.5,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-all",
+  } satisfies CSSProperties,
   code: { fontFamily: "var(--font-mono, monospace)", fontSize: 11.5, wordBreak: "break-all" } satisfies CSSProperties,
   prLink: { color: "var(--accent)", fontWeight: 500 } satisfies CSSProperties,
 } as const;

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"gorm.io/gorm"
@@ -14,8 +15,21 @@ import (
 	"dev-digest-go/backend/internal/ci/domain"
 )
 
-// StoredRunKeys implements app.Store.
+// StoredRunKeys implements app.Store: which GitHub runs (host github.com) are stored. A GitLab job
+// with the same id is another run (EC30).
 func (s *Store) StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[domain.RunKey]bool, error) {
+	return s.storedRunKeys(ctx, githubHost, keys)
+}
+
+// StoredGitLabRunKeys implements app.GitLabIngestStore: which (job id, attempt) are stored for host.
+func (s *Store) StoredGitLabRunKeys(ctx context.Context, host string, keys []domain.RunKey) (map[domain.RunKey]bool, error) {
+	if err := checkGitLabHost(host); err != nil {
+		return nil, err
+	}
+	return s.storedRunKeys(ctx, host, keys)
+}
+
+func (s *Store) storedRunKeys(ctx context.Context, host string, keys []domain.RunKey) (map[domain.RunKey]bool, error) {
 	out := make(map[domain.RunKey]bool, len(keys))
 	if len(keys) == 0 {
 		return out, nil
@@ -29,7 +43,7 @@ func (s *Store) StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[do
 		RunAttempt  *int  `gorm:"column:run_attempt"`
 	}
 	err := s.conn(ctx).Table("ci_runs").Select("github_run_id, run_attempt").
-		Where("github_run_id IN ?", ids).Find(&rows).Error
+		Where("host = ? AND github_run_id IN ?", host, ids).Find(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("select stored ci run keys: %w", err)
 	}
@@ -41,13 +55,32 @@ func (s *Store) StoredRunKeys(ctx context.Context, keys []domain.RunKey) (map[do
 	return out, nil
 }
 
-// RecordRun implements app.Store. The unique (github_run_id, run_attempt) is the idempotency key:
+// RecordRun implements app.Store. The unique (host, github_run_id, run_attempt) is the idempotency key:
 // a second writer of the same attempt waits for the first one's transaction and then inserts
 // nothing, so exactly one of two concurrent refreshes stores the run and the other gets Stored
 // false. A stored run reports the id of its agent_runs row. When ctx carries a caller's
 // transaction (platform postgres InTx), the writes join it: nothing is committed here, so the
 // caller can write the ledger entry of the run in the same transaction.
 func (s *Store) RecordRun(ctx context.Context, run domain.NewRun) (app.Recorded, error) {
+	return s.recordRun(ctx, run, githubHost, domain.RunSource)
+}
+
+// RecordGitLabRun implements app.GitLabIngestStore: RecordRun for a GitLab job. The row names its
+// host and source (the database default would be github.com), github_run_id is the job id.
+func (s *Store) RecordGitLabRun(ctx context.Context, run domain.GitLabNewRun) (app.Recorded, error) {
+	if err := checkGitLabHost(run.Host); err != nil {
+		return app.Recorded{}, err
+	}
+	if err := checkText("source", run.Source); err != nil {
+		return app.Recorded{}, err
+	}
+	if run.Source != domain.RunSourceGitLab {
+		return app.Recorded{}, fmt.Errorf("gitlab run source %q, want %q", run.Source, domain.RunSourceGitLab)
+	}
+	return s.recordRun(ctx, run.NewRun, run.Host, run.Source)
+}
+
+func (s *Store) recordRun(ctx context.Context, run domain.NewRun, host, source string) (app.Recorded, error) {
 	if err := checkRun(run); err != nil {
 		return app.Recorded{}, err
 	}
@@ -62,14 +95,15 @@ func (s *Store) RecordRun(ctx context.Context, run domain.NewRun) (app.Recorded,
 			FindingsCount:   run.FindingsCount,
 			CostUSD:         run.CostUSD,
 			GithubURL:       run.GithubURL,
-			Source:          domain.RunSource,
+			Source:          source,
+			Host:            host,
 			GithubRunID:     run.GithubRunID,
 			RunAttempt:      run.RunAttempt,
 			HeadSHA:         run.HeadSHA,
 			ManifestVersion: run.ManifestVersion,
 		}
 		res := tx.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "github_run_id"}, {Name: "run_attempt"}},
+			Columns:   []clause.Column{{Name: "host"}, {Name: "github_run_id"}, {Name: "run_attempt"}},
 			DoNothing: true,
 		}).Create(&ci)
 		if res.Error != nil {
@@ -190,6 +224,39 @@ func checkInstallation(in domain.NewInstallation) error {
 		return fmt.Errorf("provider is not an exportable provider: %w", app.ErrNotStorable)
 	}
 	return checkInt32("manifest version", in.ManifestVersion)
+}
+
+// checkGitLabInstallation rejects a GitLab installation no column can hold or that breaks the target
+// CHECKs of migration 0012 (a database error otherwise): a GitLab host key and a positive project id.
+func checkGitLabInstallation(in app.NewGitLabInstallation) error {
+	for _, t := range []struct{ name, val string }{{"agent id", in.AgentID}, {"repo", in.Repo}, {"slug", in.Slug}} {
+		if err := checkText(t.name, t.val); err != nil {
+			return err
+		}
+	}
+	if err := checkGitLabHost(in.Host); err != nil {
+		return err
+	}
+	if in.ProjectID <= 0 {
+		return fmt.Errorf("gitlab project id %d is not positive", in.ProjectID)
+	}
+	if !exportableProvider(in.Provider) {
+		return fmt.Errorf("provider is not an exportable provider: %w", app.ErrNotStorable)
+	}
+	return checkInt32("manifest version", in.ManifestVersion)
+}
+
+// checkGitLabHost refuses a host key a GitLab row cannot carry: empty, not lower case, with white
+// space, or a GitHub host. These are wiring bugs (the host comes from a connection), not hostile
+// input, so the error is not ErrNotStorable: the ingest must not turn it into a skipped artifact.
+func checkGitLabHost(host string) error {
+	switch {
+	case host == "" || host != strings.ToLower(host) || strings.ContainsFunc(host, unicode.IsSpace):
+		return fmt.Errorf("gitlab host key %q is not a lower-case host key", host)
+	case host == githubHost || host == "www.github.com" || host == "api.github.com":
+		return fmt.Errorf("gitlab host key %q is a GitHub host", host)
+	}
+	return nil
 }
 
 // exportableProvider reports whether provider fits ci_installations_provider_chk: a built-in id or

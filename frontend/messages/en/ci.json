@@ -126,7 +126,46 @@
     "nextStepsTitle": "Next steps",
     "nextAddSecrets": "Add the secrets and variables below to the repository's Actions settings first — the check on the new pull request fails until they exist.",
     "nextMerge": "Merge the pull request.",
-    "nextRequiredCheck": "To block merges, set the required status check {check}."
+    "nextRequiredCheck": "To block merges, set the required status check {check}.",
+    "needsGithubRepo": "Needs a GitHub repository",
+    "gitlab": {
+      "target": "GitLab CI",
+      "targetDesc": "Runs in merge request pipelines",
+      "needsRepo": "Needs a GitLab repository",
+      "notConnected": "Not connected — add a GitLab connection for {host}",
+      "postAs": {
+        "githubReview": "MR review (summary + inline threads)",
+        "prComment": "MR comment (summary only)",
+        "none": "Don't post"
+      },
+      "runner": {
+        "githubHosted": "GitLab shared runners",
+        "selfHosted": "Self-managed runner (tag devdigest)"
+      },
+      "triggersNote": "GitLab runs merge request pipelines on every push; trigger choices do not apply",
+      "requiredCheckNote": "Blocking merges needs “Fail CI on” on the agent plus “Pipelines must succeed” in the project's Settings › Merge requests.",
+      "includeBoxLabel": "Root CI configuration include",
+      "includeBoxIntro": "Your project already has {path}. Add this include to it:",
+      "copySnippet": "Copy",
+      "copySnippetAria": "Copy the include snippet",
+      "warnWorkflowRules": "If your workflow:rules exclude merge request pipelines, the review job cannot run",
+      "warnStagesTest": "Your stages must include test, or change the job's stage",
+      "variablesTitle": "CI/CD variables expected",
+      "variableHint": "Add it as a masked, not protected CI/CD variable",
+      "tokenHint": "scope api; a project access token with the Reporter role is recommended (on gitlab.com project access tokens need Premium or Ultimate; otherwise use a personal access token of a dedicated user). Add it as a masked, not protected CI/CD variable",
+      "visibleVariablesTitle": "Visible CI/CD variables expected",
+      "visibleVariableHint": "Add it as a visible CI/CD variable, set to:",
+      "installCardTitle": "Open a merge request with these files",
+      "installCardBody": "DevDigest opens a merge request in {repo} titled “Add DevDigest CI review” with the {count} generated files.",
+      "methodZipBody": "Downloads {name} with the same files at their repo paths. Nothing is written to GitLab.",
+      "secretNote": "Add the CI/CD variables below in the project's Settings › CI/CD › Variables before the merge request pipeline runs.",
+      "successTitle": "Merge request ready",
+      "viewPr": "View merge request",
+      "nextAddVariables": "Add the CI/CD variables below first — the pipeline of the new merge request fails until they exist.",
+      "nextInclude": "Add the include shown below to {path}.",
+      "nextMerge": "Merge the merge request.",
+      "nextPipelinesMustSucceed": "To block merges on blockers, enable Settings › Merge requests › Pipelines must succeed."
+    }
   },
   "ciTab": {
     "heading": "Continuous Integration",

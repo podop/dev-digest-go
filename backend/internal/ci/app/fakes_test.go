@@ -114,19 +114,72 @@ func (f fakeAgents) Exists(_ context.Context, _, id string) (bool, error) {
 	return ok, nil
 }
 
-// fakeRepos is an in-memory RepoDirectory.
+// fakeRepos is an in-memory RepoDirectory: the GitHub repositories by full name and the GitLab ones
+// in a list. GitHub rows get Provider github, Host github.com and the id "gh-<full name>".
 type fakeRepos struct {
-	repos map[string]domain.ImportedRepo
-	// otherHost lists names only a repository of another host carries (ErrUnsupportedHost).
-	otherHost map[string]bool
+	repos  map[string]domain.ImportedRepo
+	gitlab []app.ExportRepo
+	// followed records every FollowGitLabPath call "<id> <path>"; followErr fails it.
+	followed  *[]string
+	followErr error
 }
 
-func (f fakeRepos) FindByFullName(_ context.Context, _, fullName string) (domain.ImportedRepo, bool, error) {
-	if f.otherHost[fullName] {
-		return domain.ImportedRepo{}, false, app.ErrUnsupportedHost
+func (f fakeRepos) Find(_ context.Context, _ string, q app.RepoQuery) (app.ExportRepo, bool, error) {
+	if q.ID != "" {
+		for _, r := range f.gitlab {
+			if r.ID == q.ID {
+				return r, true, nil
+			}
+		}
+		for name, r := range f.repos {
+			if "gh-"+name == q.ID {
+				return githubExportRepo(r), true, nil
+			}
+		}
+		return app.ExportRepo{}, false, nil
 	}
-	r, ok := f.repos[fullName]
-	return r, ok, nil
+	if r, ok := f.repos[q.FullName]; ok {
+		return githubExportRepo(r), true, nil
+	}
+	var hits []app.ExportRepo
+	for _, r := range f.gitlab {
+		if r.FullName == q.FullName {
+			hits = append(hits, r)
+		}
+	}
+	switch len(hits) {
+	case 0:
+		return app.ExportRepo{}, false, nil
+	case 1:
+		return hits[0], true, nil
+	}
+	ids := make([]string, len(hits))
+	for i, r := range hits {
+		ids[i] = r.ID
+	}
+	return app.ExportRepo{}, false, &app.AmbiguousRepoError{IDs: ids}
+}
+
+func (f fakeRepos) FollowGitLabPath(_ context.Context, _ string, repo app.ExportRepo, path string) (app.ExportRepo, error) {
+	if f.followed != nil {
+		*f.followed = append(*f.followed, repo.ID+" "+path)
+	}
+	if f.followErr != nil {
+		return app.ExportRepo{}, f.followErr
+	}
+	if path != repo.FullName {
+		i := strings.LastIndex(path, "/")
+		repo.Owner, repo.Name, repo.FullName = path[:i], path[i+1:], path
+		repo.WebURL = "https://" + repo.Host + "/" + path
+	}
+	return repo, nil
+}
+
+func githubExportRepo(r domain.ImportedRepo) app.ExportRepo {
+	return app.ExportRepo{
+		ID: "gh-" + r.FullName, Provider: app.ProviderGitHub, Host: "github.com",
+		Owner: r.Owner, Name: r.Name, FullName: r.FullName, DefaultBranch: r.DefaultBranch,
+	}
 }
 
 // fakeCustom is an in-memory CustomProviders: the defined providers by public id.
@@ -185,6 +238,7 @@ type fakeStore struct {
 	saved       *domain.Installation
 	listResults []domain.Installation
 	upserts     []domain.NewInstallation // every UpsertInstallation input, in order
+	ge          geStore                  // the GitLab installations (export_gitlab_test.go)
 
 	// ingest
 	installs    []domain.Installation

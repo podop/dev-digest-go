@@ -1,4 +1,4 @@
-/* SettingsAutoReviews — Settings → Automatic Reviews (FR13–FR18, FR20; GitLab A FR13 subtitle). The section owns the
+/* SettingsAutoReviews — Settings → Automatic Reviews (FR13–FR18, FR20; GitLab A FR13 subtitle; GitLab C FR47 info box). The section owns the
    data: it reads the settings and the agents, and every control saves at once with
    PUT /settings. Controls render the stored value, so a failed save returns them to it (the
    global mutation toast shows the API message). */
@@ -96,7 +96,7 @@ export function SettingsAutoReviews() {
       <div style={s.info}>
         <Icon.Info size={14} aria-hidden />
         <span>
-          {t.rich("info", {
+          {t.rich(pollsGitLab ? "infoCiHosts" : "info", {
             integrations: (chunks) => (
               <Link href={sectionHref("integrations")} style={s.link}>
                 {chunks}

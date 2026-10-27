@@ -7,9 +7,9 @@ import React from "react";
 import { ApiError } from "@/lib/api";
 import { safeRunHref } from "@/lib/ci-runs";
 import { useInstallCi } from "@/lib/hooks";
-import type { AgentRun, Runner, RunMap } from "./helpers";
+import { gitlabNextSteps, type AgentRun, type RepoRef, type Runner, type RunMap } from "./helpers";
 
-export function useInstallRun(repo: string, runner: Runner) {
+export function useInstallRun(repoRef: RepoRef, runner: Runner) {
   const { mutateAsync } = useInstallCi();
   const [runs, setRuns] = React.useState<RunMap>({});
   const [busy, setBusy] = React.useState(false);
@@ -37,13 +37,14 @@ export function useInstallRun(repo: string, runner: Runner) {
         if (!aliveRef.current) break;
         mark(id, { status: "running" });
         try {
-          const result = await mutateAsync({ agentId: id, repo, runner });
+          const result = await mutateAsync({ agentId: id, ...repoRef, runner });
           // The response is not zod-parsed here: a missing list means none.
           mark(id, {
             status: "done",
             prUrl: safeRunHref(result.pr_url),
             secrets: result.required_secrets ?? [],
             variables: result.required_variables ?? [],
+            gitlab: gitlabNextSteps(result),
           });
         } catch (e) {
           // The failure belongs to this agent; the next one is still tried (EC13).
@@ -53,7 +54,7 @@ export function useInstallRun(repo: string, runner: Runner) {
       busyRef.current = false;
       if (aliveRef.current) setBusy(false);
     },
-    [mutateAsync, repo, runner, mark],
+    [mutateAsync, repoRef, runner, mark],
   );
 
   return { runs, busy, run };

@@ -133,6 +133,52 @@ describe("GithubActionCard", () => {
   });
 });
 
+const GITLAB_ENTRY: CiRepoEntry = {
+  repo: "grp/svc",
+  installations: [inst("i9", "ag1", "Security Reviewer")],
+  last_run: { status: "failed", ran_at: HOURS_AGO(3), github_url: "https://gitlab.com/grp/svc/-/jobs/55", agent_id: "ag1" },
+  provider: "gitlab",
+  host: "gitlab.com",
+  target_type: "gitlab_ci",
+};
+const GITHUB_SAME_NAME: CiRepoEntry = { ...SINGLE, repo: "grp/svc", provider: "github", host: "github.com", target_type: "gha" };
+
+describe("GithubActionCard with GitLab (GitLab C FR45, AC42)", () => {
+  it("is titled 'GitHub Action' without a GitLab repository and 'CI reviews' with one", async () => {
+    mockFetch({ [ROUTE]: body(SINGLE), "GET /repos": [] });
+    renderWithProviders(<GithubActionCard />);
+    expect(await screen.findByText("1 repo")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "GitHub Action" })).toBeInTheDocument();
+    cleanup();
+
+    mockFetch({
+      [ROUTE]: body(SINGLE),
+      "GET /repos": [{ id: "r2", workspace_id: "w", owner: "grp", name: "svc", full_name: "grp/svc", default_branch: "main", clone_path: null, last_polled_at: null, created_by: null, provider: "gitlab", host: "gitlab.com" }],
+    });
+    renderWithProviders(<GithubActionCard />);
+    expect(await screen.findByRole("heading", { name: "CI reviews" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "GitHub Action" })).not.toBeInTheDocument();
+  });
+
+  it("shows the host and 'GitLab CI' on GitLab rows only, keeps a same-named GitHub row apart, and links the job", async () => {
+    mockFetch({ [ROUTE]: body(GITHUB_SAME_NAME, GITLAB_ENTRY) });
+    renderWithProviders(<GithubActionCard />);
+
+    expect(await screen.findByText("2 repos")).toBeInTheDocument();
+    const [github, gitlab] = screen.getAllByRole("listitem");
+    expect(within(github!).queryByText("GitLab CI")).not.toBeInTheDocument();
+    expect(within(github!).queryByText("gitlab.com")).not.toBeInTheDocument();
+    expect(within(gitlab!).getByText("grp/svc")).toBeInTheDocument();
+    expect(within(gitlab!).getByText("GitLab CI")).toBeInTheDocument();
+    expect(within(gitlab!).getByText("gitlab.com")).toBeInTheDocument();
+    expect(within(gitlab!).getByRole("link", { name: "failed 3 hours ago" })).toHaveAttribute(
+      "href",
+      "https://gitlab.com/grp/svc/-/jobs/55",
+    );
+    expect(within(gitlab!).getByRole("link", { name: "Manage grp/svc" })).toHaveAttribute("href", "/agents/ag1?tab=ci");
+  });
+});
+
 describe("GithubActionCard messages (AC22)", () => {
   it("takes every visible string from the message files (pseudo bundle), rows and error state included", async () => {
     mockFetch({ [ROUTE]: body(SINGLE, DOUBLE) });
@@ -148,5 +194,18 @@ describe("GithubActionCard messages (AC22)", () => {
     const alert = await screen.findByRole("alert", undefined, { timeout: 5000 });
     expect(alert).toHaveTextContent("⟦integrationsGithubAction.card.loadError⟧");
     expect(strayText(document.body, ["Boom"])).toEqual([]);
+  });
+
+  it("takes the GitLab row and the CI reviews title from the message files (pseudo bundle, GitLab C AC43)", async () => {
+    mockFetch({
+      [ROUTE]: body(GITLAB_ENTRY),
+      "GET /repos": [{ id: "r2", workspace_id: "w", owner: "grp", name: "svc", full_name: "grp/svc", default_branch: "main", clone_path: null, last_polled_at: null, created_by: null, provider: "gitlab", host: "gitlab.com" }],
+    });
+    renderWithProviders(<GithubActionCard />, { messages: pseudoMessages() });
+
+    await screen.findByText("grp/svc");
+    await screen.findByText("⟦integrationsGithubAction.card.titleCiReviews⟧");
+    expect(screen.getByText("⟦integrationsGithubAction.card.targetGitlab⟧")).toBeInTheDocument();
+    expect(strayText(document.body, ["grp/svc", "gitlab.com", /ago$/])).toEqual([]);
   });
 });

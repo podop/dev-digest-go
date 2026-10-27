@@ -93,6 +93,22 @@ func CIDedupeKey(githubRunID int64, attempt int) string {
 	return "ci:" + strconv.FormatInt(githubRunID, 10) + ":" + strconv.Itoa(attempt)
 }
 
+// GitHubHost is the host key whose CI runs keep the original dedupe key.
+const GitHubHost = "github.com"
+
+// CIDedupeKeyFor is the dedupe key of the entry of one CI run attempt on a given host (FR36,
+// EC30, SCR1). host is the repository's host key (lower case, ":port" unless 443). For github.com
+// (and "" for callers that predate hosts) it is exactly CIDedupeKey, so stored GitHub keys stay
+// valid; any other host gets "ci:<host>:<id>:<attempt>", so a GitLab job id never collides with a
+// GitHub run id, nor the same id on two GitLab hosts. id is the GitHub run id or the GitLab job id.
+func CIDedupeKeyFor(host string, id int64, attempt int) string {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if h == "" || h == GitHubHost {
+		return CIDedupeKey(id, attempt)
+	}
+	return "ci:" + h + ":" + strconv.FormatInt(id, 10) + ":" + strconv.Itoa(attempt)
+}
+
 // MonthTotal is the stored total of one workspace and calendar month: the exact sum of the known
 // costs of its entries and the number of entries whose cost is unknown (FR7).
 type MonthTotal struct {

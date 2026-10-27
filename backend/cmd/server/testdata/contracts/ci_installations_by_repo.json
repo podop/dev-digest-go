@@ -1,6 +1,7 @@
 {
   "repos": [
     {
+      "host": "github.com",
       "installations": [
         {
           "agent_id": "00000000-0000-4000-8000-000000000005",
@@ -16,9 +17,12 @@
         "ran_at": "2026-01-01T00:00:00.000Z",
         "status": "succeeded"
       },
-      "repo": "acme/api"
+      "provider": "github",
+      "repo": "acme/api",
+      "target_type": "gha"
     },
     {
+      "host": "github.com",
       "installations": [
         {
           "agent_id": "00000000-0000-4000-8000-000000000007",
@@ -29,7 +33,9 @@
         }
       ],
       "last_run": null,
-      "repo": "acme/web"
+      "provider": "github",
+      "repo": "acme/web",
+      "target_type": "gha"
     }
   ]
 }

@@ -1,5 +1,6 @@
-/* RunnerField — the dialog's one Runner choice (FR32): GitHub-hosted or Self-hosted (linux x64).
-   Every agent of the run is exported with it. Locked once the run started. */
+/* RunnerField — the dialog's one Runner choice (FR32): GitHub-hosted or Self-hosted (linux x64); for a GitLab
+   repository "GitLab shared runners" or "Self-managed runner (tag devdigest)" (GitLab C FR9, FR45). Every agent of
+   the run is exported with it. Locked once the run started. */
 "use client";
 
 import React from "react";
@@ -9,14 +10,17 @@ import { s } from "./styles";
 
 export function RunnerField({
   value,
+  gitlab,
   locked,
   onChange,
 }: {
   value: Runner;
+  /** The selected repository is a GitLab one: the labels name GitLab runners. */
+  gitlab: boolean;
   locked: boolean;
   onChange: (runner: Runner) => void;
 }) {
-  const t = useTranslations("integrationsGithubAction.dialog.runner");
+  const t = useTranslations(gitlab ? "integrationsGithubAction.dialog.runnerGitlab" : "integrationsGithubAction.dialog.runner");
   const name = React.useId();
 
   return (
