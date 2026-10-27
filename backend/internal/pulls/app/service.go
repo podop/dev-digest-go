@@ -244,6 +244,7 @@ func (s *Service) refreshDetail(ctx context.Context, pr domain.Pull, repo domain
 	issue := s.linkedIssue(ctx, repo, fetched.Body)
 	err = s.store.ReplaceDetail(ctx, pr.ID, domain.DetailMirror{
 		Body: fetched.Body, DiffStats: fetched.DiffStats, Files: files, Commits: fetched.Commits,
+		DiffHead: fetched.DiffHead, // GitLab comment positions are anchored to it (spec B FR35)
 	})
 	if err != nil {
 		return domain.Detail{}, fmt.Errorf("mirror pull request detail: %w", err)

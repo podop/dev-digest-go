@@ -462,6 +462,31 @@ func TestDetail_gitlabFresh(t *testing.T) {
 	}
 }
 
+// B FR35: the detail fetch stores the merge request's diff head, the head GitLab comment
+// positions are anchored to; a fetch without one clears it.
+func TestDetail_gitlabMirrorsTheDiffHead(t *testing.T) {
+	head := strings.Repeat("ab", 20)
+	for _, tc := range []struct {
+		name string
+		head *string
+	}{{"diff head", &head}, {"no diff head", nil}} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := glFetched()
+			f.DiffHead = tc.head
+			gl := &fakeGitLab{fetched: f, stats: map[int]domain.DiffStats{}}
+			st, svc := glStoreAndService(gl, &fakeGitHub{})
+			pr := glPull(7, domain.DiffStats{})
+			st.pulls = []domain.Pull{pr}
+			if _, err := svc.Detail(t.Context(), wsID, pr.ID); err != nil {
+				t.Fatalf("Detail() error = %v", err)
+			}
+			if diff := cmp.Diff(tc.head, st.mirrors[pr.ID].DiffHead); diff != "" {
+				t.Errorf("mirrored DiffHead mismatch (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
 func TestDetail_gitlabIssueFailureOmitsIssue(t *testing.T) {
 	gl := &fakeGitLab{fetched: glFetched(), stats: map[int]domain.DiffStats{}, issueErr: &app.GitLabError{Status: 404}}
 	st, svc := glStoreAndService(gl, &fakeGitHub{})
