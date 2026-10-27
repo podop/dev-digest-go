@@ -275,14 +275,24 @@ type gitLabPublished struct {
 }
 
 // publishGitLab runs the publish sequence of FR11 and FR12 and maps its failures (§7.2). The whole
-// sequence is retried once on a transient failure, never on 429 (A4); every write is one attempt.
-// The sequence is idempotent: a commit that landed before its answer was lost is found identical
-// by the retry, and an open merge request is reused.
+// sequence is repeated at most once (A4), so at most two sequences run in all, for one of two
+// reasons: a transient failure (transport or 5xx, after a pause; never 429), or a first commit that
+// GitLab refused with 400 although it carried start_branch (a concurrent export created the CI
+// branch after our lookup; no pause, the branch is there already). The two reasons share the one
+// repeat: a repeat that fails again is final, whatever its reason. Every write is one attempt. The
+// sequence is idempotent: a commit that landed before its answer was lost, or by the other export,
+// is found identical by the repeat, and an open merge request is reused.
 func (s *ExportService) publishGitLab(ctx context.Context, in gitLabPublish) (gitLabPublished, error) {
 	out, err := s.publishGitLabOnce(ctx, in)
-	if err != nil && ctx.Err() == nil && transientGitLab(err) {
-		if perr := s.pause(ctx); perr == nil {
+	if err != nil && ctx.Err() == nil {
+		var raced *startBranchRefused
+		switch {
+		case errors.As(err, &raced):
 			out, err = s.publishGitLabOnce(ctx, in)
+		case transientGitLab(err):
+			if perr := s.pause(ctx); perr == nil {
+				out, err = s.publishGitLabOnce(ctx, in)
+			}
 		}
 	}
 	if err == nil {
@@ -310,6 +320,14 @@ func (s *ExportService) publishGitLab(ctx context.Context, in gitLabPublish) (gi
 	return gitLabPublished{}, apperr.ExternalService(msgGitLabUnavailable).
 		WithCode(string(domain.CodeGitLabUnavailable)).WithCause(err)
 }
+
+// startBranchRefused marks the failure of a commit that carried start_branch and was answered 400:
+// at our lookup the CI branch was absent, so GitLab's "branch already exists" means another export
+// created it meanwhile. It wraps the *GitLabError, which maps the failure as before.
+type startBranchRefused struct{ cause *GitLabError }
+
+func (e *startBranchRefused) Error() string { return e.cause.Error() }
+func (e *startBranchRefused) Unwrap() error { return e.cause }
 
 // transientGitLab reports a failure worth one more sequence: a transport failure or a 5xx. A 429
 // is not retried (the limit would only be hit again).
@@ -422,6 +440,10 @@ func (s *ExportService) publishGitLabOnce(ctx context.Context, in gitLabPublish)
 			commit.StartBranch = defaultBranch
 		}
 		if err := gl.Commit(ctx, ref, commit); err != nil {
+			var ge *GitLabError
+			if commit.StartBranch != "" && errors.As(err, &ge) && ge.Status == 400 {
+				return gitLabPublished{}, &startBranchRefused{cause: ge}
+			}
 			return gitLabPublished{}, err
 		}
 	}

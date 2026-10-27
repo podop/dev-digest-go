@@ -1819,23 +1819,14 @@ func TestGitLabCIExport_AC14_ConcurrentExportsGiveOneInstallation(t *testing.T) 
 		}()
 	}
 	wg.Wait()
-	created := 0
 	for _, a := range answers {
 		env.s.mu.Lock()
 		env.s.bodies = append(env.s.bodies, string(a.Body))
 		env.s.mu.Unlock()
-		switch a.Status {
-		case http.StatusCreated:
-			created++
-		default: // GitLab refuses the second first-commit (the branch exists): a clean envelope
-			if e := ciErr(t, a); a.Status < 400 || e.Code == "" {
-				t.Errorf("concurrent export answered %d %s", a.Status, a.Body)
-			}
+		// The loser's first commit is refused (the branch exists); its repeat finds the winner's files.
+		if a.Status != http.StatusCreated {
+			t.Errorf("concurrent export answered %d %s, want 201 for both", a.Status, a.Body)
 		}
-	}
-	t.Logf("concurrent open_pr answers: %d and %d", answers[0].Status, answers[1].Status)
-	if created == 0 {
-		t.Errorf("answers = %d and %d, want at least one 201", answers[0].Status, answers[1].Status)
 	}
 	if n := env.installRows(agent); n != 1 {
 		t.Errorf("installation rows = %d, want 1", n)

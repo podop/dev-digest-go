@@ -122,8 +122,11 @@ type geStub struct {
 	fail map[string][]error
 	// conflictOnCreate makes the first CreateMR answer 409 after opening the MR (one opened meanwhile).
 	conflictOnCreate bool
-	nextIID          int
-	nextSHA          int
+	// raceOnCommit makes the first commit that carries start_branch lose a race: another export
+	// creates the branch with the same files first, and GitLab answers this commit 400.
+	raceOnCommit bool
+	nextIID      int
+	nextSHA      int
 }
 
 type geMR struct {
@@ -218,6 +221,16 @@ func (g *geStub) Commit(_ context.Context, _ app.GitLabRef, in app.GitLabCommit)
 	defer g.mu.Unlock()
 	if err := g.next(app.StepCommit, "commit "+in.Branch); err != nil {
 		return err
+	}
+	if g.raceOnCommit && in.StartBranch != "" {
+		g.raceOnCommit = false
+		g.files[in.Branch] = geCopy(g.files[in.StartBranch])
+		for _, a := range in.Actions {
+			g.files[in.Branch][a.Path] = a.Content
+		}
+		g.nextSHA++
+		g.branches[in.Branch] = geSHA40(fmt.Sprintf("%s-%d", in.Branch, g.nextSHA))
+		return &app.GitLabError{Status: 400, Step: app.StepCommit}
 	}
 	g.commits = append(g.commits, in)
 	if _, ok := g.branches[in.Branch]; !ok {
@@ -1118,7 +1131,9 @@ func TestExportGitLab_Failures(t *testing.T) {
 		{"500 twice", &app.GitLabError{Status: 500, Step: app.StepCommit}, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later", 2, 1},
 		{"timeout twice", &app.GitLabError{Transport: true, Step: app.StepCommit}, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later", 2, 1},
 		{"429 is not retried", &app.GitLabError{Status: 429, Step: app.StepCommit}, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later", 1, 0},
-		{"400 is not retried", &app.GitLabError{Status: 400, Step: app.StepCommit}, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later", 1, 0},
+		// The branch is absent at the lookup, so the commit carries start_branch: a 400 is the lost race
+		// of two first exports and the sequence is repeated once, without a pause.
+		{"400 on a start_branch commit is repeated once", &app.GitLabError{Status: 400, Step: app.StepCommit}, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later", 2, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1159,6 +1174,59 @@ func TestExportGitLab_Failures(t *testing.T) {
 		}
 		if *rig.pauses != 1 || len(rig.logs.snapshot(t)) != 0 {
 			t.Errorf("pauses = %d, log lines = %v, want 1 pause and no log line", *rig.pauses, rig.logs.snapshot(t))
+		}
+	})
+	t.Run("400 on a commit without start_branch is not retried", func(t *testing.T) {
+		rig := newGERig(t, geOpts{})
+		if _, err := geOpenPR(t, rig, nil); err != nil {
+			t.Fatal(err)
+		}
+		a := rig.agents["agent-1"]
+		a.Skills = []domain.ExportSkill{{Name: "API Safety", Body: "Changed.\n"}, a.Skills[1]}
+		rig.agents["agent-1"] = a
+		before := rig.stub.count("commit")
+		rig.stub.fail[app.StepCommit] = []error{&app.GitLabError{Status: 400, Step: app.StepCommit}, &app.GitLabError{Status: 400, Step: app.StepCommit}}
+		_, err := geOpenPR(t, rig, nil)
+		wantError(t, err, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later")
+		if got := rig.stub.count("commit") - before; got != 1 {
+			t.Errorf("commit attempts = %d, want 1 (the branch existed, so the 400 is not the race)", got)
+		}
+	})
+	t.Run("a lost first-commit race is repeated once and succeeds", func(t *testing.T) {
+		rig := newGERig(t, geOpts{})
+		rig.stub.raceOnCommit = true
+		got, err := geOpenPR(t, rig, nil)
+		if err != nil || got.PRURL == nil || got.Installation == nil {
+			t.Fatalf("Export = %+v, %v, want success after one repeat", got, err)
+		}
+		if n := rig.stub.count("commit"); n != 1 {
+			t.Errorf("commit attempts = %d, want 1 (the repeat finds the winner's files identical)", n)
+		}
+		if n := rig.stub.count("project"); n != 2 {
+			t.Errorf("sequences = %d, want 2", n)
+		}
+		if len(rig.stub.created) != 1 || *rig.pauses != 0 || len(rig.logs.snapshot(t)) != 0 {
+			t.Errorf("created MRs = %d, pauses = %d, log lines = %v, want 1, 0 and none", len(rig.stub.created), *rig.pauses, rig.logs.snapshot(t))
+		}
+	})
+	t.Run("the race and a transient failure share one repeat", func(t *testing.T) {
+		rig := newGERig(t, geOpts{})
+		rig.stub.raceOnCommit = true
+		// The repeat meets a 502: no third sequence.
+		rig.stub.fail[app.StepProject] = []error{nil, &app.GitLabError{Status: 502, Step: app.StepProject}}
+		_, err := geOpenPR(t, rig, nil)
+		wantError(t, err, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later")
+		if n := rig.stub.count("project"); n != 2 {
+			t.Errorf("sequences = %d, want 2 in all", n)
+		}
+		// The other way round: a 502 first, then the race on the repeat.
+		rig = newGERig(t, geOpts{})
+		rig.stub.fail[app.StepProject] = []error{&app.GitLabError{Status: 502, Step: app.StepProject}}
+		rig.stub.raceOnCommit = true
+		_, err = geOpenPR(t, rig, nil)
+		wantError(t, err, apperr.KindExternalService, "gitlab_unavailable", "GitLab is unavailable, try again later")
+		if n := rig.stub.count("project"); n != 2 {
+			t.Errorf("sequences = %d, want 2 in all", n)
 		}
 	})
 	t.Run("a commit that landed before its answer was lost is found identical", func(t *testing.T) {
