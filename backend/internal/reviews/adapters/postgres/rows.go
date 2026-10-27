@@ -254,13 +254,14 @@ func (pullRow) TableName() string { return "pull_requests" }
 
 // repoRow maps repos.
 type repoRow struct {
-	ID          string `gorm:"column:id;primaryKey"`
-	WorkspaceID string `gorm:"column:workspace_id"`
-	Owner       string `gorm:"column:owner"`
-	Name        string `gorm:"column:name"`
-	Provider    string `gorm:"column:provider"`
-	Host        string `gorm:"column:host"`
-	ProjectID   *int64 `gorm:"column:project_id"`
+	ID          string  `gorm:"column:id;primaryKey"`
+	WorkspaceID string  `gorm:"column:workspace_id"`
+	Owner       string  `gorm:"column:owner"`
+	Name        string  `gorm:"column:name"`
+	Provider    string  `gorm:"column:provider"`
+	Host        string  `gorm:"column:host"`
+	ProjectID   *int64  `gorm:"column:project_id"`
+	WebURL      *string `gorm:"column:web_url"`
 }
 
 func (repoRow) TableName() string { return "repos" }

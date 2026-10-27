@@ -45,7 +45,7 @@ func (a *Intent) Resolve(ctx context.Context, req reviewsapp.IntentRequest, emit
 			Body: body, Branch: req.Pull.Branch, HeadSHA: req.Pull.HeadSHA,
 		},
 		Repo: intent.Repo{ID: req.Repo.ID, Owner: req.Repo.Owner, Name: req.Repo.Name,
-			Provider: req.Repo.Provider, Host: req.Repo.Host, ProjectID: req.Repo.ProjectID},
+			Provider: req.Repo.Provider, Host: req.Repo.Host, ProjectID: req.Repo.ProjectID, WebURL: req.Repo.WebURL},
 		ChangedFiles: req.ChangedFiles,
 		DiffExcerpt:  req.DiffExcerpt,
 	}

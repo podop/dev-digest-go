@@ -83,6 +83,21 @@ func TestIntent_ResolveMapsTheRequestOntoTheDerivation(t *testing.T) {
 	}
 }
 
+func TestIntent_CarriesTheGitLabRepositoryLocationAndWebURL(t *testing.T) {
+	svc := &fakeIntentService{res: intentapp.Result{Warning: "x"}}
+	req := request()
+	req.Repo = domain.ReviewRepo{ID: "repo-1", Owner: "grp/sub", Name: "web", Provider: "gitlab",
+		Host: "git.corp.example", ProjectID: 4242, WebURL: "https://git.corp.example/grp/sub/web"}
+
+	peers.NewIntent(svc).Resolve(t.Context(), req, nil)
+
+	want := intent.Repo{ID: "repo-1", Owner: "grp/sub", Name: "web", Provider: "gitlab",
+		Host: "git.corp.example", ProjectID: 4242, WebURL: "https://git.corp.example/grp/sub/web"}
+	if diff := cmp.Diff(want, svc.in.Repo); diff != "" {
+		t.Errorf("derivation repo mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestIntent_ANilBodyIsAnEmptyBody(t *testing.T) {
 	svc := &fakeIntentService{res: intentapp.Result{Warning: "x"}}
 	req := request()

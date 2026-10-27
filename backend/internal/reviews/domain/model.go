@@ -136,6 +136,9 @@ type ReviewRepo struct {
 	Provider  string
 	Host      string
 	ProjectID int64
+	// WebURL is the stored web address of a GitLab project (repos.web_url); "" for GitHub. The
+	// intent derivation reads the GitLab "same project" link rule from it.
+	WebURL string
 }
 
 // ReviewSkill is an enabled skill linked to an agent, as it goes into a run: rendered as a

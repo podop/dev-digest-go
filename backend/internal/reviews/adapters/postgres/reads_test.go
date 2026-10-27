@@ -40,7 +40,7 @@ func TestFindRepo(t *testing.T) {
 	gl := f.insertRepo(t, `INSERT INTO repos (workspace_id, owner, name, full_name, provider, host, project_id, web_url)
 		VALUES (?, 'grp/sub', 'web', 'grp/sub/web', 'gitlab', 'git.corp.example', 4242, 'https://git.corp.example/grp/sub/web') RETURNING id`, f.ws)
 	got, err = f.store.FindRepo(t.Context(), gl)
-	if want := (domain.ReviewRepo{ID: gl, Owner: "grp/sub", Name: "web", Provider: "gitlab", Host: "git.corp.example", ProjectID: 4242}); err != nil || got != want {
+	if want := (domain.ReviewRepo{ID: gl, Owner: "grp/sub", Name: "web", Provider: "gitlab", Host: "git.corp.example", ProjectID: 4242, WebURL: "https://git.corp.example/grp/sub/web"}); err != nil || got != want {
 		t.Errorf("FindRepo(gitlab) = %+v, %v, want %+v", got, err, want)
 	}
 	if _, err := f.store.FindRepo(t.Context(), missingID); !errors.Is(err, domain.ErrNotFound) {

@@ -42,6 +42,9 @@ func (s *Store) FindRepo(ctx context.Context, repoID string) (domain.ReviewRepo,
 	if row.ProjectID != nil {
 		out.ProjectID = *row.ProjectID
 	}
+	if row.WebURL != nil {
+		out.WebURL = *row.WebURL
+	}
 	return out, nil
 }
 
