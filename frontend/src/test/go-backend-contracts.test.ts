@@ -368,17 +368,76 @@ const evalRunAll = EvalRunAllResponse.extend({
   skipped: z.array(EvalRunAllResponse.shape.skipped.element.strict()),
 }).strict();
 
-const ciRun = CiRun.strict();
-const ciInstallation = CiInstallation.extend({ last_run: ciRun.nullish() }).strict();
-const ciExport = CiExport.extend({
-  installation: ciInstallation.nullable(),
-  files: z.array(CiFile.strict()),
+// GitLab C §7.1 / NFR8: the CI contracts gained provider/host/pr_url/gitlab_ci, all OPTIONAL in the UI
+// contract, so .strict() alone passes a golden that drops them. Every golden pins them per host kind:
+// GitHub rows say provider "github" / host "github.com" / pr_url null, GitLab rows provider "gitlab".
+const ciGitHubRun = CiRun.extend({
+  provider: z.literal("github"),
+  host: z.literal("github.com"),
+  pr_url: z.null(),
 }).strict();
-const ciRuns = z.object({ runs: z.array(ciRun) }).strict();
+const ciGitLabRun = CiRun.extend({
+  provider: z.literal("gitlab"),
+  host: z.string().min(1).refine((h) => h !== "github.com"),
+  source: z.literal("gitlab_ci"),
+  pr_url: z.string().nullable(),
+}).strict();
+const ciRun = z.union([ciGitHubRun, ciGitLabRun]);
+const ciGitHubInstallation = CiInstallation.extend({
+  provider: z.literal("github"),
+  host: z.literal("github.com"),
+  target_type: z.literal("gha"),
+  last_run: ciGitHubRun.nullish(),
+}).strict();
+const ciGitLabInstallation = CiInstallation.extend({
+  provider: z.literal("gitlab"),
+  host: z.string().min(1).refine((h) => h !== "github.com"),
+  target_type: z.literal("gitlab_ci"),
+  workflow_path: z.string().regex(/^\.gitlab\/devdigest\/review-.+\.yml$/),
+  last_run: ciGitLabRun.nullish(),
+}).strict();
+const ciInstallation = z.union([ciGitHubInstallation, ciGitLabInstallation]);
+const ciGitLabBlock = z
+  .object({
+    job_file: z.string().regex(/^\.gitlab\/devdigest\/review-.+\.yml$/),
+    root_config: z.enum(["create", "keep_existing", "custom_path"]),
+    config_path: z.string().min(1),
+    include_snippet: z.string().startsWith("include:\n  - local: .gitlab/devdigest/review-"),
+    triggers_note: z.string().nullable(),
+  })
+  .strict();
+const ciExportBase = { files: z.array(CiFile.strict()) };
+// GitHub export: gitlab_ci is present and null (the key is always sent).
+const ciExport = CiExport.extend({
+  ...ciExportBase,
+  installation: ciGitHubInstallation.nullable(),
+  gitlab_ci: z.null(),
+}).strict();
+// GitLab export: the gitlab_ci block is non-null and the token secret is listed (FR11/FR12).
+const ciGitLabExport = CiExport.extend({
+  ...ciExportBase,
+  installation: ciGitLabInstallation.nullable(),
+  gitlab_ci: ciGitLabBlock,
+  required_secrets: z.array(z.string()).refine((l) => l.includes("DEVDIGEST_GITLAB_TOKEN")),
+}).strict();
+const ciRuns = z.object({ runs: z.array(ciGitHubRun) }).strict();
+const ciMixedRuns = z.object({ runs: z.array(ciRun) }).strict();
+const ciRefreshInstallation = CiRefreshResult.shape.installations.element;
+const ciRefreshSkipped = z.array(ciRefreshInstallation.shape.skipped.element.strict());
+// GitHub refresh installations carry no host (only a non-github.com host is sent).
 const ciRefresh = CiRefreshResult.extend({
+  installations: z.array(ciRefreshInstallation.extend({ host: z.undefined(), skipped: ciRefreshSkipped }).strict()),
+}).strict();
+const ciGitLabRefresh = CiRefreshResult.extend({
   installations: z.array(
-    CiRefreshResult.shape.installations.element
-      .extend({ skipped: z.array(CiRefreshResult.shape.installations.element.shape.skipped.element.strict()) })
+    ciRefreshInstallation
+      .extend({
+        host: z.string().min(1).refine((h) => h !== "github.com"),
+        error_code: z
+          .enum(["gitlab_permission_denied", "gitlab_rate_limited", "gitlab_unavailable", "repo_host_not_connected", "gitlab_token_missing"])
+          .optional(),
+        skipped: ciRefreshSkipped,
+      })
       .strict(),
   ),
 }).strict();
@@ -583,16 +642,31 @@ const pluginDisabledError = ApiErrorBody.extend({
   error: ApiErrorBody.shape.error.extend({ code: z.literal(PLUGIN_DISABLED_CODE) }).strict(),
 }).strict();
 const pluginRef = PluginRef.strict();
-const ciRepoInstallations = CiRepoInstallations.extend({
-  repos: z.array(
-    CiRepoInstallations.shape.repos.element
-      .extend({
-        installations: z.array(CiRepoInstallations.shape.repos.element.shape.installations.element.strict()),
-        last_run: CiRepoInstallations.shape.repos.element.shape.last_run.unwrap().strict().nullable(),
-      })
-      .strict(),
-  ),
-}).strict();
+const ciRepoEntry = CiRepoInstallations.shape.repos.element;
+const ciRepoEntryBase = {
+  installations: z.array(ciRepoEntry.shape.installations.element.strict()),
+  last_run: ciRepoEntry.shape.last_run.unwrap().strict().nullable(),
+};
+const ciGitHubRepoEntry = ciRepoEntry
+  .extend({
+    ...ciRepoEntryBase,
+    provider: z.literal("github"),
+    host: z.literal("github.com"),
+    target_type: z.literal("gha"),
+  })
+  .strict();
+const ciGitLabRepoEntry = ciRepoEntry
+  .extend({
+    ...ciRepoEntryBase,
+    provider: z.literal("gitlab"),
+    host: z.string().min(1).refine((h) => h !== "github.com"),
+    target_type: z.literal("gitlab_ci"),
+  })
+  .strict();
+const ciRepoInstallations = z.object({ repos: z.array(ciGitHubRepoEntry) }).strict();
+const ciMixedRepoInstallations = z
+  .object({ repos: z.array(z.union([ciGitHubRepoEntry, ciGitLabRepoEntry])) })
+  .strict();
 
 // `.strict()` makes an extra key a failure: the Go API must not send fields the contract lacks.
 const contracts: Record<string, z.ZodTypeAny> = {
@@ -755,7 +829,7 @@ const contracts: Record<string, z.ZodTypeAny> = {
   ci_export_files_openai: ciExport,
   ci_export_files_anthropic: ciExport,
   ci_export_open_pr_custom: ciExport,
-  ci_installations: z.object({ installations: z.array(ciInstallation) }).strict(),
+  ci_installations: z.object({ installations: z.array(ciGitHubInstallation) }).strict(),
   ci_runs_all: ciRuns,
   ci_runs_agent: ciRuns,
   ci_runs_after_agent_delete: ciRuns,
@@ -764,6 +838,14 @@ const contracts: Record<string, z.ZodTypeAny> = {
   ci_refresh_skips: ciRefresh,
   ci_refresh_errors: ciRefresh,
   ci_refresh_not_checked: ciRefresh,
+  // GitLab C: GitLab export / refresh / lists (strict; GitLab fields pinned).
+  ci_gl_export_files: ciGitLabExport,
+  ci_gl_export_files_keep_existing: ciGitLabExport,
+  ci_gl_export_open_pr: ciGitLabExport,
+  ci_gl_refresh: ciGitLabRefresh,
+  ci_gl_refresh_skips: ciGitLabRefresh,
+  ci_gl_installations: z.object({ installations: z.array(ciInstallation) }).strict(),
+  ci_gl_runs: ciMixedRuns,
 
   // ---- PR Leaderboard ----
   leaderboard_week: leaderboard,
@@ -794,6 +876,7 @@ const contracts: Record<string, z.ZodTypeAny> = {
   plugins_delete: pluginRemoved,
   plugin_disabled: pluginDisabledError,
   ci_installations_by_repo: ciRepoInstallations,
+  ci_gl_installations_by_repo: ciMixedRepoInstallations,
   // An agent and a skill of a plugin carry its owner; the plugin object is strict here.
   agent_get_plugin: Agent.extend({ plugin: pluginRef }).strict(),
   skill_get_plugin: Skill.extend({ plugin: pluginRef }).strict(),
@@ -1014,6 +1097,138 @@ describe("Go backend golden responses", () => {
     expect(repos.map((r) => r.repo)).toEqual(["acme/api", "acme/web"]);
     expect(repos[0]?.last_run).toMatchObject({ status: "succeeded" });
     expect(repos[1]?.last_run).toBeNull();
+  });
+
+  it("the GitHub CI goldens pin provider github, host github.com and the null gitlab_ci / pr_url", () => {
+    type Row = { provider?: unknown; host?: unknown; pr_url?: unknown; target_type?: unknown; source?: unknown };
+    for (const name of ["ci_export_files", "ci_export_files_custom", "ci_export_files_openai", "ci_export_files_anthropic"]) {
+      expect(read(name), name).toMatchObject({ gitlab_ci: null, installation: null });
+    }
+    for (const name of ["ci_export_open_pr", "ci_export_open_pr_custom"]) {
+      const { installation, gitlab_ci } = read(name) as { installation: Row; gitlab_ci: unknown };
+      expect(gitlab_ci, name).toBeNull();
+      expect(installation, name).toMatchObject({ provider: "github", host: "github.com", target_type: "gha" });
+    }
+    const { installations } = read("ci_installations") as { installations: { last_run: Row | null }[] & Row[] };
+    for (const inst of installations) {
+      expect(inst).toMatchObject({ provider: "github", host: "github.com", target_type: "gha" });
+      if (inst.last_run) expect(inst.last_run).toMatchObject({ provider: "github", host: "github.com", pr_url: null });
+    }
+    for (const name of ["ci_runs_all", "ci_runs_agent", "ci_runs_after_agent_delete", "ci_refresh_runs"]) {
+      for (const run of (read(name) as { runs: Row[] }).runs) {
+        expect(run, name).toMatchObject({ provider: "github", host: "github.com", pr_url: null, source: "gha" });
+      }
+    }
+    for (const name of ["ci_refresh", "ci_refresh_skips", "ci_refresh_errors", "ci_refresh_not_checked"]) {
+      for (const inst of (read(name) as { installations: object[] }).installations) {
+        expect(inst, name).not.toHaveProperty("host");
+      }
+    }
+    for (const repo of (read("ci_installations_by_repo") as { repos: Row[] }).repos) {
+      expect(repo).toMatchObject({ provider: "github", host: "github.com", target_type: "gha" });
+    }
+  });
+
+  it("the GitLab CI export goldens carry the gitlab_ci block, the token secret and the merge request url", () => {
+    type Export = {
+      files: { path: string }[];
+      gitlab_ci: { job_file: string; root_config: string; config_path: string; triggers_note: string | null };
+      installation: Record<string, unknown> | null;
+      pr_url: string | null;
+      required_secrets: string[];
+    };
+    const files = read("ci_gl_export_files") as Export;
+    expect(files.installation).toBeNull();
+    expect(files.pr_url).toBeNull();
+    expect(files.gitlab_ci).toMatchObject({
+      job_file: ".gitlab/devdigest/review-ci-reviewer.yml",
+      root_config: "create",
+      config_path: ".gitlab-ci.yml",
+      triggers_note: null,
+    });
+    expect(files.files.map((f) => f.path)).toContain(files.gitlab_ci.job_file);
+    expect(files.required_secrets).toEqual(["OPENROUTER_API_KEY", "DEVDIGEST_GITLAB_TOKEN"]);
+
+    const keep = read("ci_gl_export_files_keep_existing") as Export;
+    expect(keep.gitlab_ci.root_config).toBe("keep_existing");
+    expect(keep.gitlab_ci.triggers_note).toEqual(expect.any(String));
+    expect(keep.installation).toBeNull();
+
+    const openPr = read("ci_gl_export_open_pr") as Export;
+    expect(openPr.installation).toMatchObject({
+      provider: "gitlab",
+      host: "gitlab.example.com",
+      target_type: "gitlab_ci",
+      workflow_path: ".gitlab/devdigest/review-ci-reviewer.yml",
+      last_run: null,
+    });
+    expect(openPr.pr_url).toBe("https://gitlab.example.com/acme/web/-/merge_requests/1");
+    // No secret value ever rides in the export response (names only).
+    for (const name of ["ci_gl_export_files", "ci_gl_export_files_keep_existing", "ci_gl_export_open_pr"]) {
+      expect(JSON.stringify(read(name)), name).not.toMatch(/glpat-/);
+    }
+  });
+
+  it("the GitLab CI list goldens pin provider gitlab, the host, the merge request url and gitlab_ci", () => {
+    type Run = { provider: string; host: string; source: string; pr_url: string | null; github_url: string };
+    const { installations } = read("ci_gl_installations") as {
+      installations: { provider: string; host: string; target_type: string; last_run: Run }[];
+    };
+    expect(installations.map((i) => [i.provider, i.host, i.target_type])).toEqual([
+      ["gitlab", "gitlab-1.lab.test", "gitlab_ci"],
+      ["github", "github.com", "gha"],
+      ["gitlab", "gitlab.example.com", "gitlab_ci"],
+    ]);
+    expect(installations[0]?.last_run).toMatchObject({
+      provider: "gitlab",
+      source: "gitlab_ci",
+      pr_url: "https://gitlab-1.lab.test/acme/web-renamed/-/merge_requests/3",
+    });
+    expect(installations[1]?.last_run).toMatchObject({ provider: "github", source: "gha", pr_url: null });
+    // A host without a connection (or a project not found) leaves pr_url null; the job url still rides along.
+    expect(installations[2]?.last_run).toMatchObject({ provider: "gitlab", source: "gitlab_ci", pr_url: null });
+
+    const { runs } = read("ci_gl_runs") as { runs: Run[] };
+    expect(runs.map((r) => [r.provider, r.host, r.source])).toEqual([
+      ["gitlab", "gitlab.example.com", "gitlab_ci"],
+      ["gitlab", "gitlab-1.lab.test", "gitlab_ci"],
+      ["github", "github.com", "gha"],
+    ]);
+    // A GitLab run keeps the job url in github_url; pr_url is the merge request (null when the host is not connected).
+    for (const r of runs.filter((x) => x.provider === "gitlab")) expect(r.github_url).toContain("/-/jobs/");
+    expect(runs.map((r) => r.pr_url)).toEqual([null, expect.stringContaining("/-/merge_requests/3"), null]);
+
+    const { repos } = read("ci_gl_installations_by_repo") as {
+      repos: { repo: string; provider: string; host: string; target_type: string }[];
+    };
+    // Same owner/name on two hosts stay two entries (grouped by host + repository identity).
+    expect(repos.map((r) => [r.provider, r.host, r.repo, r.target_type])).toEqual([
+      ["github", "github.com", "acme/web", "gha"],
+      ["gitlab", "gitlab.example.com", "acme/web", "gitlab_ci"],
+      ["gitlab", "gitlab-1.lab.test", "acme/web-renamed", "gitlab_ci"],
+    ]);
+  });
+
+  it("the GitLab CI refresh goldens carry the host, the GitLab error code and the skip reasons", () => {
+    expect(read("ci_gl_refresh")).toMatchObject({
+      degraded: false,
+      ingested: 2,
+      installations: [{ host: "gitlab-1.lab.test", state: "ok", skipped: [] }],
+    });
+    const skips = read("ci_gl_refresh_skips") as {
+      degraded: boolean;
+      installations: { host: string; state: string; error_code?: string; skipped: { reason: string }[] }[];
+    };
+    expect(skips.degraded).toBe(true);
+    expect(skips.installations).toHaveLength(1);
+    expect(skips.installations[0]).toMatchObject({
+      host: "gitlab-1.lab.test",
+      state: "error",
+      error_code: "gitlab_unavailable",
+    });
+    expect(new Set(skips.installations[0]?.skipped.map((s) => s.reason))).toEqual(
+      new Set(["artifact_expired", "artifact_too_large", "artifact_invalid"]),
+    );
   });
 
   it("the index-state goldens cover a full, a degraded and a synthesised state", () => {
