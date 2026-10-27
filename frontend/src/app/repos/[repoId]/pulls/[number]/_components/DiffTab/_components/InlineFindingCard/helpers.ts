@@ -111,7 +111,7 @@ function neutraliseQuickActions(text: string): string {
   return text.replace(/\r\n?/g, "\n").split("\n").map(neutraliseQuickAction).join("\n");
 }
 
-/** Byte-for-byte mirror of the server's code regions (`notebody.codeRegions`, decision D-new-1): half-open `[start, end)`. */
+/** Mirror of the server's code regions (`notebody.codeRegions`, decisions D-new-1, D-new-3): half-open `[start, end)`. */
 interface Region {
   start: number;
   end: number;
@@ -167,7 +167,7 @@ function fenceClosers(lines: readonly string[]): number[] {
 /** Whether a line opens a block quote or a list item (after blanks: `>`, or a list marker then a blank or the end). */
 function startsContainer(line: string): boolean {
   const t = line.replace(/^[ \t]+/, "");
-  return /^(?:>|[-*+](?:[ \t]|$)|[0-9]{1,9}[.)](?:[ \t]|$))/.test(t);
+  return /^(?:>|&gt;|[-*+](?:[ \t]|$)|[0-9]{1,9}[.)](?:[ \t]|$))/.test(t);
 }
 
 interface BacktickRun {
@@ -204,7 +204,7 @@ function inlineSpans(runs: readonly BacktickRun[]): Region[] {
 }
 
 /**
- * Where GitLab surely renders code (decision D-new-1; over-neutralising a real span is fine): a CLOSED fenced block
+ * Where GitLab probably renders code (decisions D-new-1, D-new-3: a wrong guess only changes how text looks): a CLOSED fenced block
  * (3+ backticks or tildes at column 0–3, closed by a fence of the same character, at least as long; a fence indented
  * 1–3 columns counts only while no list item or block quote can be open) and an inline span on ONE line (a backslash
  * escapes the opening backtick; a line with a pipe has none, a table row splits its cells there). Anything else,
@@ -275,17 +275,32 @@ function isSpecialReference(ref: string): boolean {
 function escapeGitLabProse(prose: string): string {
   return prose
     .replace(CHARACTER_REFERENCE, (ref) => (isSpecialReference(ref) ? `&amp;${ref.slice(1)}` : ref))
-    .replaceAll("<", "&lt;")
+    .replace(/<(?!\u200b)/g, "&lt;")
     .replaceAll(">", "&gt;")
-    .replace(/@(?!​)/g, `@${ZWSP}`)
+    .replace(/@(?!\u200b)/g, `@${ZWSP}`)
+    .replaceAll("![", `!${ZWSP}[`);
+}
+
+/**
+ * Code for GitLab (decision D-new-3): invisible changes only, so a region guessed wrong can change how text looks
+ * but never what GitLab parses. U+200B goes after `@` and `<` and into `![` and after the `&` of an entity that decodes
+ * to one of them; `>` and everything else stay.
+ */
+function escapeGitLabCode(code: string): string {
+  return code
+    .replace(CHARACTER_REFERENCE, (ref) => (isSpecialReference(ref) ? `&${ZWSP}${ref.slice(1)}` : ref))
+    .replace(/<(?!\u200b)/g, `<${ZWSP}`)
+    .replace(/@(?!\u200b)/g, `@${ZWSP}`)
     .replaceAll("![", `!${ZWSP}[`);
 }
 
 /**
  * LLM text for a GitLab merge request, made safe to post under the reviewer's name: spec FR15 (quick actions, code
- * included) and FR16 outside code, with the server's conservative code regions (D-new-1) and entity rule (D-new-2).
- * The server applies the authoritative rules (FR13–FR17) to the whole body again; this only keeps the UI's own text
- * from relying on that. `sanitizeForGitHub` is unrelated and unchanged.
+ * included) and FR16 (D-new-3): in prose `<`/`>` become text, in code only invisible U+200B changes, and `@`, `![`
+ * and the entities that decode to `@ < ! [` are neutralised everywhere. The server applies the authoritative rules
+ * (FR13–FR17) to the whole body again, and also closes a fence the text leaves open before the trailing `<sub>`
+ * line and marker; this only keeps the UI's own text from relying on that. `sanitizeForGitHub` is unrelated and
+ * unchanged.
  */
 export function sanitizeForGitLab(text: string): string {
   // Quick actions first: FR15 looks behind `>` prefixes, which the prose escape turns into `&gt;`.
@@ -293,7 +308,7 @@ export function sanitizeForGitLab(text: string): string {
   let out = "";
   let from = 0;
   for (const region of gitlabCodeRegions(lf)) {
-    out += escapeGitLabProse(lf.slice(from, region.start)) + lf.slice(region.start, region.end);
+    out += escapeGitLabProse(lf.slice(from, region.start)) + escapeGitLabCode(lf.slice(region.start, region.end));
     from = region.end;
   }
   return out + escapeGitLabProse(lf.slice(from));

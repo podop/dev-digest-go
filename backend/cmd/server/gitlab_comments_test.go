@@ -1044,7 +1044,7 @@ func TestGbComments_AC13_BodiesPassTheNoteRulesOnlyForGitLab(t *testing.T) {
 		replyTx = "- /merge"
 	)
 	wantGitLab := map[string]string{
-		finding: "\u200b/close @\u200bx &lt;i&gt;\n\nSee `@code <tag>` and &lt;b&gt;x&lt;/b&gt;\n\n<sub>DevDigest · 85% confidence</sub>\n\n<!-- devdigest-finding:abc123 -->",
+		finding: "\u200b/close @\u200bx &lt;i&gt;\n\nSee `@\u200bcode <\u200btag>` and &lt;b&gt;x&lt;/b&gt;\n\n<sub>DevDigest · 85% confidence</sub>\n\n<!-- devdigest-finding:abc123 -->",
 		free:    "\u200b/approve\n@\u200bann see &lt;b&gt;x&lt;/b&gt;",
 		replyTx: "- \u200b/merge",
 	}

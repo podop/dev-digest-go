@@ -974,6 +974,13 @@ func TestPostComment_gitlabBodiesPassTheRules(t *testing.T) {
 		{"finding", finding, wantFinding},
 		{"free text", "/approve\n@ann see <b>x</b>", z + "/approve\n@" + z + "ann see &lt;b&gt;x&lt;/b&gt;"},
 		{"CRLF", "a\r\n/close", "a\n" + z + "/close"},
+		// An unclosed fence in the rationale would swallow the sub line and the marker as code text, and
+		// the duplicate check would then miss the posted comment: the rules close it before them.
+		{
+			"unclosed fence in the rationale",
+			"**[high · bug] t**\n\n```go\nx := a<b\n\n**Suggested fix**\n\nfix\n\n<sub>DevDigest · 80% confidence</sub>\n\n<!-- devdigest-finding:abc -->",
+			"**[high · bug] t**\n\n```go\nx := a<" + z + "b\n\n**Suggested fix**\n\nfix\n\n```\n<sub>DevDigest · 80% confidence</sub>\n\n<!-- devdigest-finding:abc -->",
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

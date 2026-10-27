@@ -5,16 +5,20 @@
 // created, edited or published, notifies @mentions, renders raw HTML and fetches Markdown
 // images. [Apply] neutralises all four with invisible U+200B characters and escaped HTML:
 //
-//   - FR14: CR LF and a lone CR become LF; code is recognised conservatively, only where GitLab
-//     surely renders code (see [codeRegions]): an inline span on ONE line and a CLOSED top-level
-//     fence. Everything else, indented code included, is prose.
-//   - FR15 (everywhere, code regions included): U+200B before the "/" that follows a line's
-//     leading prefix of spaces, tabs, U+FEFF, U+00A0, ">" and list markers.
-//   - FR16 (outside code regions): U+200B after each "@"; "<" and ">" become &lt; and &gt;
-//     except on the "<sub>DevDigest · N% confidence</sub>" line and the body's last non-empty
-//     line when it is the "<!-- devdigest-finding:ID -->" marker; "![" becomes "!" + U+200B + "[";
-//     the "&" of a character reference that decodes to "@", "<", "!" or "[" becomes "&amp;"
-//     (decision D-new-2; Apply's own "&lt;" is kept, it decodes to inert text and keeps FR17).
+//   - FR14: CR LF and a lone CR become LF; a top-level fence the body leaves open is closed on its own
+//     line before the trailing "<sub>" / marker lines, so those lines always render outside code (an
+//     unclosed fence would swallow the marker and the duplicate check would miss the comment).
+//   - FR15 (everywhere, code included): U+200B before the "/" that follows a line's leading prefix
+//     of spaces, tabs, U+FEFF, U+00A0, ">" and list markers.
+//   - FR16, everywhere: U+200B after each "@"; "![" becomes "!" + U+200B + "["; the "&" of a character
+//     reference that decodes to "@", "<", "!" or "[" is neutralised. Outside code regions "<" and ">"
+//     become &lt; and &gt; and the entity "&" becomes "&amp;"; inside code regions (see [codeRegions])
+//     the changes are invisible only: U+200B after each "<" and after the "&" of such an entity
+//     (decision D-new-3). Code is a best-effort guess of where GitLab renders code, and a wrong guess
+//     can only change how text looks, never let a mention, tag or image through. A "<" already followed
+//     by U+200B is left as it is. The "<sub>DevDigest · N% confidence</sub>" line and the body's last
+//     non-empty line when it is the "<!-- devdigest-finding:ID -->" marker (FR16(b)) are kept as they
+//     are wherever they are.
 //   - FR17: the output depends only on the body and Apply is idempotent.
 //
 // The package imports only the standard library: the GitLab CI runner (slice C) links it, and
@@ -44,15 +48,16 @@ const (
 // A byte that is not valid UTF-8 counts as one character.
 func Chars(s string) int { return utf8.RuneCountInString(s) }
 
-// special marks the bytes FR16 may change outside code regions.
+// special marks the bytes FR16 may change.
 var special = [256]bool{'@': true, '<': true, '>': true, '!': true, '&': true}
 
 // Apply returns body after FR14, FR15 and FR16, in that order, applied to the whole body.
-// It runs in time linear in len(body).
+// It runs in time linear in len(body) (log factor for the fence pairing).
 func Apply(body string) string {
 	if strings.Contains(body, "\r") {
 		body = normalizeNewlines(body)
 	}
+	body = closeOpenFence(body)
 	regions := codeRegions(body)
 	lastStart := lastNonEmptyLineStart(body)
 
@@ -71,54 +76,54 @@ func Apply(body string) string {
 			lineEnd = lineStart + k
 		}
 		line := body[lineStart:lineEnd]
-		slash := quickActionSlash(line)
-		allowed := isSubLine(line) || (lineStart == lastStart && isMarkerLine(line))
-
-		for j := 0; j < len(line); {
-			i := lineStart + j
-			if j == slash {
-				edit(i, ZWSP, 0)
+		// FR16(b): the two allowed lines hold no "@", "![" or entity and stay as they are, in code or not.
+		if !(isSubLine(line) || (lineStart == lastStart && isMarkerLine(line))) {
+			slash := quickActionSlash(line)
+			for j := 0; j < len(line); j++ {
+				i := lineStart + j
+				if j == slash {
+					edit(i, ZWSP, 0)
+				}
+				c := line[j]
+				if !special[c] {
+					continue
+				}
+				for next < len(regions) && regions[next].end <= i {
+					next++
+				}
+				inCode := next < len(regions) && regions[next].start <= i
+				switch c {
+				case '@':
+					if !strings.HasPrefix(line[j+1:], ZWSP) {
+						edit(i+1, ZWSP, 0)
+					}
+				case '<':
+					if strings.HasPrefix(line[j+1:], ZWSP) {
+						break
+					}
+					if inCode {
+						edit(i+1, ZWSP, 0)
+					} else {
+						edit(i, "&lt;", 1)
+					}
+				case '>':
+					if !inCode {
+						edit(i, "&gt;", 1)
+					}
+				case '!':
+					if j+1 < len(line) && line[j+1] == '[' {
+						edit(i+1, ZWSP, 0)
+					}
+				case '&':
+					if specialEntity(line[j:]) {
+						if inCode {
+							edit(i+1, ZWSP, 0)
+						} else {
+							edit(i, "&amp;", 1)
+						}
+					}
+				}
 			}
-			for next < len(regions) && regions[next].end <= i {
-				next++
-			}
-			if next < len(regions) && regions[next].start <= i {
-				// Inside a code region only FR15 applies: skip to its end, the line end or the slash.
-				stop := min(regions[next].end, lineEnd) - lineStart
-				if slash > j {
-					stop = min(stop, slash)
-				}
-				j = stop
-				continue
-			}
-			c := line[j]
-			if !special[c] {
-				j++
-				continue
-			}
-			switch c {
-			case '@':
-				if !strings.HasPrefix(line[j+1:], ZWSP) {
-					edit(i+1, ZWSP, 0)
-				}
-			case '<':
-				if !allowed {
-					edit(i, "&lt;", 1)
-				}
-			case '>':
-				if !allowed {
-					edit(i, "&gt;", 1)
-				}
-			case '!':
-				if j+1 < len(line) && line[j+1] == '[' {
-					edit(i+1, ZWSP, 0)
-				}
-			case '&':
-				if specialEntity(line[j:]) {
-					edit(i, "&amp;", 1)
-				}
-			}
-			j++
 		}
 		if lineEnd == len(body) {
 			break
@@ -127,6 +132,80 @@ func Apply(body string) string {
 	}
 	out = append(out, body[flushed:]...)
 	return string(out)
+}
+
+// closeOpenFence returns s with a top-level fence that is still open before the trailing
+// "<sub>" / marker lines closed on its own line right before them. Those lines are allowed raw
+// (FR16(b)), so inside a fence GitLab would show them as code text and the marker would not be
+// found. The fence model is that of [codeRegions]; a body that leaves no fence open, or has no
+// such trailing lines, is returned as it is, so a second application changes nothing.
+func closeOpenFence(s string) string {
+	start := trailerStart(s)
+	if start <= 0 {
+		return s
+	}
+	prefix := s[:start]
+	if !strings.Contains(prefix, "```") && !strings.Contains(prefix, "~~~") {
+		return s
+	}
+	ch, n, ok := openFence(prefix)
+	if !ok {
+		return s
+	}
+	return prefix + strings.Repeat(string(ch), n) + "\n" + s[start:]
+}
+
+// trailerStart returns the offset of the first of the body's trailing allowed lines: the marker
+// line when it is the last non-empty line, together with a "<sub>" line right before it, or a
+// "<sub>" last non-empty line alone. -1 when the body has none.
+func trailerStart(s string) int {
+	last := lastNonEmptyLineStart(s)
+	if last < 0 {
+		return -1
+	}
+	line := lineFrom(s, last)
+	switch {
+	case isMarkerLine(line):
+		if p := lastNonEmptyLineStart(s[:last]); p >= 0 && isSubLine(lineFrom(s, p)) {
+			return p
+		}
+		return last
+	case isSubLine(line):
+		return last
+	}
+	return -1
+}
+
+// lineFrom returns the line of s that starts at offset start, without its newline.
+func lineFrom(s string, start int) string {
+	if k := strings.IndexByte(s[start:], '\n'); k >= 0 {
+		return s[start : start+k]
+	}
+	return s[start:]
+}
+
+// openFence reports the fence a top-level opener leaves unclosed in s (the character and the
+// opener's run length), walking s with the same rules as [codeRegions].
+func openFence(s string) (ch byte, n int, ok bool) {
+	starts := lineStarts(s)
+	closer := fenceClosers(s, starts)
+	containerSeen := false
+	for i := 0; i < len(starts); {
+		line := lineAt(s, starts, i)
+		if ch, n, rest, ok := fenceLine(line); ok && (ch == '~' || !strings.Contains(rest, "`")) &&
+			(leadingSpaces(line) == 0 || !containerSeen) {
+			if c := closer[i]; c >= 0 {
+				i = c + 1
+				continue
+			}
+			return ch, n, true
+		}
+		if !containerSeen && startsContainer(line) {
+			containerSeen = true
+		}
+		i++
+	}
+	return 0, 0, false
 }
 
 // normalizeNewlines turns CR LF and a lone CR into LF (FR14), scanning left to right.
@@ -149,8 +228,9 @@ func normalizeNewlines(s string) string {
 type region struct{ start, end int }
 
 // codeRegions returns the code regions of s, sorted and disjoint, in time linear in len(s)
-// (decision D-new-1: text is code only where GitLab surely renders code; over-neutralising a
-// real code span is acceptable, under-neutralising prose is not):
+// (decision D-new-1, D-new-3: a best-effort model of where GitLab renders code. Code gets only
+// invisible neutralisation, so a region the model gets wrong changes how text looks, never what
+// GitLab parses):
 //
 //   - a CLOSED fenced block: an opening line of 3+ backticks (no backtick in the info string) or
 //     tildes at column 0-3, closed by a line of the same character, at least as long, at column
@@ -283,7 +363,7 @@ func startsContainer(line string) bool {
 		return false
 	}
 	switch c := line[i]; {
-	case c == '>':
+	case c == '>' || strings.HasPrefix(line[i:], "&gt;"): // Apply writes "&gt;" for ">" outside code: same answer (FR17)
 		return true
 	case c == '-' || c == '*' || c == '+':
 		return i+1 == len(line) || isBlank(line[i+1])

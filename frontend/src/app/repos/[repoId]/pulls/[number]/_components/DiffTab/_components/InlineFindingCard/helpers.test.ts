@@ -93,8 +93,8 @@ describe("findPublishedComment", () => {
 const Z = "\u200b";
 
 describe("sanitizeForGitLab", () => {
-  it("keeps the GitHub rules: HTML as text, mention defused, code spans verbatim", () => {
-    expect(sanitizeForGitLab("<b>hi</b> @octocat `Map<K, V>`")).toBe(`&lt;b&gt;hi&lt;/b&gt; @${Z}octocat \`Map<K, V>\``);
+  it("prose: HTML as text, mention defused; code spans only get invisible changes (D-new-3)", () => {
+    expect(sanitizeForGitLab("<b>hi</b> @octocat `Map<K, V>`")).toBe(`&lt;b&gt;hi&lt;/b&gt; @${Z}octocat \`Map<${Z}K, V>\``);
   });
 
   it("FR15: puts U+200B before a leading slash behind blanks, quotes and list markers", () => {
@@ -119,8 +119,8 @@ describe("sanitizeForGitLab", () => {
     expect(sanitizeForGitLab("a\r\n/x\r/y")).toBe(`a\n${Z}/x\n${Z}/y`);
   });
 
-  it("FR16(c): an image opener outside code becomes text, inside code it stays", () => {
-    expect(sanitizeForGitLab("![x](http://a/b.png) `![y]`")).toBe(`!${Z}[x](http://a/b.png) \`![y]\``);
+  it("FR16(c): an image opener becomes text in prose and gets a U+200B in code", () => {
+    expect(sanitizeForGitLab("![x](http://a/b.png) `![y]`")).toBe(`!${Z}[x](http://a/b.png) \`!${Z}[y]\``);
   });
 
   it("does not insert U+200B a second time for a slash or image opener it already defused", () => {
@@ -142,9 +142,9 @@ describe("sanitizeForGitLab", () => {
     expect(sanitizeForGitLab("\\`@victim <b>x</b>\\`")).toBe(`\\\`@${Z}victim &lt;b&gt;x&lt;/b&gt;\\\``);
   });
 
-  it("a closed fence at column 0 is code, an unclosed or list-nested or indented one is prose", () => {
-    expect(sanitizeForGitLab("```\n@a <b> ![c]\n```")).toBe("```\n@a <b> ![c]\n```");
-    expect(sanitizeForGitLab("~~~\n<b>\n~~~")).toBe("~~~\n<b>\n~~~");
+  it("a closed fence at column 0 is code (invisible changes only), an unclosed or list-nested or indented one is prose", () => {
+    expect(sanitizeForGitLab("```\n@a <b> ![c]\n```")).toBe(`\`\`\`\n@${Z}a <${Z}b> !${Z}[c]\n\`\`\``);
+    expect(sanitizeForGitLab("~~~\n<b>\n~~~")).toBe(`~~~\n<${Z}b>\n~~~`);
     expect(sanitizeForGitLab("```\n@a")).toBe(`\`\`\`\n@${Z}a`);
     expect(sanitizeForGitLab("- x\n  ```\n@a\n  ```")).toBe(`- x\n  \`\`\`\n@${Z}a\n  \`\`\``);
     expect(sanitizeForGitLab("    ```\n@a\n    ```")).toBe(`    \`\`\`\n@${Z}a\n    \`\`\``);
@@ -158,7 +158,26 @@ describe("sanitizeForGitLab", () => {
     expect(sanitizeForGitLab("&#60;img &#x3c;img &LT;img &#33;[x](u) &excl; &lsqb; &lbrack; &#0000064;")).toBe(
       "&amp;#60;img &amp;#x3c;img &amp;LT;img &amp;#33;[x](u) &amp;excl; &amp;lsqb; &amp;lbrack; &amp;#0000064;",
     );
-    expect(sanitizeForGitLab("&lt;img&gt; &amp;#64; &#65; &#64 &copy; `&#64;`")).toBe("&lt;img&gt; &amp;#64; &#65; &#64 &copy; `&#64;`");
+    expect(sanitizeForGitLab("&lt;img&gt; &amp;#64; &#65; &#64 &copy;")).toBe("&lt;img&gt; &amp;#64; &#65; &#64 &copy;");
+    // in code the ampersand gets an invisible U+200B instead
+    expect(sanitizeForGitLab("`&#64;` &#64;")).toBe(`\`&${Z}#64;\` &amp;#64;`);
+  });
+
+  it("security r2: a code span across lines, link syntax around a backtick and a fence the list had ended leave nothing live (D-new-3)", () => {
+    const evil = "@victim <img src=x onerror=alert(1)> ![p](https://evil/p.png)";
+    const cleaned = `@${Z}victim <${Z}img src=x onerror=alert(1)> !${Z}[p](https://evil/p.png)`;
+    // The scanner takes these backtick pairs for code, GitLab may not: nothing is live either way.
+    expect(sanitizeForGitLab(`a \` b\n\` ${evil} \``)).toBe(`a \` b\n\` ${cleaned} \``);
+    expect(sanitizeForGitLab(`[x](https://a/\`) ${evil} \``)).toBe(`[x](https://a/\`) ${cleaned} \``);
+    expect(sanitizeForGitLab("10. a\n\n  ```\n```\n@victim ![p](https://evil/p.png)\n```")).toBe(
+      `10. a\n\n  \`\`\`\n\`\`\`\n@${Z}victim !${Z}[p](https://evil/p.png)\n\`\`\``,
+    );
+    expect(sanitizeForGitLab("a ` b\n` &#64;victim `")).toBe(`a \` b\n\` &${Z}#64;victim \``);
+  });
+
+  it("is idempotent for the FR17 input of security r2", () => {
+    const once = sanitizeForGitLab("> q\n  ```\n```\n@victim ![p](https://evil/p.png)\n```");
+    expect(sanitizeForGitLab(once)).toBe(once);
   });
 
   it("matches the server's EC15 corpus for every case that does not hold the server-only sub line or marker", () => {
