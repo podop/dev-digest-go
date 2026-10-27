@@ -189,10 +189,11 @@ func gitlabShellOK(job *object) bool {
 
 // gitlabEnvCommands are the words that print, dump or evaluate variables: printenv, env, eval,
 // declare/typeset/set/export/readonly/compgen (their no-argument and -p/-v forms dump every
-// variable) - set variables in `variables`, not in the script. `set` and `export` are the two
-// that a script legitimately needs, so they are allowed in the two forms that cannot dump
-// (see shellArgsOK); everything else on the list is refused wherever the word stands.
-var gitlabEnvCommands = []string{"printenv", "env", "eval", "declare", "typeset", "set", "export", "readonly", "compgen"}
+// variable) and alias (it can give any of them another name) - set variables in `variables`, not
+// in the script. `set` and `export` are the two that a script legitimately needs, so they are
+// allowed in the two forms that cannot dump (see shellArgsOK); everything else on the list is
+// refused wherever the word stands.
+var gitlabEnvCommands = []string{"printenv", "env", "eval", "declare", "typeset", "set", "export", "readonly", "compgen", "alias"}
 
 var (
 	reShellFlags  = regexp.MustCompile(`^[-+][A-Za-z]+$`)
@@ -216,15 +217,94 @@ func namesEnviron(s string) bool {
 	}
 }
 
+// shellComment marks the start of a shell comment in the plain text (see shellPlain).
+const shellComment = "\x00"
+
+// shellPlain removes the quote characters and backslashes of the script line s, which is how
+// every check but the substitution ones reads it, and puts shellComment before each `#` that
+// starts a comment. The shell starts a comment only at an unquoted, unescaped `#` at the start
+// of a word - after white space or one of ; & | ( ) < > or at the start of the line - and the
+// comment lasts to the end of the line: "#", '#', \# and a#b are ordinary words. The decision
+// is made here, on the raw text, never on the text after the quotes are gone. The quote state
+// is carried over line breaks, as in the shell; s holds no NUL (shellReadsNoVariables).
+func shellPlain(s string) string {
+	var out strings.Builder
+	emit := func(c byte) {
+		if c != '\'' && c != '"' && c != '\\' {
+			out.WriteByte(c)
+		}
+	}
+	var single, double, escaped bool
+	wordStart := true
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case escaped:
+			escaped = false
+			emit(c)
+			wordStart = false
+		case single:
+			single, wordStart = c != '\'', false
+			emit(c)
+		case double:
+			wordStart = false
+			switch c {
+			case '"':
+				double = false
+			case '\\':
+				escaped = true
+			default:
+				emit(c)
+			}
+		case c == '\\':
+			escaped, wordStart = true, false
+		case c == '\'':
+			single, wordStart = true, false
+		case c == '"':
+			double, wordStart = true, false
+		case c == '#' && wordStart:
+			out.WriteString(shellComment)
+			for ; i < len(s) && s[i] != '\n'; i++ {
+				emit(s[i])
+			}
+			i-- // the line break, if any, is read by the loop
+			wordStart = false
+		default:
+			emit(c)
+			wordStart = strings.IndexByte(" \t\n;&|()<>", c) >= 0
+		}
+	}
+	return out.String()
+}
+
+// namesEnvCommand reports whether a word of s, split at white space and at { } , $ ! # and =
+// (so the value of an assignment, X=printenv, is a word of its own), is a command of
+// gitlabEnvCommands once a path is reduced to its last element (/usr/bin/env).
+func namesEnvCommand(s string) bool {
+	words := strings.FieldsFunc(s, func(r rune) bool {
+		return unicode.IsSpace(r) || strings.ContainsRune("{},$!#=", r)
+	})
+	for _, word := range words {
+		if i := strings.LastIndexByte(word, '/'); i >= 0 {
+			word = word[i+1:]
+		}
+		if slices.Contains(gitlabEnvCommands, word) {
+			return true
+		}
+	}
+	return false
+}
+
 // shellArgsOK reports whether the arguments of a leading `set` or `export` (the words up to the
-// end of the command or a comment) cannot make it dump the variables:
+// end of the command or a comment, see shellPlain) cannot make it dump the variables:
 //   - set: at least one argument, every one a flag cluster such as -e, -eu, +x, -euo, and a cluster
 //     ending in o (-o, +o, -eo) followed by an option name (pipefail). set -- and set with a
 //     value, a reference or a glob are refused, as is bare set;
 //   - export: at least one argument, every one NAME or NAME=value with NAME in
-//     [A-Za-z_][A-Za-z0-9_]*. The value's references are judged by referencesOK.
+//     [A-Za-z_][A-Za-z0-9_]*, none of whose words (NAME, the value) is a command of
+//     gitlabEnvCommands. The value's references are judged by referencesOK.
 func shellArgsOK(cmd string, args []string) bool {
-	if i := slices.IndexFunc(args, func(a string) bool { return strings.HasPrefix(a, "#") }); i >= 0 {
+	if i := slices.IndexFunc(args, func(a string) bool { return strings.HasPrefix(a, shellComment) }); i >= 0 {
 		args = args[:i]
 	}
 	if len(args) == 0 {
@@ -233,7 +313,7 @@ func shellArgsOK(cmd string, args []string) bool {
 	for i := 0; i < len(args); i++ {
 		a := args[i]
 		if cmd == "export" {
-			if !reShellExport.MatchString(a) {
+			if !reShellExport.MatchString(a) || namesEnvCommand(a) {
 				return false
 			}
 			continue
@@ -254,26 +334,31 @@ func shellArgsOK(cmd string, args []string) bool {
 // shellReadsNoVariables reports whether the script line s contains none of the indirect reads.
 // Backslash-newline continuations are removed first (the shell removes them before it splits
 // words), then:
+//   - a NUL byte (it marks comments in shellPlain);
 //   - command substitution `$(` (also `$((`; so `$(pwd)` is refused too - a substitution can hide
 //     a read, and the script has no need for one) and backticks, process substitution `<(` and
 //     `>(`;
 //   - ANSI-C quoting `$'`, which writes a name as escapes ($'\x24NAME'); `${!` indirection is
 //     refused by referencesOK;
+//   - the positional lists $@ and $* (also ${@}, ${*}, "$@"): they put arbitrary words back
+//     together, so "$@"env can spell a command word that no scan sees;
 //   - brace expansion with a comma or `..` (e{,}nv spells env);
 //   - the word "environ" in any case, not followed by a letter (/proc/self/environ, ENVIRON[..],
 //     os.environ; "environment" passes), also once quotes and backslashes are removed (an empty quote pair inside the word);
 //   - a command word of gitlabEnvCommands, after quotes and backslashes are removed (a quote or a
 //     backslash inside the name does not hide it) and with a path reduced to its last element
-//     (/usr/bin/env); words are split at white space and at ; & | ( ) < > { } , $ ! and #.
+//     (/usr/bin/env); words are split at white space and at ; & | ( ) < > { } , $ ! # and =, so
+//     the value of an assignment (X=printenv, alias p=printenv) is a word of its own.
 //     The exception is `set` / `export` as the first word of a command (commands end at
 //     ; & | ( ) < > and line breaks) when shellArgsOK accepts the arguments: set -e,
-//     set -euo pipefail, export NAME=value.
+//     set -euo pipefail, export NAME=value. A `#` ends the arguments only when it starts a
+//     comment of the raw line (shellPlain).
 //
 // Glob spellings (/usr/bin/e?v) and interpreters (python -c) are out of scope: they need a
 // shell-aware parser, and the job file is the user's own, edited through the local API.
 func shellReadsNoVariables(s string) bool {
 	s = strings.NewReplacer("\\\r\n", "", "\\\n", "").Replace(s)
-	for _, bad := range []string{"$(", "`", "$'", "<(", ">("} {
+	for _, bad := range []string{"\x00", "$(", "`", "$'", "<(", ">(", "$@", "$*", "${@", "${*"} {
 		if strings.Contains(s, bad) {
 			return false
 		}
@@ -292,7 +377,7 @@ func shellReadsNoVariables(s string) bool {
 			return false
 		}
 	}
-	plain := strings.NewReplacer("'", "", `"`, "", `\`, "").Replace(s)
+	plain := shellPlain(s)
 	if namesEnviron(plain) {
 		return false
 	}
@@ -307,16 +392,8 @@ func shellReadsNoVariables(s string) bool {
 			}
 			continue
 		}
-		words := strings.FieldsFunc(command, func(r rune) bool {
-			return unicode.IsSpace(r) || strings.ContainsRune("{},$!#", r)
-		})
-		for _, word := range words {
-			if i := strings.LastIndexByte(word, '/'); i >= 0 {
-				word = word[i+1:]
-			}
-			if slices.Contains(gitlabEnvCommands, word) {
-				return false
-			}
+		if namesEnvCommand(command) {
+			return false
 		}
 	}
 	return true
