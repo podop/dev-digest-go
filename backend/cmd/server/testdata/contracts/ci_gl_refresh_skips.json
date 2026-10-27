@@ -1,0 +1,32 @@
+{
+  "degraded": true,
+  "ingested": 2,
+  "installations": [
+    {
+      "error_code": "gitlab_unavailable",
+      "host": "gitlab-1.lab.test",
+      "ingested": 2,
+      "installation_id": "00000000-0000-4000-8000-000000000001",
+      "repo": "acme/web",
+      "skipped": [
+        {
+          "github_run_id": 2102,
+          "reason": "artifact_expired"
+        },
+        {
+          "github_run_id": 2103,
+          "reason": "artifact_too_large"
+        },
+        {
+          "github_run_id": 2104,
+          "reason": "artifact_too_large"
+        },
+        {
+          "github_run_id": 2105,
+          "reason": "artifact_invalid"
+        }
+      ],
+      "state": "error"
+    }
+  ]
+}

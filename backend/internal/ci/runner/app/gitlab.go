@@ -34,6 +34,11 @@ const cleanupTimeout = 60 * time.Second
 // glSkipLine is printed when the merge request moved on since the pipeline started (FR25).
 const glSkipLine = "[agent-runner] inline comments skipped: the merge request changed since this pipeline started"
 
+// unusableGitLab is implemented by a GitLab port whose client could not be built; Unusable returns
+// the reason, nil when the port works. The composition root hands such a port instead of failing
+// itself so that the failure goes through the run's own failure line (redaction, job-log safety).
+type unusableGitLab interface{ Unusable() error }
+
 // glRun is what run has built before GitLab mode takes over.
 type glRun struct {
 	engine     Engine
@@ -61,6 +66,14 @@ func runGitLab(ctx context.Context, cfg Config, deps Deps, in glRun) (result, er
 	}
 	if deps.GitDiff == nil {
 		return result{}, domain.NewRunnerError("This runner cannot compute the merge request diff")
+	}
+	// A GitLab client the composition root could not build (an unreadable CI_SERVER_TLS_CA_FILE, an
+	// API URL the client refuses) is an environment failure like FR19's: it fails here, before the
+	// diff and the paid model call, with the reason (it names a variable, never a value).
+	if u, ok := deps.GitLab.(unusableGitLab); ok && glEnv.PostAs != postNone {
+		if err := u.Unusable(); err != nil {
+			return result{}, domain.NewRunnerError(err.Error())
+		}
 	}
 
 	skillList := "none"
@@ -304,6 +317,10 @@ func gitLabSecretNames() []string {
 	}
 	return names
 }
+
+// RedactGitLabSecrets is redactGitLab for the composition root: the GitLab API adapter applies it
+// to an error body before cutting it (FR30, AC29).
+func RedactGitLabSecrets(env Env, s string) string { return redactGitLab(env, s) }
 
 // redactGitLab replaces the secret values of §7.5 in s. The GitLab token is replaced whatever its
 // length; the other secrets only from minRedactLen bytes on, like in GitHub mode.

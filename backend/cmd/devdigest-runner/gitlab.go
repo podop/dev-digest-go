@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 
+	"dev-digest-go/backend/internal/ci/runner/adapters/env"
 	"dev-digest-go/backend/internal/ci/runner/adapters/gitdiff"
 	"dev-digest-go/backend/internal/ci/runner/adapters/glapi"
 	runnerapp "dev-digest-go/backend/internal/ci/runner/app"
@@ -15,9 +16,9 @@ import (
 // GitLab API client of CI_API_V4_URL (trusting CI_SERVER_TLS_CA_FILE) and the diff of the job's
 // checkout (CI_PROJECT_DIR, else the working directory). With post_as none the runner posts
 // nothing, so the client is nil and no token or API URL is read (FR19). A client that cannot be
-// built (an unusable URL or CA bundle) is not reported here: the use case already validated the
-// environment and prints every failure line; the client then fails at its first call with the
-// reason, which names a variable and never a value.
+// built (an unusable URL or CA bundle) comes back as unusableGitLab: the use case asks it
+// (Unusable) right after the environment checks and fails before the diff and the model call, with
+// a reason that names a variable and never a value.
 func gitLabDeps(lookup func(string) (string, bool)) (runnerapp.GitLab, runnerapp.GitDiff) {
 	get := func(name string) string { v, _ := lookup(name); return v }
 
@@ -38,7 +39,8 @@ func gitLabDeps(lookup func(string) (string, bool)) (runnerapp.GitLab, runnerapp
 	if err != nil {
 		return unusableGitLab{err: err}, diff
 	}
-	client, err := glapi.New(glapi.Options{APIURL: get("CI_API_V4_URL"), Transport: transport})
+	redact := func(s string) string { return runnerapp.RedactGitLabSecrets(env.Process{LookupEnv: lookup}, s) }
+	client, err := glapi.New(glapi.Options{APIURL: get("CI_API_V4_URL"), Transport: transport, Redact: redact})
 	if err != nil {
 		return unusableGitLab{err: err}, diff
 	}
@@ -138,9 +140,12 @@ func appError(err error) error {
 	return err
 }
 
-// unusableGitLab is the GitLab port when the client could not be built: every call fails with the
-// reason.
+// unusableGitLab is the GitLab port when the client could not be built. The use case reads the
+// reason from Unusable before anything runs; every call fails with it as well.
 type unusableGitLab struct{ err error }
+
+// Unusable returns why the client could not be built.
+func (u unusableGitLab) Unusable() error { return u.err }
 
 var _ runnerapp.GitLab = unusableGitLab{}
 

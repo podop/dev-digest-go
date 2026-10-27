@@ -557,3 +557,30 @@ func TestPackage_ImportsNoServerCode(t *testing.T) {
 		}
 	}
 }
+
+// FR30, AC29: Options.Redact masks the runner's other secrets before the 1,000-byte cut, so a
+// provider key straddling the cut leaves no fragment.
+func TestAPIError_OtherSecretsAreRedactedBeforeTheCut(t *testing.T) {
+	const key = "sk-or-v1-Pj3sYe6UuA1oF7gQ2wX9z"
+	body := strings.Repeat("e", 985) + key + strings.Repeat("e", 100)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = io.WriteString(w, body)
+	}))
+	t.Cleanup(srv.Close)
+	c, err := glapi.New(glapi.Options{
+		APIURL: srv.URL + "/api/v4", Transport: srv.Client().Transport, RetryDelay: time.Millisecond,
+		Redact: func(s string) string { return strings.ReplaceAll(s, key, "[REDACTED]") },
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	err = c.BulkPublish(t.Context(), token, ref)
+	var apiErr *glapi.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("BulkPublish() error = %v, want an *APIError", err)
+	}
+	if strings.Contains(apiErr.Message, key[:12]) || !strings.Contains(apiErr.Message, "[REDACTED]") {
+		t.Errorf("message = %.200q…, want the key masked before the cut and no fragment of it", apiErr.Message[len(apiErr.Message)-120:])
+	}
+}

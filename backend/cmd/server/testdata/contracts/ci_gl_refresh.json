@@ -1,0 +1,14 @@
+{
+  "degraded": false,
+  "ingested": 2,
+  "installations": [
+    {
+      "host": "gitlab-1.lab.test",
+      "ingested": 2,
+      "installation_id": "00000000-0000-4000-8000-000000000001",
+      "repo": "acme/web",
+      "skipped": [],
+      "state": "ok"
+    }
+  ]
+}

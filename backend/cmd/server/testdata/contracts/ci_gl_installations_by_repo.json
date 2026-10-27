@@ -1,0 +1,67 @@
+{
+  "repos": [
+    {
+      "host": "github.com",
+      "installations": [
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000002",
+          "agent_name": "Alpha Reviewer",
+          "id": "00000000-0000-4000-8000-000000000004",
+          "installed_at": "2026-01-01T00:00:00.000Z",
+          "slug": "alpha-reviewer"
+        }
+      ],
+      "last_run": {
+        "agent_id": "00000000-0000-4000-8000-000000000002",
+        "github_url": "https://github.com/acme/web/actions/runs/1001",
+        "ran_at": "2026-01-01T00:00:00.000Z",
+        "status": "succeeded"
+      },
+      "provider": "github",
+      "repo": "acme/web",
+      "target_type": "gha"
+    },
+    {
+      "host": "gitlab.example.com",
+      "installations": [
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000002",
+          "agent_name": "Alpha Reviewer",
+          "id": "00000000-0000-4000-8000-000000000006",
+          "installed_at": "2026-01-01T00:00:00.000Z",
+          "slug": "alpha-reviewer"
+        }
+      ],
+      "last_run": {
+        "agent_id": "00000000-0000-4000-8000-000000000002",
+        "github_url": "https://gitlab.example.com/acme/web/-/jobs/3001",
+        "ran_at": "2026-01-01T00:00:00.000Z",
+        "status": "succeeded"
+      },
+      "provider": "gitlab",
+      "repo": "acme/web",
+      "target_type": "gitlab_ci"
+    },
+    {
+      "host": "gitlab-1.lab.test",
+      "installations": [
+        {
+          "agent_id": "00000000-0000-4000-8000-000000000002",
+          "agent_name": "Alpha Reviewer",
+          "id": "00000000-0000-4000-8000-000000000001",
+          "installed_at": "2026-01-01T00:00:00.000Z",
+          "slug": "alpha-reviewer"
+        }
+      ],
+      "last_run": {
+        "agent_id": "00000000-0000-4000-8000-000000000002",
+        "github_url": "https://gitlab-1.lab.test/acme/web-renamed/-/jobs/2001",
+        "ran_at": "2026-01-01T00:00:00.000Z",
+        "status": "succeeded"
+      },
+      "provider": "gitlab",
+      "repo": "acme/web-renamed",
+      "target_type": "gitlab_ci"
+    }
+  ]
+}

@@ -68,6 +68,10 @@ type Options struct {
 	Transport http.RoundTripper
 	// RetryDelay is the pause before a GET is repeated; 0 = 500 ms.
 	RetryDelay time.Duration
+	// Redact masks the runner's other secrets (provider keys, header values) in an error text
+	// before it is cut (spec C FR30, AC29: a secret straddling the cut must not leave a fragment);
+	// nil = only the token is masked.
+	Redact func(string) string
 }
 
 // Client is the runner's GitLab client.
@@ -77,6 +81,7 @@ type Client struct {
 	prefix     string // path prefix without trailing slash, may be ""
 	http       *http.Client
 	retryDelay time.Duration
+	redact     func(string) string
 }
 
 // APIError is a non-2xx GitLab answer. Its text is the job-log message of FR28,
@@ -159,6 +164,7 @@ func New(opts Options) (*Client, error) {
 		host:       u.Host,
 		prefix:     strings.TrimRight(u.Path, "/"),
 		retryDelay: delay,
+		redact:     opts.Redact,
 		http: &http.Client{
 			Transport: opts.Transport,
 			Timeout:   requestTimeout,
@@ -247,7 +253,7 @@ func (c *Client) once(ctx context.Context, token string, r request, u *url.URL, 
 	}
 	req, err := http.NewRequestWithContext(ctx, r.method, u.String(), rd)
 	if err != nil {
-		return nil, false, fmt.Errorf("GitLab API error %s (%s): %s", r.what, u.EscapedPath(), transportText(err, token))
+		return nil, false, fmt.Errorf("GitLab API error %s (%s): %s", r.what, u.EscapedPath(), c.mask(transportText(err, token)))
 	}
 	req.Header.Set("PRIVATE-TOKEN", token)
 	req.Header.Set("Accept", "application/json")
@@ -258,15 +264,15 @@ func (c *Client) once(ctx context.Context, token string, r request, u *url.URL, 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// a cancelled or timed-out context is final; a connection failure is transient
-		return nil, ctx.Err() == nil, fmt.Errorf("GitLab API error %s (%s): %s", r.what, u.EscapedPath(), transportText(err, token))
+		return nil, ctx.Err() == nil, fmt.Errorf("GitLab API error %s (%s): %s", r.what, u.EscapedPath(), c.mask(transportText(err, token)))
 	}
 	defer closeBody(resp)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return nil, transientStatus(resp.StatusCode), &APIError{Status: resp.StatusCode, Message: apiErrorText(r.what, u.EscapedPath(), resp, token)}
+		return nil, transientStatus(resp.StatusCode), &APIError{Status: resp.StatusCode, Message: apiErrorText(r.what, u.EscapedPath(), resp, token, c.redact)}
 	}
 	out, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes+1))
 	if err != nil {
-		return nil, ctx.Err() == nil, fmt.Errorf("GitLab API error %s (%s): %s", r.what, u.EscapedPath(), transportText(err, token))
+		return nil, ctx.Err() == nil, fmt.Errorf("GitLab API error %s (%s): %s", r.what, u.EscapedPath(), c.mask(transportText(err, token)))
 	}
 	if len(out) > maxResponseBytes {
 		return nil, false, fmt.Errorf("GitLab API error %s (%s): the response is larger than %d bytes", r.what, u.EscapedPath(), maxResponseBytes)
@@ -312,10 +318,13 @@ func closeBody(resp *http.Response) {
 }
 
 // apiErrorText is "GitLab API error <what> (<path>): <status> <body>" with the body redacted of
-// the token, then cut to 1,000 bytes (at a character boundary).
-func apiErrorText(what, path string, resp *http.Response, token string) string {
+// the token and of the Options.Redact secrets, then cut to 1,000 bytes (at a character boundary).
+func apiErrorText(what, path string, resp *http.Response, token string, redact func(string) string) string {
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, errorReadBytes))
 	text := redactToken(strings.ToValidUTF8(string(raw), "�"), token)
+	if redact != nil {
+		text = redact(text) // before the cut: a cut secret is no longer recognisable
+	}
 	if len(text) > errorBodyBytes {
 		cut := errorBodyBytes
 		for cut > 0 && !utf8.RuneStart(text[cut]) {
@@ -324,6 +333,14 @@ func apiErrorText(what, path string, resp *http.Response, token string) string {
 		text = text[:cut]
 	}
 	return "GitLab API error " + what + " (" + path + "): " + strconv.Itoa(resp.StatusCode) + " " + text
+}
+
+// mask applies Options.Redact to a text that carries no cut.
+func (c *Client) mask(s string) string {
+	if c.redact == nil {
+		return s
+	}
+	return c.redact(s)
 }
 
 // transportText is the text of a failed request without the request URL (the caller adds the

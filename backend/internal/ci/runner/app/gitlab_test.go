@@ -774,3 +774,58 @@ func TestGitLab_NeedsItsPorts(t *testing.T) {
 		t.Errorf("Run() = %d, stderr %q", code, o.stderr)
 	}
 }
+
+// brokenGitLab is the port the composition root hands when the GitLab client could not be built.
+type brokenGitLab struct {
+	*fakeGitLab
+	err error
+}
+
+func (b brokenGitLab) Unusable() error { return b.err }
+
+func TestGitLab_UnusableClientFailsBeforeTheDiffAndTheModel(t *testing.T) {
+	const reason = "CI_SERVER_TLS_CA_FILE: no such file"
+	tests := []struct {
+		name   string
+		postAs string
+		want   string // "" = the run goes on
+	}{
+		{"review", "github_review", "[agent-runner] FAILED: " + reason},
+		{"comment", "pr_comment", "[agent-runner] FAILED: " + reason},
+		{"none never needs the client", "none", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e := glVars()
+			e["DEVDIGEST_POST_AS"] = tc.postAs
+			gl, d := glStd()
+			files := glFiles()
+			o := &out{}
+			var engineCalls int
+			engine := func(context.Context, reviewerapp.Input, reviewerapp.LLM, reviewerapp.Events, reviewerapp.Options) (reviewer.Outcome, error) {
+				engineCalls++
+				return reviewer.Outcome{}, nil
+			}
+			code := app.Run(t.Context(), app.Config{BuildID: "dev"}, app.Deps{
+				Env: e, Files: files, GitLab: brokenGitLab{fakeGitLab: gl, err: errors.New(reason)}, GitDiff: d,
+				LLM: nopLLM{}, Out: o, Engine: engine,
+			})
+			if tc.want == "" {
+				if code != 0 || engineCalls != 1 || d.calls != 1 {
+					t.Errorf("Run() = %d, engine calls %d, diff calls %d; want 0, 1, 1", code, engineCalls, d.calls)
+				}
+				return
+			}
+			if code != 1 {
+				t.Errorf("Run() = %d, want 1", code)
+			}
+			if len(o.stderr) != 1 || o.stderr[0] != tc.want {
+				t.Errorf("stderr = %q, want %q", o.stderr, tc.want)
+			}
+			if len(o.stdout) != 0 || d.calls != 0 || engineCalls != 0 || len(gl.calls) != 0 || len(files.written) != 0 {
+				t.Errorf("stdout %q, diff calls %d, model calls %d, GitLab calls %v, artifacts %v; want nothing at all",
+					o.stdout, d.calls, engineCalls, gl.calls, files.written)
+			}
+		})
+	}
+}

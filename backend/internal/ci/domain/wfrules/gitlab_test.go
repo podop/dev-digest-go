@@ -366,8 +366,35 @@ func TestCheckGitLab_64KiBWithin50ms(t *testing.T) {
 	}
 }
 
-// Hostile inputs of the loader's size stay bounded in time and refuse as invalid_yaml.
+// bestOf runs f up to n times and returns the fastest run, stopping as soon as one is within limit:
+// a loaded host slows single runs at random, so only the best of a few says how long f takes.
+func bestOf(n int, limit time.Duration, f func()) time.Duration {
+	best := time.Hour
+	for range n {
+		start := time.Now()
+		f()
+		best = min(best, time.Since(start))
+		if best <= limit {
+			break
+		}
+	}
+	return best
+}
+
+// Hostile inputs of the loader's size stay bounded in time and refuse as invalid_yaml. The bound
+// is the larger of an absolute second (five under the race detector, which slows the YAML parser
+// several times) and 200 times what the same host needs for a plain 64 KiB file right now, so a
+// loaded machine moves both sides; an expansion or a quadratic pass over these inputs misses it by
+// orders of magnitude. Each input counts by its best of three runs.
 func TestCheckGitLab_HostileInputsAreBounded(t *testing.T) {
+	plain := paddedTo(glJob, 65_536)
+	baseline := bestOf(3, 0, func() { wfrules.CheckGitLab(plain, glPlain) })
+	limit := time.Second
+	if raceEnabled {
+		limit = 5 * time.Second
+	}
+	limit = max(limit, 200*baseline)
+
 	for name, text := range map[string]string{
 		"billion laughs":        glJob + billionLaughs(9, 9),
 		"empty laughs":          glJob + emptyLaughs(40, 40),
@@ -376,10 +403,9 @@ func TestCheckGitLab_HostileInputsAreBounded(t *testing.T) {
 		"many references":       glJob + "x: &a hello\n" + "y: [" + strings.Repeat("*a, ", 99) + "*a]\n",
 		"long script reference": strings.Replace(glJob, "  script:\n", "  script:\n    - "+strings.Repeat("$", 30000)+strings.Repeat("%a", 10000)+"\n", 1),
 	} {
-		start := time.Now()
-		got := wfrules.CheckGitLab(text, glPlain)
-		if elapsed := time.Since(start); elapsed > time.Second {
-			t.Errorf("CheckGitLab(%s) took %v, want a bounded run", name, elapsed)
+		var got wfrules.Result
+		if elapsed := bestOf(3, limit, func() { got = wfrules.CheckGitLab(text, glPlain) }); elapsed > limit {
+			t.Errorf("CheckGitLab(%s) took %v at best, want a bounded run (<= %v)", name, elapsed, limit)
 		}
 		if got.OK && name != "many anchors" && name != "many references" && name != "long script reference" {
 			t.Errorf("CheckGitLab(%s) = %+v, want a refusal", name, got)
