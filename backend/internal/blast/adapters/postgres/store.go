@@ -35,6 +35,9 @@ type pullRow struct {
 	Name   string `gorm:"column:name"`
 	// Provider is repos.provider ("github" | "gitlab").
 	Provider string `gorm:"column:provider"`
+	// Host and ProjectID are repos.host and repos.project_id: set for a GitLab repository only.
+	Host      *string `gorm:"column:host"`
+	ProjectID *int64  `gorm:"column:project_id"`
 }
 
 type pathRow struct {
@@ -48,7 +51,7 @@ func (pathRow) TableName() string { return "pr_files" }
 func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.Pull, error) {
 	var row pullRow
 	err := s.conn(ctx).Table("pull_requests AS p").
-		Select("p.id, p.repo_id, p.number, r.owner, r.name, r.provider").
+		Select("p.id, p.repo_id, p.number, r.owner, r.name, r.provider, r.host, r.project_id").
 		Joins("JOIN repos r ON r.id = p.repo_id").
 		Where("p.workspace_id = ? AND p.id = ?", workspaceID, prID).
 		Take(&row).Error
@@ -58,7 +61,14 @@ func (s *Store) FindPull(ctx context.Context, workspaceID, prID string) (domain.
 	if err != nil {
 		return domain.Pull{}, fmt.Errorf("select pull request: %w", err)
 	}
-	return domain.Pull{ID: row.ID, RepoID: row.RepoID, Number: row.Number, Owner: row.Owner, Name: row.Name, Provider: row.Provider}, nil
+	pull := domain.Pull{ID: row.ID, RepoID: row.RepoID, Number: row.Number, Owner: row.Owner, Name: row.Name, Provider: row.Provider}
+	if row.Host != nil {
+		pull.Host = *row.Host
+	}
+	if row.ProjectID != nil {
+		pull.ProjectID = *row.ProjectID
+	}
+	return pull, nil
 }
 
 // ChangedPaths returns the distinct paths of the pull request's stored files in byte order.

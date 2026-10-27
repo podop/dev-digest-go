@@ -35,6 +35,15 @@ type GitLabError struct {
 	RetryAfter time.Time
 	// RateLimitReset is when GitLab's RateLimit-Reset header says the window renews; zero when absent.
 	RateLimitReset time.Time
+	// RetryAfterSeconds is the client's rounded-up wait for a 429 (absent or 0 → 60; spec B A5);
+	// set by the comments adapter, 0 elsewhere.
+	RetryAfterSeconds int
+	// InsufficientScope is true for a 403 whose GitLab message is insufficient_scope (spec B A6);
+	// set by the comments adapter.
+	InsufficientScope bool
+	// Conn is the display name of the connection the request went to (spec B FR10 messages); set
+	// by the comments adapter, "" elsewhere.
+	Conn string
 }
 
 func (e *GitLabError) Error() string {

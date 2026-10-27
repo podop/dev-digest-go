@@ -52,6 +52,10 @@ type Repo struct {
 	Host string
 	// ProjectID is the GitLab project id; 0 for GitHub.
 	ProjectID int64
+	// WebURL is the stored web address of a GitLab project (refreshed by every sync, A FR47);
+	// html_url of a GitLab comment is built from it, never from a GitLab response (B FR3, D14).
+	// Empty for GitHub and for rows that predate it.
+	WebURL string
 }
 
 // IsGitLab reports whether the repository is a GitLab project.
@@ -93,6 +97,18 @@ type Pull struct {
 	LastReviewedSHA *string
 	OpenedAt        *time.Time
 	UpdatedAt       *time.Time
+	// DiffHead is the head SHA of the GitLab diff version the stored files came from (B FR35);
+	// nil for GitHub rows and for GitLab rows fetched before it was stored. Never on the wire.
+	DiffHead *string
+}
+
+// EffectiveDiffHead is the head the diff on screen belongs to: the stored diff head, else the
+// stored head SHA (B FR4).
+func (p Pull) EffectiveDiffHead() string {
+	if p.DiffHead != nil && *p.DiffHead != "" {
+		return *p.DiffHead
+	}
+	return p.HeadSHA
 }
 
 // Listed is a pull request as GitHub's list endpoint returns it. The list carries no diff stats.
@@ -127,6 +143,9 @@ type File struct {
 	Additions int
 	Deletions int
 	Patch     *string
+	// PreviousPath is the GitLab old_path of the file (B FR35); nil for GitHub files and for
+	// GitLab files stored before it was kept. Never on the wire.
+	PreviousPath *string
 }
 
 // Commit is one commit of a pull request.
@@ -152,6 +171,8 @@ type Fetched struct {
 	DiffStats
 	Files   []File
 	Commits []Commit
+	// DiffHead is the GitLab diff head (B FR35); nil for a GitHub fetch.
+	DiffHead *string
 }
 
 // Detail is what GET /pulls/:id answers. FromGitHub tells a fresh fetch (status is GitHub's
@@ -268,4 +289,6 @@ type DetailMirror struct {
 	DiffStats
 	Files   []File
 	Commits []Commit
+	// DiffHead is stored with the files in the same transaction (B FR35); nil clears it.
+	DiffHead *string
 }

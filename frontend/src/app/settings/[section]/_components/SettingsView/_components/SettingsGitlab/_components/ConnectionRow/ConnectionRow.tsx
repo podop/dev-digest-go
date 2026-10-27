@@ -10,6 +10,14 @@ import type { TestEntry } from "../../useConnectionTests";
 import { TestResult } from "../TestResult";
 import { s } from "./styles";
 
+/** The message key of the identity line (FR22): a read-only token wins (EC27); a login needs a successful test. */
+function identityLine(test: TestEntry | undefined): { key: "identityReadOnly" | "identityUser" | "identityUnknown"; login: string } {
+  const result = test?.result;
+  if (result?.ok && result.token_access === "read_only") return { key: "identityReadOnly", login: "" };
+  if (result?.ok && result.login) return { key: "identityUser", login: result.login };
+  return { key: "identityUnknown", login: "" };
+}
+
 interface Props {
   connection: GitLabConnection;
   test: TestEntry | undefined;
@@ -24,6 +32,7 @@ export function ConnectionRow({ connection, test, onTest, onEdit, onDelete }: Pr
   const tone = failed ? "crit" : connection.token_configured ? "ok" : "muted";
   const badge = failed ? t("failed") : connection.token_configured ? t("tokenSaved") : t("noToken");
   const pending = test?.pending ?? false;
+  const identity = identityLine(test);
 
   return (
     <li style={s.row}>
@@ -54,6 +63,7 @@ export function ConnectionRow({ connection, test, onTest, onEdit, onDelete }: Pr
         </div>
       </div>
       <div style={s.url}>{connection.base_url}</div>
+      <div style={s.identity}>{t(identity.key, { login: identity.login })}</div>
       {pending && (
         <div role="status" style={s.testing}>
           {t("testing")}

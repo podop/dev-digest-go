@@ -39,8 +39,14 @@ func (s *Service) computeKey(ctx context.Context, workspaceID string, pull domai
 	for _, c := range commits {
 		texts = append(texts, c.Message)
 	}
-	tickets := domain.ExtractTickets(texts, repo)
-	docs, err := domain.ExtractDocs([]string{pull.Title, pull.Body}, repo)
+	// A GitLab repository has its own link forms and "same project" rule (spec B FR26, FR28); the
+	// GitHub extraction never sees it.
+	extractTickets, extractDocs := domain.ExtractTickets, domain.ExtractDocs
+	if repo.IsGitLab() {
+		extractTickets, extractDocs = domain.ExtractGitLabTickets, domain.ExtractGitLabDocs
+	}
+	tickets := extractTickets(texts, repo)
+	docs, err := extractDocs([]string{pull.Title, pull.Body}, repo)
 	if err != nil {
 		return derivation{}, err
 	}

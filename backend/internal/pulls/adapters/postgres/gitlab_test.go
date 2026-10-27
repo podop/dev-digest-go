@@ -40,7 +40,8 @@ func TestFindRepo_gitlabAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindRepo() error = %v", err)
 	}
-	want := domain.Repo{ID: id, Owner: "acme/team", Name: "web", Provider: "gitlab", Host: "git.corp.example:8443", ProjectID: 42}
+	want := domain.Repo{ID: id, Owner: "acme/team", Name: "web", Provider: "gitlab", Host: "git.corp.example:8443", ProjectID: 42,
+		WebURL: "https://git.corp.example:8443/acme/team/web"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindRepo() mismatch (-want +got):\n%s", diff)
 	}
@@ -205,4 +206,224 @@ func TestUpdateRepoPath(t *testing.T) {
 			t.Errorf("UpdateRepoPath(no web URL) = %q, %v, want \"\" and an error", skipped, err)
 		}
 	})
+}
+
+func TestFindRepo_webURL(t *testing.T) {
+	f := seeded(t)
+	id := gitlabRepo(t, f, f.wsID, "gitlab.com", 60, "grp/web", "grp", "web")
+	exec(t, f.db, `UPDATE repos SET web_url = 'https://gitlab.com/grp/web-moved' WHERE id = ?`, id)
+	got, err := f.store.FindRepo(t.Context(), f.wsID, id)
+	if err != nil || got.WebURL != "https://gitlab.com/grp/web-moved" {
+		t.Errorf("FindRepo(web_url) = WebURL %q, %v, want the stored address", got.WebURL, err)
+	}
+	// A GitHub repository has none.
+	gh, err := f.store.FindRepo(t.Context(), f.wsID, f.repoID)
+	if err != nil || gh.WebURL != "" {
+		t.Errorf("FindRepo(GitHub) = WebURL %q, %v, want \"\", nil", gh.WebURL, err)
+	}
+}
+
+const (
+	sha1Head = "0123456789abcdef0123456789abcdef01234567"
+	sha2Head = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+)
+
+type storedDetail struct {
+	DiffHead *string
+}
+
+func storedDiffHead(t *testing.T, f fixture, prID string) *string {
+	t.Helper()
+	var s storedDetail
+	scan(t, f.db, &s, `SELECT diff_head FROM pull_requests WHERE id = ?`, prID)
+	return s.DiffHead
+}
+
+// gitlabPull stores one GitLab pull request and returns its id.
+func gitlabPull(t *testing.T, f fixture, repoID string, number int) string {
+	t.Helper()
+	l := domain.Listed{Number: number, Title: "t", Author: "a", Branch: "b", Base: "main", HeadSHA: sha1Head, Status: "open",
+		OpenedAt: day(1, 9), UpdatedAt: day(2, 9)}
+	if err := f.store.UpsertListed(t.Context(), f.wsID, repoID, []domain.Listed{l}); err != nil {
+		t.Fatalf("UpsertListed() error = %v", err)
+	}
+	var id string
+	scan(t, f.db, &id, `SELECT id FROM pull_requests WHERE repo_id = ? AND number = ?`, repoID, number)
+	return id
+}
+
+// TestReplaceDetail_gitlabDiffHeadAndPreviousPath covers FR35 and AC6 (store part): the detail
+// write stores the diff head with the files' previous paths, FindPull and ListFiles return them.
+func TestReplaceDetail_gitlabDiffHeadAndPreviousPath(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	repoID := gitlabRepo(t, f, f.wsID, "gitlab.com", 61, "grp/ren", "grp", "ren")
+	prID := gitlabPull(t, f, repoID, 5)
+
+	if got, err := f.store.FindPull(ctx, f.wsID, prID); err != nil || got.DiffHead != nil {
+		t.Fatalf("FindPull(before detail) DiffHead = %v, %v, want nil", got.DiffHead, err)
+	}
+
+	mirror := domain.DetailMirror{
+		DiffHead: ptr(sha1Head),
+		Files: []domain.File{
+			{Path: "new/a.ts", PreviousPath: ptr("old/a.ts"), Patch: ptr("@@ -1 +1 @@")},
+			{Path: "keep.go"},
+			{Path: "blank.go", PreviousPath: ptr("")},
+		},
+	}
+	if err := f.store.ReplaceDetail(ctx, prID, mirror); err != nil {
+		t.Fatalf("ReplaceDetail() error = %v", err)
+	}
+	pr, err := f.store.FindPull(ctx, f.wsID, prID)
+	if err != nil || pr.DiffHead == nil || *pr.DiffHead != sha1Head {
+		t.Fatalf("FindPull() DiffHead = %v, %v, want %s", pr.DiffHead, err, sha1Head)
+	}
+	if got := pr.EffectiveDiffHead(); got != sha1Head {
+		t.Errorf("EffectiveDiffHead() = %q, want %q", got, sha1Head)
+	}
+	files, err := f.store.ListFiles(ctx, prID)
+	if err != nil {
+		t.Fatalf("ListFiles() error = %v", err)
+	}
+	want := []domain.File{
+		{Path: "blank.go"},
+		{Path: "keep.go"},
+		{Path: "new/a.ts", PreviousPath: ptr("old/a.ts"), Patch: ptr("@@ -1 +1 @@")},
+	}
+	if diff := cmp.Diff(want, files); diff != "" {
+		t.Errorf("ListFiles() mismatch (-want +got):\n%s", diff)
+	}
+	if got := files[2].PositionOldPath(); got != "old/a.ts" {
+		t.Errorf("PositionOldPath() of the renamed file = %q, want old/a.ts", got)
+	}
+
+	// A later fetch of the same file without a rename clears its previous path; a 64-hex head is
+	// stored as is.
+	next := domain.DetailMirror{DiffHead: ptr(sha2Head), Files: []domain.File{{Path: "new/a.ts"}}}
+	if err := f.store.ReplaceDetail(ctx, prID, next); err != nil {
+		t.Fatalf("ReplaceDetail(second) error = %v", err)
+	}
+	files, _ = f.store.ListFiles(ctx, prID)
+	if diff := cmp.Diff([]domain.File{{Path: "new/a.ts"}}, files); diff != "" {
+		t.Errorf("ListFiles() after refetch mismatch (-want +got):\n%s", diff)
+	}
+	if got := storedDiffHead(t, f, prID); got == nil || *got != sha2Head {
+		t.Errorf("stored diff_head = %v, want the 64-hex head", got)
+	}
+}
+
+// TestReplaceDetail_githubLeavesDiffHeadEmpty: a GitHub detail write (nil head, no previous
+// paths) leaves both columns NULL and clears a stale diff head.
+func TestReplaceDetail_githubLeavesDiffHeadEmpty(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	mirror := domain.DetailMirror{Files: []domain.File{{Path: "a.go", Additions: 1}}}
+	if err := f.store.ReplaceDetail(ctx, f.prID, mirror); err != nil {
+		t.Fatalf("ReplaceDetail() error = %v", err)
+	}
+	if got := storedDiffHead(t, f, f.prID); got != nil {
+		t.Errorf("stored diff_head = %q, want NULL", *got)
+	}
+	var n int
+	scan(t, f.db, &n, `SELECT count(*) FROM pr_files WHERE pr_id = ? AND previous_path IS NOT NULL`, f.prID)
+	if n != 0 {
+		t.Errorf("files with previous_path = %d, want 0", n)
+	}
+	pr, _ := f.store.FindPull(ctx, f.wsID, f.prID)
+	if pr.DiffHead != nil {
+		t.Errorf("FindPull() DiffHead = %q, want nil", *pr.DiffHead)
+	}
+	if got := pr.EffectiveDiffHead(); got != pr.HeadSHA {
+		t.Errorf("EffectiveDiffHead() = %q, want the head SHA %q", got, pr.HeadSHA)
+	}
+}
+
+// TestReplaceDetail_refillsDiffHeadAfterDownUp (AC30): the down migration drops the values, so
+// the head reads empty (a GitLab post then answers diff_changed); the next detail fetch refills it.
+func TestReplaceDetail_refillsDiffHeadAfterDownUp(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	repoID := gitlabRepo(t, f, f.wsID, "gitlab.com", 62, "grp/refill", "grp", "refill")
+	prID := gitlabPull(t, f, repoID, 6)
+	mirror := domain.DetailMirror{DiffHead: ptr(sha1Head), Files: []domain.File{{Path: "n.go", PreviousPath: ptr("o.go")}}}
+	if err := f.store.ReplaceDetail(ctx, prID, mirror); err != nil {
+		t.Fatalf("ReplaceDetail() error = %v", err)
+	}
+
+	// What down then up leaves behind: both columns empty.
+	exec(t, f.db, `UPDATE pull_requests SET diff_head = NULL WHERE id = ?`, prID)
+	exec(t, f.db, `UPDATE pr_files SET previous_path = NULL WHERE pr_id = ?`, prID)
+	pr, _ := f.store.FindPull(ctx, f.wsID, prID)
+	if pr.DiffHead != nil || pr.EffectiveDiffHead() != pr.HeadSHA {
+		t.Fatalf("after down/up DiffHead = %v, want nil (falls back to the head SHA)", pr.DiffHead)
+	}
+
+	if err := f.store.ReplaceDetail(ctx, prID, mirror); err != nil {
+		t.Fatalf("ReplaceDetail(refill) error = %v", err)
+	}
+	if got := storedDiffHead(t, f, prID); got == nil || *got != sha1Head {
+		t.Errorf("diff_head after refill = %v, want %s", got, sha1Head)
+	}
+	files, _ := f.store.ListFiles(ctx, prID)
+	if len(files) != 1 || files[0].PreviousPath == nil || *files[0].PreviousPath != "o.go" {
+		t.Errorf("files after refill = %+v, want previous path o.go", files)
+	}
+}
+
+// TestReplaceDetail_neverViolatesDiffHeadCheck: a value pull_requests_diff_head_chk would refuse
+// is stored as NULL instead of failing the detail write.
+func TestReplaceDetail_neverViolatesDiffHeadCheck(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	repoID := gitlabRepo(t, f, f.wsID, "gitlab.com", 63, "grp/chk", "grp", "chk")
+	prID := gitlabPull(t, f, repoID, 7)
+
+	for _, tc := range []struct{ name, head string }{
+		{"short", "abc123"},
+		{"upper case", "0123456789ABCDEF0123456789ABCDEF01234567"},
+		{"41 hex", sha1Head + "0"},
+		{"non hex", "g123456789abcdef0123456789abcdef01234567"},
+		{"empty", ""},
+		{"trailing newline", sha1Head + "\n"},
+	} {
+		if err := f.store.ReplaceDetail(ctx, prID, domain.DetailMirror{DiffHead: ptr(tc.head), Files: []domain.File{{Path: "x.go"}}}); err != nil {
+			t.Errorf("ReplaceDetail(%s head) error = %v, want nil", tc.name, err)
+			continue
+		}
+		if got := storedDiffHead(t, f, prID); got != nil {
+			t.Errorf("diff_head after %s head = %q, want NULL", tc.name, *got)
+		}
+	}
+}
+
+// TestReplaceDetail_diffHeadInTransaction [K4]: the head and the previous paths are written in
+// the caller's transaction and roll back with it.
+func TestReplaceDetail_diffHeadInTransaction(t *testing.T) {
+	f := seeded(t)
+	ctx := t.Context()
+	repoID := gitlabRepo(t, f, f.wsID, "gitlab.com", 64, "grp/tx", "grp", "tx")
+	prID := gitlabPull(t, f, repoID, 8)
+	boom := errors.New("rollback")
+	err := postgres.NewTx(f.db).InTx(ctx, func(ctx context.Context) error {
+		mirror := domain.DetailMirror{DiffHead: ptr(sha1Head), Files: []domain.File{{Path: "n.go", PreviousPath: ptr("o.go")}}}
+		if err := f.store.ReplaceDetail(ctx, prID, mirror); err != nil {
+			t.Errorf("ReplaceDetail() in tx error = %v", err)
+		}
+		var inTx *string
+		scan(t, postgres.Conn(ctx, f.db), &inTx, `SELECT diff_head FROM pull_requests WHERE id = ?`, prID)
+		if inTx == nil || *inTx != sha1Head {
+			t.Errorf("diff_head inside the transaction = %v, want %s", inTx, sha1Head)
+		}
+		return boom
+	})
+	if !errors.Is(err, boom) {
+		t.Fatalf("InTx error = %v, want the rollback error", err)
+	}
+	if got := storedDiffHead(t, f, prID); got != nil {
+		t.Errorf("diff_head after rollback = %q, want NULL", *got)
+	}
+	if files, _ := f.store.ListFiles(ctx, prID); len(files) != 0 {
+		t.Errorf("files after rollback = %d, want 0", len(files))
+	}
 }

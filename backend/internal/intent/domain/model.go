@@ -127,6 +127,9 @@ type Repo struct {
 	Provider  string
 	Host      string
 	ProjectID int64
+	// WebURL is the stored web address of a GitLab project (connection base address + project
+	// path); "" for GitHub. The GitLab link rules read the "same project" from it (gitlab_links.go).
+	WebURL string
 }
 
 // IsGitLab reports whether the repository is a GitLab project.

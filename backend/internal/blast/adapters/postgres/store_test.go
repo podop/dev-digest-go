@@ -64,13 +64,13 @@ func TestFindPull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FindPull() error = %v", err)
 	}
-	want := domain.Pull{ID: f.pr, RepoID: f.repo, Number: 5, Owner: "acme", Name: "api", Provider: "github"}
+	want := domain.Pull{ID: f.pr, RepoID: f.repo, Number: 5, Owner: "acme", Name: "api", Provider: "github", Host: "github.com"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindPull() mismatch (-want +got):\n%s", diff)
 	}
 }
 
-func TestFindPull_GitLabRepositoryReadsItsProvider(t *testing.T) { // FR29
+func TestFindPull_GitLabRepositoryReadsItsProvider(t *testing.T) { // FR29, FR24 (host and project id for the prior-MRs read)
 	f := newFixture(t)
 	repo := f.insert(t, `INSERT INTO repos (workspace_id, owner, name, full_name, provider, host, project_id, web_url)
 		VALUES (?, 'acme/core', 'payments', 'acme/core/payments', 'gitlab', 'git.example.com', 42, 'https://git.example.com/acme/core/payments') RETURNING id`, f.ws)
@@ -79,7 +79,7 @@ func TestFindPull_GitLabRepositoryReadsItsProvider(t *testing.T) { // FR29
 	if err != nil {
 		t.Fatalf("FindPull() error = %v", err)
 	}
-	want := domain.Pull{ID: pr, RepoID: repo, Number: 7, Owner: "acme/core", Name: "payments", Provider: "gitlab"}
+	want := domain.Pull{ID: pr, RepoID: repo, Number: 7, Owner: "acme/core", Name: "payments", Provider: "gitlab", Host: "git.example.com", ProjectID: 42}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("FindPull(GitLab) mismatch (-want +got):\n%s", diff)
 	}

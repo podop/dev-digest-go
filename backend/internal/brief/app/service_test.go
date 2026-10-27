@@ -662,18 +662,160 @@ func TestGenerate_IssueReadIsBoundedByItsOwnTimeout(t *testing.T) {
 	})
 }
 
-func TestGenerate_GitLabPullMakesNoIssueRequest(t *testing.T) { // FR29, AC22
-	f := newFixture(t)
+// gitlabFixture is a fixture whose pull request is a GitLab one linking "#12".
+func gitlabFixture(t *testing.T, gl app.GitLabIssues, mutate ...func(*app.Deps)) *fixture {
+	t.Helper()
+	f := newFixture(t, append([]func(*app.Deps){func(d *app.Deps) { d.GitLabIssues = gl }}, mutate...)...)
 	f.store.Pull.Provider, f.store.Pull.Host, f.store.Pull.ProjectID = "gitlab", "git.example.com", 42
+	return f
+}
+
+func linkedIssueSection(t *testing.T, f *fixture) (llm.PromptSection, bool) {
+	t.Helper()
+	if len(f.llm.Requests) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(f.llm.Requests))
+	}
+	for _, s := range f.llm.Requests[0].Sections {
+		if s.Name == "linked_issue" {
+			return s, true
+		}
+	}
+	return llm.PromptSection{}, false
+}
+
+func TestGenerate_GitLabPullReadsItsIssueFromGitLab(t *testing.T) { // FR23, FR25, AC22
+	body := "Throttle per key."
+	gl := &brieftest.GitLabIssues{Fetched: domain.Issue{Number: 12, Title: "GitLab rate limit", Body: &body}}
+	f := gitlabFixture(t, gl)
 	got, err := f.svc.Generate(t.Context(), wsID, prID)
 	if err != nil {
 		t.Fatalf("Generate() error = %v", err)
 	}
-	if len(f.issues.Calls) != 0 {
-		t.Errorf("issue reads = %v, want none for a GitLab pull request", f.issues.Repos)
+	if diff := cmp.Diff([]string{"git.example.com/42#12"}, gl.Calls); diff != "" {
+		t.Errorf("GitLab issue reads mismatch (-want +got):\n%s", diff)
 	}
-	if want := (domain.MissingInput{Input: domain.InputLinkedIssue, Reason: domain.ReasonFetchFailed}); !contains(got.Brief.MissingInputs, want) {
-		t.Errorf("missing inputs = %+v, want %+v among them (the issue is not read)", got.Brief.MissingInputs, want)
+	if len(f.issues.Calls) != 0 {
+		t.Errorf("GitHub issue reads = %v, want none for a GitLab pull request", f.issues.Repos)
+	}
+	if _, ok := linkedIssueSection(t, f); !ok {
+		t.Error("the prompt has no linked_issue section")
+	}
+	if !strings.Contains(f.llm.Requests[0].Messages[1].Content, "GitLab rate limit") {
+		t.Error("the prompt does not carry the GitLab issue title")
+	}
+	for _, m := range got.Brief.MissingInputs {
+		if m.Input == domain.InputLinkedIssue {
+			t.Errorf("missing inputs = %+v, want no linked_issue entry", got.Brief.MissingInputs)
+		}
+	}
+}
+
+func TestGenerate_GitLabIssueFailureIsFetchFailed(t *testing.T) { // FR25, AC22
+	failing := &brieftest.GitLabIssues{Err: errors.New("404 Not found")}
+	tests := []struct {
+		name  string
+		gl    app.GitLabIssues
+		calls int
+	}{
+		{name: "the read fails", gl: failing, calls: 1},
+		{name: "no reader bound", gl: nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f := gitlabFixture(t, tc.gl)
+			got, err := f.svc.Generate(t.Context(), wsID, prID)
+			if err != nil {
+				t.Fatalf("Generate() error = %v", err)
+			}
+			if want := (domain.MissingInput{Input: domain.InputLinkedIssue, Reason: domain.ReasonFetchFailed}); !contains(got.Brief.MissingInputs, want) {
+				t.Errorf("missing inputs = %+v, want %+v among them", got.Brief.MissingInputs, want)
+			}
+			if _, ok := linkedIssueSection(t, f); ok {
+				t.Error("the prompt has a linked_issue section for a missing issue")
+			}
+			if len(f.issues.Calls) != 0 {
+				t.Errorf("GitHub issue reads = %v, want none for a GitLab pull request", f.issues.Repos)
+			}
+		})
+	}
+	if len(failing.Calls) != 1 {
+		t.Errorf("GitLab issue reads = %v, want 1", failing.Calls)
+	}
+}
+
+func TestGenerate_GitLabPullWithoutProjectMakesNoRequest(t *testing.T) { // FR23
+	gl := &brieftest.GitLabIssues{Fetched: domain.Issue{Number: 12, Title: "x"}}
+	f := gitlabFixture(t, gl)
+	f.store.Pull.ProjectID = 0
+	if _, err := f.svc.Generate(t.Context(), wsID, prID); err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if len(gl.Calls) != 0 || len(f.issues.Calls) != 0 {
+		t.Errorf("reads = gitlab %v github %v, want none", gl.Calls, f.issues.Repos)
+	}
+}
+
+func TestGenerate_GitLabIssueReadIsBoundedByItsOwnTimeout(t *testing.T) { // FR25: 10 s
+	synctest.Test(t, func(t *testing.T) {
+		gl := &brieftest.GitLabIssues{Hang: true}
+		f := gitlabFixture(t, gl, func(d *app.Deps) { d.Clock = time.Now })
+		started := time.Now()
+		got, err := f.svc.Generate(t.Context(), wsID, prID)
+		if err != nil {
+			t.Fatalf("Generate() error = %v", err)
+		}
+		if took := time.Since(started); took != domain.IssueTimeout {
+			t.Errorf("Generate() took %v, want the %v issue timeout", took, domain.IssueTimeout)
+		}
+		if want := (domain.MissingInput{Input: domain.InputLinkedIssue, Reason: domain.ReasonFetchFailed}); !contains(got.Brief.MissingInputs, want) {
+			t.Errorf("missing inputs = %+v, want %+v among them", got.Brief.MissingInputs, want)
+		}
+	})
+}
+
+func TestGenerate_GitLabUnlinkedIssueIsNotLinked(t *testing.T) { // FR25
+	gl := &brieftest.GitLabIssues{Fetched: domain.Issue{Number: 12, Title: "x"}}
+	f := gitlabFixture(t, gl)
+	none := "No reference here."
+	f.store.Pull.Body = &none
+	got, err := f.svc.Generate(t.Context(), wsID, prID)
+	if err != nil {
+		t.Fatalf("Generate() error = %v", err)
+	}
+	if want := (domain.MissingInput{Input: domain.InputLinkedIssue, Reason: domain.ReasonNotLinked}); !contains(got.Brief.MissingInputs, want) {
+		t.Errorf("missing inputs = %+v, want %+v among them", got.Brief.MissingInputs, want)
+	}
+	if len(gl.Calls) != 0 {
+		t.Errorf("GitLab issue reads = %v, want none", gl.Calls)
+	}
+}
+
+// providerRoles records the provider each role lookup was made for.
+type providerRoles struct {
+	mu        sync.Mutex
+	providers map[string]bool
+}
+
+func (r *providerRoles) RoleFor(provider, _ string) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.providers[provider] = true
+	return "core"
+}
+
+func TestGenerate_RolesAreAskedForThePullProvider(t *testing.T) { // FR32
+	for _, provider := range []string{"", "github", "gitlab"} {
+		t.Run("provider "+provider, func(t *testing.T) {
+			roles := &providerRoles{providers: map[string]bool{}}
+			f := newFixture(t, func(d *app.Deps) { d.Roles = roles })
+			f.store.Pull.Provider = provider
+			if _, err := f.svc.Generate(t.Context(), wsID, prID); err != nil {
+				t.Fatalf("Generate() error = %v", err)
+			}
+			if diff := cmp.Diff(map[string]bool{provider: true}, roles.providers); diff != "" {
+				t.Errorf("role lookups by provider mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 

@@ -41,6 +41,8 @@
     "reply": "Reply",
     "viewOnGitHub": "View on GitHub",
     "postedToGitHub": "Posts to GitHub immediately",
+    "viewOnGitLab": "View on GitLab",
+    "postedToGitLab": "Posts to GitLab immediately",
     "outdatedTitle": "{count} comment(s) on older revisions",
     "addComment": "Add a comment on this line",
     "hasFindings": "Has findings",

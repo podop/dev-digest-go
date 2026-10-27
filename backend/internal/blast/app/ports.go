@@ -1,12 +1,13 @@
 // Package app holds the use cases of the blast context: the blast radius of a pull request (read
 // through the repo-intel BlastRadius port) and the prior merged pull requests that touched the
-// same files (read from GitHub). It writes nothing and makes no LLM call.
+// same files (read from GitHub, or from GitLab for a GitLab repository). It writes nothing and makes no LLM call.
 //
 // This file holds the ports the use cases depend on; api.go holds the use cases' own interfaces.
 package app
 
 import (
 	"context"
+	"errors"
 
 	"dev-digest-go/backend/internal/blast/domain"
 )
@@ -35,4 +36,20 @@ type GitHub interface {
 	// ListMergedPulls returns the repository's recently closed pull requests that were merged,
 	// with their files; one page of at most limit entries.
 	ListMergedPulls(ctx context.Context, owner, name string, limit int) ([]domain.MergedPR, error)
+}
+
+// ErrGitLabNotConnected is what a GitLabHistory answers when the repository's host has no
+// connection or the connection has no token. No request has been made; the history is empty.
+var ErrGitLabNotConnected = errors.New("gitlab: host is not connected or has no token")
+
+// GitLabHistory is the GitLab read the history of a GitLab pull request uses (the peers adapter
+// over platform/gitlab, bound to the repository's connection by host key). The wiring is optional:
+// a Service without one answers an empty history for a GitLab pull request. A GitHub request is
+// never made for a GitLab repository.
+type GitLabHistory interface {
+	// ListMerged returns the project's most recently updated merged merge requests (one page of at
+	// most limit entries), each with the paths it changed; host is the connection's host key and
+	// projectID the numeric project id. MergedAt is GitLab's value, "" when it sent none. Any error
+	// fails the whole read (ErrGitLabNotConnected: nothing was requested).
+	ListMerged(ctx context.Context, host string, projectID int64, limit int) ([]domain.MergedPR, error)
 }

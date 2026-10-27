@@ -1,10 +1,12 @@
 /* InlineComposer — shared inline comment composer (new comment or reply to a
-   thread). Posts live to GitHub via the DiffCommentApi. */
+   thread). Posts live to the code host (GitHub, GitLab) via the DiffCommentApi. */
 "use client";
 
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Textarea, Button } from "@devdigest/ui";
+import { isGitLab } from "@/lib/code-host";
+import { useLinkRepo } from "@/lib/link-repo";
 import { cs, type DiffCommentApi } from "../comments";
 
 export function InlineComposer({
@@ -23,6 +25,7 @@ export function InlineComposer({
   onClose: () => void;
 }) {
   const t = useTranslations("shell");
+  const gitlab = isGitLab(useLinkRepo());
   const [text, setText] = React.useState("");
   const submit = async () => {
     const body = text.trim();
@@ -69,7 +72,7 @@ export function InlineComposer({
         <Button kind="ghost" size="sm" onClick={onClose} disabled={commenting.posting}>
           {t("diffViewer.cancel")}
         </Button>
-        <span style={cs.hint}>{t("diffViewer.postedToGitHub")}</span>
+        <span style={cs.hint}>{t(gitlab ? "diffViewer.postedToGitLab" : "diffViewer.postedToGitHub")}</span>
       </div>
     </div>
   );

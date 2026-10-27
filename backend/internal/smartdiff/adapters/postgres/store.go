@@ -41,6 +41,10 @@ type fileRow struct {
 
 func (fileRow) TableName() string { return "pr_files" }
 
+type repoProviderRow struct {
+	Provider string `gorm:"column:provider"`
+}
+
 type findingRow struct {
 	File      string `gorm:"column:file"`
 	StartLine int    `gorm:"column:start_line"`
@@ -67,6 +71,24 @@ func (s *Store) PullFiles(ctx context.Context, workspaceID, prID string) ([]doma
 		out[i] = domain.PullFile{Path: r.Path, Additions: r.Additions, Deletions: r.Deletions}
 	}
 	return out, nil
+}
+
+// RepoProvider returns the provider of the repository of a pull request of the workspace, or
+// domain.ErrNotFound when the pull request is not in the workspace.
+func (s *Store) RepoProvider(ctx context.Context, workspaceID, prID string) (string, error) {
+	var row repoProviderRow
+	err := s.conn(ctx).Table("pull_requests AS p").
+		Select("r.provider AS provider").
+		Joins("JOIN repos r ON r.id = p.repo_id").
+		Where("p.workspace_id = ? AND p.id = ?", workspaceID, prID).
+		Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", fmt.Errorf("pull request %s: %w", prID, domain.ErrNotFound)
+	}
+	if err != nil {
+		return "", fmt.Errorf("select repository provider: %w", err)
+	}
+	return row.Provider, nil
 }
 
 // currentFindingsSQL selects every finding of the newest kind='review' review of each agent of the

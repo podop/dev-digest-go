@@ -93,15 +93,50 @@ func normalisePath(path string) string {
 	return strings.TrimPrefix(strings.ReplaceAll(path, `\`, "/"), "./")
 }
 
-// Classify returns the role of a changed file: the first role in the order boilerplate, tests,
-// wiring, docs with a matching glob, else core.
-func Classify(path string) Role {
+// ProviderGitLab is the repository provider whose files get the GitLab wiring patterns. Every
+// other value, "" included, classifies like a GitHub repository (the same strings as
+// pulls/domain.Provider*).
+const ProviderGitLab = "gitlab"
+
+// gitlabWiringPatterns are added to the wiring role of a GitLab repository (FR32, D25), after the
+// patterns of rolePatterns: the CI file at any depth and the root-anchored GitLab config directory.
+var gitlabWiringPatterns = []string{".gitlab-ci.yml", ".gitlab/**"}
+
+// gitlabWiring holds gitlabWiringPatterns compiled once; it is never modified.
+var gitlabWiring = compileAll(gitlabWiringPatterns)
+
+func compileAll(patterns []string) []*regexp.Regexp {
+	out := make([]*regexp.Regexp, len(patterns))
+	for i, p := range patterns {
+		out[i] = compileGlob(p)
+	}
+	return out
+}
+
+func matchAny(res []*regexp.Regexp, p string) bool {
+	for _, re := range res {
+		if re.MatchString(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// Classify returns the role of a changed file of a GitHub repository: the first role in the order
+// boilerplate, tests, wiring, docs with a matching glob, else core.
+func Classify(path string) Role { return ClassifyFor("", path) }
+
+// ClassifyFor returns the role of a changed file of a repository of the given provider. For
+// ProviderGitLab the wiring role also holds .gitlab-ci.yml (base name, any depth) and .gitlab/**
+// (root-anchored); any other provider classifies exactly as Classify always did.
+func ClassifyFor(provider, path string) Role {
 	p := normalisePath(path)
 	for _, cr := range compiledRoles {
-		for _, re := range cr.res {
-			if re.MatchString(p) {
-				return cr.role
-			}
+		if matchAny(cr.res, p) {
+			return cr.role
+		}
+		if cr.role == RoleWiring && provider == ProviderGitLab && matchAny(gitlabWiring, p) {
+			return cr.role
 		}
 	}
 	return RoleCore

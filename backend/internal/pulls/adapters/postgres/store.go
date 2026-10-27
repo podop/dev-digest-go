@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 
 	"gorm.io/gorm"
@@ -36,6 +37,9 @@ func (r repoRow) toDomain() domain.Repo {
 	if r.ProjectID != nil {
 		repo.ProjectID = *r.ProjectID
 	}
+	if r.WebURL != nil {
+		repo.WebURL = *r.WebURL
+	}
 	return repo
 }
 
@@ -64,6 +68,9 @@ type pullRow struct {
 	Draft           bool       `gorm:"column:draft"`
 	// HeadIsFork is NULL until the GitHub poll has written it (migration 0007).
 	HeadIsFork *bool `gorm:"column:head_is_fork"`
+	// DiffHead is the head SHA of the GitLab diff the stored files came from; NULL for GitHub rows
+	// and until a GitLab detail fetch has written it (migration 0011).
+	DiffHead *string `gorm:"column:diff_head"`
 }
 
 func (pullRow) TableName() string { return "pull_requests" }
@@ -74,6 +81,7 @@ func (r pullRow) toDomain() domain.Pull {
 		Branch: r.Branch, Base: r.Base, HeadSHA: r.HeadSHA, Additions: r.Additions,
 		Deletions: r.Deletions, FilesCount: r.FilesCount, Status: r.Status, Body: r.Body,
 		LastReviewedSHA: r.LastReviewedSHA, OpenedAt: r.OpenedAt, UpdatedAt: r.UpdatedAt,
+		DiffHead: r.DiffHead,
 	}
 }
 
@@ -84,6 +92,8 @@ type fileRow struct {
 	Additions int     `gorm:"column:additions"`
 	Deletions int     `gorm:"column:deletions"`
 	Patch     *string `gorm:"column:patch"`
+	// PreviousPath is the GitLab old_path of the file; NULL for GitHub files (migration 0011).
+	PreviousPath *string `gorm:"column:previous_path"`
 }
 
 func (fileRow) TableName() string { return "pr_files" }
@@ -233,7 +243,7 @@ func (s *Store) MarkPolled(ctx context.Context, workspaceID, repoID string, at t
 func (s *Store) ListPollTargets(ctx context.Context) ([]domain.PollTarget, error) {
 	var rows []repoRow
 	err := s.conn(ctx).
-		Select("id", "workspace_id", "owner", "name", "provider", "host", "project_id").
+		Select("id", "workspace_id", "owner", "name", "provider", "host", "project_id", "web_url").
 		Order("workspace_id, full_name, id").
 		Find(&rows).Error
 	if err != nil {
@@ -351,12 +361,36 @@ func (s *Store) SetDiffStats(ctx context.Context, prID string, stats domain.Diff
 	return nil
 }
 
-// ReplaceDetail writes the body and stats of a PR and replaces its files and commits, all in one
-// transaction: rows absent from the mirror are deleted, the others are upserted by path or sha.
+// diffHeadPattern is the shape pull_requests_diff_head_chk accepts: a full object id, 40 (SHA-1)
+// or 64 (SHA-256) lower-case hex characters.
+var diffHeadPattern = regexp.MustCompile(`^[0-9a-f]{40}([0-9a-f]{24})?$`)
+
+// storableDiffHead is the diff head to write: nil when it is absent, or would violate the CHECK
+// (then the column is cleared and a GitLab post answers diff_changed until a fetch refills it).
+func storableDiffHead(h *string) *string {
+	if h == nil || !diffHeadPattern.MatchString(*h) {
+		return nil
+	}
+	return h
+}
+
+// storablePreviousPath turns an empty previous path into NULL.
+func storablePreviousPath(p *string) *string {
+	if p == nil || *p == "" {
+		return nil
+	}
+	return p
+}
+
+// ReplaceDetail writes the body, stats and diff head of a PR and replaces its files (with their
+// previous paths) and commits, all in one transaction: rows absent from the mirror are deleted,
+// the others are upserted by path or sha. A nil DiffHead (GitHub, or an invalid value) clears
+// the stored one.
 func (s *Store) ReplaceDetail(ctx context.Context, prID string, m domain.DetailMirror) error {
 	return s.conn(ctx).Transaction(func(tx *gorm.DB) error {
 		err := tx.Model(&pullRow{}).Where("id = ?", prID).Updates(map[string]any{
 			"body": m.Body, "additions": m.Additions, "deletions": m.Deletions, "files_count": m.FilesCount,
+			"diff_head": storableDiffHead(m.DiffHead),
 		}).Error
 		if err != nil {
 			return fmt.Errorf("update pull request detail: %w", err)
@@ -385,11 +419,14 @@ func replaceFiles(tx *gorm.DB, prID string, files []domain.File) error {
 	}
 	rows := make([]fileRow, len(files))
 	for i, f := range files {
-		rows[i] = fileRow{PRID: prID, Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, Patch: f.Patch}
+		rows[i] = fileRow{
+			PRID: prID, Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, Patch: f.Patch,
+			PreviousPath: storablePreviousPath(f.PreviousPath),
+		}
 	}
 	err := tx.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "pr_id"}, {Name: "path"}},
-		DoUpdates: clause.AssignmentColumns([]string{"additions", "deletions", "patch"}),
+		DoUpdates: clause.AssignmentColumns([]string{"additions", "deletions", "patch", "previous_path"}),
 	}).CreateInBatches(&rows, insertBatch).Error
 	if err != nil {
 		return fmt.Errorf("upsert files: %w", err)
@@ -434,7 +471,7 @@ func (s *Store) ListFiles(ctx context.Context, prID string) ([]domain.File, erro
 	}
 	out := make([]domain.File, len(rows))
 	for i, r := range rows {
-		out[i] = domain.File{Path: r.Path, Additions: r.Additions, Deletions: r.Deletions, Patch: r.Patch}
+		out[i] = domain.File{Path: r.Path, Additions: r.Additions, Deletions: r.Deletions, Patch: r.Patch, PreviousPath: r.PreviousPath}
 	}
 	return out, nil
 }

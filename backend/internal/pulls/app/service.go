@@ -27,8 +27,13 @@ type Service struct {
 	store store
 	gh    gitHub
 	gl    GitLab // nil: every GitLab repository reads as not connected
-	log   *slog.Logger
-	now   func() time.Time
+	// glc is the GitLab comments access (spec B); nil: GitLab comments read as not connected.
+	glc GitLabComments
+	// redact removes every stored connection token from GitLab texts before they are shown or
+	// logged (NFR4); the identity unless WithRedact is given.
+	redact func(string) string
+	log    *slog.Logger
+	now    func() time.Time
 }
 
 // NewService builds a Service. now is the clock (nil means time.Now). A repository is routed to
@@ -38,7 +43,7 @@ func NewService(store store, gh gitHub, log *slog.Logger, now func() time.Time, 
 	if now == nil {
 		now = time.Now
 	}
-	s := &Service{store: store, gh: gh, log: log, now: now}
+	s := &Service{store: store, gh: gh, log: log, now: now, redact: func(text string) string { return text }}
 	for _, o := range opts {
 		o(s)
 	}
@@ -283,15 +288,17 @@ func (s *Service) linkedIssue(ctx context.Context, repo domain.Repo, body *strin
 	return &issue
 }
 
-// Comments proxies one page of the PR's GitHub review comments. Without a token or on any
-// GitHub failure it returns no comments.
+// Comments lists the PR's review comments: one page of GitHub's, or the diff threads of a GitLab
+// merge request (up to three discussion pages, at most 100 comments; spec B FR1–FR4). Without a
+// token, for a GitLab repository that is not connected, or on any host failure it returns no
+// comments.
 func (s *Service) Comments(ctx context.Context, workspaceID, prID string) ([]domain.ReviewComment, error) {
 	pr, repo, err := s.resolvePull(ctx, workspaceID, prID)
 	if err != nil {
 		return nil, err
 	}
 	if repo.IsGitLab() {
-		return []domain.ReviewComment{}, nil // no GitLab review comments yet and no GitHub request (FR29)
+		return s.gitLabComments(ctx, pr, repo), nil // never a GitHub request (A FR29)
 	}
 	comments, err := s.gh.ListReviewComments(ctx, repo.Owner, repo.Name, pr.Number)
 	if err != nil {
@@ -313,15 +320,15 @@ type CommentRequest struct {
 
 // PostComment posts an inline review comment, pinned to the stored head sha. It is never
 // retried. Without a token the error is github_unavailable; any GitHub failure is
-// github_comment_failed with GitHub's message.
+// github_comment_failed with GitHub's message. For a GitLab merge request it creates a positioned
+// discussion or a reply after the note body rules (spec B FR5–FR11, errors in gitlab_comments.go).
 func (s *Service) PostComment(ctx context.Context, workspaceID, prID string, req CommentRequest) (domain.ReviewComment, error) {
 	pr, repo, err := s.resolvePull(ctx, workspaceID, prID)
 	if err != nil {
 		return domain.ReviewComment{}, err
 	}
 	if repo.IsGitLab() {
-		return domain.ReviewComment{}, apperr.InvalidInput("Posting to GitLab merge requests is not available yet.").
-			WithCode("gitlab_unavailable")
+		return s.postGitLabComment(ctx, pr, repo, req)
 	}
 	created, err := s.gh.CreateReviewComment(ctx, repo.Owner, repo.Name, pr.Number, domain.CommentInput{
 		CommitID: pr.HeadSHA, Path: req.Path, Line: req.Line, Side: req.Side, Body: req.Body, InReplyTo: req.InReplyTo,

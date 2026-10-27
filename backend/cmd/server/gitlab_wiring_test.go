@@ -7,13 +7,18 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
+	"io"
 	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -481,5 +486,246 @@ func TestIsGitLabKey(t *testing.T) {
 		if got := isGitLabKey(in); got != want {
 			t.Errorf("isGitLabKey(%q) = %v, want %v", in, got, want)
 		}
+	}
+}
+
+// ---- GitLab B: the composition root binds the connections to comments and the context peers ----
+
+// Component tests of the GitLab B wiring (plan S19, [C5]) through the real server: every service
+// that reads or writes GitLab for a repository got its GitLab dependency, resolves the connection
+// at every call and sends its requests to the repository's own connection with that connection's
+// token, and no GitLab repository causes a GitHub request. The harness is the GitLab A isolation
+// stub (giBoot); helpers here start with gw.
+
+const (
+	gwToken2     = "glpat-RotatedTokenValue01"
+	gwDiscussion = "abcdef0123456789abcdef0123456789abcdef01"
+	gwNoteID     = 901
+	gwDoc        = "docs/design.md"
+	gwDocText    = "# Design\n\nThe limiter is a token bucket.\n"
+)
+
+// gwDiscussionJSON is a diff thread on a.ts line 3 by ann, at the stub's head sha.
+func gwDiscussionJSON() map[string]any {
+	return map[string]any{"id": gwDiscussion, "notes": []any{map[string]any{
+		"id": gwNoteID, "type": "DiffNote", "system": false, "body": "Looks wrong", "author": map[string]any{"username": "ann"},
+		"created_at": "2026-10-20T10:00:00Z",
+		"position": map[string]any{"position_type": "text", "base_sha": "b0", "start_sha": "s0", "head_sha": giHeadSHA,
+			"old_path": "a.ts", "new_path": "a.ts", "old_line": nil, "new_line": 3},
+	}}}
+}
+
+// gwGitLab answers what GitLab B reads and writes on top of the stub's defaults: the discussions
+// of !3, the reply note (or, while rejectNote is set, a 403 that repeats the token like a careless
+// proxy), the doc and the skill file.
+type gwGitLab struct {
+	rejectNote atomic.Bool
+}
+
+func (g *gwGitLab) handle(w http.ResponseWriter, r *http.Request) bool {
+	path := r.URL.Path
+	switch {
+	case r.Method == http.MethodGet && strings.HasSuffix(path, "/projects/7/merge_requests/3/discussions"):
+		giJSON(w, http.StatusOK, []any{gwDiscussionJSON()})
+	case r.Method == http.MethodPost && strings.HasSuffix(path, "/discussions/"+gwDiscussion+"/notes"):
+		if g.rejectNote.Load() {
+			giJSON(w, http.StatusForbidden, map[string]any{"message": "403 Forbidden: token " + r.Header.Get("PRIVATE-TOKEN") + " cannot comment"})
+			return true
+		}
+		var in struct {
+			Body string `json:"body"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&in)
+		giJSON(w, http.StatusCreated, map[string]any{"id": 902, "type": nil, "system": false, "body": in.Body,
+			"author": map[string]any{"username": "ada"}, "created_at": "2026-10-21T10:00:00Z"})
+	case r.Method == http.MethodGet && strings.HasSuffix(path, "/projects/7/merge_requests/3"):
+		// The detail answer names a doc of the project in the description (the list answer has none).
+		m := map[string]any{"iid": 3, "title": "Add feature", "state": "opened", "draft": false, "source_branch": "feat",
+			"target_branch": "main", "sha": giHeadSHA, "source_project_id": giProjectID, "target_project_id": giProjectID,
+			"created_at": "2026-10-19T10:00:00Z", "updated_at": "2026-10-20T10:00:00Z", "merged_at": nil, "closed_at": nil,
+			"author":      map[string]any{"username": "octo"},
+			"description": "Fixes #12. Design: " + gwDoc,
+		}
+		giJSON(w, http.StatusOK, m)
+	case r.Method == http.MethodGet && strings.HasSuffix(path, "/repository/files/"+gwDoc+"/raw"):
+		_, _ = io.WriteString(w, gwDocText)
+	case r.Method == http.MethodGet && strings.HasSuffix(path, "/repository/files/skills/limiter.md/raw"):
+		_, _ = io.WriteString(w, "---\nname: limiter\ndescription: Rate limits\n---\nUse a token bucket.\n")
+	default:
+		return false
+	}
+	return true
+}
+
+// gwRequests are the GitLab requests after the first n whose "METHOD path" contains sub.
+func gwRequests(e *giEnv, n int, sub string) []giReq {
+	var out []giReq
+	for _, r := range e.gl.since(n) {
+		if strings.Contains(r.Method+" "+r.Path, sub) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// gwBoot starts the stack with a connection, the acme/web repository and its merge request !3.
+func gwBoot(t *testing.T) (e *giEnv, gl *gwGitLab, connID, pr string) {
+	t.Helper()
+	e = giBoot(t, giOpts{})
+	connID = e.connect(giToken)
+	repo := e.addRepo(giPath)
+	pr = e.pullID(repo)
+	gl = &gwGitLab{}
+	e.gl.setHook(gl.handle)
+	// The detail read stores the description (the intent and the brief read it from the row).
+	if resp := e.s.get("/pulls/" + pr); resp.Status != http.StatusOK {
+		t.Fatalf("GET /pulls/%s = %d %s, want 200", pr, resp.Status, resp.Body)
+	}
+	return e, gl, connID, pr
+}
+
+// GitLab B P9: the pulls service holds the comments port and the redactor. A read lists the
+// thread, a reply is posted, both with the connection's token and none to GitHub; a rejected
+// write that repeats the token reaches neither the response nor the log; a rotated token applies
+// to the next request and a removed one stops it before any request.
+func TestGitLabBWiring_CommentsUseTheConnectionAtEveryCall(t *testing.T) {
+	e, gl, connID, pr := gwBoot(t)
+	_, ghBefore := e.lookups()
+	n := e.gl.count()
+
+	resp := e.s.get("/pulls/" + pr + "/comments")
+	got := list(t, resp)
+	if resp.Status != http.StatusOK || len(got) != 1 || got[0]["id"] != float64(gwNoteID) || got[0]["body"] != "Looks wrong" || got[0]["path"] != "a.ts" {
+		t.Fatalf("GET /pulls/:id/comments = %d %s, want the one thread of the stub", resp.Status, resp.Body)
+	}
+	if reqs := gwRequests(e, n, "GET /api/v4/projects/7/merge_requests/3/discussions"); len(reqs) != 1 || reqs[0].Private != giToken {
+		t.Errorf("the read sent %+v, want one discussions request with the connection's token", reqs)
+	}
+
+	n = e.gl.count()
+	reply := map[string]any{"path": "a.ts", "line": 3, "body": "Thanks", "in_reply_to": gwNoteID}
+	resp = e.s.post("/pulls/"+pr+"/comments", reply)
+	if resp.Status != http.StatusOK || resp.Obj(t)["body"] != "Thanks" || resp.Obj(t)["in_reply_to_id"] != float64(gwNoteID) {
+		t.Fatalf("POST reply = %d %s, want 200 with the posted note in reply to %d", resp.Status, resp.Body, gwNoteID)
+	}
+	posts := gwRequests(e, n, "POST ")
+	if len(posts) != 1 || !strings.HasSuffix(posts[0].Path, "/discussions/"+gwDiscussion+"/notes") || posts[0].Private != giToken ||
+		!strings.Contains(string(posts[0].Body), `"body":"Thanks"`) {
+		t.Errorf("the reply sent %+v, want one note POST with the token and the body", posts)
+	}
+
+	t.Run("a rejected write is redacted", func(t *testing.T) {
+		gl.rejectNote.Store(true)
+		defer gl.rejectNote.Store(false)
+		resp := e.s.post("/pulls/"+pr+"/comments", reply)
+		if resp.Status != http.StatusBadRequest || resp.errorCode(t) != "gitlab_permission_denied" {
+			t.Fatalf("POST rejected reply = %d %s, want 400 gitlab_permission_denied", resp.Status, resp.Body)
+		}
+		assertNoSecret(t, "the response", string(resp.Body)+fmt.Sprint(resp.Header), giToken)
+		assertNoSecret(t, "the log", e.s.logs.String(), giToken)
+		if !strings.Contains(string(resp.Body), "[REDACTED]") {
+			t.Errorf("the response %s holds no [REDACTED]; GitLab's text was not passed through the redactor", resp.Body)
+		}
+	})
+	t.Run("a rotated token applies to the next request", func(t *testing.T) {
+		if r := e.s.do(http.MethodPut, "/settings/gitlab-connections/"+connID, map[string]any{"token": gwToken2}); r.Status != http.StatusOK {
+			t.Fatalf("PUT token = %d %s, want 200", r.Status, r.Body)
+		}
+		n := e.gl.count()
+		if r := e.s.get("/pulls/" + pr + "/comments"); r.Status != http.StatusOK || len(list(t, r)) != 1 {
+			t.Fatalf("GET comments after the rotation = %d %s, want 200 with the thread", r.Status, r.Body)
+		}
+		if reqs := gwRequests(e, n, "/discussions"); len(reqs) != 1 || reqs[0].Private != gwToken2 {
+			t.Errorf("after the rotation the read sent %+v, want the new token", reqs)
+		}
+	})
+	t.Run("a removed token sends no request", func(t *testing.T) {
+		if r := e.s.do(http.MethodPut, "/settings/gitlab-connections/"+connID, map[string]any{"token": nil}); r.Status != http.StatusOK {
+			t.Fatalf("PUT token null = %d %s, want 200", r.Status, r.Body)
+		}
+		n := e.gl.count()
+		if r := e.s.get("/pulls/" + pr + "/comments"); r.Status != http.StatusOK || strings.TrimSpace(string(r.Body)) != "[]" {
+			t.Errorf("GET comments without a token = %d %s, want 200 []", r.Status, r.Body)
+		}
+		if r := e.s.post("/pulls/"+pr+"/comments", reply); r.Status != http.StatusUnprocessableEntity && r.Status != http.StatusBadRequest {
+			t.Errorf("POST reply without a token = %d %s, want a 4xx refusal", r.Status, r.Body)
+		}
+		if reqs := e.gl.since(n); len(reqs) != 0 {
+			t.Errorf("a repository without a token sent %d request(s), want none: %+v", len(reqs), reqs)
+		}
+	})
+
+	if _, gh := e.lookups(); gh != ghBefore {
+		t.Errorf("the comment flows sent %d GitHub request(s), want none: %v", gh-ghBefore, e.s.gh.requests()[ghBefore:])
+	}
+}
+
+// GitLab B P9: blast history, the brief's issue, the intent's ticket and doc, and the skill file
+// import each got their GitLab dependency: every one sends its request to the connection with
+// its token, and GitHub sees nothing.
+func TestGitLabBWiring_ContextPeersReadThroughTheConnection(t *testing.T) {
+	e, _, _, pr := gwBoot(t)
+	_, ghBefore := e.lookups()
+	n := e.gl.count()
+
+	t.Run("blast history", func(t *testing.T) {
+		before := e.gl.count()
+		if r := e.s.get("/pulls/" + pr + "/history"); r.Status != http.StatusOK {
+			t.Fatalf("GET history = %d %s, want 200", r.Status, r.Body)
+		}
+		reqs := gwRequests(e, before, "GET /api/v4/projects/7/merge_requests")
+		if len(reqs) == 0 || !strings.Contains(reqs[0].Query, "state=merged") || reqs[0].Private != giToken {
+			t.Errorf("history sent %+v, want the merged list with the token", reqs)
+		}
+	})
+	t.Run("intent ticket and doc", func(t *testing.T) {
+		before := e.gl.count()
+		resp := e.s.post("/pulls/"+pr+"/intent/refresh", nil)
+		if resp.Status != http.StatusOK {
+			t.Fatalf("POST intent/refresh = %d %s, want 200", resp.Status, resp.Body)
+		}
+		if reqs := gwRequests(e, before, "GET /api/v4/projects/7/issues/12"); len(reqs) != 1 || reqs[0].Private != giToken {
+			t.Errorf("the intent sent %+v for the ticket, want one issue read with the token", reqs)
+		}
+		reqs := gwRequests(e, before, "/repository/files/"+gwDoc+"/raw")
+		if len(reqs) != 1 || reqs[0].Private != giToken || !strings.Contains(reqs[0].Query, "ref="+giHeadSHA) {
+			t.Errorf("the intent sent %+v for the doc, want one file read at the head sha with the token", reqs)
+		}
+		used := map[string]string{}
+		for _, src := range obj(t, resp.JSON(t), "intent")["sources"].([]any) {
+			m := src.(map[string]any)
+			used[fmt.Sprint(m["kind"], ":", m["ref"])] = fmt.Sprint(m["status"])
+		}
+		if used["ticket:12"] != "used" {
+			t.Errorf("intent sources = %v, want ticket 12 used", used)
+		}
+	})
+	t.Run("brief issue", func(t *testing.T) {
+		before := e.gl.count()
+		if r := e.s.post("/pulls/"+pr+"/brief", nil); r.Status != http.StatusOK {
+			t.Fatalf("POST brief = %d %s, want 200", r.Status, r.Body)
+		}
+		if reqs := gwRequests(e, before, "GET /api/v4/projects/7/issues/12"); len(reqs) != 1 || reqs[0].Private != giToken {
+			t.Errorf("the brief sent %+v for the issue, want one read with the token", reqs)
+		}
+	})
+	t.Run("skill file import", func(t *testing.T) {
+		before := e.gl.count()
+		url := e.gl.baseURL() + "/" + giPath + "/-/blob/main/skills/limiter.md"
+		resp := e.s.post("/skills/import/preview", map[string]any{"kind": "url", "url": url})
+		if resp.Status != http.StatusOK || !strings.Contains(fmt.Sprint(resp.Obj(t)["body"]), "token bucket") {
+			t.Fatalf("POST import preview of %s = %d %s, want 200 with the file's body", url, resp.Status, resp.Body)
+		}
+		reqs := gwRequests(e, before, "/repository/files/")
+		if len(reqs) == 0 || reqs[0].Private != giToken || !strings.Contains(reqs[0].Query, "ref=main") {
+			t.Errorf("the import sent %+v, want the raw file read at ref main with the token", reqs)
+		}
+	})
+
+	if e.gl.count() == n {
+		t.Error("the stub saw no request; the wiring proves nothing")
+	}
+	if _, gh := e.lookups(); gh != ghBefore {
+		t.Errorf("the GitLab reads sent %d GitHub request(s), want none: %v", gh-ghBefore, e.s.gh.requests()[ghBefore:])
 	}
 }

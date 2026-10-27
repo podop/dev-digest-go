@@ -437,7 +437,9 @@ func mustTime(t *testing.T, s string) time.Time {
 
 type roleFake struct{}
 
-func (roleFake) Role(path string) string { return string(smartdiff.Classify(path)) }
+func (roleFake) RoleFor(provider, path string) string {
+	return string(smartdiff.ClassifyFor(provider, path))
+}
 
 // blastWire is the golden's BlastRadius.
 type blastWire struct {

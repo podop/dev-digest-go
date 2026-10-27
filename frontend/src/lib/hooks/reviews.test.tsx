@@ -1,9 +1,11 @@
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import type { FindingRecord, ReviewRecord } from "@devdigest/shared";
 import { renderHookWithProviders, cleanup, act, waitFor, createTestQueryClient } from "@/test/render";
 import { mockFetch, jsonResponse } from "@/test/fetch-mock";
 import { FakeEventSource, installFakeEventSource } from "@/test/fake-event-source";
+import { notify } from "../toast";
+import { createAppQueryClient } from "../providers";
 import { prKeys } from "./keys";
 import {
   applyFindingAction,
@@ -164,6 +166,64 @@ describe("run mutations own their invalidation", () => {
     expect(invalidated(queryClient, prKeys.comments("pr1"))).toBe(true);
     expect(invalidated(queryClient, prKeys.comments("pr2"))).toBe(false);
     expect(invalidated(queryClient, prKeys.reviews("pr1"))).toBe(false);
+  });
+});
+
+describe("useCreatePrComment errors", () => {
+  const failing = (reason: string) =>
+    mockFetch({
+      "POST /pulls/pr1/comments": () =>
+        jsonResponse({ error: { code: "gitlab_comment_failed", message: "Reload", details: { reason, cause: "" } } }, 400),
+    });
+
+  /** The app's real client, so the global MutationCache toast policy runs; seeded like the other tests. */
+  function appClient(): QueryClient {
+    const qc = createAppQueryClient();
+    for (const key of [prKeys.detail("pr1"), prKeys.comments("pr1"), prKeys.reviews("pr1"), prKeys.detail("pr2")]) {
+      qc.setQueryData(key, []);
+    }
+    return qc;
+  }
+
+  const post = async (hook: () => ReturnType<typeof useCreatePrComment>) => {
+    const { result, queryClient } = renderHookWithProviders(hook, { queryClient: appClient() });
+    await act(async () => {
+      await result.current.mutateAsync({ path: "a.ts", line: 3, body: "nit" }).catch(() => undefined);
+    });
+    return queryClient;
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it("GitLab: no global error toast, and a stale diff refetches that PR's detail and everything under it", async () => {
+    const toast = vi.spyOn(notify, "error").mockImplementation(() => undefined);
+    failing("diff_changed");
+    const qc = await post(() => useCreatePrComment("pr1", { gitlab: true }));
+
+    await waitFor(() => expect(invalidated(qc, prKeys.detail("pr1"))).toBe(true));
+    expect(invalidated(qc, prKeys.comments("pr1"))).toBe(true);
+    expect(invalidated(qc, prKeys.reviews("pr1"))).toBe(true);
+    expect(invalidated(qc, prKeys.detail("pr2"))).toBe(false);
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("GitLab: diff_not_ready reloads too, any other reason leaves the PR alone", async () => {
+    vi.spyOn(notify, "error").mockImplementation(() => undefined);
+    failing("diff_not_ready");
+    const notReady = await post(() => useCreatePrComment("pr1", { gitlab: true }));
+    await waitFor(() => expect(invalidated(notReady, prKeys.detail("pr1"))).toBe(true));
+
+    failing("position_rejected");
+    const rejected = await post(() => useCreatePrComment("pr1", { gitlab: true }));
+    expect(invalidated(rejected, prKeys.detail("pr1"))).toBe(false);
+    expect(invalidated(rejected, prKeys.comments("pr1"))).toBe(false);
+  });
+
+  it("GitHub (no option): the global error toast stays", async () => {
+    const toast = vi.spyOn(notify, "error").mockImplementation(() => undefined);
+    failing("position_rejected");
+    await post(() => useCreatePrComment("pr1"));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Reload"));
   });
 });
 

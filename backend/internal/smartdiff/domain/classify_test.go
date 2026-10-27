@@ -94,3 +94,42 @@ func TestClassify(t *testing.T) {
 		})
 	}
 }
+
+// EC26 / AC28 (FR32, D25): a GitLab repository adds .gitlab-ci.yml (any depth) and .gitlab/** to
+// wiring; a GitHub repository, or no provider, classifies as before.
+func TestClassifyFor_GitLabWiring(t *testing.T) {
+	tests := []struct {
+		path           string
+		gitlab, github domain.Role
+		why            string
+	}{
+		{".gitlab-ci.yml", domain.RoleWiring, domain.RoleCore, "CI file at the root"},
+		{"ci/.gitlab-ci.yml", domain.RoleWiring, domain.RoleCore, "CI file at any depth"},
+		{".gitlab/merge_request_templates/a.md", domain.RoleWiring, domain.RoleDocs, "wiring before docs"},
+		{".gitlab/CODEOWNERS", domain.RoleWiring, domain.RoleCore, ".gitlab/** root-anchored"},
+		{"src/gitlab/x.ts", domain.RoleCore, domain.RoleCore, "gitlab as a plain directory"},
+		{"sub/.gitlab/x.yml", domain.RoleCore, domain.RoleCore, ".gitlab/** is root-anchored"},
+		{"x.gitlab-ci.yml", domain.RoleCore, domain.RoleCore, ".gitlab-ci.yml is the whole base name"},
+		{".gitlab-ci.yml.md", domain.RoleDocs, domain.RoleDocs, "docs stay docs"},
+		{"lib/.gitlab/x", domain.RoleCore, domain.RoleCore, "not under the root .gitlab"},
+		{".gitlab/x.lock", domain.RoleBoilerplate, domain.RoleBoilerplate, "boilerplate still wins"},
+		{"tests/.gitlab-ci.yml", domain.RoleTests, domain.RoleTests, "tests still win over wiring"},
+		{".github/workflows/ci.yml", domain.RoleWiring, domain.RoleWiring, "GitHub paths unchanged on GitLab"},
+		{"README.md", domain.RoleDocs, domain.RoleDocs, "docs unchanged"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.why+" "+tc.path, func(t *testing.T) {
+			if got := domain.ClassifyFor(domain.ProviderGitLab, tc.path); got != tc.gitlab {
+				t.Errorf("ClassifyFor(gitlab, %q) = %q, want %q", tc.path, got, tc.gitlab)
+			}
+			for _, provider := range []string{"github", "", "unknown"} {
+				if got := domain.ClassifyFor(provider, tc.path); got != tc.github {
+					t.Errorf("ClassifyFor(%q, %q) = %q, want %q", provider, tc.path, got, tc.github)
+				}
+				if got := domain.Classify(tc.path); got != tc.github {
+					t.Errorf("Classify(%q) = %q, want %q", tc.path, got, tc.github)
+				}
+			}
+		})
+	}
+}

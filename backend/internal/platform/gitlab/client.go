@@ -1,6 +1,8 @@
-// Package gitlab is a small read-only GitLab client over net/http for the calls the backend
-// needs: the token owner, token scopes, instance version, projects, merge requests with their
-// diffs and commits, issues, and merge request diff stats through one GraphQL query.
+// Package gitlab is a small GitLab client over net/http for the calls the backend needs: the
+// token owner, token scopes, instance version, projects, merge requests with their diffs, commits,
+// versions and discussions, issues, raw repository files, and merge request diff stats through one
+// GraphQL query. Reads retry transient failures; the two writes (CreateDiscussion, CreateNote) are
+// sent exactly once.
 //
 // The HTTP client is supplied by the caller (platform/egress: no proxy, no redirect, the dial
 // guard); the package never builds one. The token goes in the PRIVATE-TOKEN header of each call
@@ -16,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"mime"
 	"net"
 	"net/http"
@@ -59,6 +62,9 @@ var (
 	ErrBaseURL = errors.New("gitlab: invalid base URL")
 	// ErrToken is a token that cannot be sent as a header value.
 	ErrToken = errors.New("gitlab: token has invalid characters")
+	// ErrTooLarge is a raw file longer than the limit the caller gave. Nothing of the file is
+	// returned.
+	ErrTooLarge = errors.New("gitlab: file larger than the limit")
 )
 
 // StatusError is a non-2xx, non-3xx GitLab answer. Message is GitLab's own message with the token
@@ -73,6 +79,10 @@ type StatusError struct {
 	// Reset is the time the RateLimit-Reset header (epoch seconds) says the window renews; the
 	// zero time without a valid one.
 	Reset time.Time
+
+	// retryAfterSecs is the whole-second wait the Retry-After header asked for, rounded up; 0
+	// without a usable header.
+	retryAfterSecs int
 }
 
 func (e *StatusError) Error() string {
@@ -101,6 +111,27 @@ func (e *StatusError) IsRateLimited() bool { return e.Status == http.StatusTooMa
 
 // IsRedirect reports a 3xx status.
 func (e *StatusError) IsRedirect() bool { return e.Status >= 300 && e.Status < 400 }
+
+// RetryAfterSeconds is the Retry-After wait in whole seconds, rounded up: a delay in seconds as
+// sent, an HTTP date as the seconds until it. A missing header, a zero or a past date, and an
+// unreadable value give 60 (spec B FR10, A5). It is at most a day.
+func (e *StatusError) RetryAfterSeconds() int {
+	secs := e.retryAfterSecs
+	if secs <= 0 && !e.RetryAfter.IsZero() {
+		secs = int(math.Ceil(time.Until(e.RetryAfter).Seconds()))
+	}
+	if secs <= 0 {
+		return int(defaultRetryAfter / time.Second)
+	}
+	return min(secs, int(maxRetryAfter/time.Second))
+}
+
+// InsufficientScope reports a 403 whose message says the token lacks a scope: GitLab answers
+// {"error":"insufficient_scope",...} when a read-only token tries to write (spec B FR10, A6).
+func (e *StatusError) InsufficientScope() bool {
+	return e.Status == http.StatusForbidden &&
+		strings.Contains(strings.ToLower(e.Message), "insufficient_scope")
+}
 
 // ResumeAt is when the host may be called again according to the answer: RetryAfter, else Reset,
 // else the zero time (FR27, A4).
@@ -225,11 +256,53 @@ type request struct {
 	// url overrides conn + path (GraphQL lives beside the REST root, not below it).
 	url  string
 	body []byte
+	// rawMax > 0 reads the 2xx body as raw bytes (any content type) into a *[]byte, at most
+	// rawMax of them; a longer body is ErrTooLarge.
+	rawMax int
 }
 
 // getJSON decodes the 2xx answer of a GET into T, retrying transient failures.
 func getJSON[T any](ctx context.Context, c *Client, conn Conn, op, path string, q url.Values) (T, error) {
 	return doJSON[T](ctx, c, request{conn: conn, op: op, method: http.MethodGet, path: path, query: q})
+}
+
+// postOnce sends payload as a JSON body and decodes the 2xx answer into T. It makes exactly one
+// attempt, whatever the Client's retry policy: a write that timed out or got a 5xx may have been
+// applied, so repeating it could post twice (spec B FR11, P4). The attempt is bounded by the
+// client's call timeout. Package-internal and reusable for further writes (slice C: CI notes).
+func postOnce[T any](ctx context.Context, c *Client, conn Conn, op, path string, payload any) (T, error) {
+	var out T
+	tok, err := conn.token()
+	if err != nil {
+		return out, err
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return out, fmt.Errorf("gitlab %s: encode request: %w", op, err)
+	}
+	err = c.once(ctx, request{conn: conn, op: op, method: http.MethodPost, path: path, body: body}, tok, 1, &out)
+	return out, err
+}
+
+// getRaw reads the 2xx body of a GET as bytes, whatever its content type, with the Client's
+// retry policy. A body longer than limit bytes is ErrTooLarge (limit must be positive); at most
+// limit+1 bytes are read. Package-internal and reusable (slice C: CI configuration files).
+func getRaw(ctx context.Context, c *Client, conn Conn, op, path string, q url.Values, limit int) ([]byte, error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("gitlab %s: limit %d out of range", op, limit)
+	}
+	tok, err := conn.token()
+	if err != nil {
+		return nil, err
+	}
+	r := request{conn: conn, op: op, method: http.MethodGet, path: path, query: q, rawMax: limit}
+	attempt := 0
+	return retry.Value(ctx, c.policy(), func(ctx context.Context) ([]byte, error) {
+		attempt++
+		var out []byte
+		err := c.once(ctx, r, tok, attempt, &out)
+		return out, err
+	})
 }
 
 func doJSON[T any](ctx context.Context, c *Client, r request) (T, error) {
@@ -300,7 +373,11 @@ func (c *Client) once(ctx context.Context, r request, token string, attempt int,
 	if token != "" {
 		req.Header.Set("PRIVATE-TOKEN", token)
 	}
-	req.Header.Set("Accept", "application/json")
+	if r.rawMax > 0 {
+		req.Header.Set("Accept", "*/*")
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
 	req.Header.Set("User-Agent", "dev-digest-go")
 	if r.body != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -318,6 +395,17 @@ func (c *Client) once(ctx context.Context, r request, token string, attempt int,
 		return fmt.Errorf("gitlab %s: %w", r.op, ErrRedirect)
 	case resp.StatusCode < 200 || resp.StatusCode > 299:
 		return statusError(resp, token)
+	}
+	if r.rawMax > 0 {
+		data, err := io.ReadAll(io.LimitReader(resp.Body, int64(r.rawMax)+1))
+		if err != nil {
+			return transportError(r.op, err, token)
+		}
+		if len(data) > r.rawMax {
+			return fmt.Errorf("gitlab %s: %w", r.op, ErrTooLarge)
+		}
+		*(out.(*[]byte)) = data
+		return nil
 	}
 	if !isJSON(resp.Header.Get("Content-Type")) {
 		return fmt.Errorf("gitlab %s: %w", r.op, ErrNotAPI)
@@ -344,6 +432,11 @@ func isJSON(contentType string) bool {
 // transportError drops the request URL (a *url.Error embeds it) and the token from a transport
 // error. The error keeps its type for retry classification unless its text had to change.
 func transportError(op string, err error, token string) error {
+	// net/http parses a redirect's Location itself, before any CheckRedirect, and quotes an
+	// unparsable one in its error; a redirect is refused anyway, so its target is never echoed.
+	if strings.Contains(err.Error(), "failed to parse Location header") {
+		return fmt.Errorf("gitlab %s: %w", op, ErrRedirect)
+	}
 	cause := egress.Unwrap(err)
 	if clean := scrub(cause.Error(), token); clean != cause.Error() {
 		return fmt.Errorf("gitlab %s: %w", op, errors.New(clean))
@@ -373,11 +466,18 @@ func statusError(resp *http.Response, token string) error {
 	if len(msg) > maxMessageBytes {
 		msg = strings.ToValidUTF8(msg[:maxMessageBytes], "")
 	}
+	now := time.Now()
+	retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"), now)
+	secs := 0
+	if !retryAfter.IsZero() {
+		secs = int(math.Ceil(retryAfter.Sub(now).Seconds()))
+	}
 	return &StatusError{
-		Status:     resp.StatusCode,
-		Message:    msg,
-		RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"), time.Now()),
-		Reset:      parseReset(resp.Header.Get("RateLimit-Reset")),
+		Status:         resp.StatusCode,
+		Message:        msg,
+		RetryAfter:     retryAfter,
+		Reset:          parseReset(resp.Header.Get("RateLimit-Reset")),
+		retryAfterSecs: secs,
 	}
 }
 

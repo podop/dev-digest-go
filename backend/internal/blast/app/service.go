@@ -17,6 +17,9 @@ type Options struct {
 	Log *slog.Logger
 	// Redact scrubs secrets from an error text before it is logged; nil logs the text as is.
 	Redact func(string) string
+	// GitLab reads the prior merge requests of a GitLab project; nil leaves a GitLab pull
+	// request's history empty.
+	GitLab GitLabHistory
 }
 
 // Service implements API and Provider. It writes nothing and makes no model call.
@@ -24,6 +27,7 @@ type Service struct {
 	store  Store
 	intel  RepoIntel
 	gh     GitHub
+	gl     GitLabHistory
 	log    *slog.Logger
 	redact func(string) string
 }
@@ -39,7 +43,7 @@ func NewService(store Store, intel RepoIntel, gh GitHub, opts Options) *Service 
 	if store == nil || intel == nil || gh == nil {
 		panic("blast/app: NewService needs a store, a repo-intel reader and a GitHub reader")
 	}
-	s := &Service{store: store, intel: intel, gh: gh, log: opts.Log, redact: opts.Redact}
+	s := &Service{store: store, intel: intel, gh: gh, gl: opts.GitLab, log: opts.Log, redact: opts.Redact}
 	if s.log == nil {
 		s.log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -79,15 +83,16 @@ func (s *Service) RadiusFor(ctx context.Context, repoID string, changed []string
 	return blast, nil
 }
 
-// History returns the prior merged pull requests that touched the same files. Every GitHub
-// failure is a warning and an empty list. A GitLab pull request has no history here (FR29): the
-// list is empty and no request goes to GitHub.
+// History returns the prior merged pull requests that touched the same files. Every code-host
+// failure is a warning and an empty list. A GitLab pull request is read from its own project
+// through the GitLabHistory port (spec B FR24); with no port, no connection or no token the list
+// is empty, and a GitLab repository never causes a GitHub request (FR23).
 func (s *Service) History(ctx context.Context, workspaceID, prID string) ([]domain.PriorPR, error) {
 	pull, err := s.store.FindPull(ctx, workspaceID, prID)
 	if err != nil {
 		return nil, notFoundOr(err, "load pull request")
 	}
-	if pull.IsGitLab() {
+	if pull.IsGitLab() && (s.gl == nil || pull.Host == "" || pull.ProjectID <= 0) {
 		return []domain.PriorPR{}, nil
 	}
 	paths, err := s.store.ChangedPaths(ctx, prID)
@@ -97,7 +102,12 @@ func (s *Service) History(ctx context.Context, workspaceID, prID string) ([]doma
 	if len(paths) == 0 {
 		return []domain.PriorPR{}, nil
 	}
-	merged, err := s.gh.ListMergedPulls(ctx, pull.Owner, pull.Name, domain.HistoryListLimit)
+	var merged []domain.MergedPR
+	if pull.IsGitLab() {
+		merged, err = s.gl.ListMerged(ctx, pull.Host, pull.ProjectID, domain.HistoryListLimit)
+	} else {
+		merged, err = s.gh.ListMergedPulls(ctx, pull.Owner, pull.Name, domain.HistoryListLimit)
+	}
 	if err != nil {
 		s.log.WarnContext(ctx, "prior PR history unavailable; returning an empty list",
 			"err", s.redact(err.Error()), "repoId", pull.RepoID)

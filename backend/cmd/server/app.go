@@ -121,6 +121,7 @@ import (
 	settingsapp "dev-digest-go/backend/internal/settings/app"
 	settingshttp "dev-digest-go/backend/internal/settings/transport/http"
 	"dev-digest-go/backend/internal/skills/adapters/catalog"
+	"dev-digest-go/backend/internal/skills/adapters/gitlabfiles"
 	skillspg "dev-digest-go/backend/internal/skills/adapters/postgres"
 	"dev-digest-go/backend/internal/skills/adapters/urlfetch"
 	skillsapp "dev-digest-go/backend/internal/skills/app"
@@ -436,6 +437,10 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	glClient := gitlab.New(gitlab.Options{HTTP: newGitLabHTTP(rootCAs), Log: log})
 	gcSvc := newGitLabConnections(db, sec, glClient, now, log)
 	glConns := reposConnections{conns: gcSvc}
+	// One connection lookup serves every context that reads GitLab for a repository (comments,
+	// blast history, brief issues, intent tickets and docs, skill file import). It is read at every
+	// call, so a changed or removed token applies to the next request (GitLab B, P9).
+	glResolve := bindingResolver(gcSvc)
 	pullsStore := pullspg.NewStore(db)
 	// Repo-intel's resync fetches a GitLab clone from its connection (the clone key holds no path).
 	intelGitPort := intelGit{Client: git, conns: gcSvc, paths: pullsStore, caFile: gitCAFile(gitCA)}
@@ -504,15 +509,21 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	repoJobs := reposapp.NewJobs(reposStore, git, reposapp.JobsOptions{
 		RemoteBase: o.remoteBase, Log: log, Index: intelJobs, Connections: glConns, CAFile: gitCAFile(gitCA),
 	})
+	// The pulls GitLab adapter reads the merge requests and posts the comments (writes are single
+	// attempts in the client). WithRedact masks every stored GitLab token and the other configured
+	// secrets (llm.Client.Redact reads them at call time) in the text that reaches a response or a log.
+	pullsGitLab := pullsgl.New(glClient, pullsResolver(gcSvc))
 	pullsSvc := pullsapp.NewService(pullsStore, pullsgh.New(gh), log, nil,
-		pullsapp.WithGitLab(pullsgl.New(glClient, pullsResolver(gcSvc))))
+		pullsapp.WithGitLab(pullsGitLab), pullsapp.WithGitLabComments(pullsGitLab),
+		pullsapp.WithRedact(llmClient.Redact))
 
 	agentsSvc := agentsapp.NewService(agentsdb.NewStore(db), tx, llmClient, log,
 		agentsapp.WithCustomProviders(agentsCustom{svc: cpSvc}))
 
 	skillsStore := skillspg.NewStore(db)
 	skillsSvc := skillsapp.NewService(skillsStore, tx, time.Now)
-	importer := skillsapp.NewImporter(urlfetch.New(urlfetchOptions(o.urlfetch, rootCAs)), cat)
+	importer := skillsapp.NewImporter(urlfetch.New(urlfetchOptions(o.urlfetch, rootCAs)), cat).
+		WithGitLabFiles(gitlabfiles.New(glClient, glResolve))
 
 	convStore := conventionspg.NewStore(db)
 	convSvc := conventionsapp.NewService(convStore, convStore, runner, conventionsapp.ServiceOptions{Redact: llmClient, Budget: spendSvc})
@@ -553,8 +564,8 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 		Pulls:    intentStore,
 		Settings: settingsSvc,
 		LLM:      llmClient,
-		Docs:     intentpeers.NewDocs(git, gh),
-		Tickets:  intentpeers.NewTickets(gh, llmClient.Redact),
+		Docs:     intentpeers.NewDocs(git, gh).WithGitLab(glClient, glResolve),
+		Tickets:  intentpeers.NewTickets(gh, llmClient.Redact).WithGitLab(glClient, glResolve),
 		Store:    intentStore,
 		Clock:    now,
 		Log:      log,
@@ -579,20 +590,23 @@ func wire(cfg config.Config, o options, db *gorm.DB, sqlDB *sql.DB, runner *jobs
 	})
 
 	blastSvc := blastapp.NewService(blastpg.NewStore(db), blastpeers.NewRepoIntel(intelReader),
-		blastpeers.NewGitHub(gh), blastapp.Options{Log: log, Redact: llmClient.Redact})
+		blastpeers.NewGitHub(gh), blastapp.Options{
+			Log: log, Redact: llmClient.Redact, GitLab: blastpeers.NewGitLab(glClient, glResolve),
+		})
 	briefSvc := briefapp.NewService(briefapp.Deps{
-		Store:     briefpg.NewStore(db),
-		Intents:   intentSvc,
-		Blast:     briefpeers.NewBlast(blastSvc),
-		Documents: briefpeers.NewDocuments(reviewsStore, peers.NewProjectContext(pcSvc.WithGit(git))),
-		Issues:    briefpeers.NewIssues(gh),
-		Roles:     briefpeers.Roles{},
-		LLM:       llmClient,
-		Models:    settingsSvc,
-		Clock:     now,
-		Log:       log,
-		Budget:    o.briefBudget,
-		Spend:     spendSvc,
+		Store:        briefpg.NewStore(db),
+		Intents:      intentSvc,
+		Blast:        briefpeers.NewBlast(blastSvc),
+		Documents:    briefpeers.NewDocuments(reviewsStore, peers.NewProjectContext(pcSvc.WithGit(git))),
+		Issues:       briefpeers.NewIssues(gh),
+		GitLabIssues: briefpeers.NewGitLabIssues(glResolve, glClient),
+		Roles:        briefpeers.Roles{},
+		LLM:          llmClient,
+		Models:       settingsSvc,
+		Clock:        now,
+		Log:          log,
+		Budget:       o.briefBudget,
+		Spend:        spendSvc,
 	})
 	onbSvc := onbapp.NewService(onbapp.Deps{
 		Store:       onbpg.NewStore(db),

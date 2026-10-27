@@ -5,6 +5,8 @@
 import React from "react";
 import { useTranslations } from "next-intl";
 import { Icon, Card, Avatar, Markdown } from "@devdigest/ui";
+import { isGitLab } from "@/lib/code-host";
+import { useLinkRepo } from "@/lib/link-repo";
 import type { PrReviewComment } from "@/lib/types";
 import { cs, visibleBody } from "../comments";
 
@@ -15,6 +17,7 @@ function formatWhen(iso: string): string {
 
 export function CommentCard({ c }: { c: PrReviewComment }) {
   const t = useTranslations("shell");
+  const gitlab = isGitLab(useLinkRepo());
   return (
     <Card>
       <div style={cs.headRow}>
@@ -24,7 +27,7 @@ export function CommentCard({ c }: { c: PrReviewComment }) {
         <span style={{ flex: 1 }} />
         <a href={c.html_url} target="_blank" rel="noopener noreferrer" style={cs.ghLink}>
           <Icon.ExternalLink size={12} />
-          {t("diffViewer.viewOnGitHub")}
+          {t(gitlab ? "diffViewer.viewOnGitLab" : "diffViewer.viewOnGitHub")}
         </a>
       </div>
       <div style={cs.mdBody}>

@@ -57,9 +57,14 @@ type api interface {
 	Commits(ctx context.Context, conn glclient.Conn, projectID int64, iid int) ([]glclient.Commit, error)
 	Issue(ctx context.Context, conn glclient.Conn, projectID int64, iid int) (glclient.Issue, error)
 	DiffStats(ctx context.Context, conn glclient.Conn, projectID int64, iids []int) (map[int]glclient.Stats, error)
+	Versions(ctx context.Context, conn glclient.Conn, projectID int64, iid int) ([]glclient.Version, error)
+	DiscussionsPage(ctx context.Context, conn glclient.Conn, projectID int64, iid, page, perPage int) ([]glclient.Discussion, error)
+	CreateDiscussion(ctx context.Context, conn glclient.Conn, projectID int64, iid int, body string, pos glclient.Position) (glclient.Discussion, error)
+	CreateNote(ctx context.Context, conn glclient.Conn, projectID int64, iid int, discID, body string) (glclient.Note, error)
 }
 
-// Adapter implements the GitLab port of the pull request use cases (app.GitLab).
+// Adapter implements the GitLab ports of the pull request use cases (app.GitLab, and
+// app.GitLabComments in comments.go).
 type Adapter struct {
 	api api
 	res Resolver
@@ -76,6 +81,7 @@ func New(c *glclient.Client, res Resolver) *Adapter { return &Adapter{api: c, re
 type target struct {
 	conn glclient.Conn
 	base string
+	name string // the connection's display name
 }
 
 // resolve finds the repository's connection. No connection is app.ErrNotConnected, a connection
@@ -95,7 +101,7 @@ func (a *Adapter) resolve(ctx context.Context, repo domain.Repo) (target, error)
 		return target{}, &app.NoTokenError{Conn: c.Name}
 	}
 	base := strings.TrimRight(c.BaseURL, "/")
-	return target{conn: glclient.Conn{BaseURL: base + apiSuffix, Token: c.Token}, base: base}, nil
+	return target{conn: glclient.Conn{BaseURL: base + apiSuffix, Token: c.Token}, base: base, name: c.Name}, nil
 }
 
 // Project reads the project's current identity. The web URL is built from the connection.
@@ -168,8 +174,12 @@ func (a *Adapter) Get(ctx context.Context, repo domain.Repo, number int) (domain
 		Files:   make([]domain.File, len(files)),
 		Commits: make([]domain.Commit, len(commits)),
 	}
+	// The diff head is the head the fetched files belong to (FR35, P13); nil unless it is a full sha.
+	out.DiffHead = diffHead(d)
 	for i, f := range files {
-		out.Files[i] = domain.File{Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, Patch: f.Patch}
+		out.Files[i] = domain.File{
+			Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, Patch: f.Patch, PreviousPath: previousPath(f),
+		}
 	}
 	for i, c := range commits {
 		out.Commits[i] = domain.Commit{SHA: c.SHA, Message: c.Message, Author: c.Author, CommittedAt: c.CommittedAt}
@@ -238,6 +248,43 @@ func listed(mr glclient.MergeRequest) domain.Listed {
 	return l
 }
 
+// diffHead is the merge request's diff_refs head sha, else its sha (spec B FR35), kept only when
+// it is a full lower-case hex sha of 40 or 64 characters (P13): anything else is nil, which
+// reads as "the diff head is the head sha" downstream.
+func diffHead(d glclient.MergeRequestDetail) *string {
+	sha := d.DiffRefs.HeadSHA
+	if sha == "" {
+		sha = d.HeadSHA
+	}
+	if !isFullSHA(sha) {
+		return nil
+	}
+	return &sha
+}
+
+// isFullSHA reports whether s is 40 (SHA-1) or 64 (SHA-256) lower-case hex characters.
+func isFullSHA(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+// previousPath is GitLab's old_path of a renamed file (spec B FR35, EC8); nil when the file keeps
+// its path, or GitLab reports none.
+func previousPath(f glclient.File) *string {
+	if f.OldPath == "" || f.OldPath == f.Path {
+		return nil
+	}
+	p := f.OldPath
+	return &p
+}
+
 // timePtr maps GitLab's always-present timestamps; a zero time means GitLab sent none.
 func timePtr(t time.Time) *time.Time {
 	if t.IsZero() {
@@ -247,15 +294,20 @@ func timePtr(t time.Time) *time.Time {
 }
 
 // mapErr converts a client error: a non-2xx answer becomes *app.GitLabError (a 429 is a rate
-// limit, ending at Retry-After or RateLimit-Reset); everything else (network, timeout, decoding,
-// redirects) passes through unchanged.
+// limit, ending at Retry-After or RateLimit-Reset; the rounded wait and the insufficient-scope
+// flag are filled for the comment flow, B FR10); everything else (network, timeout, decoding,
+// redirects) passes through unchanged. The comment methods go on with commentErr.
 func mapErr(err error) error {
 	var se *glclient.StatusError
 	if errors.As(err, &se) {
-		return &app.GitLabError{
+		ge := &app.GitLabError{
 			Status: se.Status, Message: se.Message, RateLimited: se.Status == 429,
-			RetryAfter: se.RetryAfter, RateLimitReset: se.Reset,
+			RetryAfter: se.RetryAfter, RateLimitReset: se.Reset, InsufficientScope: se.InsufficientScope(),
 		}
+		if ge.RateLimited {
+			ge.RetryAfterSeconds = se.RetryAfterSeconds()
+		}
+		return ge
 	}
 	return err
 }

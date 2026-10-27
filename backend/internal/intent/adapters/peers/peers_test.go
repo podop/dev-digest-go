@@ -382,10 +382,10 @@ func (f failingIssues) GetIssue(context.Context, string, string, int) (github.Is
 	return github.Issue{}, f.err
 }
 
-func TestTickets_GitLabRepositoryIsUnresolvedWithoutARequest(t *testing.T) { // FR29, AC22
+func TestTickets_GitLabRepositoryWithoutWiringIsNotConnectedAndMakesNoRequest(t *testing.T) { // FR23
 	gh := newStub(t, issueHandler)
 	got := peers.NewTickets(gh.client(token), nil).Read(t.Context(), gitlabRepo, 7)
-	if want := (app.TicketRead{Reason: "GitLab issues are not available yet"}); !cmp.Equal(got, want) {
+	if want := (app.TicketRead{Reason: "No GitLab connection for git.example.com:8443"}); !cmp.Equal(got, want) {
 		t.Errorf("Read(GitLab ticket) = %+v, want %+v", got, want)
 	}
 	if reqs := gh.requests(); len(reqs) != 0 {

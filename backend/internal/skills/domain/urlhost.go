@@ -38,6 +38,11 @@ type FetchedDocument struct {
 // ErrInvalidHost means a host does not parse as a browser would parse it.
 var ErrInvalidHost = errors.New("invalid host")
 
+const (
+	gitlabBlobSegment = "/-/blob/"
+	gitlabRawSegment  = "/-/raw/"
+)
+
 var githubBlobRE = regexp.MustCompile(`^/([^/]+)/([^/]+)/blob/(.+)$`)
 
 // hostIDNA converts a domain to ASCII like the WHATWG URL standard does: UTS #46 non-transitional
@@ -299,8 +304,9 @@ func publicIPv4(a [4]byte) bool {
 
 // ParseImportURL validates a user-supplied import URL: https only, port 443, no credentials, and
 // a host that is not an IP literal of a non-public address. A GitHub blob page becomes its raw
-// file. The result is rebuilt from the normalized parts (no fragment, no credentials, no port),
-// so the host that was checked is the host that is fetched. Failures are ImportErrors.
+// file, and on any other host the first "/-/blob/" of the path becomes "/-/raw/" with the query
+// dropped (GitLab). The result is rebuilt from the normalized parts (no fragment, no credentials,
+// no port), so the host that was checked is the host that is fetched. Failures are ImportErrors.
 func ParseImportURL(raw string) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
@@ -340,10 +346,20 @@ func ParseImportURL(raw string) (*url.URL, error) {
 		path = "/"
 	}
 	out := &url.URL{Scheme: "https", Host: host.URLHost(), RawQuery: u.RawQuery}
-	if host.Name == "github.com" || host.Name == "www.github.com" {
+	switch host.Name {
+	case "github.com", "www.github.com":
 		if m := githubBlobRE.FindStringSubmatch(path); m != nil {
 			out.Host, out.RawQuery = "raw.githubusercontent.com", ""
 			path = fmt.Sprintf("/%s/%s/%s", m[1], m[2], m[3])
+		}
+	case "api.github.com":
+		// A GitHub host: never rewritten as a GitLab page.
+	default:
+		// A GitLab blob page on a host without a connection becomes its raw file (spec FR31): the
+		// first "/-/blob/" turns into "/-/raw/" and the query ("ref_type=heads") is dropped. The
+		// public-address rule and the public fetcher still apply to the result.
+		if rewritten := strings.Replace(path, gitlabBlobSegment, gitlabRawSegment, 1); rewritten != path {
+			path, out.RawQuery = rewritten, ""
 		}
 	}
 	decoded, err := url.PathUnescape(path)

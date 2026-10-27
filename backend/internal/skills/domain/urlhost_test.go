@@ -91,6 +91,64 @@ func TestParseImportURL_Accepted(t *testing.T) {
 	}
 }
 
+// TestParseImportURL_GitLabBlob covers spec FR31 / EC24 / AC27 (parse part): a blob page of a host
+// without a connection is fetched as its raw file, the query dropped, and the public-address rule
+// still applies to the result.
+func TestParseImportURL_GitLabBlob(t *testing.T) {
+	tests := []struct {
+		name, in, want string
+	}{
+		{"EC24 gitlab.com", "https://gitlab.com/acme/skills/-/blob/main/a.md?ref_type=heads", "https://gitlab.com/acme/skills/-/raw/main/a.md"},
+		{"subgroups and fragment", "https://gitlab.example.org/g/sub/p/-/blob/feature/x/skills/a.md?ref_type=heads#L3", "https://gitlab.example.org/g/sub/p/-/raw/feature/x/skills/a.md"},
+		{"relative url root", "https://example.com/gitlab/acme/p/-/blob/main/a.md", "https://example.com/gitlab/acme/p/-/raw/main/a.md"},
+		{"only the first segment is rewritten", "https://gitlab.com/a/b/-/blob/main/-/blob/x.md", "https://gitlab.com/a/b/-/raw/main/-/blob/x.md"},
+		{"encoded file name kept", "https://gitlab.com/a/b/-/blob/main/my%20skill.md?x=1", "https://gitlab.com/a/b/-/raw/main/my%20skill.md"},
+		{"explicit port 443", "https://gitlab.com:443/a/b/-/blob/main/a.md", "https://gitlab.com/a/b/-/raw/main/a.md"},
+		{"raw link is kept with its query", "https://gitlab.com/a/b/-/raw/main/a.md?ref_type=heads", "https://gitlab.com/a/b/-/raw/main/a.md?ref_type=heads"},
+		{"tree link is kept", "https://gitlab.com/a/b/-/tree/main/skills", "https://gitlab.com/a/b/-/tree/main/skills"},
+		{"blob without trailing path is kept", "https://gitlab.com/a/b/-/blob", "https://gitlab.com/a/b/-/blob"},
+		{"github blob without the dash is unchanged", "https://github.com/o/r/blob/main/x.md?plain=1", "https://raw.githubusercontent.com/o/r/main/x.md"},
+		{"github host with a dash blob path is not rewritten", "https://github.com/o/r/-/blob/main/x.md?a=1", "https://github.com/o/r/-/blob/main/x.md?a=1"},
+		{"www github host is not rewritten", "https://www.github.com/-/blob/x?a=1", "https://www.github.com/-/blob/x?a=1"},
+		{"api github host is not rewritten", "https://api.github.com/o/-/blob/x?a=1", "https://api.github.com/o/-/blob/x?a=1"},
+		{"foreign host", "https://example.com/blob/main/a.md?x=1", "https://example.com/blob/main/a.md?x=1"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			u, err := domain.ParseImportURL(tc.in)
+			if err != nil {
+				t.Fatalf("ParseImportURL(%q) error = %v", tc.in, err)
+			}
+			if got := u.String(); got != tc.want {
+				t.Errorf("ParseImportURL(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestParseImportURL_GitLabBlobStillRefused: the rewrite does not relax the network rules, so a
+// private or non-443 GitLab blob page without a connection is refused (EC23, no connection).
+func TestParseImportURL_GitLabBlobStillRefused(t *testing.T) {
+	tests := []struct{ in, wantMsg string }{
+		{"https://10.0.0.5/gitlab/acme/skills/-/blob/feature/x/skills/a.md", "10.0.0.5 is not a public address"},
+		{"https://127.0.0.1/a/b/-/blob/main/a.md", "127.0.0.1 is not a public address"},
+		{"https://git.corp.example:8443/a/b/-/blob/main/a.md", "Only the default https port (443) is allowed"},
+		{"https://u:p@gitlab.com/a/b/-/blob/main/a.md", "URLs with credentials are not allowed"},
+		{"http://gitlab.com/a/b/-/blob/main/a.md", "Only https:// URLs can be imported"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			u, err := domain.ParseImportURL(tc.in)
+			if err == nil {
+				t.Fatalf("ParseImportURL(%q) = %v, want error %q", tc.in, u, tc.wantMsg)
+			}
+			if got := importMessage(t, err); got != tc.wantMsg {
+				t.Errorf("ParseImportURL(%q) message = %q, want %q", tc.in, got, tc.wantMsg)
+			}
+		})
+	}
+}
+
 func TestParseHost(t *testing.T) {
 	tests := []struct {
 		in, wantName string

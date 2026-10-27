@@ -300,16 +300,125 @@ func TestHistory_NoFilesMakesNoGitHubCall(t *testing.T) {
 	}
 }
 
-func TestHistory_GitLabPullMakesNoGitHubCall(t *testing.T) { // FR29, AC22
-	r := newRig("a.go")
+// glCall is one ListMerged call.
+type glCall struct {
+	host      string
+	projectID int64
+	limit     int
+}
+
+type fakeGitLab struct {
+	merged []domain.MergedPR
+	err    error
+	calls  []glCall
+}
+
+var _ app.GitLabHistory = (*fakeGitLab)(nil)
+
+func (f *fakeGitLab) ListMerged(_ context.Context, host string, projectID int64, limit int) ([]domain.MergedPR, error) {
+	f.calls = append(f.calls, glCall{host, projectID, limit})
+	return f.merged, f.err
+}
+
+// gitlabRig is a rig whose pull request belongs to a GitLab project with a GitLabHistory.
+func gitlabRig(paths ...string) (*rig, *fakeGitLab) {
+	r := newRig(paths...)
 	r.store.pull.Provider = "gitlab"
+	r.store.pull.Host = "git.example.com"
+	r.store.pull.ProjectID = 42
+	gl := &fakeGitLab{}
+	r.svc = app.NewService(r.store, r.intel, r.gh, app.Options{Log: slog.New(slog.NewJSONHandler(r.logs, nil)), GitLab: gl})
+	return r, gl
+}
+
+func TestHistory_GitLabPullReadsItsProjectAndNeverGitHub(t *testing.T) { // FR23, FR24, EC19, AC21
+	r, gl := gitlabRig("a.go", "b.go")
 	r.gh.merged = []domain.MergedPR{{Number: 1, Files: []string{"a.go"}}}
+	gl.merged = []domain.MergedPR{
+		{Number: 5, Title: "the current MR", Files: []string{"a.go"}},
+		{Number: 4, Title: "unparsable time", Author: "bob", MergedAt: "", Files: []string{"b.go", "z.go"}},
+		{Number: 3, Title: "overlap", Author: "ann", MergedAt: "2026-01-02T00:00:00Z", Files: []string{"b.go", "a.go"}},
+		{Number: 2, Title: "no overlap", Author: "ann", MergedAt: "2026-01-03T00:00:00Z", Files: []string{"z.go"}},
+	}
 	got, err := r.svc.History(t.Context(), ws, pr)
-	if err != nil || got == nil || len(got) != 0 {
-		t.Errorf("History(GitLab pull) = %#v, %v, want a non-nil empty list", got, err)
+	if err != nil {
+		t.Fatalf("History() error = %v", err)
+	}
+	want := []domain.PriorPR{
+		{PRNumber: 3, Title: "overlap", Author: "ann", MergedAt: "2026-01-02T00:00:00Z", FilesOverlap: []string{"a.go", "b.go"}},
+		{PRNumber: 4, Title: "unparsable time", Author: "bob", MergedAt: "", FilesOverlap: []string{"b.go"}},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("History(GitLab) mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]glCall{{"git.example.com", 42, domain.HistoryListLimit}}, gl.calls, cmp.AllowUnexported(glCall{})); diff != "" {
+		t.Errorf("GitLab calls mismatch (-want +got):\n%s", diff)
 	}
 	if len(r.gh.calls) != 0 {
 		t.Errorf("GitHub calls = %v, want none", r.gh.calls)
+	}
+}
+
+func TestHistory_GitLabFailuresAreAnEmptyListAndOneWarning(t *testing.T) { // FR24, FR23
+	for _, tc := range []struct{ name, msg string }{
+		{"diffs failed", "gitlab answered 500"},
+		{"not connected", app.ErrGitLabNotConnected.Error()},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, gl := gitlabRig("a.go")
+			gl.err = errors.New(tc.msg)
+			got, err := r.svc.History(t.Context(), ws, pr)
+			if err != nil || got == nil || len(got) != 0 {
+				t.Errorf("History() = %#v, %v, want a non-nil empty list and no error", got, err)
+			}
+			wantLogs := []map[string]any{{
+				"level": "WARN", "msg": "prior PR history unavailable; returning an empty list",
+				"err": tc.msg, "repoId": "repo-1",
+			}}
+			if diff := cmp.Diff(wantLogs, r.lines(t)); diff != "" {
+				t.Errorf("log lines mismatch (-want +got):\n%s", diff)
+			}
+			if len(r.gh.calls) != 0 {
+				t.Errorf("GitHub calls = %v, want none", r.gh.calls)
+			}
+		})
+	}
+}
+
+func TestHistory_GitLabPullWithoutWiringOrAddressIsEmptyAndMakesNoRequest(t *testing.T) { // FR23
+	for _, tc := range []struct {
+		name  string
+		setup func(r *rig)
+	}{
+		{"no GitLab reader", func(r *rig) {
+			r.svc = app.NewService(r.store, r.intel, r.gh, app.Options{})
+		}},
+		{"no project id", func(r *rig) { r.store.pull.ProjectID = 0 }},
+		{"no host", func(r *rig) { r.store.pull.Host = "" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r, gl := gitlabRig("a.go")
+			gl.merged = []domain.MergedPR{{Number: 1, Files: []string{"a.go"}}}
+			tc.setup(r)
+			got, err := r.svc.History(t.Context(), ws, pr)
+			if err != nil || got == nil || len(got) != 0 {
+				t.Errorf("History() = %#v, %v, want a non-nil empty list", got, err)
+			}
+			if len(gl.calls) != 0 || len(r.gh.calls) != 0 {
+				t.Errorf("GitLab calls %v, GitHub calls %v, want none", gl.calls, r.gh.calls)
+			}
+		})
+	}
+}
+
+func TestHistory_GitLabPullWithoutFilesMakesNoRequest(t *testing.T) {
+	r, gl := gitlabRig()
+	got, err := r.svc.History(t.Context(), ws, pr)
+	if err != nil || got == nil || len(got) != 0 {
+		t.Errorf("History() = %#v, %v, want a non-nil empty list", got, err)
+	}
+	if len(gl.calls) != 0 || len(r.gh.calls) != 0 {
+		t.Errorf("GitLab calls %v, GitHub calls %v, want none", gl.calls, r.gh.calls)
 	}
 }
 

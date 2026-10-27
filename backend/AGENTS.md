@@ -207,7 +207,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
     `pullsapp.WithGitLab`, and `PollerDeps.GitLab`, a `glClient.WithRetry(retry.Options{})` copy so a repo poll stays
     within its request bound), settings (`settingsGitLab`: connection test, `provider: "gitlab"` + `connection_id`),
     auto reviews (`autoTokens`: GitLab repos + the connection tokens decide `no_code_host_token`) and repo-intel
-    (`intelGit`, below). CI export, comments and posting stay GitHub only (`422 unsupported_host`).
+    (`intelGit`, below). Comments, posting and the context peers also work for GitLab (GitLab B, below); the CI export
+    stays GitHub only (`422 unsupported_host`) until slice C.
   - Outbound: `platform/gitlab.Client` over `egress.Client{Guard: custom.ForbiddenAddr, RootCAs}` (no proxy, SCR2; no
     redirects; the token goes only to the connection's own address). git (`gitcli.Options.AddrGuard =
     custom.ForbiddenAddr`) drops the proxy and SSL environment, resolves the host once, checks the address and pins
@@ -228,6 +229,20 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
     every call; gitcli scrubs the token (and its Basic encoding) from git stderr; the onboarding redactor knows the 12
     GitLab token prefixes. Auto reviews: a merge request from a fork (`source_project_id` ≠ `target_project_id`, or
     missing) is `skipped_fork` (SCR1). The poller keeps one rate-limit pause per host (`pulls/domain.HostPauses`).
+- GitLab comments and context (GitLab B, migration 0011): GitLab merge requests get review comments (`GET`/`POST
+  /pulls/:id/comments`: diff threads, new positioned discussion, reply into a discussion) and the same context as GitHub
+  PRs. Wiring in `cmd/server`: ONE `bindingResolver(gcSvc)` (`gitlab.ResolveFunc`: host key -> `gitlab.Binding` with the
+  token, read at every call, so a rotated or removed token applies to the next request) and the same egress `glClient`
+  feed `pullsapp.WithGitLabComments(<pulls GitLab adapter>)` + `pullsapp.WithRedact(llmClient.Redact)` (masks every stored
+  token and the custom secrets in GitLab's text before it reaches a response or log), blast `Options.GitLab`
+  (`blastpeers.NewGitLab`, prior merged MRs), brief `Deps.GitLabIssues`, intent `NewDocs/NewTickets(...).WithGitLab` and
+  skills `Importer.WithGitLabFiles(gitlabfiles.New(...))` (`/-/blob/<ref>/<file>` URLs of a connected host import with the
+  token). Without the port/connection/token a feature answers empty or "not connected" and sends no request; no GitLab
+  repository sends a GitHub request. Errors: `gitlab_comment_failed`, `gitlab_permission_denied`, `gitlab_rate_limited`
+  (`details.reason`, `cause`, `retry_after_s`); writes are single attempts (no retry). `platform/gitlab/notebody` is a
+  stdlib-only leaf (note body rules, shared with the CI runner of slice C). Migration 0011 adds
+  `pull_requests.diff_head` (CHECK 40/64 lower hex; the position the comment is anchored to) and `pr_files.previous_path`,
+  both refilled by the next detail fetch (its down does not refuse).
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

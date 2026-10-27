@@ -105,7 +105,8 @@ func TestRepo_GitLabReadsItsLocation(t *testing.T) { // FR29, FR18
 	f.exec(t, `UPDATE repos SET owner = 'acme/core', name = 'payments', full_name = 'acme/core/payments', provider = 'gitlab',
 		host = 'git.example.com:8443', project_id = 42, web_url = 'https://git.example.com:8443/acme/core/payments' WHERE id = ?`, f.repo)
 	got, err := f.store.Repo(t.Context(), f.repo)
-	want := domain.Repo{ID: f.repo, Owner: "acme/core", Name: "payments", Provider: "gitlab", Host: "git.example.com:8443", ProjectID: 42}
+	want := domain.Repo{ID: f.repo, Owner: "acme/core", Name: "payments", Provider: "gitlab", Host: "git.example.com:8443", ProjectID: 42,
+		WebURL: "https://git.example.com:8443/acme/core/payments"}
 	if err != nil || got != want || !got.IsGitLab() {
 		t.Errorf("Repo(GitLab) = %+v, %v, want %+v", got, err, want)
 	}

@@ -76,7 +76,7 @@
   },
   "importUrl": {
     "title": "Import from URL",
-    "subtitle": "An https:// link to a Markdown file or a .zip archive. GitHub blob links work too.",
+    "subtitle": "An https:// link to a Markdown file or a .zip archive. GitHub and GitLab blob links work too.",
     "label": "URL",
     "placeholder": "https://github.com/org/repo/blob/main/skills/SKILL.md",
     "fetch": "Fetch preview",

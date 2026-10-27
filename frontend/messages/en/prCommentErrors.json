@@ -1,0 +1,20 @@
+{
+  "tokenRejected": "GitLab rejected the token of this connection (401).",
+  "readOnlyToken": "The token of this connection cannot post: it needs the api scope.",
+  "forbidden": "GitLab refused the comment (403): the token’s user may lack the Reporter role, or the discussion is locked.",
+  "notFound": "GitLab did not find this merge request, or the token cannot see it.",
+  "positionRejected": "GitLab could not place the comment on this line. Reload the PR and try again.",
+  "rejected": "GitLab refused the comment.",
+  "rateLimited": "GitLab limits how many comments can be posted per minute. Try again in {seconds} s.",
+  "redirect": "GitLab answered with a redirect — check the connection’s base URL.",
+  "unavailable": "GitLab is unavailable; the comment was not confirmed. Check the merge request before posting again.",
+  "noToken": "Connect a token for this host in Settings → GitLab Integration to post comments.",
+  "hostNotConnected": "No GitLab connection for this host. Add one in Settings → GitLab Integration.",
+  "bodyTooLong": "The comment is too long for GitLab.",
+  "fileNotInDiff": "This file is not part of the merge request’s diff.",
+  "lineNotInDiff": "This line is not part of the merge request’s diff.",
+  "diffNotReady": "GitLab is still preparing this merge request’s diff. Try again in a minute.",
+  "diffChanged": "The merge request changed since this diff was loaded. Reload the PR and post again.",
+  "replyTargetNotFound": "The comment you are replying to was not found on GitLab.",
+  "failed": "Couldn’t post the comment to GitLab."
+}

@@ -15,6 +15,9 @@
     "postToPr": "Post to PR",
     "postToPrHint": "Post this finding as an inline review comment on GitHub",
     "postedToPr": "Posted on GitHub",
+    "postToMr": "Post to MR",
+    "postToMrHint": "Post this finding as a discussion on the GitLab merge request",
+    "postedToGitLab": "Posted on GitLab",
     "evalCase": "Turn into eval case",
     "evalCaseHint": "Save this decision as an eval case for the agent that produced it",
     "evalCaseUndecided": "Accept or dismiss first",
@@ -245,7 +248,8 @@
     "title": "Files changed · {count, plural, one {# file} other {# files}}",
     "showComments": "Show comments ({count})",
     "hideComments": "Hide comments ({count})",
-    "postFailed": "Couldn’t post the comment to GitHub."
+    "postFailed": "Couldn’t post the comment to GitHub.",
+    "postFailedGitLab": "Couldn’t post the comment to GitLab."
   },
   "findingsTab": {
     "liveReview": "Live review",

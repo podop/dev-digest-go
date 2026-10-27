@@ -19,6 +19,9 @@ type Store interface {
 	// order (the domain sorts them); a pull request without files yields empty. A pull request
 	// that is not in the workspace is domain.ErrNotFound.
 	PullFiles(ctx context.Context, workspaceID, prID string) ([]domain.PullFile, error)
+	// RepoProvider returns the provider ("github" or "gitlab") of the repository of a pull request
+	// of the workspace; a pull request that is not in the workspace is domain.ErrNotFound.
+	RepoProvider(ctx context.Context, workspaceID, prID string) (string, error)
 	// CurrentFindings returns every finding, dismissed ones included, of the newest
 	// kind='review' review of each agent of the pull request (reviews with a NULL agent form one
 	// group; newest by created_at, ties by id). Older reviews' findings are not returned.

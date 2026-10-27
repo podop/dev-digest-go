@@ -437,10 +437,12 @@ func (r *giRecorder) rec(resp response) response {
 // lookups is the number of requests both stubs have seen.
 func (e *giEnv) lookups() (gitlab, github int) { return e.gl.count(), len(e.s.gh.requests()) }
 
-// AC22 (FR29, EC24, EC25, NFR3): comments, posting, the brief's issue, prior PRs and the intent's
-// tickets of a GitLab merge request send no request to GitHub or GitLab; the CI export refuses a
-// GitLab-only name and prefers the GitHub repository of the same name.
-func TestGitLabIsolation_AC22_GitLabPRFeaturesSendNoRequest(t *testing.T) {
+// AC22 (FR29, EC24, EC25, NFR3), as GitLab B changed it: comments, posting, the brief's issue, prior
+// PRs and the intent's tickets of a GitLab merge request go to the merge request's own connection
+// with its token and never to GitHub; the CI export still refuses a GitLab-only name (slice C) and
+// prefers the GitHub repository of the same name. The behaviour of each feature is in the GitLab B
+// wiring tests (gitlab_wiring_test.go).
+func TestGitLabIsolation_AC22_GitLabPRFeaturesNeverReachGitHub(t *testing.T) {
 	e := giBoot(t, giOpts{spec: func(sp *spec) {
 		sp.runner = ciFakeRunner()
 		sp.env = map[string]string{"GITHUB_TOKEN": ciToken}
@@ -462,13 +464,13 @@ func TestGitLabIsolation_AC22_GitLabPRFeaturesSendNoRequest(t *testing.T) {
 			t.Errorf("GET /pulls/:id/comments = %d %s, want 200 []", resp.Status, resp.Body)
 		}
 	})
-	t.Run("posting a comment is gitlab_unavailable", func(t *testing.T) {
+	t.Run("posting a comment is refused by GitLab's answer", func(t *testing.T) {
 		resp := e.s.post("/pulls/"+pr+"/comments", map[string]any{"path": "a.ts", "line": 3, "body": "x"})
-		if resp.Status != http.StatusBadRequest || resp.errorCode(t) != "gitlab_unavailable" {
-			t.Errorf("POST /pulls/:id/comments = %d %s, want 400 gitlab_unavailable", resp.Status, resp.Body)
+		if resp.Status != http.StatusBadRequest || resp.errorCode(t) != "gitlab_comment_failed" {
+			t.Errorf("POST /pulls/:id/comments = %d %s, want 400 gitlab_comment_failed", resp.Status, resp.Body)
 		}
 	})
-	t.Run("the intent's tickets are failed reads", func(t *testing.T) {
+	t.Run("the intent reads its tickets from GitLab", func(t *testing.T) {
 		resp := e.s.post("/pulls/"+pr+"/intent/refresh", nil)
 		if resp.Status != http.StatusOK {
 			t.Fatalf("POST intent/refresh = %d %s, want 200", resp.Status, resp.Body)
@@ -480,15 +482,15 @@ func TestGitLabIsolation_AC22_GitLabPRFeaturesSendNoRequest(t *testing.T) {
 				continue
 			}
 			found = true
-			if m["ref"] != "12" || m["status"] != "failed" || m["detail"] != "GitLab issues are not available yet" {
-				t.Errorf("ticket source = %v, want #12 failed with \"GitLab issues are not available yet\"", m)
+			if m["ref"] != "12" || m["status"] != "used" {
+				t.Errorf("ticket source = %v, want #12 used", m)
 			}
 		}
 		if !found {
 			t.Errorf("the intent has no ticket source for #12: %s", resp.Body)
 		}
 	})
-	t.Run("the brief has no linked issue", func(t *testing.T) {
+	t.Run("the brief has its linked issue", func(t *testing.T) {
 		resp := e.s.post("/pulls/"+pr+"/brief", nil)
 		if resp.Status != http.StatusOK {
 			t.Fatalf("POST brief = %d %s, want 200", resp.Status, resp.Body)
@@ -498,24 +500,33 @@ func TestGitLabIsolation_AC22_GitLabPRFeaturesSendNoRequest(t *testing.T) {
 			mm := m.(map[string]any)
 			missing = append(missing, fmt.Sprint(mm["input"], "/", mm["reason"]))
 		}
-		if !slices.Contains(missing, "linked_issue/fetch_failed") {
-			t.Errorf("brief missing_inputs = %v, want linked_issue among them (the issue was not read)", missing)
+		if slices.ContainsFunc(missing, func(m string) bool { return strings.HasPrefix(m, "linked_issue/") }) {
+			t.Errorf("brief missing_inputs = %v, want the linked issue read from GitLab", missing)
 		}
 	})
 	t.Run("blast radius has no prior PRs", func(t *testing.T) {
 		resp := e.s.get("/pulls/" + pr + "/history")
-		if resp.Status != http.StatusOK || strings.TrimSpace(string(resp.Body)) != `{"history":[]}` {
-			t.Errorf("GET /pulls/:id/history = %d %s, want 200 {\"history\":[]}", resp.Status, resp.Body)
+		if resp.Status != http.StatusOK {
+			t.Errorf("GET /pulls/:id/history = %d %s, want 200", resp.Status, resp.Body)
 		}
 		if resp := e.s.get("/pulls/" + pr + "/blast"); resp.Status != http.StatusOK {
 			t.Errorf("GET /pulls/:id/blast = %d %s, want 200", resp.Status, resp.Body)
 		}
 	})
 
-	if gl, gh := e.lookups(); gl != glBefore || gh != ghBefore {
-		t.Errorf("the GitLab-only features sent %d GitLab and %d GitHub request(s), want none; GitLab: %v GitHub: %v",
-			gl-glBefore, gh-ghBefore, e.gl.since(glBefore), e.s.gh.requests()[ghBefore:])
+	gl, gh := e.lookups()
+	if gh != ghBefore {
+		t.Errorf("the GitLab features sent %d GitHub request(s), want none: %v", gh-ghBefore, e.s.gh.requests()[ghBefore:])
 	}
+	if gl == glBefore {
+		t.Error("the GitLab features sent no request to GitLab; the wiring is missing")
+	}
+	for _, r := range e.gl.since(glBefore) {
+		if r.Private != giToken {
+			t.Errorf("GitLab request %s %s carried token %q, want the connection's", r.Method, r.Path, r.Private)
+		}
+	}
+	glBefore, ghBefore = e.lookups()
 
 	t.Run("CI export of a GitLab-only name is unsupported_host", func(t *testing.T) {
 		agent := cxAgent(t, e.s, "gi-agent", "openrouter", ciModel)

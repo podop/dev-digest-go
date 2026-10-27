@@ -1,6 +1,6 @@
 // Package peers adapts the other contexts and the platform to the ports of the brief context
 // (brief/app): the blast radius, the project documents of a reviewed agent, the linked GitHub
-// issue and the smart-diff role of a path. Each adapter only maps types and holds no rule of its
+// issue (GitHub, GitLab) and the smart-diff role of a path. Each adapter only maps types and holds no rule of its
 // own; the peers are taken as small interfaces declared here, so the tests use fakes and the
 // composition root passes the real services. The stored intent needs no adapter: the intent
 // service's Stored method already has the shape of app.Intents.
@@ -9,12 +9,14 @@ package peers
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	blastapp "dev-digest-go/backend/internal/blast/app"
 	blastdomain "dev-digest-go/backend/internal/blast/domain"
 	"dev-digest-go/backend/internal/brief/app"
 	"dev-digest-go/backend/internal/brief/domain"
 	"dev-digest-go/backend/internal/platform/github"
+	"dev-digest-go/backend/internal/platform/gitlab"
 	reviewsapp "dev-digest-go/backend/internal/reviews/app"
 	reviewsdomain "dev-digest-go/backend/internal/reviews/domain"
 	smartdiff "dev-digest-go/backend/internal/smartdiff/domain"
@@ -142,10 +144,60 @@ func (a *Issues) Issue(ctx context.Context, owner, name string, number int) (dom
 	return domain.Issue{Number: is.Number, Title: is.Title, Body: is.Body}, nil
 }
 
+// Errors of a GitLab issue read. Neither makes a request.
+var (
+	// ErrGitLabNotConnected is the error of an issue read for a host without a connection.
+	ErrGitLabNotConnected = errors.New("no GitLab connection for this host")
+	// ErrGitLabNoToken is the error of an issue read for a connection without a token.
+	ErrGitLabNoToken = errors.New("the GitLab connection has no token")
+)
+
+// GitLabIssueReader is the part of *platform/gitlab.Client the GitLab issues adapter uses.
+type GitLabIssueReader interface {
+	Issue(ctx context.Context, conn gitlab.Conn, projectID int64, iid int) (gitlab.Issue, error)
+}
+
+// GitLabIssues implements app.GitLabIssues over the repository's GitLab connection.
+type GitLabIssues struct {
+	resolve gitlab.ResolveFunc
+	gl      GitLabIssueReader
+}
+
+var _ app.GitLabIssues = (*GitLabIssues)(nil)
+
+// NewGitLabIssues wraps the connection lookup (read on every call, so a rotated token applies to
+// the next one) and the GitLab client.
+func NewGitLabIssues(resolve gitlab.ResolveFunc, gl GitLabIssueReader) *GitLabIssues {
+	return &GitLabIssues{resolve: resolve, gl: gl}
+}
+
+// Issue reads one issue of the project with the connection of the host key. No connection, no
+// token and a failed lookup are errors before any request.
+func (a *GitLabIssues) Issue(ctx context.Context, host string, projectID int64, number int) (domain.Issue, error) {
+	b, ok, err := a.resolve(ctx, host)
+	if err != nil {
+		return domain.Issue{}, fmt.Errorf("resolve gitlab connection: %w", err)
+	}
+	if !ok {
+		return domain.Issue{}, ErrGitLabNotConnected
+	}
+	if b.Token == "" {
+		return domain.Issue{}, ErrGitLabNoToken
+	}
+	is, err := a.gl.Issue(ctx, b.Conn(), projectID, number)
+	if err != nil {
+		return domain.Issue{}, err
+	}
+	return domain.Issue{Number: is.Number, Title: is.Title, Body: is.Body}, nil
+}
+
 // Roles implements app.Roles with the smart-diff classification.
 type Roles struct{}
 
 var _ app.Roles = Roles{}
 
-// Role returns the smart-diff role of a path.
-func (Roles) Role(path string) string { return string(smartdiff.Classify(path)) }
+// RoleFor returns the smart-diff role of a path of a repository of the provider: GitLab
+// repositories also hold their CI files in wiring, any other provider classifies as GitHub.
+func (Roles) RoleFor(provider, path string) string {
+	return string(smartdiff.ClassifyFor(provider, path))
+}

@@ -128,6 +128,40 @@ func TestPullFiles_PullRequestOfAnotherWorkspaceIsNotFound(t *testing.T) {
 	}
 }
 
+func TestRepoProvider(t *testing.T) {
+	f := newFixture(t)
+	glRepo := f.insert(t, `INSERT INTO repos (workspace_id, owner, name, full_name, provider, host, project_id, web_url)
+		VALUES (?, 'grp', 'proj', 'grp/proj', 'gitlab', 'gitlab.example.com', 42, 'https://gitlab.example.com/grp/proj') RETURNING id`, f.ws)
+	glPR := f.pull(t, glRepo, 1)
+	for _, tc := range []struct{ name, pr, want string }{
+		{"github repository", f.pr, "github"},
+		{"gitlab repository", glPR, "gitlab"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := f.store.RepoProvider(t.Context(), f.ws, tc.pr)
+			if err != nil || got != tc.want {
+				t.Errorf("RepoProvider(%s) = %q, %v, want %q", tc.pr, got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestRepoProvider_PullRequestOfAnotherWorkspaceIsNotFound(t *testing.T) {
+	f := newFixture(t)
+	const unknownPR = "00000000-0000-4000-8000-000000000000"
+	for _, tc := range []struct{ name, ws, pr string }{
+		{"other workspace", f.other, f.pr},
+		{"unknown pull request", f.ws, unknownPR},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := f.store.RepoProvider(t.Context(), tc.ws, tc.pr)
+			if !errors.Is(err, domain.ErrNotFound) {
+				t.Errorf("RepoProvider(%s, %s) error = %v, want domain.ErrNotFound", tc.ws, tc.pr, err)
+			}
+		})
+	}
+}
+
 // AC5006 (store): the newest review of each agent counts, an older run of the same agent does
 // not, dismissed findings do, summary reviews and other pull requests do not.
 func TestCurrentFindings_NewestReviewPerAgent(t *testing.T) {

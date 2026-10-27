@@ -15,10 +15,12 @@ import (
 // fakeStore is an in-memory app.Store holding one pull request.
 type fakeStore struct {
 	ws, pr   string
+	provider string
 	files    []domain.PullFile
 	findings []domain.FindingRef
 	filesErr error
 	findErr  error
+	provErr  error
 
 	findingsCalls int
 }
@@ -33,6 +35,16 @@ func (f *fakeStore) PullFiles(_ context.Context, ws, pr string) ([]domain.PullFi
 		return nil, domain.ErrNotFound
 	}
 	return f.files, nil
+}
+
+func (f *fakeStore) RepoProvider(_ context.Context, ws, pr string) (string, error) {
+	if f.provErr != nil {
+		return "", f.provErr
+	}
+	if ws != f.ws || pr != f.pr {
+		return "", domain.ErrNotFound
+	}
+	return f.provider, nil
 }
 
 func (f *fakeStore) CurrentFindings(_ context.Context, pr string) ([]domain.FindingRef, error) {
@@ -80,8 +92,9 @@ func TestGet_StoreFailureIsNotMaskedAs404(t *testing.T) {
 		name  string
 		store *fakeStore
 	}{
-		{"files", &fakeStore{filesErr: boom}},
+		{"files", &fakeStore{ws: "w", pr: "p", filesErr: boom}},
 		{"findings", &fakeStore{ws: "w", pr: "p", findErr: boom}},
+		{"provider", &fakeStore{ws: "w", pr: "p", provErr: boom}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := app.NewService(tc.store).Get(t.Context(), "w", "p")
@@ -103,5 +116,29 @@ func TestGet_PullRequestWithoutFilesIsFiveEmptyGroups(t *testing.T) {
 	}
 	if len(got.Groups) != 5 || got.TotalLines != 0 {
 		t.Errorf("Get() = %d groups, %d lines, want 5 groups, 0 lines", len(got.Groups), got.TotalLines)
+	}
+}
+
+// AC28 (service): the repository's provider decides the roles of its files.
+func TestGet_ClassifiesByTheRepositoryProvider(t *testing.T) {
+	files := []domain.PullFile{{Path: ".gitlab-ci.yml", Additions: 1}, {Path: "ci/.gitlab-ci.yml", Additions: 1}, {Path: "src/gitlab/x.ts", Additions: 1}}
+	for _, tc := range []struct {
+		provider             string
+		wantCore, wantWiring int
+	}{
+		{"gitlab", 1, 2},
+		{"github", 3, 0},
+		{"", 3, 0},
+	} {
+		t.Run("provider "+tc.provider, func(t *testing.T) {
+			store := &fakeStore{ws: "w", pr: "p", provider: tc.provider, files: files}
+			got, err := app.NewService(store).Get(t.Context(), "w", "p")
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			if c, w := len(got.Groups[0].Files), len(got.Groups[2].Files); c != tc.wantCore || w != tc.wantWiring {
+				t.Errorf("Get(%q) core/wiring files = %d/%d, want %d/%d", tc.provider, c, w, tc.wantCore, tc.wantWiring)
+			}
+		})
 	}
 }

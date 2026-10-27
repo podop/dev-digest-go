@@ -76,15 +76,23 @@ func (s *Service) gather(ctx context.Context, workspaceID string, pull domain.Pu
 }
 
 // fetchIssue reads the linked issue within domain.IssueTimeout; every failure is a missing issue.
-// A GitLab pull request has no issue read here (FR29): the issue is missing, as without a token,
-// and no request is made.
+// A GitLab pull request reads its issue from its own connection (FR25) and never from GitHub: no
+// reader, no project or no host is a missing issue without a request.
 func (s *Service) fetchIssue(ctx context.Context, pull domain.Pull, number int) *domain.Issue {
-	if pull.IsGitLab() {
-		return nil
-	}
 	ictx, cancel := context.WithTimeout(ctx, domain.IssueTimeout)
 	defer cancel()
-	issue, err := s.d.Issues.Issue(ictx, pull.Owner, pull.Name, number)
+	var (
+		issue domain.Issue
+		err   error
+	)
+	if pull.IsGitLab() {
+		if s.d.GitLabIssues == nil || pull.Host == "" || pull.ProjectID <= 0 {
+			return nil
+		}
+		issue, err = s.d.GitLabIssues.Issue(ictx, pull.Host, pull.ProjectID, number)
+	} else {
+		issue, err = s.d.Issues.Issue(ictx, pull.Owner, pull.Name, number)
+	}
 	if err != nil {
 		return nil
 	}

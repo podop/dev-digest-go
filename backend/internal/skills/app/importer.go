@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"dev-digest-go/backend/internal/platform/apperr"
@@ -23,11 +24,67 @@ type catalog interface {
 	Get(id string) (domain.CatalogEntry, bool)
 }
 
+// GitLabFileConn is a GitLab connection that matched an import URL's host key: what the importer
+// needs to read the URL against it and to name it in messages. It carries no token.
+type GitLabFileConn struct {
+	ID   string
+	Name string
+	// BaseURL is the connection's instance URL (https://host[:port][/prefix]).
+	BaseURL string
+	// Host is the connection's host key.
+	Host string
+}
+
+// gitLabFiles reads files through the GitLab connections (spec B FR30). The token never leaves
+// the implementation: it is looked up per call and sent to the connection's own REST root only.
+type gitLabFiles interface {
+	// Match returns the connection whose host key is hostKey; ok is false when there is none. An
+	// error is a failure to read the connections.
+	Match(ctx context.Context, hostKey string) (conn GitLabFileConn, ok bool, err error)
+	// Raw returns the bytes of file at ref in project (a full project path) through conn, at most
+	// limit of them. A failure is one of the ErrGitLabFile* sentinels, a *GitLabFileStatusError,
+	// or another error (a transport failure or a canceled ctx).
+	Raw(ctx context.Context, conn GitLabFileConn, project, file, ref string, limit int) ([]byte, error)
+}
+
+// Failures of gitLabFiles.Raw the importer words for the user.
+var (
+	// ErrGitLabFileNotFound is a 404: no such project, ref or file, or the token cannot see it.
+	ErrGitLabFileNotFound = errors.New("gitlab file not found")
+	// ErrGitLabFileTooLarge is a file longer than the limit.
+	ErrGitLabFileTooLarge = errors.New("gitlab file too large")
+	// ErrGitLabFileRejected is a 401 or 403: GitLab refused the connection's token.
+	ErrGitLabFileRejected = errors.New("gitlab rejected the token")
+	// ErrGitLabFileMoved is a 3xx answer; it is never followed.
+	ErrGitLabFileMoved = errors.New("gitlab project moved")
+	// ErrGitLabFileRateLimited is a 429.
+	ErrGitLabFileRateLimited = errors.New("gitlab rate limit reached")
+	// ErrGitLabFileAddress is a connection address the egress guard refuses (link-local).
+	ErrGitLabFileAddress = errors.New("gitlab address not allowed")
+	// ErrGitLabFileConnectionGone means the connection was removed or replaced between Match and
+	// Raw.
+	ErrGitLabFileConnectionGone = errors.New("gitlab connection no longer available")
+)
+
+// GitLabFileStatusError is any other non-success HTTP answer of the files API.
+type GitLabFileStatusError struct{ Status int }
+
+func (e *GitLabFileStatusError) Error() string { return fmt.Sprintf("gitlab file: HTTP %d", e.Status) }
+
 // Importer turns a file, a URL or a community id into the skill core a user confirms. It stores
 // nothing.
 type Importer struct {
 	fetcher urlFetcher
 	catalog catalog
+	gitlab  gitLabFiles
+}
+
+// WithGitLabFiles makes the importer read URLs that belong to a GitLab connection through that
+// connection (spec B FR30) instead of the public fetcher. Without it every URL takes the public
+// path. It returns i for chaining.
+func (i *Importer) WithGitLabFiles(files gitLabFiles) *Importer {
+	i.gitlab = files
+	return i
 }
 
 // NewImporter builds an Importer.
@@ -142,6 +199,50 @@ func fromArchive(data []byte, archiveName string, source domain.Source, sourceRe
 }
 
 func (i *Importer) fromURL(ctx context.Context, raw string) (Preview, error) {
+	if i.gitlab != nil {
+		if key, ok := domain.ImportHostKey(raw); ok {
+			conn, matched, err := i.gitlab.Match(ctx, key)
+			if err != nil {
+				return Preview{}, fmt.Errorf("match gitlab connection: %w", err)
+			}
+			if matched {
+				return i.fromGitLab(ctx, raw, key, conn)
+			}
+		}
+	}
+	return i.fromPublic(ctx, raw)
+}
+
+// fromGitLab reads a URL of host key key through conn (spec B FR30): the typed URL is only
+// parsed, the file is fetched from the connection's REST root with its token, trying one ref
+// split after the other until an answer is not a 404. Nothing goes to the public fetcher.
+func (i *Importer) fromGitLab(ctx context.Context, raw, key string, conn GitLabFileConn) (Preview, error) {
+	link, matched, err := domain.ParseGitLabFileURL(raw, conn.BaseURL)
+	if err != nil {
+		return Preview{}, err
+	}
+	if !matched {
+		// The host key is the connection's but the path prefix is not: not this connection's URL,
+		// so it takes the public path and no token is sent.
+		return i.fromPublic(ctx, raw)
+	}
+	ctx, cancel := context.WithTimeout(ctx, domain.URLImportTimeout)
+	defer cancel()
+	for _, split := range link.Splits() {
+		data, err := i.gitlab.Raw(ctx, conn, link.Project, split.File, split.Ref, domain.URLImportMaxBytes)
+		if errors.Is(err, ErrGitLabFileNotFound) {
+			continue
+		}
+		if err != nil {
+			return Preview{}, gitLabFileFailure(ctx, err, key, conn)
+		}
+		return previewFromDocument(data, "", "/"+split.File, hostnameOf(key), raw)
+	}
+	return Preview{}, domain.InvalidImport("File not found on " + key + ", or the token cannot see it")
+}
+
+// fromPublic is the public path of fromURL: validation, the public fetcher, no token.
+func (i *Importer) fromPublic(ctx context.Context, raw string) (Preview, error) {
 	target, err := domain.ParseImportURL(raw)
 	if err != nil {
 		return Preview{}, err
@@ -154,22 +255,66 @@ func (i *Importer) fromURL(ctx context.Context, raw string) (Preview, error) {
 	if doc.FinalURL != nil {
 		finalPath = doc.FinalURL.EscapedPath()
 	}
-	ref := strings.TrimSpace(raw)
-	isZip := domain.IsZipName(finalPath) || hasZipMagic(doc.Bytes) || strings.Contains(strings.ToLower(doc.ContentType), "zip")
+	return previewFromDocument(doc.Bytes, doc.ContentType, finalPath, target.Hostname(), raw)
+}
+
+// gitLabFileFailure words a Raw failure; the text never carries the token (it is not in the
+// errors, and only fixed text and the connection's name are used).
+func gitLabFileFailure(ctx context.Context, err error, key string, conn GitLabFileConn) error {
+	var status *GitLabFileStatusError
+	switch {
+	case ctx.Err() != nil:
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return domain.InvalidImport("Fetching " + key + " timed out")
+		}
+		return ctx.Err()
+	case errors.Is(err, ErrGitLabFileTooLarge):
+		return domain.InvalidImport("The document is larger than " + strconv.Itoa(domain.URLImportMaxBytes) + " bytes")
+	case errors.Is(err, ErrGitLabFileRejected):
+		return domain.InvalidImport("GitLab rejected the token of connection " + conn.Name)
+	case errors.Is(err, ErrGitLabFileMoved):
+		return domain.InvalidImport("GitLab reports that this project has moved; use its current URL")
+	case errors.Is(err, ErrGitLabFileRateLimited):
+		return domain.InvalidImport("GitLab rate limit reached; try again later")
+	case errors.Is(err, ErrGitLabFileAddress):
+		return domain.InvalidImport(key + " resolves to an address that is not allowed")
+	case errors.Is(err, ErrGitLabFileConnectionGone):
+		return domain.InvalidImport("GitLab connection " + conn.Name + " is no longer available")
+	case errors.As(err, &status):
+		return domain.InvalidImport(fmt.Sprintf("The server answered HTTP %d", status.Status))
+	default:
+		return domain.InvalidImport("Could not fetch " + key)
+	}
+}
+
+// hostnameOf is the host name of a host key ("host" or "host:port").
+func hostnameOf(key string) string {
+	if u, err := url.Parse("https://" + key); err == nil && u.Hostname() != "" {
+		return u.Hostname()
+	}
+	return key
+}
+
+// previewFromDocument turns downloaded bytes into the preview. finalPath names the document
+// (its URL path or file path), fallbackHost names the skill when the path has no stem and ref is
+// the URL as typed.
+func previewFromDocument(data []byte, contentType, finalPath, fallbackHost, ref string) (Preview, error) {
+	ref = strings.TrimSpace(ref)
+	isZip := domain.IsZipName(finalPath) || hasZipMagic(data) || strings.Contains(strings.ToLower(contentType), "zip")
 	if isZip {
 		name := domain.StemOf(finalPath)
 		if name == "" {
 			name = "archive.zip"
 		}
-		return fromArchive(doc.Bytes, name, domain.SourceImportedURL, ref)
+		return fromArchive(data, name, domain.SourceImportedURL, ref)
 	}
-	text, ok := domain.DecodeUTF8(doc.Bytes)
+	text, ok := domain.DecodeUTF8(data)
 	if !ok {
 		return Preview{}, errNotUTF8
 	}
 	fallback := domain.StemOf(finalPath)
 	if fallback == "" {
-		fallback = target.Hostname()
+		fallback = fallbackHost
 	}
 	c, err := domain.SkillFromMarkdown(text, fallback)
 	if err != nil {

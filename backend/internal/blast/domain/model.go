@@ -109,6 +109,10 @@ type Pull struct {
 	Owner, Name string
 	// Provider is the repository's code host ("github" | "gitlab"; "" reads as github).
 	Provider string
+	// Host is the GitLab repository's connection host key and ProjectID its numeric project id
+	// (ProjectID is zero for a GitHub repository, whose Host is "github.com").
+	Host      string
+	ProjectID int64
 }
 
 // IsGitLab reports whether the pull request belongs to a GitLab project.

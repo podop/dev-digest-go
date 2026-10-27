@@ -12,6 +12,12 @@ import (
 // on that path. A finding on a path that is not one of the files is ignored. TotalLines is the sum
 // of additions and deletions over all files.
 func Build(files []PullFile, findings []FindingRef) SmartDiff {
+	return BuildFor("", files, findings)
+}
+
+// BuildFor is Build for a repository of the given provider: the files are classified with
+// ClassifyFor. Build is BuildFor with the GitHub rules.
+func BuildFor(provider string, files []PullFile, findings []FindingRef) SmartDiff {
 	linesByFile := make(map[string]map[int]struct{})
 	for _, f := range findings {
 		set := linesByFile[f.File]
@@ -34,7 +40,7 @@ func Build(files []PullFile, findings []FindingRef) SmartDiff {
 			lines = append(lines, l)
 		}
 		slices.Sort(lines)
-		role := Classify(f.Path)
+		role := ClassifyFor(provider, f.Path)
 		byRole[role] = append(byRole[role], FileEntry{
 			Path: f.Path, Additions: f.Additions, Deletions: f.Deletions, FindingLines: lines,
 		})

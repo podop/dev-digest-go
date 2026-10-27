@@ -13,6 +13,7 @@ import (
 	"dev-digest-go/backend/internal/brief/app"
 	"dev-digest-go/backend/internal/brief/domain"
 	"dev-digest-go/backend/internal/platform/github"
+	"dev-digest-go/backend/internal/platform/gitlab"
 	reviewsapp "dev-digest-go/backend/internal/reviews/app"
 	reviewsdomain "dev-digest-go/backend/internal/reviews/domain"
 )
@@ -165,16 +166,104 @@ func TestIssues(t *testing.T) {
 	}
 }
 
-func TestRoles(t *testing.T) {
-	tests := []struct{ path, want string }{
-		{"src/server.ts", "core"},
-		{"src/server.test.ts", "tests"},
-		{"README.md", "docs"},
-		{"package-lock.json", "boilerplate"},
+type fakeGitLab struct {
+	issue gitlab.Issue
+	err   error
+	conn  gitlab.Conn
+	pid   int64
+	iid   int
+	calls int
+}
+
+func (f *fakeGitLab) Issue(_ context.Context, conn gitlab.Conn, pid int64, iid int) (gitlab.Issue, error) {
+	f.calls++
+	f.conn, f.pid, f.iid = conn, pid, iid
+	return f.issue, f.err
+}
+
+func resolver(b gitlab.Binding, ok bool, err error, hosts *[]string) gitlab.ResolveFunc {
+	return func(_ context.Context, host string) (gitlab.Binding, bool, error) {
+		*hosts = append(*hosts, host)
+		return b, ok, err
+	}
+}
+
+func TestGitLabIssues(t *testing.T) { // FR23, FR25
+	body := "Throttle per key."
+	b := gitlab.Binding{ID: "c1", Name: "corp", BaseURL: "https://git.example.com/gl", Host: "git.example.com", Token: "glpat-secret"}
+	var hosts []string
+	fg := &fakeGitLab{issue: gitlab.Issue{Number: 7, Title: "Rate limit", Body: &body, State: "open"}}
+	got, err := peers.NewGitLabIssues(resolver(b, true, nil, &hosts), fg).Issue(t.Context(), "git.example.com", 42, 7)
+	if err != nil {
+		t.Fatalf("Issue() error = %v", err)
+	}
+	if diff := cmp.Diff(domain.Issue{Number: 7, Title: "Rate limit", Body: &body}, got); diff != "" {
+		t.Errorf("Issue() mismatch (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff([]string{"git.example.com"}, hosts); diff != "" {
+		t.Errorf("resolved hosts mismatch (-want +got):\n%s", diff)
+	}
+	if fg.conn != b.Conn() || fg.pid != 42 || fg.iid != 7 {
+		t.Errorf("client asked with conn %v project %d issue %d, want the binding's conn, 42, 7", fg.conn.BaseURL, fg.pid, fg.iid)
+	}
+}
+
+func TestGitLabIssues_NoRequestWithoutAConnectionOrToken(t *testing.T) { // FR23
+	cause := errors.New("db down")
+	tests := []struct {
+		name string
+		b    gitlab.Binding
+		ok   bool
+		err  error
+		want error
+	}{
+		{name: "not connected", ok: false, want: peers.ErrGitLabNotConnected},
+		{name: "no token", b: gitlab.Binding{BaseURL: "https://git.example.com"}, ok: true, want: peers.ErrGitLabNoToken},
+		{name: "lookup failed", err: cause, want: cause},
 	}
 	for _, tc := range tests {
-		if got := (peers.Roles{}).Role(tc.path); got != tc.want {
-			t.Errorf("Role(%q) = %q, want %q", tc.path, got, tc.want)
+		t.Run(tc.name, func(t *testing.T) {
+			var hosts []string
+			fg := &fakeGitLab{}
+			_, err := peers.NewGitLabIssues(resolver(tc.b, tc.ok, tc.err, &hosts), fg).Issue(t.Context(), "git.example.com", 42, 7)
+			if !errors.Is(err, tc.want) {
+				t.Errorf("Issue() error = %v, want %v", err, tc.want)
+			}
+			if fg.calls != 0 {
+				t.Errorf("GitLab client calls = %d, want 0", fg.calls)
+			}
+		})
+	}
+}
+
+func TestGitLabIssues_ClientErrorPassesThrough(t *testing.T) {
+	cause := errors.New("404 Not found")
+	var hosts []string
+	b := gitlab.Binding{BaseURL: "https://git.example.com", Token: "t"}
+	_, err := peers.NewGitLabIssues(resolver(b, true, nil, &hosts), &fakeGitLab{err: cause}).Issue(t.Context(), "git.example.com", 42, 7)
+	if !errors.Is(err, cause) {
+		t.Errorf("Issue() error = %v, want the cause", err)
+	}
+}
+
+func TestRoles(t *testing.T) {
+	tests := []struct{ provider, path, want string }{
+		{"github", "src/server.ts", "core"},
+		{"github", "src/server.test.ts", "tests"},
+		{"github", "README.md", "docs"},
+		{"github", "package-lock.json", "boilerplate"},
+		{"github", ".github/workflows/ci.yml", "wiring"},
+		{"github", ".gitlab-ci.yml", "core"}, // GitHub classifies exactly as before (D25)
+		{"", ".gitlab-ci.yml", "core"},
+		{"gitlab", ".gitlab-ci.yml", "wiring"},
+		{"gitlab", "svc/.gitlab-ci.yml", "wiring"},
+		{"gitlab", ".gitlab/ci/build.yml", "wiring"},
+		{"gitlab", "src/gitlab/x.ts", "core"},
+		{"gitlab", "src/server.ts", "core"},
+	}
+	for _, tc := range tests {
+		if got := (peers.Roles{}).RoleFor(tc.provider, tc.path); got != tc.want {
+			t.Errorf("RoleFor(%q, %q) = %q, want %q", tc.provider, tc.path, got, tc.want)
 		}
 	}
 }

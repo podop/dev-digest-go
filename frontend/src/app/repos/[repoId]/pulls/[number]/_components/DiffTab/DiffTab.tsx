@@ -4,8 +4,9 @@ import React from "react";
 import { useTranslations } from "next-intl";
 import { SectionLabel, Button } from "@devdigest/ui";
 import { DiffViewer, type DiffCommentApi, type DiffFindingApi, type DiffHighlight } from "@/components/diff-viewer";
-import { isGitLab } from "@/lib/code-host";
-import { useLinkRepo } from "@/lib/link-repo";
+import { isGitLab, isNotConnected } from "@/lib/code-host";
+import { commentErrorMessage } from "@/lib/code-host/comment-errors";
+import { useActiveRepo } from "@/lib/repo-context";
 import { usePrComments, useCreatePrComment, useLiveRunRefresh, usePrReviews, useSmartDiff } from "@/lib/hooks";
 import { notify } from "@/lib/toast";
 import type { FindingRecord } from "@devdigest/shared";
@@ -32,13 +33,15 @@ interface DiffTabProps {
 export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder, focus }: DiffTabProps) {
   const t = useTranslations("prReview");
   const tp = useTranslations("prPosting");
-  // Posting comments is GitHub-only until GitLab slice B (FR45): no composer and no "Post to PR" on a GitLab PR,
-  // nor while the repository (and so its host) is still unknown.
-  const repo = useLinkRepo();
+  const tErr = useTranslations("prCommentErrors");
+  // No composer and no "Post to PR" / "Post to MR" while the repository (and so its host) is still unknown, nor for
+  // a GitLab repository without a connection (FR21); a connected GitLab repository posts like GitHub (FR19).
+  const { activeRepo: repo } = useActiveRepo();
   const gitlab = isGitLab(repo);
-  const postable = !!canComment && repo != null && !gitlab;
+  const notConnected = isNotConnected(repo);
+  const postable = !!canComment && repo != null && !notConnected;
   const { data: comments } = usePrComments(prId);
-  const create = useCreatePrComment(prId);
+  const create = useCreatePrComment(prId, { gitlab });
   const { data: smartDiff } = useSmartDiff(prId);
   const { data: reviews } = usePrReviews(prId);
   // A run that finishes while this tab is open refreshes counters/dots live,
@@ -69,7 +72,15 @@ export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder
         setShowOverride(true); // a just-posted comment shouldn't stay hidden
         return res;
       } catch (err) {
-        notify.error(err instanceof Error ? err.message : t("diff.postFailed"));
+        // A GitLab post is quiet in the mutation, so this is its one toast (FR20): the server's message, else the
+        // localized copy of its reason, else the fallback. GitHub keeps its message-or-fallback toast.
+        notify.error(
+          gitlab
+            ? (commentErrorMessage(err, tErr) ?? t("diff.postFailedGitLab"))
+            : err instanceof Error
+              ? err.message
+              : t("diff.postFailed"),
+        );
         throw err;
       }
     },
@@ -87,7 +98,7 @@ export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder
     items: findings,
     flagged,
     show,
-    // GitHub anchors comments only on diff lines of an open PR.
+    // GitHub and GitLab anchor comments only on diff lines of an open PR.
     renderCard: (f, placement) => (
       <InlineFindingCard f={f} prId={prId} canPublish={postable && placement === "line"} />
     ),
@@ -128,7 +139,9 @@ export function DiffTab({ prId, filesCount, files, canComment, order, onSetOrder
           })}
         </span>
         {!hasReview && <span style={s.noReviewHint}>{t("smartDiff.noReview")}</span>}
-        {gitlab && <span style={s.noReviewHint}>{tp("gitlabCommentsNotShown")}</span>}
+        {notConnected && (
+          <span style={s.noReviewHint}>{tp("commentsNotConnected", { host: repo?.host ?? "" })}</span>
+        )}
       </div>
 
       {order === "original" ? (

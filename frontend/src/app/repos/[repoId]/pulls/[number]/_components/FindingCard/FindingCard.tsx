@@ -21,13 +21,13 @@ import {
 import type { FindingRecord, FindingActionKind } from "@devdigest/shared";
 import { SEV_COLOR, SEV_COLOR_FALLBACK } from "./constants";
 import { isFromInteractive, lineLabel } from "./helpers";
-import { blobUrl } from "@/lib/code-host";
+import { blobUrl, isGitLab } from "@/lib/code-host";
 import { useLinkRepo } from "@/lib/link-repo";
 import { s } from "./styles";
 
-/** State + action of a finding's "Post to PR" button. */
+/** State + action of a finding's "Post to PR" button ("Post to MR" for a GitLab repository). */
 interface FindingPublish {
-  /** GitHub URL of the comment this finding was already posted as → a link instead of the button. */
+  /** URL of the comment this finding was already posted as → a link instead of the button. */
   url: string | null;
   pending: boolean;
   /** Omitted → nothing to post (e.g. the line isn't in the diff), no button. */
@@ -60,6 +60,7 @@ export function FindingCard({
   const bodyId = React.useId();
   const toggle = () => setExpanded((e) => !e);
   const repo = useLinkRepo();
+  const gitlab = isGitLab(repo);
   const sevColor = SEV_COLOR[f.severity] ?? SEV_COLOR_FALLBACK;
   const fileHref = headSha ? (blobUrl(repo, headSha, f.file, f.start_line, f.end_line) ?? undefined) : undefined;
   const accepted = !!f.accepted_at;
@@ -147,7 +148,7 @@ export function FindingCard({
             {publish?.url ? (
               <a href={publish.url} target="_blank" rel="noopener noreferrer" style={s.publishedLink}>
                 <Icon.ExternalLink size={13} aria-hidden />
-                {t("finding.postedToPr")}
+                {t(gitlab ? "finding.postedToGitLab" : "finding.postedToPr")}
               </a>
             ) : (
               publish?.onPost && (
@@ -156,10 +157,10 @@ export function FindingCard({
                   size="sm"
                   icon="MessageSquare"
                   loading={publish.pending}
-                  title={t("finding.postToPrHint")}
+                  title={t(gitlab ? "finding.postToMrHint" : "finding.postToPrHint")}
                   onClick={publish.onPost}
                 >
-                  {t("finding.postToPr")}
+                  {t(gitlab ? "finding.postToMr" : "finding.postToPr")}
                 </Button>
               )
             )}

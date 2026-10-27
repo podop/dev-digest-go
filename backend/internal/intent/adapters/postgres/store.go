@@ -107,6 +107,9 @@ type repoRow struct {
 	Provider  string `gorm:"column:provider"`
 	Host      string `gorm:"column:host"`
 	ProjectID *int64 `gorm:"column:project_id"`
+	// WebURL is the project's web address (0010, refreshed by every sync); NULL for GitHub. The
+	// GitLab "same project" rule of the link extraction reads it (spec B P7).
+	WebURL *string `gorm:"column:web_url"`
 }
 
 func (repoRow) TableName() string { return "repos" }
@@ -137,7 +140,8 @@ func (s *Store) Pull(ctx context.Context, workspaceID, prID string) (domain.Pull
 	return pull, nil
 }
 
-// Repo returns a repository by id.
+// Repo returns a repository by id. For a GitLab project Owner is the namespace path, Name the last
+// path segment, Host the connection's host key and WebURL its web address (all stored by the sync).
 func (s *Store) Repo(ctx context.Context, repoID string) (domain.Repo, error) {
 	var row repoRow
 	err := s.conn(ctx).Where("id = ?", repoID).Take(&row).Error
@@ -150,6 +154,9 @@ func (s *Store) Repo(ctx context.Context, repoID string) (domain.Repo, error) {
 	repo := domain.Repo{ID: row.ID, Owner: row.Owner, Name: row.Name, Provider: row.Provider, Host: row.Host}
 	if row.ProjectID != nil {
 		repo.ProjectID = *row.ProjectID
+	}
+	if row.WebURL != nil {
+		repo.WebURL = *row.WebURL
 	}
 	return repo, nil
 }

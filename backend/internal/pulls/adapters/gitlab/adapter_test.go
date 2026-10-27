@@ -343,6 +343,76 @@ func TestGet(t *testing.T) {
 	}
 }
 
+func TestGet_diffHeadAndPreviousPath(t *testing.T) {
+	const sha40 = "0123456789abcdef0123456789abcdef01234567"
+	sha64 := strings.Repeat("ab", 32)
+	tests := []struct {
+		name      string
+		sha       string
+		diffRefs  any
+		want      *string
+		wantPrev  *string
+		renamedTo string
+	}{
+		{name: "diff_refs head wins", sha: "ffffffffffffffffffffffffffffffffffffffff",
+			diffRefs: map[string]any{"head_sha": sha40}, want: ptr(sha40)},
+		{name: "sha-256 head", diffRefs: map[string]any{"head_sha": sha64}, want: ptr(sha64)},
+		{name: "no diff_refs: the mr sha", sha: sha40, diffRefs: nil, want: ptr(sha40)},
+		{name: "empty diff_refs head: the mr sha", sha: sha40, diffRefs: map[string]any{"head_sha": ""}, want: ptr(sha40)},
+		{name: "short sha is not stored", sha: "aaa", diffRefs: nil, want: nil},
+		{name: "upper case is not stored", diffRefs: map[string]any{"head_sha": strings.ToUpper(sha40)}, want: nil},
+		{name: "non-hex is not stored", diffRefs: map[string]any{"head_sha": strings.Repeat("g", 40)}, want: nil},
+		{name: "41 characters are not stored", diffRefs: map[string]any{"head_sha": sha40 + "a"}, want: nil},
+		{name: "renamed file keeps the old path", sha: sha40, wantPrev: ptr("old/b.go"), renamedTo: "new/b.go", want: ptr(sha40)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := newServer(t, func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case prefix + "/api/v4/projects/42/merge_requests/7":
+					writeJSON(w, 200, map[string]any{
+						"iid": 7, "title": "t", "state": "opened", "source_branch": "f", "target_branch": "main", "sha": tc.sha,
+						"source_project_id": 42, "target_project_id": 42, "diff_refs": tc.diffRefs,
+						"created_at": "2026-10-20T10:00:00Z", "updated_at": "2026-10-21T10:00:00Z",
+					})
+				case prefix + "/api/v4/projects/42/merge_requests/7/diffs":
+					newPath, oldPath := "same.go", "same.go"
+					if tc.renamedTo != "" {
+						newPath, oldPath = tc.renamedTo, "old/b.go"
+					}
+					writeJSON(w, 200, []map[string]any{
+						{"old_path": oldPath, "new_path": newPath, "diff": "@@ -1 +1 @@\n-a\n+b\n"},
+						{"old_path": "gone.go", "new_path": "gone.go", "deleted_file": true, "diff": "@@ -1 +0,0 @@\n-x\n"},
+						{"old_path": "", "new_path": "added.go", "new_file": true, "diff": "@@ -0,0 +1 @@\n+x\n"},
+					})
+				case prefix + "/api/v4/projects/42/merge_requests/7/commits":
+					writeJSON(w, 200, []any{})
+				default:
+					writeJSON(w, 200, map[string]any{"data": map[string]any{"projects": map[string]any{"nodes": []any{}}}})
+				}
+			})
+			got, err := srv.adapterFor(token).Get(t.Context(), repo, 7)
+			if err != nil {
+				t.Fatalf("Get() error = %v", err)
+			}
+			if diff := cmp.Diff(tc.want, got.DiffHead); diff != "" {
+				t.Errorf("Get().DiffHead mismatch (-want +got):\n%s", diff)
+			}
+			if len(got.Files) != 3 {
+				t.Fatalf("Get() files = %d, want 3", len(got.Files))
+			}
+			if diff := cmp.Diff(tc.wantPrev, got.Files[0].PreviousPath); diff != "" {
+				t.Errorf("Get().Files[0].PreviousPath mismatch (-want +got):\n%s", diff)
+			}
+			for _, f := range got.Files[1:] {
+				if f.PreviousPath != nil {
+					t.Errorf("Get() file %s PreviousPath = %q, want nil (deleted and added files keep one path)", f.Path, *f.PreviousPath)
+				}
+			}
+		})
+	}
+}
+
 func TestGet_failures(t *testing.T) {
 	for _, failing := range []string{"", "/diffs", "/commits"} {
 		t.Run("fails at "+failing, func(t *testing.T) {

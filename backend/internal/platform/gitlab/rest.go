@@ -78,6 +78,9 @@ type Project struct {
 	// DefaultBranch is "" when GitLab reports none (an empty project); FR14 stores "main" then.
 	DefaultBranch string
 	WebURL        string
+	// CIConfigPath is the project's ci_config_path; "" when GitLab reports none (the default
+	// .gitlab-ci.yml at the root).
+	CIConfigPath string
 }
 
 type apiProject struct {
@@ -86,6 +89,7 @@ type apiProject struct {
 	PathWithNamespace string  `json:"path_with_namespace"`
 	DefaultBranch     *string `json:"default_branch"`
 	WebURL            string  `json:"web_url"`
+	CIConfigPath      *string `json:"ci_config_path"`
 	Namespace         *struct {
 		FullPath string `json:"full_path"`
 	} `json:"namespace"`
@@ -98,6 +102,9 @@ func (p apiProject) project() (Project, error) {
 	out := Project{ID: p.ID, PathWithNamespace: p.PathWithNamespace, Path: p.Path, WebURL: p.WebURL}
 	if p.DefaultBranch != nil {
 		out.DefaultBranch = *p.DefaultBranch
+	}
+	if p.CIConfigPath != nil {
+		out.CIConfigPath = *p.CIConfigPath
 	}
 	if p.Namespace != nil {
 		out.NamespaceFullPath = p.Namespace.FullPath
@@ -168,10 +175,20 @@ type MergeRequest struct {
 	WebURL     string
 }
 
+// DiffRefs are the three commits GitLab positions a diff comment against. A field is "" when
+// GitLab reports none (a merge request whose diff is still being prepared).
+type DiffRefs struct {
+	BaseSHA  string
+	StartSHA string
+	HeadSHA  string
+}
+
 // MergeRequestDetail is a single merge request with its description.
 type MergeRequestDetail struct {
 	MergeRequest
 	Description *string
+	// DiffRefs is the merge request's diff_refs; the zero value when GitLab has none.
+	DiffRefs DiffRefs
 }
 
 type apiMR struct {
@@ -193,6 +210,11 @@ type apiMR struct {
 	Author          *struct {
 		Username string `json:"username"`
 	} `json:"author"`
+	DiffRefs *struct {
+		BaseSHA  string `json:"base_sha"`
+		StartSHA string `json:"start_sha"`
+		HeadSHA  string `json:"head_sha"`
+	} `json:"diff_refs"`
 }
 
 func mapState(state string) string {
@@ -301,13 +323,19 @@ func (c *Client) MergeRequest(ctx context.Context, conn Conn, projectID int64, i
 	if mr.IID != iid {
 		return MergeRequestDetail{}, fmt.Errorf("gitlab merge request: %w", ErrNotAPI)
 	}
-	return MergeRequestDetail{MergeRequest: mr, Description: raw.Description}, nil
+	detail := MergeRequestDetail{MergeRequest: mr, Description: raw.Description}
+	if raw.DiffRefs != nil {
+		detail.DiffRefs = DiffRefs{BaseSHA: raw.DiffRefs.BaseSHA, StartSHA: raw.DiffRefs.StartSHA, HeadSHA: raw.DiffRefs.HeadSHA}
+	}
+	return detail, nil
 }
 
 // File is one changed file of a merge request. Patch is nil when GitLab gives none (binary,
-// collapsed, too large or empty diff); the counts are then 0.
+// collapsed, too large or empty diff); the counts are then 0. OldPath is GitLab's old_path as
+// reported ("" when absent); it equals Path unless the file was renamed.
 type File struct {
 	Path      string
+	OldPath   string
 	Additions int
 	Deletions int
 	Patch     *string
@@ -330,7 +358,7 @@ func (d apiDiff) file() (File, bool) {
 	if path == "" {
 		return File{}, false
 	}
-	f := File{Path: path}
+	f := File{Path: path, OldPath: d.OldPath}
 	if d.Collapsed || d.TooLarge || d.Diff == "" {
 		return f, true
 	}
@@ -463,6 +491,9 @@ func mergeSamePath(files []File) []File {
 			continue
 		}
 		prev := &out[i]
+		if prev.OldPath == "" {
+			prev.OldPath = f.OldPath
+		}
 		prev.Additions += f.Additions
 		prev.Deletions += f.Deletions
 		var patches []string

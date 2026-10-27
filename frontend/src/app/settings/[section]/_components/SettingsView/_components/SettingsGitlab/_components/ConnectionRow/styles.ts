@@ -31,5 +31,6 @@ export const s = {
     borderRadius: "50%",
     background: `var(--${tone === "muted" ? "text-muted" : tone})`,
   }),
+  identity: { fontSize: 12, color: "var(--text-secondary)" } satisfies CSSProperties,
   testing: { fontSize: 12, color: "var(--text-muted)" } satisfies CSSProperties,
 } as const;

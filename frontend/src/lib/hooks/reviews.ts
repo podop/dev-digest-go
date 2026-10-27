@@ -6,6 +6,7 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api, API_BASE } from "../api";
+import { isDiffReloadError } from "../code-host/comment-errors";
 import { notify } from "../toast";
 import { multiAgentKeys, prKeys, RUN_SCOPED_PR_KEYS } from "./keys";
 import { EMPTY_RUN_EVENTS, RunEventsStore, mergeRunEvents } from "./run-events-store";
@@ -117,12 +118,21 @@ export function usePrComments(prId: string | null | undefined) {
   });
 }
 
-/** Post one inline comment (or reply) to GitHub; refreshes the thread list. */
-export function useCreatePrComment(prId: string | null | undefined) {
+/**
+ * Post one inline comment (or reply); refreshes the thread list.
+ * A GitLab post (`gitlab: true`) is quiet — no global error toast, the caller shows `commentErrorMessage(err)` once
+ * (spec FR20) — and when the failure means the loaded diff is stale (`diff_changed`, `diff_not_ready`) the PR detail
+ * and everything scoped to it, comments included, is refetched so the diff reloads. GitHub keeps the global toast.
+ */
+export function useCreatePrComment(prId: string | null | undefined, { gitlab = false }: { gitlab?: boolean } = {}) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: PrCommentInput) => api.post<PrReviewComment>(`/pulls/${prId}/comments`, input),
+    meta: gitlab ? { quietErrorCodes: ["*"] } : undefined,
     onSuccess: () => qc.invalidateQueries({ queryKey: prKeys.comments(prId) }),
+    onError: (err) => {
+      if (isDiffReloadError(err)) qc.invalidateQueries({ queryKey: prKeys.detail(prId) });
+    },
   });
 }
 

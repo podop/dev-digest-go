@@ -512,29 +512,4 @@ func TestDetail_gitlabServesStored(t *testing.T) {
 	}
 }
 
-func TestComments_gitlabSendsNothing(t *testing.T) {
-	gl := &fakeGitLab{}
-	gh := &fakeGitHub{comments: []domain.ReviewComment{{ID: 1}}}
-	st, svc := glStoreAndService(gl, gh)
-	pr := glPull(7, domain.DiffStats{})
-	st.pulls = []domain.Pull{pr}
-
-	got, err := svc.Comments(t.Context(), wsID, pr.ID)
-	if err != nil || got == nil || len(got) != 0 {
-		t.Errorf("Comments() = %#v, %v, want an empty list", got, err)
-	}
-	if len(gl.calls) != 0 {
-		t.Errorf("GitLab calls = %v, want none", gl.calls)
-	}
-
-	_, err = svc.PostComment(t.Context(), wsID, pr.ID, app.CommentRequest{Path: "a.go", Line: 1, Body: "x"})
-	kind, ae := kindOf(t, err)
-	if kind != apperr.KindInvalidInput || ae.Code != "gitlab_unavailable" || ae.Message != "Posting to GitLab merge requests is not available yet." {
-		t.Errorf("PostComment() = %v %q %q, want 400 gitlab_unavailable with the not-yet message", kind, ae.Code, ae.Message)
-	}
-	if len(gh.createCalls) != 0 || len(gl.calls) != 0 {
-		t.Errorf("create calls = %d, gitlab calls = %v, want none", len(gh.createCalls), gl.calls)
-	}
-}
-
 func glDiscardLog() *slog.Logger { return slog.New(slog.DiscardHandler) }

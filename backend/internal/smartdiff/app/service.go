@@ -26,6 +26,10 @@ func NewService(store Store) *Service {
 
 // Get builds the smart diff of a pull request of the workspace.
 func (s *Service) Get(ctx context.Context, workspaceID, prID string) (domain.SmartDiff, error) {
+	provider, err := s.store.RepoProvider(ctx, workspaceID, prID)
+	if err != nil {
+		return domain.SmartDiff{}, notFoundOr(err, "load repository provider")
+	}
 	files, err := s.store.PullFiles(ctx, workspaceID, prID)
 	if err != nil {
 		return domain.SmartDiff{}, notFoundOr(err, "load pull request files")
@@ -34,7 +38,7 @@ func (s *Service) Get(ctx context.Context, workspaceID, prID string) (domain.Sma
 	if err != nil {
 		return domain.SmartDiff{}, notFoundOr(err, "load current findings")
 	}
-	return domain.Build(files, findings), nil
+	return domain.BuildFor(provider, files, findings), nil
 }
 
 // notFoundOr turns domain.ErrNotFound into the 404 of the route; any other failure is wrapped with

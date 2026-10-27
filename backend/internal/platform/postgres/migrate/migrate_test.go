@@ -2150,3 +2150,149 @@ INSERT INTO pull_requests (id, workspace_id, repo_id, number, title, author, bra
 		t.Errorf("repositories after Down->Up = %v, want github on github.com", got)
 	}
 }
+
+// TestMigration0011_GitLabDiffPositions: Up adds pull_requests.diff_head (optional, CHECK: 40 or 64
+// lower-case hex characters) and pr_files.previous_path (optional); GitHub and GitLab rows that exist
+// stay untouched with both empty (FR34, AC30). Down drops both columns and the CHECK and restores
+// version 10 exactly, rows untouched; Up again restores version 11 with the values empty (the next
+// GitLab detail fetch refills them).
+func TestMigration0011_GitLabDiffPositions(t *testing.T) {
+	upTo10Names := []string{"0001_baseline", "0002_pr_merge_state", "0003_spend_query_indexes", "0004_reset_history_indexes", "0005_cost_ledger", "0006_auto_review_records", "0007_pr_head_repo", "0008_plugin_ownership", "0009_custom_providers", "0010_gitlab"}
+	upTo11Names := append(append([]string{}, upTo10Names...), "0011_gitlab_diff_positions")
+
+	const ws = "00000000-0000-0000-0000-0000000000a1"
+	const repoGH, repoGL = "00000000-0000-0000-0000-0000000000b1", "00000000-0000-0000-0000-0000000000b2"
+	const prGH, prGL = "00000000-0000-0000-0000-0000000000c1", "00000000-0000-0000-0000-0000000000c2"
+
+	d := pgtest.Empty(t)
+	db := sqlDBOf(t, d)
+	if _, err := newMigrator(t, db, embeddedFS(t, upTo10Names...)).Up(t.Context()); err != nil {
+		t.Fatalf("Up() versions 1-10 error = %v", err)
+	}
+	exec := func(q string) error {
+		_, err := db.ExecContext(t.Context(), q)
+		return err
+	}
+	// Version 10 data: one GitHub and one GitLab repository, each with a PR and two files.
+	if err := exec(`
+INSERT INTO workspaces (id, name) VALUES ('` + ws + `', 'w1');
+INSERT INTO repos (id, workspace_id, owner, name, full_name) VALUES ('` + repoGH + `', '` + ws + `', 'acme', 'web', 'acme/web');
+INSERT INTO repos (id, workspace_id, owner, name, full_name, provider, host, project_id, web_url) VALUES
+  ('` + repoGL + `', '` + ws + `', 'acme', 'web', 'acme/web', 'gitlab', 'git.corp.example', 42, 'https://git.corp.example/acme/web');
+INSERT INTO pull_requests (id, workspace_id, repo_id, number, title, author, branch, base, head_sha) VALUES
+  ('` + prGH + `', '` + ws + `', '` + repoGH + `', 7, 't', 'a', 'f', 'main', 'abc'),
+  ('` + prGL + `', '` + ws + `', '` + repoGL + `', 3, 't', 'a', 'f', 'main', 'def');
+INSERT INTO pr_files (pr_id, path, additions, deletions, patch) VALUES
+  ('` + prGH + `', 'a.go', 1, 0, '@@'), ('` + prGH + `', 'b.go', 2, 1, '@@'),
+  ('` + prGL + `', 'c.go', 3, 0, '@@'), ('` + prGL + `', 'd.go', 0, 4, '@@');`); err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	before := catalog(t, db)
+	const rowsQ = `SELECT (SELECT string_agg(p.id::text || ' ' || p.repo_id::text || ' ' || p.number::text || ' ' || p.head_sha, ',' ORDER BY p.id) FROM pull_requests p)
+	  || ' | ' || (SELECT string_agg(f.pr_id::text || ' ' || f.path || ' ' || f.additions::text || ' ' || f.deletions::text || ' ' || coalesce(f.patch, '-'), ',' ORDER BY f.pr_id, f.path) FROM pr_files f)`
+	rowsBefore := queryStrings(t, db, rowsQ)
+
+	upTo11 := embeddedFS(t, upTo11Names...)
+	all, err := migrate.Load(upTo11)
+	if err != nil {
+		t.Fatalf("Load(versions 1-11) error = %v", err)
+	}
+	if len(all) != 11 || all[10].Version != 11 || all[10].Name != "gitlab_diff_positions" {
+		t.Fatalf("Load(versions 1-11) = %d migrations, last %+v, want 11 ending in version 11 gitlab_diff_positions", len(all), all[len(all)-1])
+	}
+	m := newMigrator(t, db, upTo11)
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() = %d, %v, want 1, nil (version 11 only)", n, err)
+	}
+	afterUp := catalog(t, db)
+
+	if diff := cmp.Diff([]string(nil), onlyIn(before, afterUp)); diff != "" {
+		t.Errorf("objects removed by 0011 mismatch (-want +got):\n%s", diff)
+	}
+	wantAdded := []string{
+		"column pr_files.previous_path #7 text default=<none> generated= identity=",
+		"column pull_requests.diff_head #22 text default=<none> generated= identity=",
+		"constraint pull_requests pull_requests_diff_head_chk c CHECK (((diff_head IS NULL) OR (diff_head ~ '^[0-9a-f]{40}([0-9a-f]{24})?$'::text)))",
+	}
+	if diff := cmp.Diff(wantAdded, onlyIn(afterUp, before)); diff != "" {
+		t.Errorf("objects added by 0011 mismatch (-want +got):\n%s", diff)
+	}
+
+	// Existing GitHub and GitLab rows: both attributes empty, nothing else changed (AC30).
+	const emptyQ = `SELECT (SELECT count(*) FROM pull_requests WHERE diff_head IS NULL)::text || ' ' || (SELECT count(*) FROM pr_files WHERE previous_path IS NULL)::text`
+	if got := queryStrings(t, db, emptyQ); !cmp.Equal(got, []string{"2 4"}) {
+		t.Errorf("rows with empty diff_head and previous_path after Up = %v, want 2 PRs and 4 files", got)
+	}
+	if diff := cmp.Diff(rowsBefore, queryStrings(t, db, rowsQ)); diff != "" {
+		t.Errorf("PRs and files after Up mismatch (-before +got):\n%s", diff)
+	}
+
+	// An insert that names neither column (the GitHub path) still works and leaves both empty.
+	if err := exec(`INSERT INTO pull_requests (workspace_id, repo_id, number, title, author, branch, base, head_sha) VALUES ('` + ws + `', '` + repoGH + `', 8, 't', 'a', 'f', 'main', 'abc');`); err != nil {
+		t.Errorf("insert a PR without the new columns: %v", err)
+	}
+	if err := exec(`DELETE FROM pull_requests WHERE number = 8`); err != nil {
+		t.Fatal(err)
+	}
+
+	// diff_head: 40 or 64 lower-case hex characters, or NULL (FR34).
+	sha40 := strings.Repeat("a1", 20)
+	sha64 := strings.Repeat("0f", 32)
+	setHead := func(v string) error {
+		return exec(`UPDATE pull_requests SET diff_head = ` + v + ` WHERE id = '` + prGL + `'`)
+	}
+	for _, ok := range []string{"'" + sha40 + "'", "'" + sha64 + "'", "NULL"} {
+		if err := setHead(ok); err != nil {
+			t.Errorf("diff_head = %s error = %v, want accepted", ok, err)
+		}
+	}
+	for name, bad := range map[string]string{
+		"39 characters": sha40[:39],
+		"41 characters": sha40 + "a",
+		"63 characters": sha64[:63],
+		"65 characters": sha64 + "0",
+		"upper case":    strings.ToUpper(sha40),
+		"not hex":       strings.Repeat("g", 40),
+		"empty":         "",
+		"with newline":  sha40 + "\n",
+		"with space":    sha40 + " ",
+	} {
+		if err := setHead(`'` + bad + `'`); err == nil || !strings.Contains(err.Error(), "pull_requests_diff_head_chk") {
+			t.Errorf("diff_head with %s error = %v, want a violation of pull_requests_diff_head_chk", name, err)
+		}
+	}
+	// previous_path is free text (a renamed GitLab file) and is dropped with the file rows.
+	if err := exec(`UPDATE pull_requests SET diff_head = '` + sha40 + `' WHERE id = '` + prGL + `';
+UPDATE pr_files SET previous_path = 'old/c.go' WHERE pr_id = '` + prGL + `' AND path = 'c.go'`); err != nil {
+		t.Fatalf("fill the GitLab diff head and previous path: %v", err)
+	}
+	if got := queryStrings(t, db, `SELECT (SELECT diff_head FROM pull_requests WHERE id = '`+prGL+`') || ' ' || (SELECT previous_path FROM pr_files WHERE pr_id = '`+prGL+`' AND path = 'c.go')`); !cmp.Equal(got, []string{sha40 + " old/c.go"}) {
+		t.Errorf("stored GitLab diff head and previous path = %v, want %q", got, sha40+" old/c.go")
+	}
+
+	// Down drops both columns and the CHECK: exactly version 10, rows untouched.
+	v, ok, err := m.Down(t.Context())
+	if err != nil || !ok || v != 11 {
+		t.Fatalf("Down() = %d, %v, %v, want 11, true, nil", v, ok, err)
+	}
+	if diff := cmp.Diff(before, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down of 0011 differs from version 10 (-v10 +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(rowsBefore, queryStrings(t, db, rowsQ)); diff != "" {
+		t.Errorf("PRs and files after Down mismatch (-before +got):\n%s", diff)
+	}
+
+	// Up again restores version 11; the values are empty until the next detail fetch refills them.
+	if n, err := m.Up(t.Context()); err != nil || n != 1 {
+		t.Fatalf("Up() after Down = %d, %v, want 1, nil", n, err)
+	}
+	if diff := cmp.Diff(afterUp, catalog(t, db)); diff != "" {
+		t.Errorf("schema after Down->Up differs from first Up (-first +got):\n%s", diff)
+	}
+	if got := queryStrings(t, db, emptyQ); !cmp.Equal(got, []string{"2 4"}) {
+		t.Errorf("rows with empty diff_head and previous_path after Down->Up = %v, want 2 PRs and 4 files", got)
+	}
+	if diff := cmp.Diff(rowsBefore, queryStrings(t, db, rowsQ)); diff != "" {
+		t.Errorf("PRs and files after Down->Up mismatch (-before +got):\n%s", diff)
+	}
+}

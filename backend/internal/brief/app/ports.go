@@ -75,10 +75,21 @@ type Issues interface {
 	Issue(ctx context.Context, owner, name string, number int) (domain.Issue, error)
 }
 
-// Roles tells the smart-diff role of a path (the peers adapter over the smart-diff context's
-// classification): "core", "tests", "wiring", "docs" or "boilerplate".
+// GitLabIssues reads a linked issue of a GitLab project (the peers adapter over platform/gitlab,
+// resolving the repository's connection by its host key; spec B FR23, FR25). An unknown
+// connection, a missing token and every GitLab failure are errors, and then no GitHub request is
+// made. The service races it against domain.IssueTimeout and treats every failure as a missing
+// input.
+type GitLabIssues interface {
+	Issue(ctx context.Context, host string, projectID int64, number int) (domain.Issue, error)
+}
+
+// Roles tells the smart-diff role of a path of a repository of the given provider (the peers
+// adapter over the smart-diff context's classification): "core", "tests", "wiring", "docs" or
+// "boilerplate". The provider is the pull request's ("github", "gitlab"; "" reads as github);
+// GitLab repositories also hold their CI files in "wiring" (spec B FR32).
 type Roles interface {
-	Role(path string) string
+	RoleFor(provider, path string) string
 }
 
 // LLM is the part of *llm.Client the generation uses.

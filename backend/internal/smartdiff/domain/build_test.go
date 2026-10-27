@@ -102,3 +102,39 @@ func TestBuild_DoesNotModifyItsInput(t *testing.T) {
 		t.Errorf("Build reordered its input: %v", files)
 	}
 }
+
+// EC26: the same four files group differently by provider; Build is the GitHub grouping.
+func TestBuildFor_GitLabGroupsCIFilesAsWiring(t *testing.T) {
+	files := []domain.PullFile{
+		{Path: ".gitlab-ci.yml", Additions: 1},
+		{Path: "ci/.gitlab-ci.yml", Additions: 2},
+		{Path: ".gitlab/merge_request_templates/a.md", Additions: 3},
+		{Path: "src/gitlab/x.ts", Additions: 4},
+	}
+	paths := func(g domain.Group) []string {
+		out := []string{}
+		for _, f := range g.Files {
+			out = append(out, f.Path)
+		}
+		return out
+	}
+	gl := domain.BuildFor(domain.ProviderGitLab, files, nil)
+	if diff := cmp.Diff([]string{"src/gitlab/x.ts"}, paths(gl.Groups[0])); diff != "" {
+		t.Errorf("BuildFor(gitlab) core mismatch (-want +got):\n%s", diff)
+	}
+	wantWiring := []string{".gitlab-ci.yml", ".gitlab/merge_request_templates/a.md", "ci/.gitlab-ci.yml"}
+	if diff := cmp.Diff(wantWiring, paths(gl.Groups[2])); diff != "" {
+		t.Errorf("BuildFor(gitlab) wiring mismatch (-want +got):\n%s", diff)
+	}
+	if gl.TotalLines != 10 {
+		t.Errorf("BuildFor(gitlab).TotalLines = %d, want 10", gl.TotalLines)
+	}
+
+	gh := domain.BuildFor("github", files, nil)
+	if diff := cmp.Diff(domain.Build(files, nil), gh); diff != "" {
+		t.Errorf("BuildFor(github) differs from Build (-Build +BuildFor):\n%s", diff)
+	}
+	if len(gh.Groups[2].Files) != 0 {
+		t.Errorf("Build(github) wiring = %v, want empty: GitHub output is unchanged", gh.Groups[2].Files)
+	}
+}

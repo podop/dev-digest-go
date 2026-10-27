@@ -5,6 +5,7 @@ package brieftest
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"dev-digest-go/backend/internal/brief/app"
@@ -172,13 +173,40 @@ func (i *Issues) Issue(ctx context.Context, owner, name string, number int) (dom
 	return issue, err
 }
 
+// GitLabIssues is an app.GitLabIssues answering one issue.
+type GitLabIssues struct {
+	mu sync.Mutex
+	// Fetched is the issue every call answers with, unless Err is set.
+	Fetched domain.Issue
+	Err     error
+	// Hang blocks every call until its context ends.
+	Hang bool
+	// Calls records "host/projectID#number" of every call.
+	Calls []string
+}
+
+var _ app.GitLabIssues = (*GitLabIssues)(nil)
+
+// Issue implements app.GitLabIssues.
+func (i *GitLabIssues) Issue(ctx context.Context, host string, projectID int64, number int) (domain.Issue, error) {
+	i.mu.Lock()
+	i.Calls = append(i.Calls, fmt.Sprintf("%s/%d#%d", host, projectID, number))
+	hang, issue, err := i.Hang, i.Fetched, i.Err
+	i.mu.Unlock()
+	if hang {
+		<-ctx.Done()
+		return domain.Issue{}, ctx.Err()
+	}
+	return issue, err
+}
+
 // Roles is an app.Roles that answers every path with one role.
 type Roles string
 
 var _ app.Roles = Roles("")
 
-// Role implements app.Roles.
-func (r Roles) Role(string) string { return string(r) }
+// RoleFor implements app.Roles.
+func (r Roles) RoleFor(string, string) string { return string(r) }
 
 // Models is an app.FeatureModels answering a settings bag.
 type Models struct {

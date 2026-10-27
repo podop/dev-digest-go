@@ -5,7 +5,7 @@
 import React from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { renderWithProviders, screen, cleanup, waitFor, within } from "@/test/render";
-import { mockFetch, type RouteHandler } from "@/test/fetch-mock";
+import { jsonResponse, mockFetch, type RouteHandler } from "@/test/fetch-mock";
 import type { FindingRecord, PrFile, ReviewRecord, SmartDiffResponse } from "@devdigest/shared";
 vi.mock("next/navigation", () => ({ usePathname: () => "/repos/r1/pulls/12" }));
 
@@ -13,6 +13,7 @@ import { DiffTab } from "./DiffTab";
 import type { DiffOrder } from "./constants";
 import { GITHUB_REPO, GITLAB_REPO } from "@/test/code-host-repo";
 import { pseudoMessages } from "@/test/render";
+import { strayText } from "@/test/pseudo";
 import { RepoProvider } from "@/lib/repo-context";
 
 afterEach(cleanup);
@@ -408,80 +409,200 @@ describe("DiffTab — deep-link focus (?file/?line)", () => {
   });
 });
 
-describe("DiffTab — GitLab PR: no posting (FR45; AC34)", () => {
-  function renderOn(repo: typeof GITLAB_REPO, options?: Parameters<typeof renderWithProviders>[1]) {
-    routes({ "GET /repos": [repo] });
-    return renderWithProviders(<Wrapper initialOrder="original" />, options);
+describe("DiffTab — GitLab PR: posting (GitLab B FR19–FR21; AC17–AC19, AC33)", () => {
+  const ZWSP = "\u200b";
+  const MR_URL = "https://git.corp.example/gitlab/acme/platform/payments/-/merge_requests/12";
+  const NOT_CONNECTED_REPO = { ...GITLAB_REPO, connection_id: null } as typeof GITLAB_REPO;
+
+  function gitlabComment(over: Record<string, unknown> = {}) {
+    return {
+      id: 7,
+      path: "src/config.ts",
+      line: 2,
+      original_line: 2,
+      side: "RIGHT",
+      body: "please check",
+      user: "ann",
+      created_at: "2026-09-01T00:00:00Z",
+      html_url: `${MR_URL}#note_7`,
+      in_reply_to_id: null,
+      is_outdated: false,
+      ...over,
+    };
   }
 
-  /** `GET /repos` held until `release()`: the repository (so its host) is unknown meanwhile. */
-  function renderHeld(repo: typeof GITLAB_REPO) {
+  function apiError(status: number, code: string, message: string, details?: Record<string, unknown>) {
+    return jsonResponse({ error: { code, message, ...(details ? { details } : {}) } }, status);
+  }
+
+  function renderOn(repo: typeof GITLAB_REPO, over: Record<string, RouteHandler> = {}, options?: Parameters<typeof renderWithProviders>[1]) {
+    const api = routes({ "GET /repos": [repo], ...over });
+    return { api, ...renderWithProviders(<Wrapper initialOrder="original" />, options) };
+  }
+
+  /** A promise and its `release()`, to hold a response while the UI is inspected. */
+  function gate() {
     let release: () => void = () => {};
-    const gate = new Promise<void>((resolve) => {
+    const opened = new Promise<void>((resolve) => {
       release = resolve;
     });
-    routes({
-      "GET /repos": async () => {
-        await gate;
-        return [repo];
-      },
-    });
-    return { ...renderWithProviders(<Wrapper initialOrder="original" />), release };
+    return { opened, release };
   }
 
-  it("offers neither 'Post to PR' nor an inline composer, and says comments are not shown yet", async () => {
-    const { user } = renderOn(GITLAB_REPO);
-
-    expect(await screen.findByText("Comments from GitLab are not shown yet.")).toBeInTheDocument();
-    expect(await screen.findByText("Hardcoded secret")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Posted on GitHub/ })).not.toBeInTheDocument();
-
-    await user.hover(screen.getByText("added line"));
-    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
-  });
-
-  it("offers no posting and no GitLab note while the repository list loads, and still none once it is GitLab (FR45)", async () => {
-    const { user, release } = renderHeld(GITLAB_REPO);
+  it("offers no posting until the repository list has loaded, then 'Post to MR' (never 'Post to PR')", async () => {
+    const { opened, release } = gate();
+    routes({
+      "GET /repos": async () => {
+        await opened;
+        return [GITLAB_REPO];
+      },
+    });
+    const { user } = renderWithProviders(<Wrapper initialOrder="original" />);
 
     expect(await screen.findByText("Hardcoded secret")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Post to MR" })).not.toBeInTheDocument();
     await user.hover(screen.getByText("added line"));
-    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Comments from GitLab are not shown yet.")).not.toBeInTheDocument();
-
-    release();
-    expect(await screen.findByText("Comments from GitLab are not shown yet.")).toBeInTheDocument();
-    await user.hover(screen.getByText("added line"));
-    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
-  });
-
-  it("a GitHub PR offers posting only once the repository list has loaded", async () => {
-    const { user, release } = renderHeld(GITHUB_REPO);
-
-    expect(await screen.findByText("Hardcoded secret")).toBeInTheDocument();
-    await user.hover(screen.getByText("added line"));
-    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
 
     release();
-    expect(await screen.findByRole("button", { name: "Post to PR" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Post to MR" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
     await user.hover(screen.getByText("added line"));
     expect(await screen.findByRole("button", { name: "Add a comment on this line" })).toBeInTheDocument();
   });
 
-  it("a GitHub PR keeps the button and the composer and has no GitLab note", async () => {
-    const { user } = renderOn(GITHUB_REPO);
+  it("posts the escaped finding once (disabled while pending) and then links 'Posted on GitLab' (AC17, EC18)", async () => {
+    const hostile: FindingRecord = { ...FINDING, title: "/close @x <i>" };
+    const { opened, release } = gate();
+    let posted = "";
+    const { api, user } = renderOn(GITLAB_REPO, {
+      "GET /pulls/pr1/reviews": [{ ...REVIEW, findings: [hostile] }],
+      "POST /pulls/pr1/comments": async (req) => {
+        posted = (req.body as { body: string }).body;
+        await opened;
+        return gitlabComment({ id: 9, body: posted, html_url: `${MR_URL}#note_9` });
+      },
+    });
 
-    expect(await screen.findByRole("button", { name: "Post to PR" })).toBeInTheDocument();
-    expect(screen.queryByText("Comments from GitLab are not shown yet.")).not.toBeInTheDocument();
-    await user.hover(screen.getByText("added line"));
-    expect(await screen.findByRole("button", { name: "Add a comment on this line" })).toBeInTheDocument();
+    const button = await screen.findByRole("button", { name: "Post to MR" });
+    expect(button).toHaveAttribute("title", "Post this finding as a discussion on the GitLab merge request");
+    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
+
+    await user.dblClick(button);
+    await waitFor(() => expect(api.requests("POST", "/pulls/pr1/comments")).toHaveLength(1));
+    expect(button).toBeDisabled();
+
+    api.on("GET /pulls/pr1/comments", () => [gitlabComment({ id: 9, body: posted, html_url: `${MR_URL}#note_9` })]);
+    release();
+    const link = await screen.findByRole("link", { name: "Posted on GitLab" });
+    expect(link).toHaveAttribute("href", `${MR_URL}#note_9`);
+    expect(screen.queryByRole("button", { name: "Post to MR" })).not.toBeInTheDocument();
+
+    const [req] = api.requests("POST", "/pulls/pr1/comments");
+    const body = req!.body as { path: string; line: number; side: string; body: string };
+    expect(body).toMatchObject({ path: "src/config.ts", line: 2, side: "RIGHT" });
+    expect(body.body).toContain(`**[CRITICAL · security] ${ZWSP}/close @${ZWSP}x &lt;i&gt;**`);
+    expect(body.body).toContain("<!-- devdigest-finding:f1 -->");
   });
 
-  it("the note comes from the message files (pseudo messages)", async () => {
-    renderOn(GITLAB_REPO, { messages: pseudoMessages() });
-    expect(await screen.findByText("⟦prPosting.gitlabCommentsNotShown⟧")).toBeInTheDocument();
+  it("a failed finding post shows the server's message in one toast and the button comes back (FR20)", async () => {
+    const { api, user } = renderOn(GITLAB_REPO, {
+      "POST /pulls/pr1/comments": apiError(400, "gitlab_comment_failed", "GitLab rejected line 2 of src/config.ts.", {
+        reason: "position_rejected",
+      }),
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Post to MR" }));
+    expect(await screen.findAllByText("GitLab rejected line 2 of src/config.ts.")).toHaveLength(1);
+    expect(await screen.findByRole("button", { name: "Post to MR" })).toBeEnabled();
+    expect(api.requests("POST", "/pulls/pr1/comments")).toHaveLength(1);
+  });
+
+  it("threads say 'View on GitLab' and 'Posts to GitLab immediately'; a reply sends the root id; a 400 diff_changed toasts once, keeps the draft and reloads the PR (AC18)", async () => {
+    const reply = gitlabComment({ id: 8, body: "on it", user: "bob", in_reply_to_id: 7 });
+    const { api, user } = renderOn(GITLAB_REPO, {
+      "GET /pulls/pr1/comments": [gitlabComment(), reply],
+      "POST /pulls/pr1/comments": apiError(400, "gitlab_comment_failed", "The merge request changed. Reload and post again.", {
+        reason: "diff_changed",
+      }),
+    });
+
+    expect(await screen.findAllByRole("link", { name: "View on GitLab" })).toHaveLength(2);
+    expect(screen.queryByRole("link", { name: "View on GitHub" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reply" }));
+    expect(screen.getByText("Posts to GitLab immediately")).toBeInTheDocument();
+    expect(screen.queryByText("Posts to GitHub immediately")).not.toBeInTheDocument();
+
+    const draft = screen.getByPlaceholderText(/Leave a comment/);
+    await user.type(draft, "thanks");
+    const commentsBefore = api.requests("GET", "/pulls/pr1/comments").length;
+    await user.click(screen.getByRole("button", { name: "Comment" }));
+
+    expect(await screen.findAllByText("The merge request changed. Reload and post again.")).toHaveLength(1);
+    expect(api.requests("POST", "/pulls/pr1/comments")[0]!.body).toMatchObject({
+      path: "src/config.ts",
+      line: 2,
+      side: "RIGHT",
+      body: "thanks",
+      in_reply_to: 7,
+    });
+    expect(screen.getByPlaceholderText(/Leave a comment/)).toHaveValue("thanks");
+    await waitFor(() => expect(api.requests("GET", "/pulls/pr1/comments").length).toBeGreaterThan(commentsBefore));
+  });
+
+  it("a connected repository without a token still offers posting and shows the server's message (AC19)", async () => {
+    const { user } = renderOn(GITLAB_REPO, {
+      "POST /pulls/pr1/comments": apiError(400, "gitlab_unavailable", "GitLab connection corp has no token."),
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Post to MR" }));
+    expect(await screen.findAllByText("GitLab connection corp has no token.")).toHaveLength(1);
+  });
+
+  it("a not-connected repository has no 'Post to MR', composer or reply, and says why (FR21, AC19)", async () => {
+    const { user } = renderOn(NOT_CONNECTED_REPO, { "GET /pulls/pr1/comments": [gitlabComment()] });
+
+    expect(
+      await screen.findByText("Comments are not available while git.corp.example is not connected."),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("Hardcoded secret")).toBeInTheDocument();
+    expect(await screen.findByText("please check")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Post to MR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Post to PR" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reply" })).not.toBeInTheDocument();
+    await user.hover(screen.getByText("added line"));
+    expect(screen.queryByRole("button", { name: "Add a comment on this line" })).not.toBeInTheDocument();
+  });
+
+  it("a GitHub PR keeps 'Post to PR', 'View on GitHub' and the GitHub composer note, and has no not-connected note", async () => {
+    routes({ "GET /pulls/pr1/comments": [gitlabComment({ html_url: "https://github.com/acme/api/pull/1#r7" })] });
+    const { user } = renderWithProviders(<Wrapper initialOrder="original" />);
+
+    expect(await screen.findByRole("button", { name: "Post to PR" })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "View on GitHub" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reply" }));
+    expect(screen.getByText("Posts to GitHub immediately")).toBeInTheDocument();
+    expect(screen.queryByText(/is not connected/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Post to MR" })).not.toBeInTheDocument();
+  });
+
+  it("all new copy comes from the message files (pseudo messages, AC33)", async () => {
+    renderOn(NOT_CONNECTED_REPO, {}, { messages: pseudoMessages() });
+    expect(await screen.findByText("⟦prPosting.commentsNotConnected⟧")).toBeInTheDocument();
+    cleanup();
+
+    const { user, container } = renderOn(
+      GITLAB_REPO,
+      { "GET /pulls/pr1/comments": [gitlabComment()] },
+      { messages: pseudoMessages() },
+    );
+    expect(await screen.findByText("⟦prReview.finding.postToMr⟧")).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: /⟦shell.diffViewer.reply⟧/ }));
+    expect(screen.getByText("⟦shell.diffViewer.postedToGitLab⟧")).toBeInTheDocument();
+    expect(screen.getByText("⟦shell.diffViewer.viewOnGitLab⟧")).toBeInTheDocument();
+    // Data only: paths, the comment (author, avatar initial, body), the finding's own text, diff marks and hunks.
+    const data = ["src/config.ts", "README.md", "pnpm-lock.yaml", "ann", "A", "please check", "added line", "context"];
+    const finding = ["Hardcoded secret", "why", "security", ":"];
+    expect(strayText(container, [...data, ...finding, /^[+−]$/, /^@@ /, /^src\/config\.ts:\d+$/, /^[#!]\d+$/, /^\d/])).toEqual([]);
   });
 });

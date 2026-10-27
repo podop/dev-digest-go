@@ -341,7 +341,15 @@ func TestGitLabRepos_AC12_SameNameOnBothHosts(t *testing.T) { // AC12
 		t.Fatal(err)
 	}
 	before := dumpTable(t, s.db.DB, "repos") + dumpTable(t, s.db.DB, "gitlab_connections")
-	_, _, err = m.Down(t.Context())
+	// Down steps back one version at a time: the migrations after 0010 hold no GitLab-only data
+	// and roll back; the walk stops at 0010, which refuses.
+	rolledBack := 0
+	for range 8 {
+		if _, _, err = m.Down(t.Context()); err != nil {
+			break
+		}
+		rolledBack++
+	}
 	if err == nil || !strings.Contains(err.Error(), "GitLab data exists") {
 		t.Fatalf("Down() with a GitLab repository = %v, want an error naming the GitLab data", err)
 	}
@@ -361,8 +369,8 @@ func TestGitLabRepos_AC12_SameNameOnBothHosts(t *testing.T) { // AC12
 	if v, ok, err := m.Down(t.Context()); err != nil || !ok || v != 10 {
 		t.Fatalf("Down() with GitHub data only = %d, %v, %v, want 10, true, nil", v, ok, err)
 	}
-	if n, err := m.Up(t.Context()); err != nil || n != 1 {
-		t.Fatalf("Up() after the Down() = %d, %v, want 1, nil", n, err)
+	if n, err := m.Up(t.Context()); err != nil || n != rolledBack+1 {
+		t.Fatalf("Up() after the Down() = %d, %v, want %d, nil", n, err, rolledBack+1)
 	}
 	if row := scalar[string](t, s.db.DB, `SELECT provider || ' ' || host FROM repos WHERE id = ?`, ghID); row != "github github.com" {
 		t.Errorf("the GitHub repository after down and up = %q, want github github.com", row)

@@ -182,6 +182,20 @@ func pullsResolver(conns connectionResolver) pullsgitlab.Resolver {
 	})
 }
 
+// bindingResolver adapts the connections to the platform GitLab client's lookup (gitlab.ResolveFunc):
+// the host key finds the connection, with its token. The blast, brief, intent and skills adapters
+// share it. It reads the connection at every call, so a rotated token applies to the next request
+// and a removed connection or token stops the next one before any request is sent.
+func bindingResolver(conns connectionResolver) gitlab.ResolveFunc {
+	return func(ctx context.Context, hostKey string) (gitlab.Binding, bool, error) {
+		c, ok, err := conns.Resolve(ctx, hostKey)
+		if err != nil || !ok {
+			return gitlab.Binding{}, false, err
+		}
+		return gitlab.Binding{ID: c.ID, Name: c.Name, BaseURL: c.BaseURL, Host: c.Host, Token: c.Token}, true, nil
+	}
+}
+
 // settingsGitLab adapts the connection test to the settings context (POST
 // /settings/test-connection with provider gitlab).
 type settingsGitLab struct {

@@ -29,9 +29,12 @@ type Deps struct {
 	Blast     Blast
 	Documents Documents
 	Issues    Issues
-	Roles     Roles
-	LLM       LLM
-	Models    FeatureModels
+	// GitLabIssues reads the linked issue of a GitLab pull request; nil = GitLab issues are never
+	// read (the issue is missing, as without a token).
+	GitLabIssues GitLabIssues
+	Roles        Roles
+	LLM          LLM
+	Models       FeatureModels
 	// Clock stamps generated_at and measures the generation; nil = time.Now.
 	Clock Clock
 	// Log receives the content-free generation lines; nil discards them.
@@ -201,7 +204,7 @@ func (s *Service) generate(ctx context.Context, workspaceID string, pull domain.
 	in := domain.BuildInput(domain.InputFacts{
 		Pull: pull, Files: files, Findings: findings, Intent: facts.intent, Blast: facts.blast,
 		Issue: facts.issue, Docs: facts.docs,
-	}, domain.RoleFunc(s.d.Roles.Role))
+	}, domain.RoleFunc(func(path string) string { return s.d.Roles.RoleFor(pull.Provider, path) }))
 	trim := domain.TrimToBudget(in, domain.InputBudgetTokens)
 	st.estTokensIn = ptr(trim.EstTokens)
 
