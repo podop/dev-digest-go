@@ -1,5 +1,5 @@
 # GitLab B — merge request comments and context peers
-Spec: GitLab slice B (MR diff comments read and posted, GitLab-safe note bodies, GitLab context peers) · Status: ready-for-planning · Date: 2026-10-25
+Spec: GitLab slice B (MR diff comments read and posted, GitLab-safe note bodies, GitLab context peers) · Status: implemented (2026-10-27, 63e45fb..a6ebe77; D31–D40; AC34 live gitlab.com part pending the user) · Date: 2026-10-25
 Date note: the file name keeps 2026-10-24, the day the GitLab slicing (D1) started, so the slice A/B/C files sort
 together; the spec itself was written and approved on 2026-10-25. Planning waits for the Settings A review gate (D30).
 Areas: api, ctx, db, ui
@@ -926,9 +926,38 @@ except the skill import, which addresses the URL's project by URL-encoded path; 
   2026-10-25).
 - D30 — The user approved the spec with every default as written and set it ready for planning; planning starts
   only after the Settings A review gate has passed (user, 2026-10-25).
+- D31 — Plan SCRs adopted as planned (pre-approval, 2026-10-27): discussions read by page number, never `x-next-page`
+  (SCR1); request budgets count logical requests, GETs keep A's retries, POSTs are single attempts (SCR2); GitLab
+  tickets ordered by text position, GitHub unchanged (SCR3); "1,000,000 characters" = Unicode code points (SCR5); a
+  line of only spaces/tabs is empty for FR16(b) (SCR6).
+- D32 — Security r1, FR14 superseded (user, 2026-10-27): text is code only where GitLab surely renders code — an
+  inline span on one line whose opening backtick is not escaped (an escaped opener loses one backtick), and a closed
+  fence (``` or ~~~) at column 0–3 outside lists and block quotes; indented code, unclosed fences and a line holding
+  `|` (GFM tables) are prose.
+- D33 — Security r1, FR16 extended (user, 2026-10-27): in prose the `&` of an entity that decodes to `@`, `<`, `!` or
+  `[` (decimal, hex, named, any case, any leading zeros, `;` required) becomes `&amp;`; lower-case `&lt;` is exempt
+  (inert, it is Apply's own output, FR17).
+- D34 — Security r2, D32 hardened (user, 2026-10-27): inside code regions only invisible changes are made — U+200B
+  after every `@` and `<`, `!`+U+200B+`[` for `![`, U+200B after the `&` of an entity of D33; `>` stays raw. A wrong
+  code guess therefore changes appearance only, never what GitLab parses (residue invariant: no live `@`, `<`, `![` or
+  D33 entity anywhere except the two FR16(b) lines).
+- D35 — FR17 support: a line starting with `&gt;` counts as a block-quote container; the FR16(b) `<sub>` line and the
+  final marker are exempt as whole lines; a still-open top-level fence is closed on its own line before them, so the
+  trailer is not swallowed (best effort: a fence the model does not see stays a cosmetic duplicate-post risk).
+- D36 — Error messages name the connection: `GitLabError.Conn` carries the display name (host as fallback) for the
+  401 / read-only-token messages (FR10).
+- D37 — The detail fetch stores the diff head (`pull_requests.diff_head`, FR35); without it every post answered
+  `diff_changed` (found by the component tests).
+- D38 — Intent ticket extraction is linear (`refBefore` bounded backward scan, `inURL` bisection) (security r1).
+- D39 — The review hook's intent carries the stored repository `web_url` (`ReviewRepo.WebURL`), so same-project doc
+  and issue URLs resolve during a review, not only on the intent routes (BUG-1 of the S25 run).
+- D40 — Accepted lane deviations: discussions without a file position are dropped; a text DiffNote without lines is
+  kept with null lines; a reply into a non-diff thread is allowed; a malformed `%` in a GitLab doc link behaves as on
+  GitHub; `http://` ticket URLs are ignored; a connection-imported skill lists `/<file path>`; only `.gitlab-ci.yml`
+  and `.gitlab/**` are GitLab wiring roles; the UI shows the server message first (FR20).
 
 ## 17. Open questions
-None. Q1–Q9 were answered on 2026-10-25 and are recorded as D21–D29.
+None. Q1–Q9 were answered on 2026-10-25 and are recorded as D21–D29. Live checks left for AC34 (user): U+200B before quick actions and before Unicode line separators, entity mentions, `>>>` / `$$` in a code region, Mermaid/PlantUML blocks, the trailer after an unclosed fence.
 
 ## Glossary
 - `{ZWSP}` — written in this spec's examples for the invisible U+200B zero-width space.

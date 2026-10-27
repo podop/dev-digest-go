@@ -1,6 +1,6 @@
 # Migration status — handoff
 
-Last updated: 2026-10-26 night (see ▶ Resume here; GitLab A done) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
+Last updated: 2026-10-27 (see ▶ Resume here; GitLab B done, GitLab C in its review gate) · Branch: `feat/go-backend-phase-1` (from `master` @ `dfb9fc7`) · not pushed, no PR
 
 ## Where we are
 **All six phases are implemented and passed the review gate. The Node backend is fully ported (wire
@@ -15,18 +15,37 @@ plan `docs/plans/2026-10-22-go-backend-phase-5.md` (+ `.context.md`, S1–S38, W
 parallel lanes by the user). Backend gate after Phase 6: `make backend-check` exit 0, 128 packages;
 frontend contract test 148/148.
 
-## ▶ Resume here (2026-10-26)
+## ▶ Resume here (2026-10-27)
 Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user's standing orders:
 - run features autonomously in multi-agent waves and lanes;
 - approve plans by default and escalate only CRITICAL items (spec contradictions that change behaviour, destructive or irreversible choices, security, an NFR failure that needs a spec change);
-- next: GitLab B ∥ C (specs `specs/2026-10-24-gitlab-{b,c}-*.md`, committed 4819a47, not yet planned); open for the user: GitLab A AC36 with a real gitlab.com token (checklist in `.sdd/review/2026-10-26-gitlab-a-connection-sync/s38-manual.md`).
+- GitLab B is done; GitLab C is implemented (dacc9d0) and in its review gate (reports `.sdd/review/2026-10-27-gitlab-c-ci/`); then C's S27 manual run and close.
+- open for the user: GitLab A AC36 (`.sdd/review/2026-10-26-gitlab-a-connection-sync/s38-manual.md`) and GitLab B AC34 (`.sdd/review/2026-10-27-gitlab-b-comments-context/s25-manual.md`) with real gitlab.com tokens; AC34 has STOP-IF-FAIL items (a quick action or mention firing means FR15 moves to the backslash form of D29).
 
 | Feature | State |
 |---|---|
 | PR Leaderboard, Settings A, B, Cost ledger, Settings C | done and committed (specs `implemented`, plans `done`) |
+| **GitLab B** (MR comments + context peers) | **done** — plan `63e45fb`, `e0e58b4` (S1 notebody), `76e32dd` (W1–W3), `b19dcd1` (W4), `8e990e9` (S24), fix rounds `41d2ce3`, `5b08094`, `a6ebe77`; spec `implemented` (D31–D40), plan `done`; migration **0011** (stand not rebuilt yet) |
+| **GitLab C** (GitLab CI) | **implemented, in review** — plan `e94f583`, `11b1c81` (W1–W3), `05253c9` (W4 + fixes), `5f41e63` (S26), `dacc9d0` (race fix); migration **0012**; user SCR1: GitLab ledger key `ci:<host>:<job id>:<attempt>` |
 | **GitLab A** (connections + MR sync) | **done** — plan `d181249`, `9cbf097` (W1–W3), `f9682c3` (W4), `d56ddf3` (W5 + fix r1); spec `implemented` (D36–D44), plan `done`; the stand runs it (rebuilt, migrations up to **0010**) |
 | **Custom model providers** | **done** — plan `84c2f39`, `e10495f` (W1–W4), `67549cd` (W5), fix rounds `0f108b8`, `f86f362`; spec `implemented` (D30–D37), plan `done`; the stand runs it (rebuilt, migrations up to **0009**) |
 | **Settings D** (integrations / plugins) | **done** — `ebaceb5` (W1–W3), `00c0ecd` (W4 + D19/D21), `fd90f3d` (fix r1), `4a31756` (fix r2); spec `implemented` (D19–D22), plan `done`; the stand runs it (rebuilt, migrations up to **0008**) |
+
+**GitLab B gate** (reports in `.sdd/review/2026-10-27-gitlab-b-comments-context/`, git-ignored):
+| Reviewer | r1 (`21a3ce4..8e990e9`) | r2 (`..41d2ce3`) | r3 (`..5b08094`) | r4 (`..a6ebe77`) |
+|---|---|---|---|---|
+| Architecture | **PASS**, 0 findings | — | — | — |
+| Security | BLOCK: HIGH notebody code-region mismatch, MEDIUM quadratic ticket scan → fix r1 (user D32/D33) | BLOCK: 3 new code-region bypass classes + FR17 break → fix r2 (user D34) | **PASS** (invariant by construction; fuzz clean) | — |
+| Plan verification | 110 PASS / 0 FAIL | 114 / 0 | 116 / 0 | 119 / 0 (BUG-1 fix) |
+- W4 component tests found the DiffHead mirror bug (every GitLab post answered `diff_changed`) → fixed (D37). S25 stub run 31/32 → BUG-1 (review-hook intent lacked `web_url`) → fix r3 (D39). S25 throwaway stack removed; stand untouched.
+- cmd/server `TestMain` loads the system root pool before tests set `SSL_CERT_FILE` (it made the cached pool trust the shared httptest certificate under `-shuffle`).
+
+**GitLab B follow-ups (not fixed):**
+- AC34 live on gitlab.com (user): U+200B before quick actions and Unicode line separators, entity mentions, `>>>` / `$$` in code, Mermaid/PlantUML, trailer after an unclosed fence.
+- INFO-1: when the fence model disagrees with CommonMark the trailer renders as code → the finding marker is missed and a duplicate post is possible (6 of 5,055 random bodies).
+- `sanitizeForGitHub` has the same code-region weakness on the GitHub path (pre-existing; GitHub output was kept byte-identical).
+- O1: finding cards render images from LLM markdown in the reviewer's browser (pre-existing); O2 React #418 hydration (pre-existing); every PR detail reads the linked GitLab issue (by design).
+- Latency tests (`notebody` NFR8 p95, pulls 1 MiB) are load-sensitive (best-of-3 for notebody); an other-project skipped URL keeps a trailing `.` in its ref.
 
 **GitLab A gate** (reports in `.sdd/review/2026-10-26-gitlab-a-connection-sync/`, git-ignored):
 | Reviewer | r1 (`d181249..f9682c3`) | r2 (`f9682c3..d56ddf3`) |
@@ -89,7 +108,7 @@ Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user
 - carry-over notes `{b,c,d,cp,ga,ledger}-carryover.md` with every lane's exported API, user decisions and the review findings.
 Reports for each feature: `.sdd/review/<date>-<slug>/`.
 
-Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D · 0009 custom providers · 0010 GitLab A.
+Migration numbers: 0004 B · 0005 ledger · 0006 C · 0007 C (fork filter) · 0008 D · 0009 custom providers · 0010 GitLab A · 0011 GitLab B · 0012 GitLab C.
 
 ## After the migration — PR Leaderboard (in progress) and Settings (specs only) · 2026-10-23 night
 **PR Leaderboard** (new feature, not Node parity). Spec `specs/2026-10-23-pr-leaderboard.md` (+D18–D26), plan
