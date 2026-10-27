@@ -26,7 +26,9 @@ describe("RepoStep", () => {
     expect(await screen.findByText("acme/api is indexed")).toBeInTheDocument();
     expect(screen.getByText("Partial index")).toBeInTheDocument();
     expect(api.requests("GET", "/repos/r9/index-state")).toHaveLength(1);
-    expect(screen.queryByRole("textbox", { name: "Repository URL" })).toBeNull();
+    // The form stays so another repository can be added.
+    expect(screen.getByRole("heading", { name: "Add another repository" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Repository URL" })).toBeInTheDocument();
 
     await waitFor(() => expect(finish()).toBeEnabled());
     await user.click(finish());
@@ -48,8 +50,11 @@ describe("RepoStep", () => {
     expect(onFinish).not.toHaveBeenCalled();
   });
 
-  it("lists existing repositories and Finish opens the first one", async () => {
-    mockFetch({});
+  it("lists existing repositories above an 'Add another repository' form; adding one keeps Finish on it", async () => {
+    const api = mockFetch({
+      "POST /repos": repo("r9", "acme/new"),
+      "GET /repos/:id/index-state": INDEXED,
+    });
     const onFinish = vi.fn();
     const { user } = renderWithProviders(
       <RepoStep repos={[repo("r1", "acme/api"), repo("r2", "acme/web")]} onFinish={onFinish} />,
@@ -57,7 +62,26 @@ describe("RepoStep", () => {
     expect(screen.getByText("Your repositories")).toBeInTheDocument();
     expect(screen.getByText("acme/api")).toBeInTheDocument();
     expect(screen.getByText("acme/web")).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Repository URL" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Add another repository" })).toBeInTheDocument();
+    // Finish is open for the first existing repo before anything is added.
+    expect(finish()).toBeEnabled();
+
+    await user.type(screen.getByRole("textbox", { name: "Repository URL" }), "https://github.com/acme/new");
+    await user.click(screen.getByRole("button", { name: "Add repository" }));
+    expect(await screen.findByText("acme/new is indexed")).toBeInTheDocument();
+    expect(api.requests("POST", "/repos")).toHaveLength(1);
+    // The list keeps the other repos and the form is ready for one more.
+    expect(screen.getByText("acme/api")).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Repository URL" })).toHaveValue("");
+
+    await user.click(finish());
+    expect(onFinish).toHaveBeenCalledWith("r9");
+  });
+
+  it("Finish opens the first existing repository when nothing is added", async () => {
+    mockFetch({});
+    const onFinish = vi.fn();
+    const { user } = renderWithProviders(<RepoStep repos={[repo("r1", "acme/api")]} onFinish={onFinish} />);
     await user.click(finish());
     expect(onFinish).toHaveBeenCalledWith("r1");
   });

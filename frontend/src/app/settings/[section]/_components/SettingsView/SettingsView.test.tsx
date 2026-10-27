@@ -19,6 +19,7 @@ vi.mock("@/components/app-shell", () => ({
     </>
   ),
 }));
+vi.mock("./_components/SettingsSetup", () => ({ SettingsSetup: () => <div data-testid="panel-setup" /> }));
 vi.mock("./_components/SettingsApiKeys", () => ({ SettingsApiKeys: () => <div data-testid="panel-api-keys" /> }));
 vi.mock("./_components/SettingsGithub", () => ({ SettingsGithub: () => <div data-testid="panel-github" /> }));
 vi.mock("./_components/SettingsGitlab", () => ({ SettingsGitlab: () => <div data-testid="panel-gitlab" /> }));
@@ -38,6 +39,7 @@ import { SETTINGS_SECTION_KEYS, type SettingsSectionKey } from "./constants";
 afterEach(cleanup);
 
 const LABELS: Record<SettingsSectionKey, string> = {
+  setup: "First-run setup",
   "api-keys": "API Keys",
   github: "GitHub Integration",
   gitlab: "GitLab Integration",
@@ -48,6 +50,7 @@ const LABELS: Record<SettingsSectionKey, string> = {
   about: "About",
 };
 const PANEL_TESTID: Record<SettingsSectionKey, string> = {
+  setup: "panel-setup",
   "api-keys": "panel-api-keys",
   github: "panel-github",
   gitlab: "panel-gitlab",
@@ -59,12 +62,13 @@ const PANEL_TESTID: Record<SettingsSectionKey, string> = {
 };
 
 describe("SettingsView", () => {
-  it("lists the eight sections in order, linked to /settings/<key>", () => {
+  it("lists the nine sections (First-run setup first) in order, linked to /settings/<key>", () => {
     renderWithProviders(<SettingsView section="api-keys" />);
 
     const nav = screen.getByRole("navigation", { name: "Settings sections" });
     const links = within(nav).getAllByRole("link");
     expect(links.map((a) => a.textContent)).toEqual([
+      "First-run setup",
       "API Keys",
       "GitHub Integration",
       "GitLab Integration",

@@ -1,5 +1,6 @@
 /** Settings sections in sub-nav order (FR1). App-owned: the vendored SETTINGS_SECTIONS lists only two. */
 export const SETTINGS_SECTION_KEYS = [
+  "setup",
   "api-keys",
   "github",
   "gitlab",
@@ -12,7 +13,7 @@ export const SETTINGS_SECTION_KEYS = [
 
 export type SettingsSectionKey = (typeof SETTINGS_SECTION_KEYS)[number];
 
-/** Default settings section; an unknown route key redirects here. */
+/** Default settings section (api-keys, not the first-listed setup); an unknown route key redirects here. */
 export const DEFAULT_SECTION: SettingsSectionKey = "api-keys";
 
 /** Route of a section (also the target of the unknown-key redirect). */

@@ -3,7 +3,7 @@ import type { GitLabConnection, Repo, SecretsStatus } from "@/lib/types";
 /** Where `/` sends the user: a first-run setup step, or the first repo's PR list (FR27). */
 export type HomeDestination = { kind: "setup"; step: "model" | "code-host" | "repo" } | { kind: "pulls"; repoId: string };
 
-export const setupHref = (step: "model" | "code-host" | "repo") => `/setup?step=${step}`;
+export const setupHref = (step: "model" | "code-host" | "repo") => `/settings/setup?step=${step}`;
 export const pullsHref = (repoId: string) => `/repos/${repoId}/pulls`;
 
 export const destinationHref = (d: HomeDestination) => (d.kind === "setup" ? setupHref(d.step) : pullsHref(d.repoId));

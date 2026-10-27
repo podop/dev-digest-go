@@ -14,8 +14,12 @@ export function RepoSwitcher({ ctx }: { ctx: ShellContext }) {
         ? { onRemove: () => ctx.onRemoveRepo!(r.id), removeLabel: `Remove ${r.full_name}` }
         : {}),
     })),
-    ...(ctx.repos && ctx.repos.length ? [{ divider: true }] : []),
-    { label: "Add repository…", icon: "Plus", muted: true, onClick: () => ctx.onAddRepo?.() },
+    ...(ctx.onAddRepo
+      ? [
+          ...(ctx.repos && ctx.repos.length ? [{ divider: true }] : []),
+          { label: "Add repository…", icon: "Plus" as const, muted: true, onClick: () => ctx.onAddRepo?.() },
+        ]
+      : []),
   ];
   return (
     <Dropdown

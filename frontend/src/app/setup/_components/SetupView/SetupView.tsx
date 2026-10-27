@@ -1,16 +1,18 @@
-/* SetupView — first-run setup (FR22–FR26): a centred card with a 3-step stepper (model
-   provider key → code host: GitHub token or GitLab connection → first repository). The step shown comes from the URL, pulled
-   back to the first incomplete step; completeness comes from secrets-status, GET /repos, the custom providers and the GitLab connections,
-   so nothing new is stored. Step changes replace the URL. */
+/* SetupView — first-run setup flow (FR22–FR26): a 3-step stepper (model provider key → code host:
+   GitHub token or GitLab connection → repository) with the step's content and a "Step n of 3" footer.
+   It has no page frame: it is rendered inline by Settings › First-run setup. The step shown comes from
+   `requestedStep`, pulled back to the first incomplete step; completeness comes from secrets-status,
+   GET /repos, the custom providers and the GitLab connections, so nothing new is stored. Step
+   changes replace the URL with `hrefForStep(step)`. */
 "use client";
 
 import React from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ErrorState, Icon, Skeleton } from "@devdigest/ui";
+import { ErrorState, Skeleton } from "@devdigest/ui";
 import { useCustomProviders, useGitLabConnections, useRepos, useSecretsStatus } from "@/lib/hooks";
 import type { ConnTestProvider } from "@/lib/types";
-import { SETUP_STEPS, pullsHref, setupHref, type SetupStep } from "./constants";
+import { SETUP_STEPS, pullsHref, type SetupStep } from "./constants";
 import { gitlabTokenCount, nextStep, previousStep, resolveStep, stepsDone } from "./helpers";
 import { CodeHostStep } from "./_components/CodeHostStep";
 import { ModelStep } from "./_components/ModelStep";
@@ -18,7 +20,14 @@ import { RepoStep } from "./_components/RepoStep";
 import { Stepper } from "./_components/Stepper";
 import { s } from "./styles";
 
-export function SetupView({ requestedStep }: { requestedStep?: string }) {
+interface SetupViewProps {
+  /** The `step` the URL asks for (any string; resolved against what is complete). */
+  requestedStep?: string;
+  /** The URL of a step, used to pin the resolved step and to move between steps. */
+  hrefForStep: (step: SetupStep) => string;
+}
+
+export function SetupView({ requestedStep, hrefForStep }: SetupViewProps) {
   const t = useTranslations("setup");
   const router = useRouter();
   const secrets = useSecretsStatus();
@@ -42,8 +51,8 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
   // Pin the resolved step in the URL (a missing, invalid or too-far `step` is corrected), so a step
   // that completes while it is shown does not make the view jump ahead.
   React.useEffect(() => {
-    if (step && step !== requestedStep) router.replace(setupHref(step));
-  }, [step, requestedStep, router]);
+    if (step && step !== requestedStep) router.replace(hrefForStep(step));
+  }, [step, requestedStep, router, hrefForStep]);
 
   let body: React.ReactNode;
   if (secrets.isError || repos.isError || custom.isError || gitlab.isError) {
@@ -71,7 +80,7 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
   } else {
     const prev = previousStep(step);
     const next = nextStep(step);
-    const go = (to: SetupStep | null) => (to ? () => router.replace(setupHref(to)) : undefined);
+    const go = (to: SetupStep | null) => (to ? () => router.replace(hrefForStep(to)) : undefined);
     body = (
       <>
         <Stepper current={step} done={done} />
@@ -99,15 +108,9 @@ export function SetupView({ requestedStep }: { requestedStep?: string }) {
   }
 
   return (
-    <main style={s.page}>
-      <div style={s.brand}>
-        <div style={s.logo}>
-          <Icon.Layers size={17} style={{ color: "var(--bg-primary)" }} />
-        </div>
-        <span style={s.brandName}>{t("brand")}</span>
-      </div>
-      <div style={s.card}>{body}</div>
+    <div>
+      {body}
       {step && <p style={s.footer}>{t("footer", { n: SETUP_STEPS.indexOf(step) + 1 })}</p>}
-    </main>
+    </div>
   );
 }

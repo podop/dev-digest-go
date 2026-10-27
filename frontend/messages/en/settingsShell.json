@@ -3,6 +3,7 @@
   "title": "Settings",
   "navLabel": "Settings sections",
   "sections": {
+    "setup": "First-run setup",
     "api-keys": "API Keys",
     "github": "GitHub Integration",
     "gitlab": "GitLab Integration",

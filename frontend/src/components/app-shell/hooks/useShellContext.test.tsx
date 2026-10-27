@@ -65,6 +65,15 @@ describe("the repo switcher subtitle", () => {
   });
 });
 
+describe("repository add", () => {
+  it("is not offered by the repo switcher (repositories are added in Settings › First-run setup)", async () => {
+    const { result } = setup(INFO("acme"));
+    await waitFor(() => expect(result.current.activeRepo).not.toBeNull());
+    expect(result.current.onAddRepo).toBeUndefined();
+    expect(result.current.onSelectRepo).toBeTypeOf("function");
+  });
+});
+
 describe("repository removal", () => {
   it("is not offered by the repo switcher (it lives in Settings › GitHub / GitLab Integration)", async () => {
     const { result } = setup(INFO("acme"));

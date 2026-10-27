@@ -77,10 +77,10 @@ const secrets = (over: Partial<SecretsStatus>): SecretsStatus => ({ ...NONE, ...
 
 describe("HomeView gate", () => {
   it.each([
-    ["no model key, no token, no repo", secrets({}), [], "/setup?step=model"],
-    ["no model key even with a token and repos", secrets({ github: true }), REPOS, "/setup?step=model"],
-    ["a model key but no GitHub token and no GitLab connection", secrets({ openai: true }), REPOS, "/setup?step=code-host"],
-    ["an anthropic key and a token but no repo", secrets({ anthropic: true, github: true }), [], "/setup?step=repo"],
+    ["no model key, no token, no repo", secrets({}), [], "/settings/setup?step=model"],
+    ["no model key even with a token and repos", secrets({ github: true }), REPOS, "/settings/setup?step=model"],
+    ["a model key but no GitHub token and no GitLab connection", secrets({ openai: true }), REPOS, "/settings/setup?step=code-host"],
+    ["an anthropic key and a token but no repo", secrets({ anthropic: true, github: true }), [], "/settings/setup?step=repo"],
     // An env-provided key is reported by secrets-status exactly like a stored one (EC11).
     ["only an env-provided openrouter key and a token, with repos", secrets({ openrouter: true, github: true }), REPOS, "/repos/r1/pulls"],
     ["every prerequisite met", secrets({ openai: true, anthropic: true, openrouter: true, github: true }), REPOS, "/repos/r1/pulls"],
@@ -104,7 +104,7 @@ describe("HomeView gate", () => {
     expect(nav.replace).not.toHaveBeenCalled();
 
     release(jsonResponse(NONE));
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=model"));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/settings/setup?step=model"));
     expect(container.querySelector("[aria-busy='true']")).not.toBeNull();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByText("No repositories yet")).not.toBeInTheDocument();
@@ -131,13 +131,13 @@ describe("HomeView gate", () => {
   it("with a custom provider the next unmet step is still reported (code host, then repo) (AC26)", async () => {
     mockFetch({ "GET /settings/secrets-status": NONE, "GET /repos": REPOS, [CUSTOM]: [customProvider()] });
     renderWithProviders(<HomeView />);
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=code-host"));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/settings/setup?step=code-host"));
     cleanup();
     nav.replace.mockReset();
 
     mockFetch({ "GET /settings/secrets-status": secrets({ github: true }), "GET /repos": [], [CUSTOM]: [customProvider()] });
     renderWithProviders(<HomeView />);
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=repo"));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/settings/setup?step=repo"));
   });
 
   it("waits for the custom providers before redirecting — no model step flashes for a workspace that has one", async () => {
@@ -158,9 +158,9 @@ describe("HomeView gate", () => {
 
   // AC30 / FR39: a GitLab connection with a token is a code host; one without a token is not.
   it.each([
-    ["with a token and no GitHub token, goes on to the repository", [gitlabConnection()], [], "/setup?step=repo"],
+    ["with a token and no GitHub token, goes on to the repository", [gitlabConnection()], [], "/settings/setup?step=repo"],
     ["with a token and no GitHub token, opens the first repo when there is one", [gitlabConnection()], REPOS, "/repos/r1/pulls"],
-    ["without a token (alone) still stops at the code-host step", [gitlabConnection({ token_configured: false })], REPOS, "/setup?step=code-host"],
+    ["without a token (alone) still stops at the code-host step", [gitlabConnection({ token_configured: false })], REPOS, "/settings/setup?step=code-host"],
     [
       "without a token next to one with a token passes",
       [gitlabConnection({ id: "c2", token_configured: false }), gitlabConnection({ id: "c3", host: "git.corp.example" })],

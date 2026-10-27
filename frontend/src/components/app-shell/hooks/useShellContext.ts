@@ -17,7 +17,8 @@ interface ShellContextOptions {
 /**
  * Assembles the `ShellContext` consumed by AppFrame: active nav key, the repo
  * list/active repo (mapped to the shell shape), theme, PR count, and the repo
- * selection / add actions. Removing a repository lives only in Settings › GitHub / GitLab
+ * selection action. There is no 'Add repository' item in the switcher (repositories are added in
+ * Settings › First-run setup). Removing a repository lives only in Settings › GitHub / GitLab
  * Integration, so the switcher gets no `onRemoveRepo` and its menu shows no remove button.
  */
 export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): ShellContext {
@@ -40,10 +41,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
     [setRepoId, router, confirmLeave],
   );
 
-  const onAddRepo = React.useCallback(() => {
-    if (confirmLeave()) router.push("/onboarding");
-  }, [router, confirmLeave]);
-
   return React.useMemo<ShellContext>(
     () => ({
       Link,
@@ -56,7 +53,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
       onToggleTheme: toggle,
       onOpenCommandPalette,
       onSelectRepo,
-      onAddRepo,
       // Sidebar badge = PRs that still NEED review, not the total PR count.
       // 0 → undefined so the badge hides entirely when nothing needs review.
       prCount: pulls?.filter((p) => p.status === "needs_review").length || undefined,
@@ -71,7 +67,6 @@ export function useShellContext({ onOpenCommandPalette }: ShellContextOptions): 
       toggle,
       onOpenCommandPalette,
       onSelectRepo,
-      onAddRepo,
       pulls,
     ],
   );

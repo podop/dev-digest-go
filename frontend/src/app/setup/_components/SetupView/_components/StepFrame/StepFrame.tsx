@@ -29,7 +29,7 @@ export function StepFrame({
   const t = useTranslations("setup");
   return (
     <section aria-label={title}>
-      <h1 style={s.title}>{title}</h1>
+      <h3 style={s.title}>{title}</h3>
       <p style={s.sub}>{sub}</p>
       {children}
       <div style={s.actions}>

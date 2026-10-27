@@ -41,7 +41,7 @@ describe("SettingsAbout", () => {
     // The secrets file belongs to API Keys' info box, not here.
     expect(screen.queryByText(ABOUT.secrets_file)).not.toBeInTheDocument();
 
-    expect(screen.getByRole("link", { name: "Run setup again" })).toHaveAttribute("href", "/setup?step=model");
+    expect(screen.getByRole("link", { name: "Run setup again" })).toHaveAttribute("href", "/settings/setup?step=model");
     expect(screen.queryByRole("status", { name: "Loading about information…" })).not.toBeInTheDocument();
   });
 

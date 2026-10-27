@@ -9,7 +9,7 @@ import { SectionTitle } from "../SectionTitle";
 import { s } from "./styles";
 
 /** Where "Run setup again" lands (FR21, D14). */
-const SETUP_HREF = "/setup?step=model";
+const SETUP_HREF = "/settings/setup?step=model";
 const SKELETON_ROWS = [0, 1, 2, 3, 4];
 
 /**

@@ -21,5 +21,6 @@ export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 export const INDEX_POLL_MS = 3_000;
 export const INDEX_POLL_MAX_MS = 5 * 60_000;
 
-export const setupHref = (step: SetupStep) => `/setup?step=${step}`;
+/** First-run setup lives in Settings › First-run setup; `/setup` only redirects there. */
+export const setupHref = (step: SetupStep) => `/settings/setup?step=${step}`;
 export const pullsHref = (repoId: string) => `/repos/${repoId}/pulls`;

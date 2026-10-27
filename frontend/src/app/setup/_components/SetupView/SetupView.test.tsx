@@ -9,6 +9,7 @@ const nav = vi.hoisted(() => ({ replace: vi.fn(), push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => nav }));
 
 import { SetupView } from "./SetupView";
+import { setupHref } from "./constants";
 
 afterEach(() => {
   cleanup();
@@ -66,7 +67,7 @@ function Host({ initial }: { initial?: string }) {
   React.useEffect(() => {
     nav.replace.mockImplementation((href: string) => setStep(new URL(href, "http://x").searchParams.get("step") ?? undefined));
   }, []);
-  return <SetupView requestedStep={step} />;
+  return <SetupView requestedStep={step} hrefForStep={setupHref} />;
 }
 
 const steps = () => within(screen.getByRole("list", { name: "Setup steps" })).getAllByRole("listitem");
@@ -127,14 +128,14 @@ describe("SetupView ?step contract", () => {
     api.on("GET /repos", []);
     renderWithProviders(<Host />);
     expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
-    expect(nav.replace).toHaveBeenCalledWith("/setup?step=repo");
+    expect(nav.replace).toHaveBeenCalledWith("/settings/setup?step=repo");
   });
 
   it("replaces a too-far step with the earliest unmet one in the URL (AC21 earlier step)", async () => {
     mockFetch({ "GET /settings/secrets-status": NONE, [CUSTOM]: [], "GET /repos": [] });
     renderWithProviders(<Host initial="repo" />);
     expect(await screen.findByRole("heading", { name: "Connect a model provider" })).toBeInTheDocument();
-    expect(nav.replace).toHaveBeenCalledWith("/setup?step=model");
+    expect(nav.replace).toHaveBeenCalledWith("/settings/setup?step=model");
   });
 });
 
@@ -165,12 +166,12 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     await waitFor(() => expect(cont()).toBeEnabled());
     await user.click(cont());
-    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=code-host");
+    expect(nav.replace).toHaveBeenLastCalledWith("/settings/setup?step=code-host");
 
     // Step 2 → Back → step 1 again (stored key: "Already connected") → Continue → step 2.
     await screen.findByRole("heading", { name: "Connect a code host" });
     await user.click(screen.getByRole("button", { name: "Back" }));
-    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=model");
+    expect(nav.replace).toHaveBeenLastCalledWith("/settings/setup?step=model");
     await screen.findByRole("heading", { name: "Connect a model provider" });
     expect(await screen.findByText("Already connected")).toBeInTheDocument();
     await user.click(cont());
@@ -180,7 +181,7 @@ describe("SetupView navigation (FR26, AC19, AC20)", () => {
     await user.click(screen.getByRole("button", { name: "Test connection" }));
     expect(await screen.findByText("Connected as @ann")).toBeInTheDocument();
     await user.click(cont());
-    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=repo");
+    expect(nav.replace).toHaveBeenLastCalledWith("/settings/setup?step=repo");
     expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
   });
 
@@ -207,7 +208,7 @@ describe("SetupView code host (FR38, AC30)", () => {
     expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
     expect(current()).toHaveTextContent("Code host");
     expect(steps()[1]).not.toHaveTextContent("GitHub token");
-    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/setup?step=code-host"));
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/settings/setup?step=code-host"));
     expect(nav.replace).toHaveBeenCalledTimes(1);
     // Resolved once: the view stays where it is.
     expect(screen.getByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
@@ -246,7 +247,7 @@ describe("SetupView code host (FR38, AC30)", () => {
     expect(current()).toHaveTextContent("Code host");
     expect(screen.queryByText("Already connected")).toBeNull();
     expect(cont()).toBeDisabled();
-    expect(nav.replace).toHaveBeenCalledWith("/setup?step=code-host");
+    expect(nav.replace).toHaveBeenCalledWith("/settings/setup?step=code-host");
   });
 
   it("Save and test with GitLab creates and tests the connection; Continue then moves on to the repository", async () => {
@@ -275,7 +276,7 @@ describe("SetupView code host (FR38, AC30)", () => {
 
     await waitFor(() => expect(cont()).toBeEnabled());
     await user.click(cont());
-    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=repo");
+    expect(nav.replace).toHaveBeenLastCalledWith("/settings/setup?step=repo");
     expect(await screen.findByRole("heading", { name: "Add your first repository" })).toBeInTheDocument();
   });
 
@@ -313,7 +314,7 @@ describe("SetupView with a custom provider (FR21, D21, AC26)", () => {
     expect(screen.getByRole("link", { name: "Use a custom provider" })).toHaveAttribute("href", "/settings/api-keys");
     expect(cont()).toBeEnabled();
     await user.click(cont());
-    expect(nav.replace).toHaveBeenLastCalledWith("/setup?step=code-host");
+    expect(nav.replace).toHaveBeenLastCalledWith("/settings/setup?step=code-host");
     expect(await screen.findByRole("heading", { name: "Connect a code host" })).toBeInTheDocument();
   });
 });

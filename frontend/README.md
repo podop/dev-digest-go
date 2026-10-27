@@ -25,8 +25,9 @@ Routes (`src/app/**/page.tsx`) and the API surface each leans on (via
 ```mermaid
 flowchart TD
   ROOT["/<br/>first-run gate"] -->|"GET /settings/secrets-status · GET /repos<br/>all set → first repo"| PULLS["/repos/:repoId/pulls<br/>PR list"]
-  ROOT -->|"no model key → ?step=model<br/>no GitHub token → ?step=github<br/>no repo → ?step=repo"| SETUP["/setup<br/>first-run setup · ?step=model, github, repo"]
+  ROOT -->|"no model key → ?step=model<br/>no GitHub token → ?step=github<br/>no repo → ?step=repo"| SETUP["/settings/setup<br/>first-run setup, inline in Settings · ?step=model, code-host, repo"]
   ONB["/onboarding<br/>old add-repo link"] -->|"server redirect"| SETUP
+  OLDSETUP["/setup<br/>old link"] -->|"server redirect (keeps ?step)"| SETUP
   SETUP -->|"POST /settings/test-connection · POST /repos"| API[("Fastify API")]
   SETUP -->|"Finish"| PULLS
   PULLS --> PR["/pulls/:number<br/>review detail<br/>(overview · diff · findings)"]
@@ -66,11 +67,11 @@ flowchart TD
 
 **First run.** `/` is the only gated route (`src/app/_components/HomeView`): once
 `GET /settings/secrets-status` and `GET /repos` have loaded it replaces the URL with
-`/setup?step=model` (no key for openai, anthropic or openrouter), else `/setup?step=github`
-(no GitHub token), else `/setup?step=repo` (no repository), else the first repo's PR list.
+`/settings/setup?step=model` (no key for openai, anthropic or openrouter), else `/settings/setup?step=code-host`
+(no GitHub token), else `/settings/setup?step=repo` (no repository), else the first repo's PR list.
 It shows a skeleton while loading and an error with Retry when either request fails
-(no redirect). `/onboarding` is a server redirect to `/setup?step=repo`; `/setup` moves to
-an earlier step when a prerequisite is missing. There is no "Skip setup" link.
+(no redirect). `/onboarding` is a server redirect to `/settings/setup?step=repo` and `/setup` one to `/settings/setup`
+(step kept); Settings › First-run setup moves to an earlier step when a prerequisite is missing. There is no "Skip setup" link.
 
 The agent editor's **CI** tab and the Export wizard, and the `/ci-runs` page, are described in
 [`../docs/export-to-ci.md`](../docs/export-to-ci.md) (hooks: `src/lib/hooks/ci.ts`).

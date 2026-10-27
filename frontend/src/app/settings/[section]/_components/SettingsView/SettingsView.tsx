@@ -4,7 +4,7 @@
 
 import type React from "react";
 import Link from "next/link";
-import { EmptyState } from "@devdigest/ui";
+import { EmptyState, Icon } from "@devdigest/ui";
 import { useTranslations } from "next-intl";
 import { AppShell } from "@/components/app-shell";
 import { SettingsAbout } from "./_components/SettingsAbout";
@@ -14,12 +14,14 @@ import { SettingsGithub } from "./_components/SettingsGithub";
 import { SettingsGitlab } from "./_components/SettingsGitlab";
 import { SettingsIntegrations } from "./_components/SettingsIntegrations";
 import { SettingsModels } from "./_components/SettingsModels";
+import { SettingsSetup } from "./_components/SettingsSetup";
 import { SettingsWorkspace } from "./_components/SettingsWorkspace";
 import { DEFAULT_SECTION, SETTINGS_SECTION_KEYS, sectionHref, type SettingsSectionKey } from "./constants";
 import { s } from "./styles";
 
 /** Sections that have a panel; the others render the "coming in a later release" empty state. */
 const PANELS: Partial<Record<SettingsSectionKey, React.ComponentType>> = {
+  setup: SettingsSetup,
   "api-keys": SettingsApiKeys,
   github: SettingsGithub,
   gitlab: SettingsGitlab,
@@ -44,7 +46,10 @@ export function SettingsView({ section }: { section: SettingsSectionKey }) {
             const on = key === section;
             return (
               <Link key={key} href={sectionHref(key)} aria-current={on ? "page" : undefined}>
-                <div style={s.navItem(on)}>{t(`sections.${key}`)}</div>
+                <div style={s.navItem(on)}>
+                  {key === "setup" && <Icon.Sparkles size={13} style={s.navIcon} aria-hidden />}
+                  {t(`sections.${key}`)}
+                </div>
               </Link>
             );
           })}

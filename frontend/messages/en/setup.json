@@ -1,5 +1,4 @@
 {
-  "brand": "DevDigest",
   "footer": "Step {n} of 3 · You can change keys later in Settings",
   "loading": "Loading setup",
   "error": {
@@ -76,6 +75,7 @@
     "title": "Add your first repository",
     "sub": "Paste a GitHub repository URL. DevDigest clones it locally and imports open PRs.",
     "existingTitle": "Your repositories",
+    "addAnotherTitle": "Add another repository",
     "indexing": "Indexing {name}…",
     "indexed": "{name} is indexed",
     "indexStatus": {
