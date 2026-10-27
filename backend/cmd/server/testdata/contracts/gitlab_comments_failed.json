@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "gitlab_comment_failed",
+    "details": {
+      "cause": "line_code can't be blank",
+      "reason": "position_rejected"
+    },
+    "message": "GitLab could not place the comment on a.ts line 12. Reload the PR and try again."
+  }
+}

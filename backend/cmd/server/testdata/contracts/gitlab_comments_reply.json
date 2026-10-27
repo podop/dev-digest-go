@@ -1,0 +1,13 @@
+{
+  "body": "Thanks.",
+  "created_at": "2026-01-01T00:00:00.000Z",
+  "html_url": "https://gitlab.example.com/acme/web/-/merge_requests/3#note_7002",
+  "id": 7002,
+  "in_reply_to_id": 101,
+  "is_outdated": false,
+  "line": 5,
+  "original_line": 5,
+  "path": "a.ts",
+  "side": "RIGHT",
+  "user": "ada"
+}

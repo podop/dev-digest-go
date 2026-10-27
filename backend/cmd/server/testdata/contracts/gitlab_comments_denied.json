@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "gitlab_permission_denied",
+    "details": {
+      "cause": "403 Forbidden",
+      "reason": "forbidden"
+    },
+    "message": "GitLab refused the comment (403): the token's user may lack the Reporter role, or the discussion is locked."
+  }
+}

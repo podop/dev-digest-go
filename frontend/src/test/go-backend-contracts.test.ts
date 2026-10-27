@@ -466,6 +466,16 @@ const gitlabConnection = GitLabConnection.extend({ id: uuid }).strict();
 const gitlabConnectionDeleted = GitLabConnectionDeleted.extend({ deleted: uuid }).strict();
 // The GitLab test answers with every key present (null when not known); unknown keys are a drift.
 const gitlabConnTest = GitLabConnTestResult.extend({ warnings: z.array(GitLabTestWarning.strict()) }).strict();
+// 400 of the GitLab comment flow: details always carry the reason and the redacted cause.
+const gitlabCommentError = (code: string, reason: z.ZodTypeAny, more: z.ZodRawShape = {}) =>
+  ApiErrorBody.extend({
+    error: ApiErrorBody.shape.error
+      .extend({
+        code: z.literal(code),
+        details: z.object({ reason, cause: z.string(), ...more }).strict(),
+      })
+      .strict(),
+  }).strict();
 const gitlabConnError = (code: string) =>
   ApiErrorBody.extend({ error: ApiErrorBody.shape.error.extend({ code: z.literal(code), details: z.undefined() }).strict() }).strict();
 // 422 validation_error: details are the httpx issues (params.issue holds the Zod-style issue).
@@ -806,6 +816,24 @@ const contracts: Record<string, z.ZodTypeAny> = {
   gitlab_conn_deleted_bound: gitlabConnectionDeletedBound,
   gitlab_repo_create: gitlabRepo,
   gitlab_repos_list: z.array(gitlabRepo).length(1),
+
+  // ---- GitLab merge request comments ----
+  gitlab_comments_list: z.array(PrReviewComment.strict()).length(3),
+  gitlab_comments_create: PrReviewComment.strict(),
+  gitlab_comments_reply: PrReviewComment.strict(),
+  gitlab_comments_failed: gitlabCommentError("gitlab_comment_failed", z.literal("position_rejected")),
+  gitlab_comments_denied: gitlabCommentError("gitlab_permission_denied", z.literal("forbidden")),
+  gitlab_comments_rate_limited: gitlabCommentError("gitlab_rate_limited", z.literal("rate_limited"), {
+    retry_after_s: z.number().int().positive(),
+  }),
+  gitlab_comments_not_connected: ApiErrorBody.extend({
+    error: ApiErrorBody.shape.error
+      .extend({
+        code: z.literal("repo_host_not_connected"),
+        details: z.object({ host: z.string().min(1), repo_id: uuid }).strict(),
+      })
+      .strict(),
+  }).strict(),
 
   // ---- Custom model providers ----
   custom_providers_create: customProvider,
@@ -1565,5 +1593,59 @@ describe("GitLab connection goldens (GitLab A, NFR7)", () => {
   it("the repos goldens are GitHub repos: web_url is https://github.com/<full_name>", () => {
     const repos = [read("repos_create") as { full_name: string; web_url: string }, ...(read("repos_list") as { full_name: string; web_url: string }[])];
     for (const r of repos) expect(r.web_url).toBe(`https://github.com/${r.full_name}`);
+  });
+});
+
+describe("GitLab comment goldens (GitLab B, AC31, NFR7)", () => {
+  type Comment = {
+    id: number;
+    path: string;
+    line: number | null;
+    original_line: number | null;
+    side: string;
+    html_url: string;
+    in_reply_to_id: number | null;
+    is_outdated: boolean;
+  };
+  const commentNames = ["gitlab_comments_create", "gitlab_comments_reply"];
+
+  it("every comment links to its note on the merge request page and is not outdated when posted", () => {
+    const rows = [...(read("gitlab_comments_list") as Comment[]), ...commentNames.map((n) => read(n) as Comment)];
+    for (const c of rows) {
+      expect(c.html_url, String(c.id)).toBe(`https://gitlab.example.com/acme/web/-/merge_requests/3#note_${c.id}`);
+    }
+    for (const n of commentNames) expect((read(n) as Comment).is_outdated, n).toBe(false);
+  });
+
+  it("the list has a reply that points at its root and an outdated thread without a current line", () => {
+    const rows = read("gitlab_comments_list") as Comment[];
+    const reply = rows.find((c) => c.in_reply_to_id !== null);
+    expect(rows.some((c) => c.id === reply?.in_reply_to_id && c.in_reply_to_id === null)).toBe(true);
+    const outdated = rows.filter((c) => c.is_outdated);
+    expect(outdated).toHaveLength(1);
+    expect(outdated[0]?.line).toBeNull();
+    expect(outdated[0]?.original_line).not.toBeNull();
+    expect(outdated[0]?.side).toBe("LEFT");
+  });
+
+  it("a posted reply carries the id of the comment it answers", () => {
+    const reply = read("gitlab_comments_reply") as Comment;
+    expect(reply.in_reply_to_id).toBe((read("gitlab_comments_list") as Comment[])[0]?.id);
+    expect((read("gitlab_comments_create") as Comment).in_reply_to_id).toBeNull();
+  });
+
+  it("no comment golden holds a token key or a token-shaped value", () => {
+    const names = readdirSync(goldenDir)
+      .filter((f) => f.startsWith("gitlab_comments_") && f.endsWith(".json"))
+      .map((f) => f.slice(0, -".json".length));
+    expect(names).toHaveLength(7);
+    for (const name of names) {
+      expect(JSON.stringify(read(name)), name).not.toMatch(/"token":|glpat-|oauth2|127\.0\.0\.1/);
+    }
+  });
+
+  it("the rate limit names the wait in its message and in details.retry_after_s", () => {
+    const body = read("gitlab_comments_rate_limited") as { error: { message: string; details: { retry_after_s: number } } };
+    expect(body.error.message).toContain(`${body.error.details.retry_after_s} s`);
   });
 });

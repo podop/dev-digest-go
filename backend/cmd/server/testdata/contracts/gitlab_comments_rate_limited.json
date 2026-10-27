@@ -1,0 +1,11 @@
+{
+  "error": {
+    "code": "gitlab_rate_limited",
+    "details": {
+      "cause": "Retry later",
+      "reason": "rate_limited",
+      "retry_after_s": 37
+    },
+    "message": "GitLab limits how many comments can be posted per minute. Try again in 37 s."
+  }
+}

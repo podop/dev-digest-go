@@ -1,0 +1,41 @@
+[
+  {
+    "body": "root 101",
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "html_url": "https://gitlab.example.com/acme/web/-/merge_requests/3#note_101",
+    "id": 101,
+    "in_reply_to_id": null,
+    "is_outdated": false,
+    "line": 5,
+    "original_line": 5,
+    "path": "a.ts",
+    "side": "RIGHT",
+    "user": "ann"
+  },
+  {
+    "body": "Good catch.",
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "html_url": "https://gitlab.example.com/acme/web/-/merge_requests/3#note_102",
+    "id": 102,
+    "in_reply_to_id": 101,
+    "is_outdated": false,
+    "line": 5,
+    "original_line": 5,
+    "path": "a.ts",
+    "side": "RIGHT",
+    "user": "bob"
+  },
+  {
+    "body": "root 201",
+    "created_at": "2026-01-01T00:00:00.000Z",
+    "html_url": "https://gitlab.example.com/acme/web/-/merge_requests/3#note_201",
+    "id": 201,
+    "in_reply_to_id": null,
+    "is_outdated": true,
+    "line": null,
+    "original_line": 7,
+    "path": "a.ts",
+    "side": "LEFT",
+    "user": "cat"
+  }
+]

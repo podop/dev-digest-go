@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "repo_host_not_connected",
+    "details": {
+      "host": "gitlab.example.com",
+      "repo_id": "00000000-0000-4000-8000-000000000001"
+    },
+    "message": "No GitLab connection for gitlab.example.com. Add one in Settings → GitLab Integration."
+  }
+}
