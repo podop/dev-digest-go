@@ -1,9 +1,12 @@
 package integration_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -450,4 +453,38 @@ func (e *env) nonJavaRows(table, column string) []string {
 		e.repo, "%.java")
 	slices.Sort(rows)
 	return rows
+}
+
+// S-M2: a 3.4 KB package declaration made a package key Postgres refused in the package-key index
+// ("index row size exceeds btree maximum 2704"), which rolled the whole index back for good. The
+// file now gets no package row, and the repo indexes full with every other row in place.
+func TestJava_LongPackageDeclarationStillIndexes(t *testing.T) {
+	const longFile = "src/main/java/Long.java"
+	// Hash segments: a repetitive name compresses below the index row limit and stores fine.
+	var segs []string
+	for i := range 100 {
+		h := sha256.Sum256([]byte(strconv.Itoa(i)))
+		segs = append(segs, "p"+hex.EncodeToString(h[:16]))
+	}
+	files := javaFixture()
+	files[longFile] = "package " + strings.Join(segs, ".") + ";\n\npublic class Long {\n    public void run() {\n    }\n}\n"
+	e := newEnv(t, withFiles(files))
+	clean := newEnv(t, withFiles(javaFixture()))
+	clean.mustFull()
+
+	e.mustFull()
+
+	st := e.mustState()
+	if st.Status != domain.StatusFull || st.FilesIndexed != 8 {
+		t.Fatalf("state = {%s files_indexed %d} (stats %v), want {full 8}", st.Status, st.FilesIndexed, st.Stats)
+	}
+	if diff := cmp.Diff(clean.paths("file_packages", "file_path || ' ' || package_key"),
+		e.paths("file_packages", "file_path || ' ' || package_key")); diff != "" {
+		t.Errorf("file_packages mismatch with the fixture without the long package (-want +got):\n%s", diff)
+	}
+	want := append(clean.symbolNames(), longFile+":Long", longFile+":run")
+	slices.Sort(want)
+	if diff := cmp.Diff(want, e.symbolNames()); diff != "" {
+		t.Errorf("symbols mismatch (-want +got):\n%s", diff)
+	}
 }

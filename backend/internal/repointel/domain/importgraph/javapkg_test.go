@@ -2,6 +2,7 @@ package importgraph_test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -140,5 +141,40 @@ func TestBuild_JavaIgnoresGoKeys(t *testing.T) {
 	}
 	if len(g.Edges) != 0 {
 		t.Errorf("edges = %v, want none", g.Edges)
+	}
+}
+
+// longPackage returns a dotted Java package name of at least n bytes.
+func longPackage(n int) string {
+	var segs []string
+	for i := 0; len(segs)*6 < n; i++ {
+		segs = append(segs, fmt.Sprintf("p%04d", i))
+	}
+	return strings.Join(segs, ".")
+}
+
+// TestBuild_LongPackageKeyIsDropped is S-M2: a 3.4 KB package declaration made a 3.4 KB key that
+// Postgres refused in the package-key index (btree rows hold at most 2,704 bytes), which failed
+// the whole index. A key over 1,024 bytes gives the file no package row; 1,024 bytes still do.
+func TestBuild_LongPackageKeyIsDropped(t *testing.T) {
+	long := longPackage(3400)
+	edgePkg := strings.Repeat("q", 1024-len("java:"))
+	files := []string{"a/Long.java", "a/Edge.java", "b/B.java", "g/g.go"}
+	keys := map[string]string{
+		files[0]: domain.JavaPackageKey(long),
+		files[1]: domain.JavaPackageKey(edgePkg),
+		files[2]: domain.JavaPackageKey("b"),
+		files[3]: "go:" + strings.Repeat("g", 1022),
+	}
+	imports := func(_ context.Context, file string) domain.FileImports {
+		return domain.FileImports{Package: keys[file]}
+	}
+	g, _, err := importgraph.Build(t.Context(), &fakeFS{files: map[string]string{}}, "/clone", files, imports)
+	if err != nil {
+		t.Fatalf("Build() error: %v", err)
+	}
+	want := []domain.FilePackage{{Path: files[1], Key: keys[files[1]]}, {Path: files[2], Key: "java:b"}}
+	if diff := cmp.Diff(want, g.Packages); diff != "" {
+		t.Errorf("Build() packages mismatch (-want +got):\n%s", diff)
 	}
 }

@@ -82,6 +82,12 @@ func BuildEdges(ctx context.Context, files []string, r *Resolver, specs Specifie
 // any other graph failure.
 var ErrEdgeBudget = errors.New("import graph exceeds the edge budget")
 
+// maxPackageKeyBytes is the longest package key Build keeps. A longer one (a Java package
+// declaration of kilobytes, a Go directory hundreds of levels deep) is dropped: the file gets no
+// package row and no package-based resolution, as if it declared none. Postgres refuses a
+// package_key over its index row limit (2,704 bytes), which would fail the whole index.
+const maxPackageKeyBytes = 1024
+
 // javaKeyPrefix is the prefix of the package key of a Java file (see domain.JavaPackageKey).
 const javaKeyPrefix = "java:"
 
@@ -92,7 +98,8 @@ type SourceImports func(ctx context.Context, file string) domain.FileImports
 // Build builds the import graph of the walked files (FR14, FR15, FR17): it loads the root
 // tsconfig aliases, reads every file's imports once, and resolves each specifier with the
 // resolver of the importing file's syntax (TS/JS: Resolver, Go: GoResolver, Java: JavaResolver). Graph.Packages has
-// one row per file whose imports name a package, in walk order; both slices are non-nil.
+// one row per file whose imports name a package of at most maxPackageKeyBytes, in walk order;
+// both slices are non-nil.
 // aliasErr explains, in content-free words (categories and clone-relative config paths, see
 // LoadAliases), why alias resolution is off or partial; the caller logs it, the edges are still
 // built from relative imports. err is ctx's error, or ErrEdgeBudget when the edges would
@@ -112,6 +119,9 @@ func Build(ctx context.Context, fs domain.SourceFS, root string, files []string,
 	javaFiles := map[string][]string{}
 	for _, f := range files {
 		key := byFile[f].Package
+		if len(key) > maxPackageKeyBytes {
+			key = "" // no package row and no Java package grouping
+		}
 		if key != "" {
 			packages = append(packages, domain.FilePackage{Path: f, Key: key})
 		}
