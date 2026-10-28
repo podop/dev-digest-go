@@ -3,6 +3,7 @@ package importgraph
 import (
 	"context"
 	"path"
+	"strings"
 
 	"dev-digest-go/backend/internal/repointel/domain"
 )
@@ -74,13 +75,16 @@ func BuildEdges(ctx context.Context, files []string, r *Resolver, specs Specifie
 	return collectEdges(ctx, files, tsResolve(r), imports)
 }
 
+// javaKeyPrefix is the prefix of the package key of a Java file (see domain.JavaPackageKey).
+const javaKeyPrefix = "java:"
+
 // SourceImports returns the imports of one walked file: its package key and its specifiers in
 // first-seen order. A file that cannot be read or parsed returns the zero value.
 type SourceImports func(ctx context.Context, file string) domain.FileImports
 
 // Build builds the import graph of the walked files (FR14, FR15, FR17): it loads the root
 // tsconfig aliases, reads every file's imports once, and resolves each specifier with the
-// resolver of the importing file's syntax (TS/JS: Resolver, Go: GoResolver). Graph.Packages has
+// resolver of the importing file's syntax (TS/JS: Resolver, Go: GoResolver, Java: JavaResolver). Graph.Packages has
 // one row per file whose imports name a package, in walk order; both slices are non-nil.
 // aliasErr explains, in content-free words (categories and clone-relative config paths, see
 // LoadAliases), why alias resolution is off or partial; the caller logs it, the edges are still
@@ -97,14 +101,23 @@ func Build(ctx context.Context, fs domain.SourceFS, root string, files []string,
 	}
 	packages := []domain.FilePackage{}
 	hasGo := false
+	javaFiles := map[string][]string{}
 	for _, f := range files {
-		if key := byFile[f].Package; key != "" {
+		key := byFile[f].Package
+		if key != "" {
 			packages = append(packages, domain.FilePackage{Path: f, Key: key})
 		}
-		if syntax, _ := domain.SyntaxForPath(f); syntax == domain.SyntaxGo {
+		switch syntax, _ := domain.SyntaxForPath(f); syntax {
+		case domain.SyntaxGo:
 			hasGo = true
+		case domain.SyntaxJava:
+			// The package comes from the declaration, not the path (Review Focus 2).
+			if pkg, ok := strings.CutPrefix(key, javaKeyPrefix); ok {
+				javaFiles[pkg] = append(javaFiles[pkg], f)
+			}
 		}
 	}
+	java := NewJavaResolver(javaFiles)
 	ts := tsResolve(NewResolver(tree, aliases))
 	var golang *GoResolver
 	if hasGo {
@@ -117,8 +130,12 @@ func Build(ctx context.Context, fs domain.SourceFS, root string, files []string,
 			return nil
 		case syntax == domain.SyntaxGo:
 			return golang.ResolveAll(spec)
-		default:
+		case syntax == domain.SyntaxJava:
+			return java.ResolveAll(spec)
+		case syntax == domain.SyntaxTypeScript, syntax == domain.SyntaxTSX, syntax == domain.SyntaxJavaScript:
 			return ts(from, spec)
+		default:
+			return nil // an unsupported syntax resolves to nothing
 		}
 	}
 	edges, err := collectEdges(ctx, files, resolve, byFile)
