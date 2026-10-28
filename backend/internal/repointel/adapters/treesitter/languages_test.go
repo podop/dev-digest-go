@@ -49,6 +49,7 @@ func TestLanguage_ParsesEachGrammar(t *testing.T) {
 		{"javascript rejects types", domain.SyntaxJavaScript, "const x: number = 1;\n", "program", "", true},
 		{"typescript recovers from errors", domain.SyntaxTypeScript, "function f( {\nconst ok = 1;\n", "program", "", true},
 		{"go method", domain.SyntaxGo, "package p\n\nfunc (s *S) M() {}\n", "source_file", "method_declaration", false},
+		{"java record", domain.SyntaxJava, "package p;\n\nrecord R(int a) {}\n", "program", "record_declaration", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -116,25 +116,11 @@ func goTypeSignature(src []byte, spec *sitter.Node) string {
 // document order, each followed by its argument names and then by the calls nested inside it. A
 // (name, line) that is a declaration of the file is dropped, and each (name, line) is kept once.
 func goReferences(root sitter.Node, src []byte, symbols []domain.Symbol, g *guard) ([]domain.Reference, error) {
-	declared := make(map[string]struct{}, len(symbols))
-	for _, s := range symbols {
-		declared[s.Name+":"+strconv.Itoa(s.Line)] = struct{}{}
-	}
-	var out []domain.Reference
-	seen := map[string]struct{}{}
+	refs := newRefFilter(symbols)
 	add := func(name string, at *sitter.Node) {
-		if name == "" {
-			return
+		if name != "" {
+			refs.add(domain.Reference{Name: name, Line: line(at)})
 		}
-		key := name + ":" + strconv.Itoa(line(at))
-		if _, isDecl := declared[key]; isDecl {
-			return
-		}
-		if _, dup := seen[key]; dup {
-			return
-		}
-		seen[key] = struct{}{}
-		out = append(out, domain.Reference{Name: name, Line: line(at)})
 	}
 
 	var argErr error
@@ -164,7 +150,7 @@ func goReferences(root sitter.Node, src []byte, symbols []domain.Symbol, g *guar
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	return refs.out, nil
 }
 
 // goName is the text of an identifier or the field of a selector expression; "" for any other

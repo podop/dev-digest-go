@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"unsafe"
@@ -61,8 +62,12 @@ func (a *Analyzer) Extract(ctx context.Context, file, text string) (domain.Extra
 	var out domain.Extraction
 	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, syntax domain.Syntax, g *guard) error {
 		var err error
-		if syntax == domain.SyntaxGo {
+		switch syntax {
+		case domain.SyntaxGo:
 			out, err = extractGo(root, src, g)
+			return err
+		case domain.SyntaxJava:
+			out, err = extractJava(root, src, g)
 			return err
 		}
 		if out.Symbols, err = extractSymbols(root, src, g); err != nil {
@@ -83,8 +88,12 @@ func (a *Analyzer) Imports(ctx context.Context, file, text string) (domain.FileI
 	var out domain.FileImports
 	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, syntax domain.Syntax, g *guard) error {
 		var err error
-		if syntax == domain.SyntaxGo {
+		switch syntax {
+		case domain.SyntaxGo:
 			out, err = importsGo(root, src, file, g)
+			return err
+		case domain.SyntaxJava:
+			out, err = importsJava(root, src, g)
 			return err
 		}
 		out.Specs, err = extractImports(root, src, isTypeScriptPath(file), g)
@@ -207,15 +216,15 @@ func eachChild(n *sitter.Node, fn func(c *sitter.Node) bool) {
 	}
 }
 
-// firstChildKind returns the first child of n of the given kind, or nil.
-func firstChildKind(n *sitter.Node, kind string) *sitter.Node {
+// firstChildKind returns the first child of n of one of the given kinds, or nil.
+func firstChildKind(n *sitter.Node, kinds ...string) *sitter.Node {
 	cur := n.Walk()
 	defer cur.Close()
 	if !cur.GotoFirstChild() {
 		return nil
 	}
 	for {
-		if c := cur.Node(); c.Kind() == kind {
+		if c := cur.Node(); slices.Contains(kinds, c.Kind()) {
 			return c
 		}
 		if !cur.GotoNextSibling() {

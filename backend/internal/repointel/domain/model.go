@@ -103,6 +103,8 @@ const (
 	SyntaxJavaScript
 	// SyntaxGo is the grammar of .go files.
 	SyntaxGo
+	// SyntaxJava is the grammar of .java files.
+	SyntaxJava
 )
 
 // String names the grammar.
@@ -116,13 +118,15 @@ func (s Syntax) String() string {
 		return "javascript"
 	case SyntaxGo:
 		return "go"
+	case SyntaxJava:
+		return "java"
 	}
 	return "unknown"
 }
 
 // SyntaxForPath returns the grammar for a file path by its extension, compared
 // case-insensitively; ok is false for every other extension. The supported extensions are
-// .ts, .tsx, .js, .jsx, .mjs, .cjs and .go.
+// .ts, .tsx, .js, .jsx, .mjs, .cjs, .go and .java.
 func SyntaxForPath(p string) (Syntax, bool) {
 	switch strings.ToLower(path.Ext(p)) {
 	case ".ts":
@@ -133,6 +137,8 @@ func SyntaxForPath(p string) (Syntax, bool) {
 		return SyntaxJavaScript, true
 	case ".go":
 		return SyntaxGo, true
+	case ".java":
+		return SyntaxJava, true
 	}
 	return 0, false
 }
@@ -144,7 +150,7 @@ type FileImports struct {
 	Specs   []string
 }
 
-// FilePackage maps a source file to the key of its package (see GoPackageKey).
+// FilePackage maps a source file to the key of its package (see GoPackageKey, JavaPackageKey).
 type FilePackage struct {
 	Path string
 	Key  string
@@ -160,6 +166,10 @@ type Graph struct {
 // GoPackageKey returns the package key of a Go file: "go:" plus its repo-relative directory
 // ("go:." for the repository root).
 func GoPackageKey(file string) string { return "go:" + path.Dir(file) }
+
+// JavaPackageKey returns the package key of a Java file: "java:" plus the name in its package
+// declaration ("java:" for the default package).
+func JavaPackageKey(pkg string) string { return "java:" + pkg }
 
 // Repo is the part of a repository row the indexer needs.
 type Repo struct {

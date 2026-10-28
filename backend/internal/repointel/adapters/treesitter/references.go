@@ -47,11 +47,6 @@ func rightmostName(src []byte, n *sitter.Node) string {
 // extractor it lists calls first, then `new` expressions, then JSX opening and self-closing
 // elements, each in document order.
 func extractReferences(root sitter.Node, src []byte, syntax domain.Syntax, symbols []domain.Symbol, g *guard) ([]domain.Reference, error) {
-	declared := make(map[string]struct{}, len(symbols))
-	for _, s := range symbols {
-		declared[s.Name+":"+strconv.Itoa(s.Line)] = struct{}{}
-	}
-
 	var calls, news, opening, selfClosing []domain.Reference
 	err := walk(root, g, func(n *sitter.Node) bool {
 		switch n.Kind() {
@@ -95,23 +90,47 @@ func extractReferences(root sitter.Node, src []byte, syntax domain.Syntax, symbo
 		return nil, err
 	}
 
-	var out []domain.Reference
-	seen := map[string]struct{}{}
+	refs := newRefFilter(symbols)
 	for _, list := range [][]domain.Reference{calls, news, opening, selfClosing} {
 		for _, r := range list {
-			if isKeyword(r.Name) {
-				continue
+			if !isKeyword(r.Name) {
+				refs.add(r)
 			}
-			key := r.Name + ":" + strconv.Itoa(r.Line)
-			if _, isDecl := declared[key]; isDecl {
-				continue
-			}
-			if _, dup := seen[key]; dup {
-				continue
-			}
-			seen[key] = struct{}{}
-			out = append(out, r)
 		}
 	}
-	return out, nil
+	return refs.out, nil
 }
+
+// refFilter collects the references of one file under the dedupe rules every language shares
+// (spec section 7.4, FR10): a (name, line) that is a declaration of the file is dropped, and each
+// (name, line) is kept once, the first time it is added.
+type refFilter struct {
+	declared map[string]struct{}
+	seen     map[string]struct{}
+	// out holds the kept references in the order they were added; nil when none was kept.
+	out []domain.Reference
+}
+
+// newRefFilter returns a refFilter that drops the (name, line) of every symbol.
+func newRefFilter(symbols []domain.Symbol) *refFilter {
+	declared := make(map[string]struct{}, len(symbols))
+	for _, s := range symbols {
+		declared[refKey(s.Name, s.Line)] = struct{}{}
+	}
+	return &refFilter{declared: declared, seen: map[string]struct{}{}}
+}
+
+// add keeps r unless it is a declaration of the file or was kept before.
+func (f *refFilter) add(r domain.Reference) {
+	key := refKey(r.Name, r.Line)
+	if _, isDecl := f.declared[key]; isDecl {
+		return
+	}
+	if _, dup := f.seen[key]; dup {
+		return
+	}
+	f.seen[key] = struct{}{}
+	f.out = append(f.out, r)
+}
+
+func refKey(name string, line int) string { return name + ":" + strconv.Itoa(line) }

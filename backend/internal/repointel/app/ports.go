@@ -107,8 +107,9 @@ type Git interface {
 }
 
 // Analyzer extracts symbols, references and import specifiers from source text with the
-// tree-sitter grammars. path is only used for its extension (it selects the grammar and the
-// JavaScript or TypeScript import rules). text is valid UTF-8. Implementations are safe for
+// tree-sitter grammars. path is the repo-relative, slash-separated file path: its extension
+// selects the grammar and the JavaScript or TypeScript import rules, and a Go file's directory is
+// its package key (domain.GoPackageKey). text is valid UTF-8. Implementations are safe for
 // concurrent use. A method returns an error wrapping ctx.Err() when ctx ends first; the caller
 // bounds one file's parse time with a context deadline (domain.ParseTimeout).
 type Analyzer interface {
@@ -116,7 +117,7 @@ type Analyzer interface {
 	// errors yields what the parsable parts hold).
 	Extract(ctx context.Context, path, text string) (domain.Extraction, error)
 	// Imports returns the file's package key ("" for TypeScript and JavaScript, see
-	// domain.GoPackageKey) and its import specifiers of section 7.5 in first-seen order, without
+	// domain.GoPackageKey and domain.JavaPackageKey) and its import specifiers of section 7.5 in first-seen order, without
 	// duplicates and empty strings (FR11).
 	Imports(ctx context.Context, path, text string) (domain.FileImports, error)
 }

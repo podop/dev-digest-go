@@ -7,10 +7,11 @@ import (
 	"unicode/utf8"
 )
 
-// IsExcludedDir reports a directory name the walk never enters, at any depth (FR3013).
+// IsExcludedDir reports a directory name the walk never enters, at any depth (FR3013; target is
+// Maven's output, FR2).
 func IsExcludedDir(name string) bool {
 	switch name {
-	case "node_modules", "dist", "build", "coverage", ".next", "out", "vendor", ".git":
+	case "node_modules", "dist", "build", "coverage", ".next", "out", "vendor", ".git", "target":
 		return true
 	}
 	return false

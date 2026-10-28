@@ -80,3 +80,31 @@ func TestGoPasses_StopOnADoneContext(t *testing.T) {
 		t.Fatalf("withTree error = %v", err)
 	}
 }
+
+// TestJavaPasses_StopOnADoneContext: the same for the Java passes (FR4).
+func TestJavaPasses_StopOnADoneContext(t *testing.T) {
+	src := "package p;\n" + strings.Repeat("import a.b.C;\n", 1200) +
+		strings.Repeat("@A interface I { void f(); }\nclass S { S() { g(new T()); } }\n", 400)
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	done := func() *guard { return &guard{ctx: cancelled} }
+
+	err := withTree(t.Context(), "p/F.java", src, func(root sitter.Node, b []byte, _ domain.Syntax, _ *guard) error {
+		if _, err := javaSymbols(root, b, done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("javaSymbols error = %v, want context.Canceled", err)
+		}
+		if _, err := javaReferences(root, b, nil, done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("javaReferences error = %v, want context.Canceled", err)
+		}
+		if _, err := extractJava(root, b, done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("extractJava error = %v, want context.Canceled", err)
+		}
+		if _, err := importsJava(root, b, done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("importsJava error = %v, want context.Canceled", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("withTree error = %v", err)
+	}
+}

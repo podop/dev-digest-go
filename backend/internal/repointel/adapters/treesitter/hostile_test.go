@@ -37,6 +37,16 @@ func hostileGo() string {
 	return head + strings.Repeat("func(){", (size-len(head)-len(calls))/len("func(){")) + calls
 }
 
+// hostileJava is the Java shape of AC17 at the largest admitted size: about 9,400 nested annotated
+// classes around a method of 50,000 calls, all braces closed so the tree really is that deep.
+func hostileJava() string {
+	const size = 409_600 // domain.MaxFileBytes
+	const head, unit = "class C{\n", "@A(x=1) class B{"
+	calls := "void m(){\n" + strings.Repeat("a();\n", 50_000) + "}"
+	n := (size - len(head) - len(calls) - 1) / (len(unit) + 1)
+	return head + strings.Repeat(unit, n) + calls + strings.Repeat("}", n+1)
+}
+
 // run calls Extract or Imports and returns the error and the time it took.
 func run(ctx context.Context, a *treesitter.Analyzer, op, file, src string) (time.Duration, error) {
 	start := time.Now()
@@ -95,6 +105,7 @@ func TestHostileFiles_StopAtTheDeadline(t *testing.T) {
 		}
 	}
 	cases = append(cases, hostileCase{name: "go_nested_funcs", file: "f.go", src: hostileGo()})
+	cases = append(cases, hostileCase{name: "java_nested_classes", file: "F.java", src: hostileJava()})
 
 	a := treesitter.New()
 	for _, tc := range cases {

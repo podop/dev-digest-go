@@ -45,7 +45,7 @@ func TestSelectFiles_SkipsGeneratedGo(t *testing.T) {
 }
 
 func TestIsExcludedDir(t *testing.T) {
-	for _, n := range []string{"node_modules", "dist", "build", "coverage", ".next", "out", "vendor", ".git"} {
+	for _, n := range []string{"node_modules", "dist", "build", "coverage", ".next", "out", "vendor", ".git", "target"} {
 		if !IsExcludedDir(n) {
 			t.Errorf("IsExcludedDir(%q) = false, want true", n)
 		}
