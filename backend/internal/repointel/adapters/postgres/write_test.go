@@ -753,6 +753,95 @@ func TestResolveReferences_SamePackageExcludesOwnFile(t *testing.T) {
 	}
 }
 
+// The other file wins: own is declared in a.go and b.go, and a.go's reference goes to b.go.
+func TestResolveReferences_SamePackageOtherFileWins(t *testing.T) {
+	e := newEnv(t)
+	seedPackages(t, e,
+		[]domain.SymbolRow{sym("p/a.go", "own", 1, false), sym("p/b.go", "own", 1, false)},
+		[]domain.ReferenceRow{{FromPath: "p/a.go", ToSymbol: "own", Line: 2}},
+		pkgs("p/a.go", "go:p", "p/b.go", "go:p"))
+	must(t, e.store.ResolveReferences(t.Context(), e.repo, false))
+	if diff := cmp.Diff(map[string]string{"own": "p/b.go"}, declFiles(t, e)); diff != "" {
+		t.Errorf("decl_file mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// One package of many files, written and resolved in one transaction on tables that were
+// vacuumed while empty: the planner then believes they hold nothing and picked nested loops of
+// references × file_packages × file_packages × symbols (300 × 300 ran past 120 s, security
+// review S-H1). Half of each file's references go to the next file's symbol, half to a name
+// nobody declares.
+func TestResolveReferences_SamePackageFreshRowsResolveInTime(t *testing.T) {
+	cases := []struct {
+		name          string
+		files, perRef int
+	}{
+		{name: "300 files x 300 references", files: 300, perRef: 300},
+		{name: "5000 files x 20 references", files: 5000, perRef: 20},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			must(t, e.db.Exec(`VACUUM "references", symbols, file_packages, file_edges`).Error)
+			var (
+				syms []domain.SymbolRow
+				refs []domain.ReferenceRow
+				p    []domain.FilePackage
+			)
+			file := func(i int) string { return fmt.Sprintf("p/f%05d.go", i) }
+			for i := range tc.files {
+				syms = append(syms, sym(file(i), fmt.Sprintf("s%05d", i), 1, false))
+				p = append(p, domain.FilePackage{Path: file(i), Key: "go:p"})
+				for l := range tc.perRef {
+					to := "undeclared"
+					if l%2 == 0 {
+						to = fmt.Sprintf("s%05d", (i+1)%tc.files)
+					}
+					refs = append(refs, domain.ReferenceRow{FromPath: file(i), ToSymbol: to, Line: l + 2})
+				}
+			}
+			var took time.Duration
+			err := e.tx.InTx(t.Context(), func(ctx context.Context) error {
+				must(t, e.store.InsertSymbols(ctx, e.repo, syms))
+				must(t, e.store.InsertReferences(ctx, e.repo, refs))
+				must(t, e.store.ReplaceFilePackages(ctx, e.repo, p))
+				start := time.Now()
+				defer func() { took = time.Since(start) }()
+				return e.store.ResolveReferences(ctx, e.repo, false)
+			})
+			must(t, err)
+			t.Logf("ResolveReferences of %d fresh references in one package took %v", len(refs), took)
+			if took > 5*time.Second {
+				t.Errorf("ResolveReferences of %d fresh references in one package took %v, want under 5s", len(refs), took)
+			}
+			var resolved, unresolved int
+			must(t, e.db.Raw(`SELECT count(*) FROM "references" WHERE repo_id = ?
+				AND decl_file = 'p/f' || substr(to_symbol, 2) || '.go'`, e.repo).Scan(&resolved).Error)
+			must(t, e.db.Raw(`SELECT count(*) FROM "references" WHERE repo_id = ? AND decl_file IS NULL`, e.repo).Scan(&unresolved).Error)
+			if want := len(refs) / 2; resolved != want || unresolved != want {
+				t.Errorf("references resolved to their symbol's file = %d, unresolved = %d, want %d each", resolved, unresolved, want)
+			}
+		})
+	}
+}
+
+// The in-package step switches nested loops off for its one statement only: the rest of the
+// index transaction plans as before.
+func TestResolveReferences_RestoresEnableNestloop(t *testing.T) {
+	e := newEnv(t)
+	var got string
+	err := e.tx.InTx(t.Context(), func(ctx context.Context) error {
+		if err := e.store.ResolveReferences(ctx, e.repo, false); err != nil {
+			return err
+		}
+		return platformpg.Conn(ctx, e.db).Raw(`SHOW enable_nestloop`).Scan(&got).Error
+	})
+	must(t, err)
+	if got != "on" {
+		t.Errorf("enable_nestloop after ResolveReferences = %q, want on", got)
+	}
+}
+
 func TestResolveReferences_TSUnaffected(t *testing.T) {
 	e := newEnv(t)
 	seedResolution(t, e)

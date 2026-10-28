@@ -186,24 +186,56 @@ WHERE r.id = c.ref_id`, repoID).Error
 	if err != nil {
 		return fmt.Errorf("resolve references: %w", err)
 	}
-	// Same shape as the import step: one aggregate per reference (see the note above).
-	err = conn.Exec(`
-UPDATE "references" r
-SET decl_file = c.decl
-FROM (
-	SELECT r.id AS ref_id, min(s.path) AS decl
-	FROM "references" r
-	JOIN file_packages fp ON fp.repo_id = r.repo_id AND fp.file_path = r.from_path
-	JOIN file_packages op ON op.repo_id = r.repo_id AND op.package_key = fp.package_key
-		AND op.file_path <> r.from_path
-	JOIN symbols s ON s.repo_id = r.repo_id AND s.path = op.file_path AND s.name = r.to_symbol
-	WHERE r.repo_id = ? AND r.decl_file IS NULL
-	GROUP BY r.id
-	HAVING count(DISTINCT s.path) = 1
-) c
-WHERE r.id = c.ref_id`, repoID).Error
-	if err != nil {
+	if err := resolveInPackage(conn, repoID); err != nil {
 		return fmt.Errorf("resolve references in package: %w", err)
+	}
+	return nil
+}
+
+// resolveInPackage is the FR20 step of ResolveReferences. The symbols are first aggregated to one
+// row per (package key, name) holding the number of distinct declaring files and the least and
+// greatest of them; each NULL reference then joins its own file's package row and that one
+// aggregate row. "Exactly one other file" is then: one declaring file that is not the
+// reference's own, or two of which one is. Joining the references to the other files of the
+// package and their symbols instead was cubic when the planner had no statistics (rows fresh in
+// the transaction, or tables vacuumed while empty: 300 files × 300 references ran 9.5 min).
+//
+// Without statistics every estimate is one row, and the planner still picks nested loops over
+// the aggregate (90,000 references × 300 package rows × the aggregate: 6 s, 100,000 × 5,000:
+// 112 s), so nested loops are switched off for this one statement and the setting restored
+// after it: the plan is then hash joins only. SET LOCAL lasts until the transaction ends and a
+// failed statement rolls the transaction back, setting included; outside a transaction (tests)
+// both settings are no-ops. ANALYZE is no option inside the transaction: it serialises
+// concurrent index jobs.
+func resolveInPackage(conn *gorm.DB, repoID string) error {
+	// GUCs and UPDATE ... FROM over a materialized CTE: the builder has no form for them.
+	var nestLoop string
+	if err := conn.Raw(`SELECT current_setting('enable_nestloop')`).Scan(&nestLoop).Error; err != nil {
+		return fmt.Errorf("read enable_nestloop: %w", err)
+	}
+	if err := conn.Exec(`SET LOCAL enable_nestloop = off`).Error; err != nil {
+		return fmt.Errorf("switch nested loops off: %w", err)
+	}
+	err := conn.Exec(`
+WITH decl AS MATERIALIZED (
+	SELECT fp.package_key, s.name, count(DISTINCT s.path) AS n, min(s.path) AS mn, max(s.path) AS mx
+	FROM symbols s
+	JOIN file_packages fp ON fp.repo_id = s.repo_id AND fp.file_path = s.path
+	WHERE s.repo_id = ?
+	GROUP BY fp.package_key, s.name
+)
+UPDATE "references" r
+SET decl_file = CASE WHEN d.n = 1 OR r.from_path = d.mx THEN d.mn ELSE d.mx END
+FROM file_packages fp, decl d
+WHERE r.repo_id = ? AND r.decl_file IS NULL
+	AND fp.repo_id = r.repo_id AND fp.file_path = r.from_path
+	AND d.package_key = fp.package_key AND d.name = r.to_symbol
+	AND ((d.n = 1 AND d.mn <> r.from_path) OR (d.n = 2 AND r.from_path IN (d.mn, d.mx)))`, repoID, repoID).Error
+	if err != nil {
+		return err
+	}
+	if err := conn.Exec(`SELECT set_config('enable_nestloop', ?, true)`, nestLoop).Error; err != nil {
+		return fmt.Errorf("restore enable_nestloop: %w", err)
 	}
 	return nil
 }
