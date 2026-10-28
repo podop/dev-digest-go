@@ -16,7 +16,7 @@
   `IndexWriter.ReplaceFilePackages(ctx, repoID string, rows []domain.FilePackage) error`.
 - [C3] `IG/`: `type SourceImports func(ctx context.Context, file string) domain.FileImports` ·
   `func Build(ctx, fs domain.SourceFS, root string, files []string, imports SourceImports) (g domain.Graph, aliasErr, err error)` ·
-  `func NewGoResolver(tree Tree, files []string) *GoResolver` + `func (r *GoResolver) ResolveAll(spec string) []string` ·
+  `func NewGoResolver(ctx context.Context, tree Tree, files []string) (*GoResolver, error)` + `func (r *GoResolver) ResolveAll(spec string) []string` ·
   `func NewJavaResolver(pkgFiles map[string][]string) *JavaResolver` (key = package name without `java:`) +
   `func (r *JavaResolver) ResolveAll(spec string) []string`. `BuildEdges(ctx, files, *Resolver, SpecifierSource)` keeps
   its signature and tests (TS-only helper).

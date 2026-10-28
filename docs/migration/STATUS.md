@@ -25,11 +25,20 @@ Branch `feat/go-backend-phase-1`. Not pushed, no PR (the user decides). The user
 | Feature | State |
 |---|---|
 | PR Leaderboard, Settings A, B, Cost ledger, Settings C | done and committed (specs `implemented`, plans `done`) |
+| **Repo-intel Go/Java** (Go + Java indexing, honest `no_files` UI) | **done** — spec `0990650`, code `56750db`…`98282d9` (branch `worktree-feat-repo-intel-go-java`, not merged), close commit; spec `implemented` (D1–D10), plan `done`; migration **0013** (`file_packages`), `IndexerVersion` 3 (startup backfill re-indexes every repo; Go/Java repos show the old partial text with Resync until then). Live: holocron `full`, 129 files (first run 79 s, import-step nested loops; 2.25 s after L-1); dsf-fam-service `full`, 1,451 Java files in 5.6 s; AC24 closed without dcg-orchestrator/ucc (user, 2026-10-28). Follow-ups below |
 | **GitLab B** (MR comments + context peers) | **done** — plan `63e45fb`, `e0e58b4` (S1 notebody), `76e32dd` (W1–W3), `b19dcd1` (W4), `8e990e9` (S24), fix rounds `41d2ce3`, `5b08094`, `a6ebe77`; spec `implemented` (D31–D40), plan `done`; migration **0011** (stand not rebuilt yet) |
 | **GitLab C** (GitLab CI) | **done** — plan `e94f583`, `11b1c81` (W1–W3), `05253c9` (W4 + fixes), `5f41e63` (S26), `dacc9d0` (race fix), fix rounds `c2a8bc2`, `1a8bffc`, `621ba72`, close commit (CiTab labels); spec `implemented` (D29–D37), plan `done`; migration **0012**; user SCR1: GitLab ledger key `ci:<host>:<job id>:<attempt>` |
 | **GitLab A** (connections + MR sync) | **done** — plan `d181249`, `9cbf097` (W1–W3), `f9682c3` (W4), `d56ddf3` (W5 + fix r1); spec `implemented` (D36–D44), plan `done`; the stand runs it (rebuilt, migrations up to **0010**) |
 | **Custom model providers** | **done** — plan `84c2f39`, `e10495f` (W1–W4), `67549cd` (W5), fix rounds `0f108b8`, `f86f362`; spec `implemented` (D30–D37), plan `done`; the stand runs it (rebuilt, migrations up to **0009**) |
 | **Settings D** (integrations / plugins) | **done** — `ebaceb5` (W1–W3), `00c0ecd` (W4 + D19/D21), `fd90f3d` (fix r1), `4a31756` (fix r2); spec `implemented` (D19–D22), plan `done`; the stand runs it (rebuilt, migrations up to **0008**) |
+
+**Repo-intel Go/Java follow-ups (not fixed):**
+- Echo/Gin group-prefix endpoint tracking: holocron registers `g.GET("", h)` on groups, so it shows 0 endpoints (FR22 needs a path starting with `/`).
+- Blast caller labels for Go/Java rows come from the TS-only `ExtractSymbols`: the file name shows instead of the enclosing function.
+- Java declaration heuristic limits: a constructor with no modifier, and `a < b && c > f(x)`.
+- Other statements in the index transaction over fresh rows are not yet audited for planner nested loops (only the import and same-package steps use `withoutNestedLoops`).
+- NFR1/NFR2 not run on dcg-orchestrator and ucc (not registered in the stand).
+- Full `go test -race ./...` fails `cmd/server TestContracts_Phase2GoldenResponses` on hosts with `core.autocrlf=true` (CRLF goldens; also fails on the base); 4 frontend Vitest failures in files this branch does not touch (host Node 24 Blob vs jsdom, one timeout).
 
 **GitLab C gate** (reports in `.sdd/review/2026-10-27-gitlab-c-ci/`, git-ignored):
 | Reviewer | r1 (`5b08094..dacc9d0`) | r2 (`..c2a8bc2`) | r3 (`..1a8bffc`) |

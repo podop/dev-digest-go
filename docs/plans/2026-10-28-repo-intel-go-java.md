@@ -1,5 +1,5 @@
 # Repo intelligence for Go and Java — Implementation Plan
-Plan: repo-intel Go + Java + honest "no source files" UI · Status: draft · Spec: specs/2026-10-28-repo-intel-go-java.md
+Plan: repo-intel Go + Java + honest "no source files" UI · Status: done · Spec: specs/2026-10-28-repo-intel-go-java.md
 (approved by the user 2026-10-28) · Base: main @ a0f6c1c (+ uncommitted clone-retry change of 2026-10-28)
 Packages: backend, frontend · Context pack: docs/plans/2026-10-28-repo-intel-go-java.context.md
 
@@ -334,17 +334,19 @@ Test: create `F/lib/hooks/repo-intel.test.ts`, `GitLabRepoRow.test.tsx`; modify 
 ## Close
 
 ### Task 14: Gates, live acceptance, docs
-- [ ] **Step 1:** `make check` in an `autocrlf=false` worktree ([V2]); all green (load-sensitive timing tests re-run
+- [x] **Step 1:** `make check` in an `autocrlf=false` worktree ([V2]); all green (load-sensitive timing tests re-run
   alone per [K3]).
-- [ ] **Step 2:** review gate — project `architecture-reviewer` (base `main`) ∥ `security` skill review (hostile clone
+- [x] **Step 2:** review gate — project `architecture-reviewer` (base `main`) ∥ `security` skill review (hostile clone
   input: grammars, annotation scanner, `go.mod` read, SQL) ∥ plan verification against the spec; fix rounds as needed.
-- [ ] **Step 3:** rebuild the stack (`docker compose up -d --build backend frontend`), Resync holocron, dsf-fam-service,
+- [x] **Step 3:** rebuild the stack (`docker compose up -d --build backend frontend`), Resync holocron, dsf-fam-service,
   dcg-orchestrator, ucc. Record for AC24/NFR1/NFR2: holocron `full` with `filesIndexed > 0`, tour generated, blast of
   one MR not degraded; dsf-fam-service Java files indexed; dcg-orchestrator and ucc `durationMs` < 110,000 and the
   same-package step ≤ the import step (log/`EXPLAIN ANALYZE` on the live db).
-- [ ] **Step 4:** spec status → implemented; `docs/migration/STATUS.md` line; `backend/AGENTS.md` repointel note
+  Decision (user, 2026-10-28): dcg-orchestrator and ucc are not registered in this stack, so AC24 is closed without
+  them; NFR1/NFR2 were measured on holocron and dsf-fam-service only (results in the spec's AC24 note).
+- [x] **Step 4:** spec status → implemented; `docs/migration/STATUS.md` line; `backend/AGENTS.md` repointel note
   (languages, `file_packages`); engineering-insights WRAP-UP for backend and frontend.
-- [ ] **Step 5:** commit `repo-intel Go/Java done: gates, live acceptance, docs`.
+- [x] **Step 5:** commit `repo-intel Go/Java done: gates, live acceptance, docs`.
 
 ## Execution
 - Mode: sequential by phase (tasks share `ports.go`, `edges.go`, `fakes_test.go`); inside Phase A, Tasks 6 and 7 are

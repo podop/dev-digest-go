@@ -255,6 +255,12 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   `RecordGitLabCIRun`; `options.artifactClient` also stands in for the GitLab storage hop. Runner GitLab mode
   (`DEVDIGEST_PLATFORM=gitlab_ci`, `ci/runner` + `adapters/glapi` + `adapters/gitdiff`): drafts + bulk publish, at most
   50 inline threads, B's `notebody` rules, and NO `::stop-commands::` wrapping of the log in GitLab mode.
+- Repo-intel languages (spec 2026-10-28): the indexer parses TS/JS/Go/Java with tree-sitter. The
+  `file_packages` table (migration 0013) drives same-package resolution (a second step after the import
+  edges). `domain.IndexerVersion` is 3; a bump re-indexes every repo through the startup backfill
+  ("repo-intel backfill enqueued"), and the frontend pins the number (`GO_JAVA_INDEXER_VERSION`,
+  `go-backend-contracts.test.ts`). Index-transaction statements that join rows written earlier in the same
+  transaction run inside `withoutNestedLoops` (`adapters/postgres/write.go`) — add new ones there.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

@@ -1,5 +1,5 @@
 # Repo intelligence for Go and Java, and an honest "no source files" state
-Spec: repo-intel language support (Go, Java) and the UI state of a repo without indexable files · Status: draft · Date: 2026-10-28
+Spec: repo-intel language support (Go, Java) and the UI state of a repo without indexable files · Status: implemented (2026-10-28, 56750db..98282d9; D1–D10) · Date: 2026-10-28
 Areas: index, graph, facts, db, ui
 Design sources: the user's requests of 2026-10-28 ("do both, start with Go support. Add also Java support"), after
 holocron (a Go GitLab project) was indexed with `filesIndexed: 0, reason: no_files` and could neither generate an
@@ -316,6 +316,16 @@ No HTTP route, status code, JSON field or frontend contract changes. `RepoIndexS
 - AC24 [index] — Live (after deploy, on this machine): holocron re-indexes with `filesIndexed > 0` and status `full`,
   an onboarding tour is generated, and the blast radius of one of its MRs is not degraded; dsf-fam-service indexes its
   Java files; dcg-orchestrator and ucc meet NFR1.
+  - Implementation note (live run, stack built from 98282d9, 2026-10-28). Migration 0013 `file_packages` applied in
+    15 ms. **holocron (Go, GitLab):** before the branch version 2, `partial`/`no_files`, 0 files; now version 3, `full`,
+    129 files. The first run took 79,131 ms, of which 76,826 ms was the import-step UPDATE (planner nested loops over
+    fresh rows); fix L-1 (98282d9) brought it to 2,250 ms. Onboarding tour generated (status ready). MR !133 blast:
+    degraded=false, 64 changed symbols, 81 callers, 13 downstream. 0 endpoints: holocron registers Echo group routes
+    with an empty path (`g.GET("", h)`), and FR22 requires the path to start with `/`, so this matches the spec (a
+    follow-up). **dsf-fam-service (Java):** version 3, `full`, 1,451 files indexed (1 skipped), 5,590 ms; same-package
+    step 403 ms; import step under the 200 ms slow-SQL threshold. **dcg-orchestrator and ucc** are not registered in
+    this stack; the user decided (2026-10-28) to close AC24 without them. NFR1/NFR2 were measured on holocron and
+    dsf-fam-service only; the named repos were not run.
 
 ## 11. Traceability
 | FR | AC |
