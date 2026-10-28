@@ -209,7 +209,7 @@ describe("TourView — states", () => {
   it("says the repo has no source files DevDigest can index, with the languages line, and keeps Generate disabled (FR31, AC22)", async () => {
     setup(
       { status: "none" },
-      { "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "no_files", lastIndexedSha: "abc", indexerVersion: 1, updatedAt: "2026-10-01T00:00:00.000Z" } },
+      { "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "no_files", lastIndexedSha: "abc", indexerVersion: 3, updatedAt: "2026-10-01T00:00:00.000Z" } },
     );
     renderWithProviders(view());
 

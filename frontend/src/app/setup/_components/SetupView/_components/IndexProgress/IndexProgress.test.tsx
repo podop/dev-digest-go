@@ -54,7 +54,7 @@ describe("IndexProgress (FR25, EC16)", () => {
   });
 
   it("says the repo has no supported source files, with the languages line (FR30, AC22)", async () => {
-    mockFetch({ "GET /repos/:id/index-state": { ...INDEXED, status: "partial", filesIndexed: 0, reason: "no_files" } });
+    mockFetch({ "GET /repos/:id/index-state": { ...INDEXED, status: "partial", filesIndexed: 0, reason: "no_files", indexerVersion: 3 } });
     renderWithProviders(<IndexProgress repo={REPO} />);
     expect(await screen.findByText("acme/api has no supported source files")).toBeInTheDocument();
     expect(screen.getByText("Only TypeScript, JavaScript, Go and Java files are indexed.")).toBeInTheDocument();

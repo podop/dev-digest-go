@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RepoIndexState } from "@devdigest/shared";
-import { hasNoSourceFiles } from "./repo-intel";
+import { GO_JAVA_INDEXER_VERSION, hasNoSourceFiles } from "./repo-intel";
 
 const state = (over: Partial<RepoIndexState>): RepoIndexState => ({
   repoId: "r1",
@@ -10,7 +10,7 @@ const state = (over: Partial<RepoIndexState>): RepoIndexState => ({
   durationMs: 1,
   reason: "no_files",
   lastIndexedSha: "abc",
-  indexerVersion: 1,
+  indexerVersion: GO_JAVA_INDEXER_VERSION,
   updatedAt: "2026-10-01T00:00:00.000Z",
   ...over,
 });
@@ -26,6 +26,7 @@ describe("hasNoSourceFiles (FR28)", () => {
     ["another reason", state({ reason: "budget" })],
     ["no reason", state({ reason: undefined })],
     ["indexed files", state({ filesIndexed: 12 })],
+    ["a no_files state of indexer version 2 (stale: Go and Java were not read, R-I2)", state({ indexerVersion: 2 })],
   ])("is false for %s", (_name, s) => {
     expect(hasNoSourceFiles(s)).toBe(false);
   });

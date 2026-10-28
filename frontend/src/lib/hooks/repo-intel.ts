@@ -32,10 +32,19 @@ export function isRepoIndexed(state: RepoIndexState | undefined): boolean {
   return !!state && state.lastIndexedSha !== "";
 }
 
+/** First indexer version that reads Go and Java; an older no_files state is stale. */
+export const GO_JAVA_INDEXER_VERSION = 3;
+
 /** The repo was indexed and held no file in a supported language (TypeScript, JavaScript, Go, Java): the
-    API answers `reason: "no_files"` with zero files. A never-indexed or failed repo is not this (EC13). */
+    API answers `reason: "no_files"` with zero files. A never-indexed or failed repo is not this (EC13),
+    nor is a state written by an indexer older than GO_JAVA_INDEXER_VERSION (R-I2). */
 export function hasNoSourceFiles(state: RepoIndexState | undefined): boolean {
-  return isRepoIndexed(state) && state?.reason === "no_files" && state.filesIndexed === 0;
+  return (
+    isRepoIndexed(state) &&
+    state?.reason === "no_files" &&
+    state.filesIndexed === 0 &&
+    state.indexerVersion >= GO_JAVA_INDEXER_VERSION
+  );
 }
 
 /** Waits for a repo's first index state (first-run setup, FR25): refetches GET

@@ -32,7 +32,7 @@ function renderRow() {
 
 describe("GitLabRepoRow index state", () => {
   it("says 'no supported source files' with the languages hint instead of 'indexed … ago'", async () => {
-    mockFetch({ "GET /repos/r1/index-state": indexState({ reason: "no_files" }) });
+    mockFetch({ "GET /repos/r1/index-state": indexState({ reason: "no_files", indexerVersion: 3 }) });
     renderRow();
     expect(await screen.findByText("no supported source files")).toBeInTheDocument();
     expect(screen.getByText(LANGUAGES)).toBeInTheDocument();

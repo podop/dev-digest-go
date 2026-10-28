@@ -145,7 +145,7 @@ describe("BlastRadiusCard", () => {
     mockFetch({
       "GET /repos": [GITHUB_REPO],
       "GET /pulls/pr-1/blast": { changed_symbols: [], downstream: [], summary: "s", degraded: true, reason: "index_partial" } satisfies BlastRadius,
-      "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "no_files", lastIndexedSha: "abc", indexerVersion: 1, updatedAt: "2026-10-01T00:00:00.000Z" },
+      "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "no_files", lastIndexedSha: "abc", indexerVersion: 3, updatedAt: "2026-10-01T00:00:00.000Z" },
     });
     renderCard();
 
@@ -159,8 +159,24 @@ describe("BlastRadiusCard", () => {
     expect(within(card).queryByText(/index of this repo is partial/)).toBeNull();
   });
 
+  it("a no_files state of an indexer older than version 3 is stale: the partial reason and Resync show as before (R-I2)", async () => {
+    const api = mockFetch({
+      "GET /repos": [GITHUB_REPO],
+      "GET /pulls/pr-1/blast": { changed_symbols: [], downstream: [], summary: "s", degraded: true, reason: "index_partial" } satisfies BlastRadius,
+      "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "no_files", lastIndexedSha: "abc", indexerVersion: 2, updatedAt: "2026-10-01T00:00:00.000Z" },
+    });
+    renderCard();
+
+    const card = await screen.findByRole("region", { name: "Blast radius" });
+    await waitFor(() => expect(api.requests("GET", "/repos/r1/index-state")).toHaveLength(1));
+    expect(await within(card).findByRole("button", { name: "Resync" })).toBeInTheDocument();
+    expect(within(card).getByText(/index of this repo is partial/)).toBeInTheDocument();
+    expect(within(card).queryByText(/no source files DevDigest can index/)).toBeNull();
+    expect(within(card).queryByText("Only TypeScript, JavaScript, Go and Java files are indexed.")).toBeNull();
+  });
+
   it("a degraded answer with a budget-limited index still shows the partial reason and Resync (AC22)", async () => {
-    mockFetch({
+    const api = mockFetch({
       "GET /repos": [GITHUB_REPO],
       "GET /pulls/pr-1/blast": { changed_symbols: [], downstream: [], summary: "s", degraded: true, reason: "index_partial" } satisfies BlastRadius,
       "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 12, filesSkipped: 0, durationMs: 1, reason: "budget", lastIndexedSha: "abc", indexerVersion: 1, updatedAt: "2026-10-01T00:00:00.000Z" },
@@ -168,6 +184,7 @@ describe("BlastRadiusCard", () => {
     renderCard();
 
     const card = await screen.findByRole("region", { name: "Blast radius" });
+    await waitFor(() => expect(api.requests("GET", "/repos/r1/index-state")).toHaveLength(1));
     expect(await within(card).findByRole("button", { name: "Resync" })).toBeInTheDocument();
     expect(within(card).getByText(/index of this repo is partial/)).toBeInTheDocument();
     expect(within(card).queryByText(/no source files DevDigest can index/)).toBeNull();
