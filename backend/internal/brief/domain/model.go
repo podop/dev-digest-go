@@ -37,8 +37,9 @@ const (
 	Temperature     = 0.2
 	MaxOutputTokens = 8_000
 	Reprompts       = 1
-	// GenerationBudget bounds one generation: facts, model call and storage.
-	GenerationBudget = 120 * time.Second
+	// GenerationBudget bounds one generation: facts, model call and storage. Twice Node's 120 s:
+	// one request may take the provider's whole 120 s request timeout.
+	GenerationBudget = 240 * time.Second
 	// IssueTimeout bounds the linked-issue read.
 	IssueTimeout = 10 * time.Second
 	// InputBudgetTokens is the estimated-token budget of the prompt (system plus user).

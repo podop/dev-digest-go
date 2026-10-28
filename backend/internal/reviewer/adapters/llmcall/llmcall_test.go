@@ -115,6 +115,9 @@ func TestCaller_BuildsTheReviewRequest(t *testing.T) {
 	if r.Temperature == nil || *r.Temperature != 0 {
 		t.Errorf("Review() temperature = %v, want 0", r.Temperature)
 	}
+	if r.Timeout != 300*time.Second {
+		t.Errorf("Review() request timeout = %v, want 5m0s", r.Timeout)
+	}
 	if string(r.Schema) != string(domain.ReviewSchemaJSON) {
 		t.Error("Review() schema is not domain.ReviewSchemaJSON")
 	}

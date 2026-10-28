@@ -262,6 +262,12 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   ("repo-intel backfill enqueued"), and the frontend pins the number (`GO_JAVA_INDEXER_VERSION`,
   `go-backend-contracts.test.ts`). Index-transaction statements that join rows written earlier in the same
   transaction run inside `withoutNestedLoops` (`adapters/postgres/write.go`) — add new ones there.
+- LLM time bounds (user decision 2026-10-28, a deliberate divergence from Node): one structured call
+  (every request, retry and re-prompt) has `llm.DefaultTotalBudget` 720 s; the review call sets its own
+  request timeout `reviewer/domain.RequestTimeout` 300 s (other calls keep the adapters' 120 s, OpenRouter
+  180 s); intent `Budget`, brief and onboarding `GenerationBudget` are 240 s, an eval case `CaseBudget`
+  720 s, a conventions scan `JobTimeout` 600 s. The parity tests compare these against Node's values with
+  the factor stated, and the Node scenario replays (intent, eval executor goldens) run with Node's budget.
 - Echo only in `internal/platform/httpx`, `transport/http` packages and `cmd/` (one test-only
   exception: `platform/inflight/shutdown_test.go` drives a real Echo listener to prove that its
   graceful shutdown never cancels request contexts). GORM only in

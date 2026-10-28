@@ -181,7 +181,7 @@ type options struct {
 	// intentBudget, briefBudget and onboardingBudget bound one intent derivation, brief generation
 	// and tour generation; 0 = each domain's own budget (120 s).
 	intentBudget, briefBudget, onboardingBudget time.Duration
-	// evalCaseBudget bounds one eval case; 0 = the domain's budget (120 s).
+	// evalCaseBudget bounds one eval case; 0 = the domain's budget (720 s).
 	evalCaseBudget time.Duration
 	// runner is the CI runner the export ships; nil = runnerbin.Default(), the runner embedded by the
 	// image build (a build without the devdigest_runner tag has none and answers runner_bundle_missing).

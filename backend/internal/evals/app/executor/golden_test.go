@@ -261,7 +261,9 @@ func (g goldenEnv) run(t *testing.T, sc goldenScenario, sw corpusScenario) {
 		}
 
 		fixed := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
-		h := newHarness(t, store, llm, executor.Options{}, func() time.Time { return fixed })
+		// The Node scenarios time cases against Node's 120 s case budget; Go's domain.CaseBudget is
+		// larger since 2026-10-28, so the replay runs with Node's.
+		h := newHarness(t, store, llm, executor.Options{CaseBudget: 120 * time.Second}, func() time.Time { return fixed })
 		run := g.buildRun(sc.Job)
 
 		shutdown := (*bool)(nil)

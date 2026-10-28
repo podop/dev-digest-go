@@ -369,9 +369,9 @@ func TestExtract_JobTimeoutAndShutdown(t *testing.T) {
 		cancel  bool
 		want    string
 	}{
-		{"default limit", 0, 300 * time.Second, false, "The scan timed out after 300 s"},
+		{"default limit", 0, app.JobTimeout, false, "The scan timed out after 600 s"},
 		{"custom limit", 2 * time.Second, 2 * time.Second, false, "The scan timed out after 2 s"},
-		{"shutdown", 0, 300 * time.Second, true, "The scan was interrupted"},
+		{"shutdown", 0, app.JobTimeout, true, "The scan was interrupted"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

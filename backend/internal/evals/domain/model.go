@@ -62,10 +62,12 @@ const (
 	InterruptedError = "interrupted"
 	// EveryCaseErrored is the run error when every outcome errored and no case message exists.
 	EveryCaseErrored = "every case errored"
-	// CaseConcurrency is the cases of one run in flight; CaseBudget the time one case may take;
+	// CaseConcurrency is the cases of one run in flight; CaseBudget the time one case may take
+	// (Node: 120 s; here one review call's total budget, llm.DefaultTotalBudget, since a case runs
+	// the review call and its request alone may take reviewer/domain.RequestTimeout, 300 s);
 	// ShutdownDrain how long shutdown waits for runs to record themselves.
 	CaseConcurrency = 3
-	CaseBudget      = 120 * time.Second
+	CaseBudget      = 720 * time.Second
 	ShutdownDrain   = 5 * time.Second
 	// RunListDefault and RunListMax are the default and maximum limit of a run list.
 	RunListDefault = 20

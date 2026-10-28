@@ -18,8 +18,9 @@ import (
 const (
 	// KindExtract is the job kind a scan runs under.
 	KindExtract = "conventions.extract"
-	// JobTimeout is the per-attempt limit of KindExtract; register the handler with it.
-	JobTimeout = 300 * time.Second
+	// JobTimeout is the per-attempt limit of KindExtract; register the handler with it. Twice
+	// the former 300 s, in step with the doubled llm.DefaultTotalBudget.
+	JobTimeout = 600 * time.Second
 )
 
 // Texts the client sees (spec FR242, FR247, FR248, D210).

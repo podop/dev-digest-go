@@ -216,7 +216,7 @@ func TestOnboardingParity_Constants(t *testing.T) {
 		"inputMaxTokens":      {domain.InputBudgetTokens, int(k.Constants["inputMaxTokens"].(float64))},
 		"llmMaxOutputTokens":  {domain.MaxOutputTokens, int(k.Constants["llmMaxOutputTokens"].(float64))},
 		"llmMaxRetries":       {domain.Reprompts, int(k.Constants["llmMaxRetries"].(float64))},
-		"generationTimeoutMs": {int(domain.GenerationBudget.Milliseconds()), int(k.Constants["generationTimeoutMs"].(float64))},
+		"generationTimeoutMs": {int(domain.GenerationBudget.Milliseconds()) / 2, int(k.Constants["generationTimeoutMs"].(float64))}, // Go: twice Node's (2026-10-28)
 		"topFilesCount":       {domain.TopFilesInPrompt, int(k.Constants["topFilesCount"].(float64))},
 		"readmeMaxChars":      {domain.ReadmeMaxUnits, int(k.Constants["readmeMaxChars"].(float64))},
 		"composeMaxChars":     {domain.ComposeMaxUnits, int(k.Constants["composeMaxChars"].(float64))},

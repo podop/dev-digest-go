@@ -79,7 +79,7 @@ type Deps struct {
 
 // Options tune an Executor. Zero values select the defaults.
 type Options struct {
-	// CaseBudget is how long one case may take; 0 = domain.CaseBudget (120 s).
+	// CaseBudget is how long one case may take; 0 = domain.CaseBudget (720 s).
 	CaseBudget time.Duration
 	// Cases bounds the cases of one run in flight; 0 = domain.CaseConcurrency (3).
 	Cases int

@@ -105,8 +105,10 @@ const (
 	DefaultReprompts = 2
 	// NoReprompts in Request.Reprompts makes the call give up after its first attempt.
 	NoReprompts = -1
-	// DefaultTotalBudget bounds one structured call: every request, retry and re-prompt.
-	DefaultTotalBudget = 360 * time.Second
+	// DefaultTotalBudget bounds one structured call: every request, retry and re-prompt. It is
+	// twice Node's 360 s, so a slow gateway model keeps room for re-prompts after a long request
+	// (the review request alone may take reviewer/domain.RequestTimeout, 300 s).
+	DefaultTotalBudget = 720 * time.Second
 )
 
 // Request is one structured completion. The context carries cancellation.
@@ -339,7 +341,7 @@ type Options struct {
 	Prices Pricer
 	// PriceTTL is the live-price lifetime of the default price book (default 6 h).
 	PriceTTL time.Duration
-	// TotalBudget bounds one structured call (default 360 s).
+	// TotalBudget bounds one structured call (default DefaultTotalBudget, 720 s).
 	TotalBudget time.Duration
 	// Retry tunes the backoff (BaseDelay, MaxDelay, Jitter, OnRetry); the retry count always
 	// comes from the adapter's Policy.

@@ -12,6 +12,8 @@
 // token estimate is ceil(units / 4).
 package domain
 
+import "time"
+
 // Constants of the engine (spec section 7.1).
 const (
 	// MapThresholdLines is the added+deleted line count above which the auto strategy goes
@@ -29,6 +31,11 @@ const (
 	// Temperature is the sampling temperature of a review call (subject to the reasoning-model
 	// rules of the LLM layer).
 	Temperature = 0.0
+	// RequestTimeout bounds one HTTP request of a review call, for every provider, instead of the
+	// providers' default (120 s): a large chunk on a slow gateway model answers in more than two
+	// minutes, and a timed-out request is not retried. Every request and re-prompt of the call
+	// still share the LLM client's total budget (llm.DefaultTotalBudget, 720 s).
+	RequestTimeout = 300 * time.Second
 )
 
 // Strategy is an agent's review strategy.

@@ -100,7 +100,8 @@ func TestIntentGolden_Constants(t *testing.T) {
 		{"IntentMaxUnits", domain.IntentMaxUnits, num("intentTextMaxChars")},
 		{"ScopeMaxItems", domain.ScopeMaxItems, num("scopeMaxItems")},
 		{"ScopeItemMaxUnits", domain.ScopeItemMaxUnits, num("scopeItemMaxChars")},
-		{"Budget (ms)", int(domain.Budget.Milliseconds()), num("budgetMs")},
+		// Deliberate divergence (2026-10-28): the Go budget is twice Node's (nodeIntentBudget).
+		{"Budget (ms)", int(domain.Budget.Milliseconds()) / 2, num("budgetMs")},
 		{"MaxOutputTokens", domain.MaxOutputTokens, num("llmMaxOutputTokens")},
 		{"Reprompts", domain.Reprompts, num("llmMaxRetries")},
 		{"RefreshRatePerMinute", domain.RefreshRatePerMinute, rate.Max},

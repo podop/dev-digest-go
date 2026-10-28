@@ -41,8 +41,8 @@ func TestDomainConstantsMatchTheContract(t *testing.T) {
 	if domain.DerivedInferred != "inferred" || domain.DerivedExplicit != "explicit" {
 		t.Errorf("derived_from constants = %q, %q", domain.DerivedExplicit, domain.DerivedInferred)
 	}
-	if domain.PromptVersion != 2 || domain.Budget.Milliseconds() != 120_000 {
-		t.Errorf("PromptVersion, Budget = %d, %v, want 2, 120s", domain.PromptVersion, domain.Budget)
+	if domain.PromptVersion != 2 || domain.Budget.Milliseconds() != 240_000 {
+		t.Errorf("PromptVersion, Budget = %d, %v, want 2, 4m0s", domain.PromptVersion, domain.Budget)
 	}
 	if domain.EventInfo != string(reviewer.EventInfo) || domain.EventResult != string(reviewer.EventResult) {
 		t.Errorf("event constants = %q, %q, want the reviewer event kinds", domain.EventInfo, domain.EventResult)

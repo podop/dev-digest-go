@@ -298,7 +298,9 @@ func TestEvalsConstantsParity(t *testing.T) {
 		{"TREND_POINTS", gNum(c["TREND_POINTS"]), domain.LatestWindow},
 		{"RECENT_RUNS_LIMIT", gNum(c["RECENT_RUNS_LIMIT"]), domain.RecentRunsMax},
 		{"EVAL_CASE_CONCURRENCY", gNum(c["EVAL_CASE_CONCURRENCY"]), domain.CaseConcurrency},
-		{"EVAL_CASE_TIMEOUT_MS", gNum(c["EVAL_CASE_TIMEOUT_MS"]), float64(domain.CaseBudget.Milliseconds())},
+		// Deliberate divergence (2026-10-28): the Go case budget is 6× Node's 120 s (one review
+		// call's total budget, llm.DefaultTotalBudget).
+		{"EVAL_CASE_TIMEOUT_MS", gNum(c["EVAL_CASE_TIMEOUT_MS"]), float64(domain.CaseBudget.Milliseconds()) / 6},
 		{"ERROR_MESSAGE_MAX_CHARS", gNum(c["ERROR_MESSAGE_MAX_CHARS"]), domain.ErrorTextMax},
 		{"EVAL_SHUTDOWN_WAIT_MS", gNum(c["EVAL_SHUTDOWN_WAIT_MS"]), float64(domain.ShutdownDrain.Milliseconds())},
 		{"EVAL_CASE_NAME_MAX", gNum(sh["EVAL_CASE_NAME_MAX"]), domain.CaseNameMax},

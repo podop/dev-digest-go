@@ -2,8 +2,8 @@
 // completion client of internal/llm. One Caller is bound to one agent run: it knows the provider,
 // model, run id, OpenRouter session id and the usage observer, so the engine passes only the
 // prompt and the chunk position. It builds the Review call of spec 7.9 (schema name and schema,
-// temperature 0, two re-prompts, the prompt log's section metadata) and maps the validated JSON
-// answer onto the engine's domain types.
+// temperature 0, two re-prompts, a 300 s request timeout, the prompt log's section metadata) and
+// maps the validated JSON answer onto the engine's domain types.
 package llmcall
 
 import (
@@ -86,6 +86,7 @@ func (c *Caller) request(call reviewerapp.Call) llm.Request {
 		SchemaName:    domain.ReviewSchemaName,
 		Schema:        domain.ReviewSchemaJSON,
 		Temperature:   &temperature,
+		Timeout:       domain.RequestTimeout,
 		Reprompts:     domain.Reprompts,
 		Feature:       Feature,
 		CorrelationID: c.cfg.RunID,

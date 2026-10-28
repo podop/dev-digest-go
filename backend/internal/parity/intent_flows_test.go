@@ -793,6 +793,10 @@ type runningCaller struct {
 	res    app.Result
 }
 
+// nodeIntentBudget is Node's intent budget (constants.budgetMs of the golden); Go's domain.Budget
+// is twice it since 2026-10-28.
+const nodeIntentBudget = 120 * time.Second
+
 func TestIntentGolden_Scenarios(t *testing.T) {
 	var g struct {
 		Scenarios []scenarioCase `json:"scenarios"`
@@ -834,7 +838,8 @@ func runScenario(t *testing.T, tc scenarioCase, sc scenarioScript) {
 	w.LLM.Data, w.LLM.TokensIn, w.LLM.TokensOut, w.LLM.CostUSD = tc.World.LLM.Data, tc.World.LLM.TokensIn, tc.World.LLM.TokensOut, tc.World.LLM.CostUSD
 	w.LLM.Error = ""
 
-	rig := newRig(t, &w, app.Options{})
+	// The scenarios carry Node's budget in their messages, so they run with Node's budget.
+	rig := newRig(t, &w, app.Options{Budget: nodeIntentBudget})
 	rig.llm.gate = make(chan gateAnswer)
 	callers := map[string]*runningCaller{}
 
@@ -891,7 +896,7 @@ func runScenario(t *testing.T, tc scenarioCase, sc scenarioScript) {
 			rig.llm.gate <- a
 			synctest.Wait()
 		case step["fire"] != nil:
-			time.Sleep(domain.Budget + time.Second)
+			time.Sleep(nodeIntentBudget + time.Second)
 			synctest.Wait()
 		case step["await"] != nil:
 			<-callers[step["await"].(string)].done

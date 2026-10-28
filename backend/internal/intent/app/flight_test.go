@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"dev-digest-go/backend/internal/intent/app"
+	"dev-digest-go/backend/internal/intent/domain"
 	"dev-digest-go/backend/internal/llm"
 	"dev-digest-go/backend/internal/platform/apperr"
 	"dev-digest-go/backend/internal/platform/inflight"
@@ -350,9 +352,9 @@ func TestFlight_ATicketReadStuckPastTheBudgetIsCutAndSeenByEveryCaller(t *testin
 		synctest.Wait()
 		b := resolveAsync(t.Context(), w, in, nil)
 		synctest.Wait()
-		time.Sleep(120 * time.Second)
+		time.Sleep(domain.Budget)
 
-		want := "intent derivation exceeded its 120000ms budget"
+		want := fmt.Sprintf("intent derivation exceeded its %dms budget", domain.Budget.Milliseconds())
 		for name, ch := range map[string]<-chan app.Result{"first": a, "second": b} {
 			if got := outcome(t, ch); got.Used || got.Warning != want {
 				t.Errorf("%s caller got %+v, want unavailable: %s", name, got, want)

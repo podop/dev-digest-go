@@ -379,7 +379,7 @@ func TestBriefParity_Constants(t *testing.T) {
 		"inputMaxTokens":       {domain.InputBudgetTokens, l["inputMaxTokens"]},
 		"llmMaxOutputTokens":   {domain.MaxOutputTokens, l["llmMaxOutputTokens"]},
 		"llmMaxRetries":        {domain.Reprompts, l["llmMaxRetries"]},
-		"generationTimeoutMs":  {domain.GenerationBudget.Milliseconds(), l["generationTimeoutMs"]},
+		"generationTimeoutMs":  {domain.GenerationBudget.Milliseconds() / 2, l["generationTimeoutMs"]}, // Go: twice Node's (2026-10-28)
 		"issueFetchTimeoutMs":  {domain.IssueTimeout.Milliseconds(), l["issueFetchTimeoutMs"]},
 		"descriptionMaxChars":  {domain.MaxDescription, l["descriptionMaxChars"]},
 		"issueBodyMaxChars":    {domain.MaxIssueBody, l["issueBodyMaxChars"]},

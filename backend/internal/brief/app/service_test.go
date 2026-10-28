@@ -613,7 +613,7 @@ func TestGenerate_FailedModelCallLogsItsRequests(t *testing.T) {
 	}
 }
 
-// AC5024-style budget: the default 120 s budget expires during the model call.
+// AC5024-style budget: the default budget (domain.GenerationBudget) expires during the model call.
 func TestGenerate_BudgetExpiresDuringTheCall(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		f := newFixture(t, func(d *app.Deps) { d.Clock = time.Now })
@@ -627,8 +627,9 @@ func TestGenerate_BudgetExpiresDuringTheCall(t *testing.T) {
 		if len(f.store.Saved) != 0 {
 			t.Error("a timed out generation stored a brief")
 		}
-		if got := generatedLine(t, f); got["outcome"] != "generation_failed" || got["durationMs"] != float64(120_000) {
-			t.Errorf("generation line = %v, want generation_failed after 120000 ms", got)
+		wantMs := float64(domain.GenerationBudget.Milliseconds())
+		if got := generatedLine(t, f); got["outcome"] != "generation_failed" || got["durationMs"] != wantMs {
+			t.Errorf("generation line = %v, want generation_failed after %v ms", got, wantMs)
 		}
 		assertReleased(t, f)
 	})

@@ -30,7 +30,8 @@ const (
 	LogFeature = "intent"
 
 	// Budget bounds one derivation, from its start; the LLM call, ticket and doc reads honour it.
-	Budget = 120 * time.Second
+	// Twice Node's 120 s: one request may take the provider's whole 120 s request timeout.
+	Budget = 240 * time.Second
 	// MaxOutputTokens, Reprompts and Temperature are the classification call's parameters.
 	MaxOutputTokens = 5_000
 	Reprompts       = 1
