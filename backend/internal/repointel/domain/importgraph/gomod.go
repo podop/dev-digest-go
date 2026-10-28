@@ -20,8 +20,9 @@ type GoResolver struct {
 	filesByDir map[string][]string
 }
 
-// NewGoResolver reads go.mod in the clone root and in every directory that holds a walked file
-// (never elsewhere, so the reads are bounded by the walk) and indexes the walked .go files that
+// NewGoResolver reads go.mod in every directory above a walked file, the clone root included
+// (never elsewhere, so the reads are bounded by the walk; a nested module's directory may hold
+// only subdirectories), and indexes the walked .go files that
 // do not end in _test.go by directory. A go.mod that is missing, over MaxGoModBytes or without a
 // module directive contributes no module. When two go.mod files declare the same module path,
 // the one in the directory first in byte order wins.
@@ -30,9 +31,15 @@ func NewGoResolver(tree Tree, files []string) *GoResolver {
 	dirs := map[string]struct{}{".": {}}
 	for _, f := range files {
 		dir := path.Dir(f)
-		dirs[dir] = struct{}{}
 		if strings.HasSuffix(f, ".go") && !strings.HasSuffix(f, "_test.go") {
 			r.filesByDir[dir] = append(r.filesByDir[dir], f)
+		}
+		// Every directory above f, up to the first one already seen (as NewTree does).
+		for d := dir; ; d = path.Dir(d) {
+			if _, ok := dirs[d]; ok {
+				break
+			}
+			dirs[d] = struct{}{}
 		}
 	}
 	ordered := make([]string, 0, len(dirs))

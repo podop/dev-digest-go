@@ -88,6 +88,25 @@ func TestGoResolver_NestedModuleLongestPrefix(t *testing.T) {
 	}
 }
 
+// TestGoResolver_NestedModuleWithoutDirectFiles: a go.mod in a directory that holds no walked
+// file itself, only subdirectories that do, still declares a module (multi-module repositories).
+func TestGoResolver_NestedModuleWithoutDirectFiles(t *testing.T) {
+	src := &fakeFS{files: map[string]string{
+		"go.mod":     "module example.com/r\n",
+		"api/go.mod": "module example.com/api\n",
+	}}
+	files := []string{"api/v1/types.go", "api/v1/types_test.go", "api/v1/zz.go", "main.go"}
+	imports := importsOf(map[string][]string{"main.go": {"example.com/api/v1"}})
+	g, _, err := importgraph.Build(t.Context(), src, "/clone", files, imports)
+	if err != nil {
+		t.Fatalf("Build() error: %v", err)
+	}
+	want := []domain.Edge{edge("main.go", "api/v1/types.go"), edge("main.go", "api/v1/zz.go")}
+	if diff := cmp.Diff(want, g.Edges); diff != "" {
+		t.Errorf("Build() edges mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // TestGoResolver_GoModWithoutModuleOrTooLarge is EC3: such a go.mod contributes no module.
 func TestGoResolver_GoModWithoutModuleOrTooLarge(t *testing.T) {
 	big := "module example.com/r\n// " + strings.Repeat("x", 65<<10) + "\n"
@@ -210,12 +229,12 @@ func TestBuild_TSOnlyCloneReadsNoGoMod(t *testing.T) {
 	}
 }
 
-// TestNewGoResolver_ReadsGoModOnlyWhereFilesAreWalked: go.mod is read in the root and in the
-// directories holding a walked file, nowhere else.
+// TestNewGoResolver_ReadsGoModOnlyWhereFilesAreWalked: go.mod is read once in every directory
+// above a walked file (the root included), nowhere else.
 func TestNewGoResolver_ReadsGoModOnlyWhereFilesAreWalked(t *testing.T) {
 	tree := &countTree{perFile: map[string]int{}, files: map[string]string{}}
 	importgraph.NewGoResolver(tree, []string{"a/b/c.go", "a/b/d.go", "e/f.ts"})
-	want := map[string]int{"go.mod": 1, "a/b/go.mod": 1, "e/go.mod": 1}
+	want := map[string]int{"go.mod": 1, "a/go.mod": 1, "a/b/go.mod": 1, "e/go.mod": 1}
 	if diff := cmp.Diff(want, tree.perFile); diff != "" {
 		t.Errorf("NewGoResolver() reads mismatch (-want +got):\n%s", diff)
 	}
