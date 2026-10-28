@@ -203,7 +203,9 @@ func (r *Reader) symbolsOf(ctx context.Context, file, text string) (syms []domai
 // line order, a name stops collecting at limit rows, and once the names up to some index hold
 // limit rows between them the later names are dropped (their rows could never be returned).
 // A file is scanned for all names in one pass (domain.ReferenceScanner), which looks at ctx every
-// few thousand units of work, so the scan timeout and a cancel are honoured inside a file.
+// few thousand units of work, so the scan timeout and a cancel are honoured inside a file. A Go or
+// Java file is scanned with its language's declaration rules (ScanFile), so a line declaring a
+// name of the same spelling is no caller.
 func (r *Reader) scanFiles(ctx context.Context, root string, files []string, names []callerName, limit int) error {
 	symbols := make([]string, len(names))
 	for i := range names {
@@ -252,7 +254,7 @@ func (r *Reader) scanFiles(ctx context.Context, root string, files []string, nam
 			}
 			return len(n.rows) < limit, nil
 		}
-		if err := scanner.Scan(ctx, text, skip, hit); err != nil {
+		if err := scanner.ScanFile(ctx, rel, text, skip, hit); err != nil {
 			if hitErr != nil {
 				return hitErr
 			}

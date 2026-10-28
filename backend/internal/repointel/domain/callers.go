@@ -133,6 +133,120 @@ func declares(name, before, after string) bool {
 	return keywordThenSpace(before, "class", "interface", "type", "enum", "const", "let", "var")
 }
 
+// declRule names the extra declaration rules of a scanned file's language (ScanFile), applied on
+// top of declares. TypeScript and JavaScript files have none: they keep Node's rules exactly.
+type declRule uint8
+
+const (
+	declNode declRule = iota
+	declGo
+	declJava
+)
+
+// declRuleFor picks the rules by the file's extension, case-sensitive like IsCallerScanFile.
+func declRuleFor(file string) declRule {
+	switch {
+	case strings.HasSuffix(file, ".go"):
+		return declGo
+	case strings.HasSuffix(file, ".java"):
+		return declJava
+	}
+	return declNode
+}
+
+// lineDecl is what the Go and Java declaration tests need from a whole (sanitized) line. It is
+// computed once per line so that the test of each occurrence only looks at the text next to it
+// and a line stays linear in its length however many occurrences it holds.
+type lineDecl struct {
+	rule declRule
+	// funcEnd is, for Go, the index just past a leading func keyword (leading whitespace allowed,
+	// followed by whitespace or '('), -1 without one; recv is the index of the first non-space
+	// byte after it.
+	funcEnd, recv int
+	// firstLT is, for Java, the index of the line's first '<', -1 without one.
+	firstLT int
+}
+
+func newLineDecl(rule declRule, line string) lineDecl {
+	d := lineDecl{rule: rule, funcEnd: -1, recv: -1, firstLT: -1}
+	switch rule {
+	case declGo:
+		lead := len(line) - len(trimLeftSpace(line))
+		rest, ok := strings.CutPrefix(line[lead:], "func")
+		if !ok || rest == "" {
+			break
+		}
+		if r, _ := utf8.DecodeRuneInString(rest); r != '(' && !isJSSpace(r) {
+			break
+		}
+		d.funcEnd = len(line) - len(rest)
+		d.recv = len(line) - len(trimLeftSpace(rest))
+	case declJava:
+		d.firstLT = strings.IndexByte(line, '<')
+	}
+	return d
+}
+
+// declares reports whether the occurrence of name at byte p of line declares it under the
+// file's language rules (always false for TypeScript and JavaScript).
+func (d lineDecl) declares(line, name string, p int) bool {
+	before, after := line[:p], line[p+len(name):]
+	if d.rule == declNode || !startsWithParen(after) {
+		return false
+	}
+	if d.rule == declGo {
+		return d.goDeclares(before)
+	}
+	return d.javaDeclares(before)
+}
+
+// goDeclares: the line's code is func name( or func (receiver) name(.
+func (d lineDecl) goDeclares(before string) bool {
+	if d.funcEnd < 0 {
+		return false
+	}
+	t := trimRightSpace(before)
+	if len(t) == d.funcEnd { // func name(
+		return len(before) > d.funcEnd
+	}
+	// func (receiver) name(: the receiver opens right after func and closes right before name.
+	return d.recv < len(t) && before[d.recv] == '(' && t[len(t)-1] == ')'
+}
+
+// isJavaCallKeyword reports a word token a call may follow; any other word before name( is a type
+// or a modifier, so the occurrence declares a method or constructor.
+func isJavaCallKeyword(w string) bool {
+	switch w {
+	case "return", "throw", "new", "else", "case", "yield", "assert", "do":
+		return true
+	}
+	return false
+}
+
+// javaDeclares: name( is preceded, after whitespace, by a type or modifier token (a word that is
+// not a keyword a call may follow, a closing ']' of an array type, or a '>' closing a type
+// argument list opened on the line) rather than '.', '=', '(', ',', "return", "->" or the line
+// start.
+func (d lineDecl) javaDeclares(before string) bool {
+	t := trimRightSpace(before)
+	if t == "" || len(t) == len(before) {
+		return false
+	}
+	switch last := t[len(t)-1]; {
+	case last == ']':
+		return true
+	case last == '>':
+		return d.firstLT >= 0 && d.firstLT < len(t)-1 && !strings.HasSuffix(t, "->")
+	case isWordASCII(rune(last)):
+		i := len(t) - 1
+		for i > 0 && isWordASCII(rune(t[i-1])) {
+			i--
+		}
+		return !isJavaCallKeyword(t[i:])
+	}
+	return false
+}
+
 // references is callRe | memberCallRe | newRe | jsxRe.
 func references(name, before, after string) bool {
 	if startsWithParen(after) {

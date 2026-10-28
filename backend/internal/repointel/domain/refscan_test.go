@@ -236,3 +236,154 @@ func TestReferenceScanner_ContextIsHonouredInsideAFile(t *testing.T) {
 		}
 	})
 }
+
+// scanFileAll runs one ScanFile and returns the lines per symbol (empty, not nil, for no hit).
+func scanFileAll(t testing.TB, file, content string, symbols []string) [][]int {
+	t.Helper()
+	got := make([][]int, len(symbols))
+	for i := range got {
+		got[i] = []int{}
+	}
+	err := domain.NewReferenceScanner(symbols).ScanFile(t.Context(), file, content, nil, func(i, line int) (bool, error) {
+		got[i] = append(got[i], line)
+		return true, nil
+	})
+	if err != nil {
+		t.Fatalf("ScanFile(%q) error = %v", file, err)
+	}
+	return got
+}
+
+// TestReferenceScanner_GoAndJavaDeclarationLines (R-I1): in a .go or .java file a line that
+// declares the name is no reference, while a call on the next line still is; a TypeScript file
+// keeps the Node rules, so the same Go line references there.
+func TestReferenceScanner_GoAndJavaDeclarationLines(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		content string
+		symbols []string
+		want    [][]int
+	}{
+		{
+			name:    "go function",
+			file:    "pkg/server.go",
+			content: "func New(cfg Config) *Server {\n\treturn New(cfg)\n}\n",
+			symbols: []string{"New"},
+			want:    [][]int{{2}},
+		},
+		{
+			name:    "go method",
+			file:    "pkg/other.go",
+			content: "func (o *Other) Start(ctx context.Context) error {\n\treturn o.Start(ctx)\n}\n",
+			symbols: []string{"Start"},
+			want:    [][]int{{2}},
+		},
+		{
+			name:    "go indented, generic receiver and string literal",
+			file:    "pkg/list.go",
+			content: "  func (l *List[T]) Push(v T) {\n\tPush(\"func Push(\")\n}\n",
+			symbols: []string{"Push"},
+			want:    [][]int{{2}},
+		},
+		{
+			name:    "go calls stay calls",
+			file:    "pkg/run.go",
+			content: "go Start()\ndefer Start()\nfunc() { Start() }()\nx := Start()\nfunc run() { Start() }\n",
+			symbols: []string{"Start"},
+			want:    [][]int{{1, 2, 3, 4, 5}},
+		},
+		{
+			name:    "java method",
+			file:    "src/OrderService.java",
+			content: "public Order findById(long id) {\n  return findById(id, false);\n}\n",
+			symbols: []string{"findById"},
+			want:    [][]int{{2}},
+		},
+		{
+			name:    "java interface method",
+			file:    "src/OrderRepository.java",
+			content: "Order findById(long id);\nOrder x = findById(1);\n",
+			symbols: []string{"findById"},
+			want:    [][]int{{2}},
+		},
+		{
+			name:    "java generic and array return types",
+			file:    "src/Lists.java",
+			content: "public static <T> List<T> of(T a) {\nString[] names() {\nList<T> x = of(a);\nreturn names();\n",
+			symbols: []string{"of", "names"},
+			want:    [][]int{{3}, {4}},
+		},
+		{
+			name: "java calls stay calls",
+			file: "src/Calls.java",
+			content: "return findById(1);\nx = findById(1);\nfindById(1);\nfoo(findById(1));\nfoo(a, findById(1));\n" +
+				"throw findById(1);\nlist.forEach(o -> findById(o));\nelse findById(1);\nObject o = (Order) findById(1);\n",
+			symbols: []string{"findById"},
+			want:    [][]int{{1, 2, 3, 4, 5, 6, 7, 8, 9}},
+		},
+		{
+			name:    "java constructor call",
+			file:    "src/Make.java",
+			content: "public Order(long id) {\nOrder o = new Order(1);\n",
+			symbols: []string{"Order"},
+			want:    [][]int{{2}},
+		},
+		{
+			name:    "typescript keeps the node rules",
+			file:    "src/server.ts",
+			content: "func New(cfg Config) *Server {\nOrder findById(long id);\n",
+			symbols: []string{"New", "findById"},
+			want:    [][]int{{1}, {2}},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if diff := cmp.Diff(tc.want, scanFileAll(t, tc.file, tc.content, tc.symbols)); diff != "" {
+				t.Errorf("ScanFile(%q, %q) mismatch (-want +got):\n%s", tc.file, tc.content, diff)
+			}
+		})
+	}
+}
+
+// TestReferenceScanner_ScanFileOfTypeScriptEqualsScan: a path that is neither .go nor .java scans
+// exactly like Scan (the Node rules), on the Node golden.
+func TestReferenceScanner_ScanFileOfTypeScriptEqualsScan(t *testing.T) {
+	raw, err := os.ReadFile("testdata/callers_refs.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Content string `json:"content"`
+		Symbol  string `json:"symbol"`
+	}
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		symbols := []string{c.Symbol}
+		if diff := cmp.Diff(scanAll(t, c.Content, symbols), scanFileAll(t, "src/x.ts", c.Content, symbols)); diff != "" {
+			t.Errorf("ScanFile(src/x.ts, %q, %q) mismatch (-Scan +ScanFile):\n%s", c.Content, c.Symbol, diff)
+		}
+	}
+}
+
+// TestReferenceScanner_GoAndJavaDeclarationRulesAreLinear: the declaration tests look at a
+// whole-line fact computed once per line, so a 2 MB line of call occurrences behind a long run of
+// spaces (each one tested, none declaring) scans in linear time.
+func TestReferenceScanner_GoAndJavaDeclarationRulesAreLinear(t *testing.T) {
+	tests := []struct {
+		file    string
+		content string
+	}{
+		{file: "pkg/x.go", content: "func" + strings.Repeat(" ", 1_000_000) + "(r R) x " + strings.Repeat("Start( ", 150_000) + "\n"},
+		{file: "src/X.java", content: strings.Repeat(" ", 1_000_000) + "x = " + strings.Repeat("Start( ", 150_000) + "\n"},
+	}
+	for _, tc := range tests {
+		start := time.Now()
+		scanFileAll(t, tc.file, tc.content, []string{"Start"})
+		if d := time.Since(start); d > 2*time.Second {
+			t.Errorf("ScanFile(%s, %d bytes of declaration-shaped lines) took %v, want < 2 s", tc.file, len(tc.content), d)
+		}
+	}
+}

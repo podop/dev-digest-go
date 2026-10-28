@@ -278,6 +278,59 @@ func TestCallerSignatures_FirstDeclaringFileWinsAndDuplicatesAreRead(t *testing.
 	}
 }
 
+// TestCallerSignatures_GoAndJavaDeclarationLinesAreNoCallers (R-I1): New, Start and findById are
+// declared in the changed files and again in other files; those declaration lines are no
+// callers, while a call on a later line is.
+func TestCallerSignatures_GoAndJavaDeclarationLinesAreNoCallers(t *testing.T) {
+	store := newFakeStore()
+	store.repos[repoID] = domain.Repo{ID: repoID, ClonePath: "/clone"}
+	files := &callerFiles{files: map[string]string{
+		"pkg/a.go": "package pkg\n\nfunc New(cfg Config) *Server { return nil }\n\nfunc (s *Server) Start(ctx context.Context) error { return nil }\n",
+		"pkg/b.go": "package pkg\n\nfunc New(cfg Config) *Server {\n\treturn nil\n}\n\n" +
+			"func (o *Other) Start(ctx context.Context) error {\n\t_ = New(Config{})\n\treturn nil\n}\n",
+		"src/OrderService.java":    "public class OrderService {\n  public Order findById(long id) { return null; }\n}\n",
+		"src/OrderRepository.java": "interface OrderRepository {\n  Order findById(long id);\n}\n",
+		"src/OrderController.java": "public class OrderController {\n  public Order findById(long id) {\n    return null;\n  }\n" +
+			"  public Order get(long id) {\n    return findById(id);\n  }\n}\n",
+	}}
+	method := func(name string, line, end int, sig string) domain.Symbol {
+		return domain.Symbol{Name: name, Kind: "method", Line: line, EndLine: end, Signature: sig}
+	}
+	an := &fakeAnalyzer{ex: map[string]domain.Extraction{
+		"pkg/a.go": {Symbols: []domain.Symbol{
+			sym("New", "function", 3, "func New(cfg Config) *Server"), method("Start", 5, 5, "func (s *Server) Start(ctx context.Context) error"),
+		}},
+		"pkg/b.go": {Symbols: []domain.Symbol{
+			sym("New", "function", 3, "func New(cfg Config) *Server"), method("Start", 7, 10, "func (o *Other) Start(ctx context.Context) error"),
+		}},
+		"src/OrderService.java": {Symbols: []domain.Symbol{
+			sym("OrderService", "class", 1, "public class OrderService"), method("findById", 2, 2, "public Order findById(long id)"),
+		}},
+		"src/OrderRepository.java": {Symbols: []domain.Symbol{
+			sym("OrderRepository", "interface", 1, "interface OrderRepository"), method("findById", 2, 2, "Order findById(long id)"),
+		}},
+		"src/OrderController.java": {Symbols: []domain.Symbol{
+			sym("OrderController", "class", 1, "public class OrderController"),
+			method("findById", 2, 4, "public Order findById(long id)"), method("get", 5, 7, "public Order get(long id)"),
+		}},
+	}}
+	r := app.NewReader(store, true, app.WithCallerScan(app.CallerScan{Repos: store, Files: files, Analyzer: an}))
+	got, err := r.CallerSignatures(t.Context(), repoID, []string{"pkg/a.go", "src/OrderService.java"}, 10)
+	if err != nil {
+		t.Fatalf("CallerSignatures() error = %v", err)
+	}
+	// New: b.go declares it on line 3 (no caller) and calls it on line 8, inside Start. Start: b.go
+	// only declares it. findById: the repository and the controller declare it (no callers); the
+	// controller calls it inside get.
+	want := []domain.CallerSignature{
+		{File: "pkg/b.go", Symbol: "Start", Signature: "func (o *Other) Start(ctx context.Context) error"},
+		{File: "src/OrderController.java", Symbol: "get", Signature: "public Order get(long id)"},
+	}
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Errorf("CallerSignatures(a.go, OrderService.java) mismatch (-want +got):\n%s", diff)
+	}
+}
+
 func TestCallerSignatures_TieBreakIsTheFirstExtracted(t *testing.T) {
 	store := newFakeStore()
 	store.repos[repoID] = domain.Repo{ID: repoID, ClonePath: "/clone"}

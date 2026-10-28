@@ -170,6 +170,20 @@ func (s *ReferenceScanner) walk(text string, fn func(sym int32, start int) bool)
 // returned as it is. Scan returns ctx's error when ctx ends; it looks at it every few thousand
 // units of work, so a single huge line cannot hold it past the deadline for long.
 func (s *ReferenceScanner) Scan(ctx context.Context, content string, skip func(i int) bool, hit func(i, line int) (more bool, err error)) error {
+	return s.scan(ctx, declNode, content, skip, hit)
+}
+
+// ScanFile is Scan of the content of file with the declaration rules of its language on top of
+// Node's (spec R-I1): in a file ending in .go a line whose code is func name( or
+// func (receiver) name( declares name; in a file ending in .java an occurrence name( preceded,
+// after whitespace, by a type or modifier token (a word other than return, throw, new, else, case,
+// yield, assert or do; a ']'; a '>' closing a '<' of the line) declares it. A line that declares
+// a name is no reference to it, as in Node. Any other file scans exactly like Scan.
+func (s *ReferenceScanner) ScanFile(ctx context.Context, file, content string, skip func(i int) bool, hit func(i, line int) (more bool, err error)) error {
+	return s.scan(ctx, declRuleFor(file), content, skip, hit)
+}
+
+func (s *ReferenceScanner) scan(ctx context.Context, rule declRule, content string, skip func(i int) bool, hit func(i, line int) (more bool, err error)) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -199,6 +213,7 @@ func (s *ReferenceScanner) Scan(ctx context.Context, content string, skip func(i
 		line, raw string
 		lineNo    int32
 		sameLine  bool
+		ld        lineDecl
 	)
 	tick := func(units int) bool {
 		work += units
@@ -235,7 +250,7 @@ func (s *ReferenceScanner) Scan(ctx context.Context, content string, skip func(i
 			return tick(1)
 		}
 		name, before, after := s.names[sym], line[:p], line[p+s.lens[sym]:]
-		if declares(name, before, after) {
+		if declares(name, before, after) || ld.declares(line, name, p) {
 			isDecl[sym] = true
 		} else if !isRef[sym] && references(name, before, after) {
 			isRef[sym] = true
@@ -267,6 +282,7 @@ func (s *ReferenceScanner) Scan(ctx context.Context, content string, skip func(i
 		line = sanitizeLine(raw)
 		sameLine = len(line) == len(raw) && line == raw
 		lineNo = int32(n)
+		ld = newLineDecl(rule, line)
 		if !sameLine {
 			if s.walk(raw, mark); ctxErr != nil {
 				return ctxErr
