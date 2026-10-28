@@ -228,6 +228,33 @@ func TestBlastRadius_Scan(t *testing.T) {
 	}
 }
 
+// R-I1 in the blast scan: a Go func New( line and a Java public Order findById( declaration in
+// another file are no callers of the changed symbols of the same names, while the call on the
+// next line is (the row's line is the call's); a file that only declares them has no row. A
+// TypeScript caller file keeps Node's rules.
+func TestBlastRadius_ScanSkipsGoAndJavaDeclarationLines(t *testing.T) {
+	r, _, _ := scanEnv(map[string]string{
+		"src/decl.ts":         "export function New() {}\nexport function findById() {}\n",
+		"pkg/server.go":       "func New(cfg Config) *Server {\n\treturn New(cfg)\n}\n",
+		"pkg/only.go":         "func New() *Server { return nil }\n",
+		"src/OrderStore.java": "public Order findById(long id) {\n  return findById(id, false);\n}\n",
+		"src/OnlyDecl.java":   "  public Order findById(long id);\n",
+		"src/same.ts":         "func New(cfg Config) *Server {\n",
+	})
+	got, err := r.BlastRadius(t.Context(), repoID, []string{"src/decl.ts"})
+	if err != nil {
+		t.Fatalf("BlastRadius() error = %v", err)
+	}
+	want := []domain.BlastCaller{
+		{File: "pkg/server.go", Symbol: "server.go", ViaSymbol: "New", Line: 2},
+		{File: "src/same.ts", Symbol: "same.ts", ViaSymbol: "New", Line: 1},
+		{File: "src/OrderStore.java", Symbol: "OrderStore.java", ViaSymbol: "findById", Line: 2},
+	}
+	if diff := cmp.Diff(want, got.Callers); diff != "" {
+		t.Errorf("BlastRadius(decl.ts) callers mismatch (-want +got):\n%s", diff)
+	}
+}
+
 // Two changed symbols with one name: the first in order keeps the rows both would find, the
 // second adds only the rows of the first one's own file (Node's symbol-major loop).
 func TestBlastRadius_ScanSameNameInTwoChangedFiles(t *testing.T) {

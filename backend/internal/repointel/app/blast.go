@@ -330,7 +330,9 @@ func enclosingOf(syms []domain.ExtractedSymbol) domain.Enclosing {
 // collectCallers reads each walked file once and collects, for every changed symbol, the callers
 // found in the files other than its own. The result equals Node's symbol-major loop (rows of a
 // symbol in file then line order, a (file, enclosing symbol, name) once) up to the bound of
-// domain.MaxBlastScanCallers rows, which keeps the first rows of that order; see prune.
+// domain.MaxBlastScanCallers rows, which keeps the first rows of that order; see prune. A Go or
+// Java file is scanned with its language's declaration rules (ScanFile, R-I1), so a line that
+// declares a name of the same spelling is no caller; other files keep Node's rules.
 func (s *blastScanner) collectCallers(ctx context.Context, files []string) error {
 	n := len(s.symbols)
 	names := make([]string, n)
@@ -394,7 +396,7 @@ func (s *blastScanner) collectCallers(ctx context.Context, files []string) error
 			}
 			return len(s.rows[i]) < s.limit[i], nil
 		}
-		if err := scanner.Scan(ctx, text, skip, hit); err != nil {
+		if err := scanner.ScanFile(ctx, rel, text, skip, hit); err != nil {
 			if hitErr != nil {
 				return hitErr
 			}
