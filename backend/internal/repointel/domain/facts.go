@@ -101,7 +101,13 @@ func ExtractCrons(text string) []string {
 // ExtractFacts returns the facts row of one file; ok is false when the file has neither an
 // endpoint nor a cron (such a file gets no row).
 func ExtractFacts(path, text string) (facts FileFacts, ok bool) {
-	facts = FileFacts{Path: path, Endpoints: ExtractEndpoints(text), Crons: ExtractCrons(text)}
+	facts = FileFacts{Path: path}
+	switch syn, _ := SyntaxForPath(path); syn {
+	case SyntaxGo:
+		facts.Endpoints, facts.Crons = extractGoFacts(text)
+	case SyntaxTypeScript, SyntaxTSX, SyntaxJavaScript:
+		facts.Endpoints, facts.Crons = ExtractEndpoints(text), ExtractCrons(text)
+	}
 	return facts, len(facts.Endpoints) > 0 || len(facts.Crons) > 0
 }
 
