@@ -69,6 +69,15 @@ type edgeRow struct {
 
 func (edgeRow) TableName() string { return "file_edges" }
 
+// filePackageRow maps file_packages.
+type filePackageRow struct {
+	RepoID     string `gorm:"column:repo_id"`
+	FilePath   string `gorm:"column:file_path"`
+	PackageKey string `gorm:"column:package_key"`
+}
+
+func (filePackageRow) TableName() string { return "file_packages" }
+
 // rankRow maps file_rank.
 type rankRow struct {
 	RepoID     string  `gorm:"column:repo_id"`

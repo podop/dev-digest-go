@@ -182,6 +182,12 @@ func (s *fakeStore) ReplaceEdges(ctx context.Context, repoID string, edges []dom
 	return nil
 }
 
+func (s *fakeStore) ReplaceFilePackages(ctx context.Context, repoID string, pkgs []domain.FilePackage) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.hook(ctx, "ReplaceFilePackages")
+}
+
 func (s *fakeStore) ResolveReferences(ctx context.Context, repoID string, reset bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

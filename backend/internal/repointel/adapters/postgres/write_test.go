@@ -660,3 +660,125 @@ func TestPathLookups_IgnorePathsNoRowCanHold(t *testing.T) {
 		t.Errorf("SymbolsInFiles(invalid paths) error = %v, want nil", err)
 	}
 }
+
+func pkgs(kv ...string) []domain.FilePackage {
+	var out []domain.FilePackage
+	for i := 0; i+1 < len(kv); i += 2 {
+		out = append(out, domain.FilePackage{Path: kv[i], Key: kv[i+1]})
+	}
+	return out
+}
+
+func TestReplaceFilePackages(t *testing.T) {
+	e := newEnv(t)
+	other := e.addRepo(t, "o", "other", "/clones/o/other")
+	ctx := t.Context()
+	must(t, e.store.ReplaceFilePackages(ctx, other, pkgs("k.go", "go:.")))
+	must(t, e.store.ReplaceFilePackages(ctx, e.repo, pkgs("a/x.go", "go:a", "a/y\x00.go", "go:a")))
+	must(t, e.store.ReplaceFilePackages(ctx, e.repo, pkgs("b/z.go", "go:b", "a/y\x00.go", "go:a")))
+
+	var rows []string
+	must(t, e.db.Raw(`SELECT file_path || ' ' || package_key FROM file_packages WHERE repo_id = ? ORDER BY file_path`, e.repo).Scan(&rows).Error)
+	if diff := cmp.Diff([]string{"a/y\uFFFD.go go:a", "b/z.go go:b"}, rows); diff != "" {
+		t.Errorf("file_packages after ReplaceFilePackages mismatch (-want +got):\n%s", diff)
+	}
+	if n := count(t, e, "file_packages", other); n != 1 {
+		t.Errorf("other repo file_packages = %d, want 1", n)
+	}
+	must(t, e.store.ReplaceFilePackages(ctx, e.repo, nil))
+	if n := count(t, e, "file_packages", e.repo); n != 0 {
+		t.Errorf("file_packages after replacing with none = %d, want 0", n)
+	}
+	if err := e.store.ReplaceFilePackages(ctx, unknownRepo, pkgs("a.go", "go:.")); !errors.Is(err, domain.ErrRepoNotFound) {
+		t.Errorf("ReplaceFilePackages(unknown repo) error = %v, want ErrRepoNotFound", err)
+	}
+}
+
+// seedPackages inserts symbols, references (from a.go unless the name says otherwise) and packages.
+func seedPackages(t *testing.T, e *env, syms []domain.SymbolRow, refs []domain.ReferenceRow, p []domain.FilePackage) {
+	t.Helper()
+	ctx := t.Context()
+	must(t, e.store.InsertSymbols(ctx, e.repo, syms))
+	must(t, e.store.InsertReferences(ctx, e.repo, refs))
+	must(t, e.store.ReplaceFilePackages(ctx, e.repo, p))
+}
+
+func TestResolveReferences_SamePackage(t *testing.T) {
+	e := newEnv(t)
+	seedPackages(t, e,
+		[]domain.SymbolRow{sym("p/b.go", "helper", 1, false), sym("q/d.go", "other", 1, false)},
+		[]domain.ReferenceRow{{FromPath: "p/a.go", ToSymbol: "helper", Line: 1}, {FromPath: "p/a.go", ToSymbol: "other", Line: 2}},
+		pkgs("p/a.go", "go:p", "p/b.go", "go:p", "q/d.go", "go:q"))
+	must(t, e.store.ResolveReferences(t.Context(), e.repo, false))
+	want := map[string]string{"helper": "p/b.go", "other": ""}
+	if diff := cmp.Diff(want, declFiles(t, e)); diff != "" {
+		t.Errorf("decl_file mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestResolveReferences_SamePackageAmbiguous(t *testing.T) {
+	e := newEnv(t)
+	seedPackages(t, e,
+		[]domain.SymbolRow{sym("p/b.go", "helper", 1, false), sym("p/c.go", "helper", 1, false)},
+		[]domain.ReferenceRow{{FromPath: "p/a.go", ToSymbol: "helper", Line: 1}},
+		pkgs("p/a.go", "go:p", "p/b.go", "go:p", "p/c.go", "go:p"))
+	must(t, e.store.ResolveReferences(t.Context(), e.repo, false))
+	if diff := cmp.Diff(map[string]string{"helper": ""}, declFiles(t, e)); diff != "" {
+		t.Errorf("decl_file mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestResolveReferences_ImportStepWins(t *testing.T) {
+	e := newEnv(t)
+	seedPackages(t, e,
+		[]domain.SymbolRow{sym("lib/l.go", "Run", 1, true), sym("p/b.go", "Run", 1, false)},
+		[]domain.ReferenceRow{{FromPath: "p/a.go", ToSymbol: "Run", Line: 1}},
+		pkgs("p/a.go", "go:p", "p/b.go", "go:p", "lib/l.go", "go:lib"))
+	must(t, e.store.ReplaceEdges(t.Context(), e.repo, []domain.Edge{{From: "p/a.go", To: "lib/l.go"}}))
+	must(t, e.store.ResolveReferences(t.Context(), e.repo, false))
+	if diff := cmp.Diff(map[string]string{"Run": "lib/l.go"}, declFiles(t, e)); diff != "" {
+		t.Errorf("decl_file mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestResolveReferences_SamePackageExcludesOwnFile(t *testing.T) {
+	e := newEnv(t)
+	seedPackages(t, e,
+		[]domain.SymbolRow{sym("p/a.go", "own", 1, false)},
+		[]domain.ReferenceRow{{FromPath: "p/a.go", ToSymbol: "own", Line: 2}},
+		pkgs("p/a.go", "go:p", "p/b.go", "go:p"))
+	must(t, e.store.ResolveReferences(t.Context(), e.repo, false))
+	if diff := cmp.Diff(map[string]string{"own": ""}, declFiles(t, e)); diff != "" {
+		t.Errorf("decl_file mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestResolveReferences_TSUnaffected(t *testing.T) {
+	e := newEnv(t)
+	seedResolution(t, e)
+	// No file_packages rows: the result is the import step's alone.
+	must(t, e.store.ResolveReferences(t.Context(), e.repo, false))
+	want := map[string]string{"x": "", "y": "b.ts", "z": ""}
+	if diff := cmp.Diff(want, declFiles(t, e)); diff != "" {
+		t.Errorf("decl_file mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestResolveReferences_SamePackageReset(t *testing.T) {
+	e := newEnv(t)
+	ctx := t.Context()
+	seedPackages(t, e,
+		[]domain.SymbolRow{sym("p/b.go", "helper", 1, false)},
+		[]domain.ReferenceRow{{FromPath: "p/a.go", ToSymbol: "helper", Line: 1}},
+		pkgs("p/a.go", "go:p", "p/b.go", "go:p"))
+	must(t, e.store.ResolveReferences(ctx, e.repo, false))
+	must(t, e.store.ReplaceFilePackages(ctx, e.repo, pkgs("p/a.go", "go:p", "p/b.go", "go:other")))
+	must(t, e.store.ResolveReferences(ctx, e.repo, false))
+	if got := declFiles(t, e)["helper"]; got != "p/b.go" {
+		t.Errorf("decl_file without reset = %q, want the stale %q", got, "p/b.go")
+	}
+	must(t, e.store.ResolveReferences(ctx, e.repo, true))
+	if got := declFiles(t, e)["helper"]; got != "" {
+		t.Errorf("decl_file after reset = %q, want NULL", got)
+	}
+}

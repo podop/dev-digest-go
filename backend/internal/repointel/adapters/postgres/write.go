@@ -137,10 +137,25 @@ func (s *Store) ReplaceEdges(ctx context.Context, repoID string, edges []domain.
 	return insertChunks(conn, "file_edges", out)
 }
 
+// ReplaceFilePackages deletes the repo's file_packages and inserts pkgs.
+func (s *Store) ReplaceFilePackages(ctx context.Context, repoID string, pkgs []domain.FilePackage) error {
+	conn := s.conn(ctx)
+	if err := conn.Where("repo_id = ?", repoID).Delete(&filePackageRow{}).Error; err != nil {
+		return fmt.Errorf("delete file_packages: %w", err)
+	}
+	out := make([]filePackageRow, len(pkgs))
+	for i, p := range pkgs {
+		out[i] = filePackageRow{RepoID: repoID, FilePath: domain.SanitizeText(p.Path), PackageKey: domain.SanitizeText(p.Key)}
+	}
+	return insertChunks(conn, "file_packages", out)
+}
+
 // ResolveReferences sets decl_file (FR3030): a reference gets file F when exactly one distinct
 // file F has an import edge from the reference's file and an exported symbol with the
 // reference's name; with none or several such files decl_file stays as it is (NULL after a
-// reset or on a first run).
+// reset or on a first run). A second step (FR20) then resolves the references still NULL within
+// the package: file G gets the reference from F when G is the only other file with F's package
+// key that has a symbol named like the reference, exported or not.
 func (s *Store) ResolveReferences(ctx context.Context, repoID string, reset bool) error {
 	conn := s.conn(ctx)
 	if reset {
@@ -170,6 +185,25 @@ FROM (
 WHERE r.id = c.ref_id`, repoID).Error
 	if err != nil {
 		return fmt.Errorf("resolve references: %w", err)
+	}
+	// Same shape as the import step: one aggregate per reference (see the note above).
+	err = conn.Exec(`
+UPDATE "references" r
+SET decl_file = c.decl
+FROM (
+	SELECT r.id AS ref_id, min(s.path) AS decl
+	FROM "references" r
+	JOIN file_packages fp ON fp.repo_id = r.repo_id AND fp.file_path = r.from_path
+	JOIN file_packages op ON op.repo_id = r.repo_id AND op.package_key = fp.package_key
+		AND op.file_path <> r.from_path
+	JOIN symbols s ON s.repo_id = r.repo_id AND s.path = op.file_path AND s.name = r.to_symbol
+	WHERE r.repo_id = ? AND r.decl_file IS NULL
+	GROUP BY r.id
+	HAVING count(DISTINCT s.path) = 1
+) c
+WHERE r.id = c.ref_id`, repoID).Error
+	if err != nil {
+		return fmt.Errorf("resolve references in package: %w", err)
 	}
 	return nil
 }

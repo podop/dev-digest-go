@@ -42,6 +42,8 @@ type IndexWriter interface {
 	InsertReferences(ctx context.Context, repoID string, rows []domain.ReferenceRow) error
 	// ReplaceEdges deletes the repo's file_edges and inserts edges.
 	ReplaceEdges(ctx context.Context, repoID string, edges []domain.Edge) error
+	// ReplaceFilePackages deletes the repo's file_packages and inserts pkgs.
+	ReplaceFilePackages(ctx context.Context, repoID string, pkgs []domain.FilePackage) error
 	// ResolveReferences sets decl_file as FR3030 defines; reset first sets every decl_file of the
 	// repo to NULL.
 	ResolveReferences(ctx context.Context, repoID string, reset bool) error
