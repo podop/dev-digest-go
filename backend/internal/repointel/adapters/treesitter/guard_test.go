@@ -53,3 +53,30 @@ func TestPasses_StopOnADoneContext(t *testing.T) {
 		t.Fatalf("withTree error = %v", err)
 	}
 }
+
+// TestGoPasses_StopOnADoneContext: the same for the Go passes (FR4).
+func TestGoPasses_StopOnADoneContext(t *testing.T) {
+	src := "package p\n" + strings.Repeat("import \"x\"\nfunc f(a int) { g(a, h.i); _ = T{} }\ntype S struct{}\n", 400)
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+	done := func() *guard { return &guard{ctx: cancelled} }
+
+	err := withTree(t.Context(), "p/f.go", src, func(root sitter.Node, b []byte, _ domain.Syntax, _ *guard) error {
+		if _, err := goSymbols(root, b, done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("goSymbols error = %v, want context.Canceled", err)
+		}
+		if _, err := goReferences(root, b, nil, done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("goReferences error = %v, want context.Canceled", err)
+		}
+		if _, err := extractGo(root, b, done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("extractGo error = %v, want context.Canceled", err)
+		}
+		if _, err := importsGo(root, b, "p/f.go", done()); !errors.Is(err, context.Canceled) {
+			t.Errorf("importsGo error = %v, want context.Canceled", err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("withTree error = %v", err)
+	}
+}

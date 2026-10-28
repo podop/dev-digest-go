@@ -174,11 +174,11 @@ func specifiers(root string) importgraph.SpecifierSource {
 		if err != nil {
 			return nil
 		}
-		specs, err := analyzer.Imports(ctx, file, domain.DecodeText(raw))
+		imports, err := analyzer.Imports(ctx, file, domain.DecodeText(raw))
 		if err != nil {
 			return nil
 		}
-		return specs
+		return imports.Specs
 	}
 }
 

@@ -73,11 +73,11 @@ func (g *ImportGraph) specifiers(root string) importgraph.SpecifierSource {
 		}
 		fctx, cancel := context.WithTimeout(ctx, domain.ParseTimeout)
 		defer cancel()
-		specs, err := g.analyzer.Imports(fctx, file, domain.DecodeText(raw))
+		imports, err := g.analyzer.Imports(fctx, file, domain.DecodeText(raw))
 		if err != nil || fctx.Err() != nil {
 			return nil
 		}
-		return specs
+		return imports.Specs
 	}
 }
 

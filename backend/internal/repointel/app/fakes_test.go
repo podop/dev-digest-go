@@ -552,15 +552,15 @@ func (a *fakeAnalyzer) Extract(ctx context.Context, path, text string) (domain.E
 	return a.ex[path], nil
 }
 
-func (a *fakeAnalyzer) Imports(ctx context.Context, path, text string) ([]string, error) {
+func (a *fakeAnalyzer) Imports(ctx context.Context, path, text string) (domain.FileImports, error) {
 	if a.panicImports[path] {
 		panic("imports exploded")
 	}
 	if a.hangImports[path] {
 		<-ctx.Done()
-		return nil, fmt.Errorf("parse: %w", ctx.Err())
+		return domain.FileImports{}, fmt.Errorf("parse: %w", ctx.Err())
 	}
-	return a.imports[path], nil
+	return domain.FileImports{Specs: a.imports[path]}, nil
 }
 
 // fakeGit serves HEAD and diffs.

@@ -61,6 +61,10 @@ func (a *Analyzer) Extract(ctx context.Context, file, text string) (domain.Extra
 	var out domain.Extraction
 	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, syntax domain.Syntax, g *guard) error {
 		var err error
+		if syntax == domain.SyntaxGo {
+			out, err = extractGo(root, src, g)
+			return err
+		}
 		if out.Symbols, err = extractSymbols(root, src, g); err != nil {
 			return err
 		}
@@ -73,16 +77,21 @@ func (a *Analyzer) Extract(ctx context.Context, file, text string) (domain.Extra
 	return out, nil
 }
 
-// Imports returns the import specifiers of one file in first-seen order (spec section 7.5).
-func (a *Analyzer) Imports(ctx context.Context, file, text string) ([]string, error) {
-	var out []string
-	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, _ domain.Syntax, g *guard) error {
+// Imports returns the package key of one file and its import specifiers in first-seen order
+// (spec section 7.5, FR11). TypeScript and JavaScript files have no package key.
+func (a *Analyzer) Imports(ctx context.Context, file, text string) (domain.FileImports, error) {
+	var out domain.FileImports
+	err := withTree(ctx, file, text, func(root sitter.Node, src []byte, syntax domain.Syntax, g *guard) error {
 		var err error
-		out, err = extractImports(root, src, isTypeScriptPath(file), g)
+		if syntax == domain.SyntaxGo {
+			out, err = importsGo(root, src, file, g)
+			return err
+		}
+		out.Specs, err = extractImports(root, src, isTypeScriptPath(file), g)
 		return err
 	})
 	if err != nil {
-		return nil, err
+		return domain.FileImports{}, err
 	}
 	return out, nil
 }

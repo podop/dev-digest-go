@@ -87,7 +87,7 @@ func TestImports(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Imports(%q) error = %v", tc.file, err)
 			}
-			if diff := cmp.Diff(tc.want, got, cmpopts.EquateEmpty()); diff != "" {
+			if diff := cmp.Diff(tc.want, got.Specs, cmpopts.EquateEmpty()); diff != "" {
 				t.Errorf("Imports(%q) mismatch (-want +got):\n%s", tc.file, diff)
 			}
 		})

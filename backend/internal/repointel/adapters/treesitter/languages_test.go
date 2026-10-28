@@ -38,21 +38,23 @@ func TestLanguage_ParsesEachGrammar(t *testing.T) {
 		name    string
 		syntax  domain.Syntax
 		src     string
+		root    string // the root node's kind
 		wantIn  string // a node kind that must appear in the tree
 		wantErr bool
 	}{
-		{"typescript type alias", domain.SyntaxTypeScript, "export type A = { x: number };\ninterface B {}\n", "type_alias_declaration", false},
-		{"typescript interface", domain.SyntaxTypeScript, "interface B { y: string }\n", "interface_declaration", false},
-		{"tsx jsx element", domain.SyntaxTSX, "const a = <Foo x={1} />;\n", "jsx_self_closing_element", false},
-		{"javascript function", domain.SyntaxJavaScript, "function f(a) { return a; }\n", "function_declaration", false},
-		{"javascript rejects types", domain.SyntaxJavaScript, "const x: number = 1;\n", "", true},
-		{"typescript recovers from errors", domain.SyntaxTypeScript, "function f( {\nconst ok = 1;\n", "", true},
+		{"typescript type alias", domain.SyntaxTypeScript, "export type A = { x: number };\ninterface B {}\n", "program", "type_alias_declaration", false},
+		{"typescript interface", domain.SyntaxTypeScript, "interface B { y: string }\n", "program", "interface_declaration", false},
+		{"tsx jsx element", domain.SyntaxTSX, "const a = <Foo x={1} />;\n", "program", "jsx_self_closing_element", false},
+		{"javascript function", domain.SyntaxJavaScript, "function f(a) { return a; }\n", "program", "function_declaration", false},
+		{"javascript rejects types", domain.SyntaxJavaScript, "const x: number = 1;\n", "program", "", true},
+		{"typescript recovers from errors", domain.SyntaxTypeScript, "function f( {\nconst ok = 1;\n", "program", "", true},
+		{"go method", domain.SyntaxGo, "package p\n\nfunc (s *S) M() {}\n", "source_file", "method_declaration", false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			kind, hasErr, sexp := parse(t, tc.syntax, tc.src)
-			if kind != "program" {
-				t.Errorf("root kind = %q, want program", kind)
+			if kind != tc.root {
+				t.Errorf("root kind = %q, want %q", kind, tc.root)
 			}
 			if hasErr != tc.wantErr {
 				t.Errorf("HasError = %v, want %v (tree %s)", hasErr, tc.wantErr, sexp)

@@ -28,6 +28,15 @@ func hostile() map[string]string {
 	}
 }
 
+// hostileGo is the Go shape of AC17 at the largest admitted size: deeply nested function
+// literals followed by 50,000 calls.
+func hostileGo() string {
+	const size = 409_600 // domain.MaxFileBytes
+	head := "package p\nfunc f(){\n"
+	calls := strings.Repeat("a()\n", 50_000)
+	return head + strings.Repeat("func(){", (size-len(head)-len(calls))/len("func(){")) + calls
+}
+
 // run calls Extract or Imports and returns the error and the time it took.
 func run(ctx context.Context, a *treesitter.Analyzer, op, file, src string) (time.Duration, error) {
 	start := time.Now()
@@ -78,22 +87,29 @@ func TestHostileFiles_StopAtTheDeadline(t *testing.T) {
 		deadline = 100 * time.Millisecond
 		slack    = 5 * time.Second
 	)
-	a := treesitter.New()
+	type hostileCase struct{ name, file, src string }
+	var cases []hostileCase
 	for name, src := range hostile() {
 		for _, file := range []string{"f.ts", "f.tsx", "f.js"} {
-			for _, op := range []string{"Extract", "Imports"} {
-				t.Run(name+"/"+file+"/"+op, func(t *testing.T) {
-					ctx, cancel := context.WithTimeout(t.Context(), deadline)
-					defer cancel()
-					elapsed, err := run(ctx, a, op, file, src)
-					if elapsed > deadline+slack {
-						t.Errorf("%s(%s %s) took %v, want at most %v", op, name, file, elapsed, deadline+slack)
-					}
-					if !errors.Is(err, context.DeadlineExceeded) {
-						t.Errorf("%s(%s %s) error = %v, want context.DeadlineExceeded", op, name, file, err)
-					}
-				})
-			}
+			cases = append(cases, hostileCase{name: name, file: file, src: src})
+		}
+	}
+	cases = append(cases, hostileCase{name: "go_nested_funcs", file: "f.go", src: hostileGo()})
+
+	a := treesitter.New()
+	for _, tc := range cases {
+		for _, op := range []string{"Extract", "Imports"} {
+			t.Run(tc.name+"/"+tc.file+"/"+op, func(t *testing.T) {
+				ctx, cancel := context.WithTimeout(t.Context(), deadline)
+				defer cancel()
+				elapsed, err := run(ctx, a, op, tc.file, tc.src)
+				if elapsed > deadline+slack {
+					t.Errorf("%s(%s %s) took %v, want at most %v", op, tc.name, tc.file, elapsed, deadline+slack)
+				}
+				if !errors.Is(err, context.DeadlineExceeded) {
+					t.Errorf("%s(%s %s) error = %v, want context.DeadlineExceeded", op, tc.name, tc.file, err)
+				}
+			})
 		}
 	}
 }

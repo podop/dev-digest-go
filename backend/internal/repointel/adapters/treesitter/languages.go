@@ -1,5 +1,5 @@
-// Package treesitter extracts symbols, references and import specifiers from TypeScript and
-// JavaScript sources with the tree-sitter grammars through the CGO go-tree-sitter binding. The
+// Package treesitter extracts symbols, references and import specifiers from TypeScript,
+// JavaScript and Go sources with the tree-sitter grammars through the CGO go-tree-sitter binding. The
 // binding has no finalizers: every Parser, Tree and TreeCursor created here is closed.
 package treesitter
 
@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	sitter "github.com/tree-sitter/go-tree-sitter"
+	golang "github.com/tree-sitter/tree-sitter-go/bindings/go"
 	javascript "github.com/tree-sitter/tree-sitter-javascript/bindings/go"
 	typescript "github.com/tree-sitter/tree-sitter-typescript/bindings/go"
 
@@ -23,6 +24,8 @@ func Language(s domain.Syntax) (*sitter.Language, error) {
 		return sitter.NewLanguage(typescript.LanguageTSX()), nil
 	case domain.SyntaxJavaScript:
 		return sitter.NewLanguage(javascript.Language()), nil
+	case domain.SyntaxGo:
+		return sitter.NewLanguage(golang.Language()), nil
 	}
 	return nil, fmt.Errorf("no tree-sitter grammar for syntax %d", int(s))
 }

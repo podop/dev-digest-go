@@ -113,9 +113,10 @@ type Analyzer interface {
 	// Extract returns the symbols and references of section 7.4 (EC3005: a file with syntax
 	// errors yields what the parsable parts hold).
 	Extract(ctx context.Context, path, text string) (domain.Extraction, error)
-	// Imports returns the import specifiers of section 7.5 in first-seen order, without
-	// duplicates and empty strings.
-	Imports(ctx context.Context, path, text string) ([]string, error)
+	// Imports returns the file's package key ("" for TypeScript and JavaScript, see
+	// domain.GoPackageKey) and its import specifiers of section 7.5 in first-seen order, without
+	// duplicates and empty strings (FR11).
+	Imports(ctx context.Context, path, text string) (domain.FileImports, error)
 }
 
 // GraphBuilder builds the import graph over the walked files: edges importer → imported for the
