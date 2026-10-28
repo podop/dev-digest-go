@@ -164,32 +164,32 @@ func TestParity_ExtractCoversCorpus(t *testing.T) {
 
 // ---- import graph (AC3049, AC3050) ----
 
-// specifiers returns the SpecifierSource of a clone: read through the confined reader, decode
+// sourceImports returns the SourceImports of a clone: read through the confined reader, decode
 // like the indexer, parse with tree-sitter. A file that cannot be read or parsed has none.
-func specifiers(root string) importgraph.SpecifierSource {
+func sourceImports(root string) importgraph.SourceImports {
 	fs := clonetree.New()
 	analyzer := treesitter.New()
-	return func(ctx context.Context, file string) []string {
+	return func(ctx context.Context, file string) domain.FileImports {
 		raw, err := fs.ReadFile(root, file)
 		if err != nil {
-			return nil
+			return domain.FileImports{}
 		}
 		imports, err := analyzer.Imports(ctx, file, domain.DecodeText(raw))
 		if err != nil {
-			return nil
+			return domain.FileImports{}
 		}
-		return imports.Specs
+		return imports
 	}
 }
 
 func buildEdges(t *testing.T, root string, files []string) [][2]string {
 	t.Helper()
-	edges, _, err := importgraph.Build(t.Context(), clonetree.New(), root, files, specifiers(root))
+	g, _, err := importgraph.Build(t.Context(), clonetree.New(), root, files, sourceImports(root))
 	if err != nil {
 		t.Fatalf("Build(%s) error = %v", root, err)
 	}
-	out := make([][2]string, len(edges))
-	for i, e := range edges {
+	out := make([][2]string, len(g.Edges))
+	for i, e := range g.Edges {
 		out[i] = [2]string{e.From, e.To}
 	}
 	return out

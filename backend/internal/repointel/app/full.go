@@ -71,14 +71,15 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 
 	// Import graph, outside the transaction; skipped when the budget is spent.
 	var (
-		edges       []domain.Edge
+		graph       domain.Graph
 		graphFailed string
 	)
 	if !stopped {
-		if edges, graphFailed, err = ix.buildGraph(ctx, root, walk.Files); err != nil {
+		if graph, graphFailed, err = ix.buildGraph(ctx, root, walk.Files); err != nil {
 			return Result{}, err
 		}
 	}
+	edges := graph.Edges
 	status := domain.FullStatus(stopped, graphFailed != "", len(out.degraded))
 
 	var ranks []domain.FileRankRow

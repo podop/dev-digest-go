@@ -120,10 +120,11 @@ type Analyzer interface {
 }
 
 // GraphBuilder builds the import graph over the walked files: edges importer → imported for the
-// specifiers that resolve to another walked file (FR3023). A file that cannot be read or parsed
-// contributes no specifier; an error means the builder itself failed (graphFailed, P11).
+// specifiers that resolve to another walked file (FR3023, FR14, FR15) and the package key of
+// every file that has one. A file that cannot be read or parsed contributes no specifier and no
+// package; an error means the builder itself failed (graphFailed, P11).
 type GraphBuilder interface {
-	BuildEdges(ctx context.Context, root string, files []string) ([]domain.Edge, error)
+	BuildGraph(ctx context.Context, root string, files []string) (domain.Graph, error)
 }
 
 // Enqueuer is the job queue: it records the job and returns at once.

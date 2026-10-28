@@ -325,17 +325,17 @@ func TestImportGraph_NoTSConfigRaisesNoAliasError(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	specs := func(_ context.Context, file string) []string {
+	imports := func(_ context.Context, file string) domain.FileImports {
 		if file == "a.ts" {
-			return []string{"./b"}
+			return domain.FileImports{Specs: []string{"./b"}}
 		}
-		return nil
+		return domain.FileImports{}
 	}
-	edges, aliasErr, err := importgraph.Build(t.Context(), clonetree.New(), root, []string{"a.ts", "b.ts"}, specs)
+	g, aliasErr, err := importgraph.Build(t.Context(), clonetree.New(), root, []string{"a.ts", "b.ts"}, imports)
 	if err != nil || aliasErr != nil {
 		t.Fatalf("Build() = %v, %v, want no errors for a clone without tsconfig.json", aliasErr, err)
 	}
-	if diff := cmp.Diff([]domain.Edge{{From: "a.ts", To: "b.ts"}}, edges); diff != "" {
+	if diff := cmp.Diff([]domain.Edge{{From: "a.ts", To: "b.ts"}}, g.Edges); diff != "" {
 		t.Errorf("Build() edges mismatch (-want +got):\n%s", diff)
 	}
 }

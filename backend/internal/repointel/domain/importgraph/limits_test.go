@@ -280,12 +280,12 @@ func TestBuild_SubstitutionFanoutIsBounded(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&before)
 	start := time.Now()
-	edges, aliasErr, err := importgraph.Build(t.Context(), src, "/clone", files, specsOf(map[string][]string{"src/x.ts": list}))
+	g, aliasErr, err := importgraph.Build(t.Context(), src, "/clone", files, importsOf(map[string][]string{"src/x.ts": list}))
 	elapsed := time.Since(start)
 	runtime.GC()
 	runtime.ReadMemStats(&after)
-	if err != nil || len(edges) != 0 {
-		t.Fatalf("Build() = %v, %v, want no edges and no error", edges, err)
+	if err != nil || len(g.Edges) != 0 {
+		t.Fatalf("Build() = %v, %v, want no edges and no error", g.Edges, err)
 	}
 	_ = wantAliasError(t, aliasErr)
 	// the root tsconfig, plus package.json of the two directories above the walked files.

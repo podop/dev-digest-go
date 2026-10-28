@@ -101,10 +101,11 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 
 	// The graph, rank and map are global: rebuilt over the whole walk (P15 re-parses unchanged
 	// files for their imports only).
-	edges, graphFailed, err := ix.buildGraph(ctx, root, walk.Files)
+	graph, graphFailed, err := ix.buildGraph(ctx, root, walk.Files)
 	if err != nil {
 		return Result{}, err
 	}
+	edges := graph.Edges
 
 	var status domain.Status
 	err = ix.d.Tx.InTx(ctx, func(ctx context.Context) error {

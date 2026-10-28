@@ -124,11 +124,11 @@ func TestBuild_BadTSConfig(t *testing.T) {
 		{"healthy control", `{` + alias + `}`, false, true},
 	}
 	files := []string{"src/a.ts", "src/b.ts", "src/c.ts"}
-	specs := specsOf(map[string][]string{"src/a.ts": {"./b", "@/c"}})
+	imports := importsOf(map[string][]string{"src/a.ts": {"./b", "@/c"}})
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			src := &fakeFS{files: map[string]string{"tsconfig.json": tc.tsconfig, "p.json": `{"compilerOptions":{"paths":{"@/*":["src/*"]}},`}}
-			edges, aliasErr, err := importgraph.Build(t.Context(), src, "/clone", files, specs)
+			g, aliasErr, err := importgraph.Build(t.Context(), src, "/clone", files, imports)
 			if err != nil {
 				t.Fatalf("Build() error: %v", err)
 			}
@@ -139,7 +139,7 @@ func TestBuild_BadTSConfig(t *testing.T) {
 			if tc.wantAlias {
 				want = append(want, edge("src/a.ts", "src/c.ts"))
 			}
-			if diff := cmp.Diff(want, edges); diff != "" {
+			if diff := cmp.Diff(want, g.Edges); diff != "" {
 				t.Errorf("Build() edges mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -148,11 +148,11 @@ func TestBuild_BadTSConfig(t *testing.T) {
 
 func TestBuild_NoTSConfig(t *testing.T) {
 	src := &fakeFS{files: map[string]string{}}
-	edges, aliasErr, err := importgraph.Build(t.Context(), src, "/clone", []string{"a.ts", "b.ts"}, specsOf(map[string][]string{"a.ts": {"./b"}}))
+	g, aliasErr, err := importgraph.Build(t.Context(), src, "/clone", []string{"a.ts", "b.ts"}, importsOf(map[string][]string{"a.ts": {"./b"}}))
 	if err != nil || aliasErr != nil {
 		t.Fatalf("Build() = %v, %v, want no errors without a tsconfig", aliasErr, err)
 	}
-	if diff := cmp.Diff([]domain.Edge{edge("a.ts", "b.ts")}, edges); diff != "" {
+	if diff := cmp.Diff([]domain.Edge{edge("a.ts", "b.ts")}, g.Edges); diff != "" {
 		t.Errorf("Build() edges mismatch (-want +got):\n%s", diff)
 	}
 }

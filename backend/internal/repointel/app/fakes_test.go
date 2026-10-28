@@ -519,6 +519,8 @@ func (c *fakeClone) ReadFile(root, rel string) ([]byte, error) {
 type fakeAnalyzer struct {
 	ex      map[string]domain.Extraction
 	imports map[string][]string
+	// packages is the package key Imports reports per path ("" when absent).
+	packages map[string]string
 	// hang paths block in Extract until ctx ends, then return its error.
 	hang map[string]bool
 	// panicOn paths panic in Extract.
@@ -560,7 +562,7 @@ func (a *fakeAnalyzer) Imports(ctx context.Context, path, text string) (domain.F
 		<-ctx.Done()
 		return domain.FileImports{}, fmt.Errorf("parse: %w", ctx.Err())
 	}
-	return domain.FileImports{Specs: a.imports[path]}, nil
+	return domain.FileImports{Package: a.packages[path], Specs: a.imports[path]}, nil
 }
 
 // fakeGit serves HEAD and diffs.
@@ -611,19 +613,22 @@ func (g *fakeGit) DiffNames(ctx context.Context, owner, name, base, head string)
 	return g.diff, g.diffErr
 }
 
-// fakeGraph returns canned edges.
+// fakeGraph returns a graph of canned edges.
 type fakeGraph struct {
 	edges []domain.Edge
 	err   error
-	// panics makes BuildEdges panic.
+	// panics makes BuildGraph panic.
 	panics bool
 }
 
-func (g *fakeGraph) BuildEdges(ctx context.Context, root string, files []string) ([]domain.Edge, error) {
+func (g *fakeGraph) BuildGraph(ctx context.Context, root string, files []string) (domain.Graph, error) {
 	if g.panics {
 		panic("graph exploded")
 	}
-	return g.edges, g.err
+	if g.err != nil {
+		return domain.Graph{}, g.err
+	}
+	return domain.Graph{Edges: g.edges, Packages: []domain.FilePackage{}}, nil
 }
 
 // fakeClock is a settable clock safe for concurrent use; every Now call may advance it.

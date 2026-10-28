@@ -32,21 +32,21 @@ func NewImportGraph(files domain.SourceFS, analyzer Analyzer, log *slog.Logger) 
 	return &ImportGraph{files: files, analyzer: analyzer, log: log}
 }
 
-// BuildEdges implements GraphBuilder.
-func (g *ImportGraph) BuildEdges(ctx context.Context, root string, files []string) (edges []domain.Edge, err error) {
+// BuildGraph implements GraphBuilder.
+func (g *ImportGraph) BuildGraph(ctx context.Context, root string, files []string) (graph domain.Graph, err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			edges, err = nil, fmt.Errorf("import graph panicked: %v", p)
+			graph, err = domain.Graph{}, fmt.Errorf("import graph panicked: %v", p)
 		}
 	}()
-	edges, aliasErr, err := importgraph.Build(ctx, g.files, root, files, g.specifiers(root))
+	graph, aliasErr, err := importgraph.Build(ctx, g.files, root, files, g.sourceImports(root))
 	if err != nil {
-		return nil, fmt.Errorf("build import graph: %w", err)
+		return domain.Graph{}, fmt.Errorf("build import graph: %w", err)
 	}
 	if aliasErr != nil {
 		g.logAliasProblem(ctx, aliasErr)
 	}
-	return edges, nil
+	return graph, nil
 }
 
 // logAliasProblem logs the problem categories and their count, nothing the clone's tsconfig said
@@ -63,38 +63,38 @@ func (g *ImportGraph) logAliasProblem(ctx context.Context, aliasErr error) {
 		"disabled", ae.Disabled)
 }
 
-// specifiers returns the SpecifierSource of the clone at root: each file is read and parsed
-// under its own parse deadline (P10); any failure means no specifiers.
-func (g *ImportGraph) specifiers(root string) importgraph.SpecifierSource {
-	return func(ctx context.Context, file string) []string {
+// sourceImports returns the SourceImports of the clone at root: each file is read and parsed
+// under its own parse deadline (P10); any failure means no specifiers and no package (EC8).
+func (g *ImportGraph) sourceImports(root string) importgraph.SourceImports {
+	return func(ctx context.Context, file string) domain.FileImports {
 		raw, err := g.files.ReadFile(root, file)
 		if err != nil {
-			return nil
+			return domain.FileImports{}
 		}
 		fctx, cancel := context.WithTimeout(ctx, domain.ParseTimeout)
 		defer cancel()
 		imports, err := g.analyzer.Imports(fctx, file, domain.DecodeText(raw))
 		if err != nil || fctx.Err() != nil {
-			return nil
+			return domain.FileImports{}
 		}
-		return imports.Specs
+		return imports
 	}
 }
 
-// buildGraph runs the GraphBuilder for the indexer: edges, or the message of a builder failure
-// (graphFailed, no edges). It returns an error only when ctx ended.
-func (ix *Indexer) buildGraph(ctx context.Context, root string, files []string) (edges []domain.Edge, graphFailed string, err error) {
+// buildGraph runs the GraphBuilder for the indexer: the graph, or the message of a builder
+// failure (graphFailed, empty graph). It returns an error only when ctx ended.
+func (ix *Indexer) buildGraph(ctx context.Context, root string, files []string) (graph domain.Graph, graphFailed string, err error) {
 	defer func() {
 		if p := recover(); p != nil {
-			edges, graphFailed, err = nil, errorText(ix.d.Redact, fmt.Sprintf("import graph panicked: %v", p)), nil
+			graph, graphFailed, err = domain.Graph{}, errorText(ix.d.Redact, fmt.Sprintf("import graph panicked: %v", p)), nil
 		}
 	}()
-	edges, gerr := ix.d.Graph.BuildEdges(ctx, root, files)
+	graph, gerr := ix.d.Graph.BuildGraph(ctx, root, files)
 	if gerr != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, "", fmt.Errorf("build import graph: %w", ctxErr)
+			return domain.Graph{}, "", fmt.Errorf("build import graph: %w", ctxErr)
 		}
-		return nil, errorText(ix.d.Redact, gerr.Error()), nil
+		return domain.Graph{}, errorText(ix.d.Redact, gerr.Error()), nil
 	}
-	return edges, "", nil
+	return graph, "", nil
 }

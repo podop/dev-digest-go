@@ -20,7 +20,8 @@ type walkedTree struct {
 	dirs map[string]struct{}
 }
 
-// ctxCheckEvery is the number of specifiers resolved between two looks at ctx in BuildEdges.
+// ctxCheckEvery is the number of specifiers (or extra targets) resolved between two looks at
+// ctx in collectEdges.
 const ctxCheckEvery = 256
 
 // NewTree returns the Tree of a clone: IsFile is true for the walked files (the only files an
@@ -59,58 +60,145 @@ func (t *walkedTree) IsFile(rel string) bool {
 
 func (t *walkedTree) ReadFile(rel string) ([]byte, error) { return t.fs.ReadFile(t.root, rel) }
 
-// BuildEdges returns the import edges importer -> imported over files (FR3023): for each file in
-// order and each of its specifiers in order, the resolved path when it is another walked file
-// with a supported extension (step 5). Duplicates are dropped; edge paths are clone-relative. It
-// returns ctx's error when ctx ends first.
+// BuildEdges returns the import edges importer -> imported over files with the TS/JS resolver
+// only (FR3023): for each file in order and each of its specifiers in order, the resolved path
+// when it is another walked file with a supported extension (step 5). Duplicates are dropped;
+// edge paths are clone-relative. It returns ctx's error when ctx ends first.
 func BuildEdges(ctx context.Context, files []string, r *Resolver, specs SpecifierSource) ([]domain.Edge, error) {
+	imports, err := readImports(ctx, files, func(ctx context.Context, file string) domain.FileImports {
+		return domain.FileImports{Specs: specs(ctx, file)}
+	})
+	if err != nil {
+		return nil, err
+	}
+	return collectEdges(ctx, files, tsResolve(r), imports)
+}
+
+// SourceImports returns the imports of one walked file: its package key and its specifiers in
+// first-seen order. A file that cannot be read or parsed returns the zero value.
+type SourceImports func(ctx context.Context, file string) domain.FileImports
+
+// Build builds the import graph of the walked files (FR14, FR15, FR17): it loads the root
+// tsconfig aliases, reads every file's imports once, and resolves each specifier with the
+// resolver of the importing file's syntax (TS/JS: Resolver, Go: GoResolver). Graph.Packages has
+// one row per file whose imports name a package, in walk order; both slices are non-nil.
+// aliasErr explains, in content-free words (categories and clone-relative config paths, see
+// LoadAliases), why alias resolution is off or partial; the caller logs it, the edges are still
+// built from relative imports. err is only ctx's error.
+func Build(ctx context.Context, fs domain.SourceFS, root string, files []string, imports SourceImports) (g domain.Graph, aliasErr, err error) {
+	tree := NewTree(fs, root, files)
+	aliases, aliasErr := LoadAliases(ctx, tree)
+	if err := ctx.Err(); err != nil {
+		return domain.Graph{}, nil, err
+	}
+	byFile, err := readImports(ctx, files, imports)
+	if err != nil {
+		return domain.Graph{}, nil, err
+	}
+	packages := []domain.FilePackage{}
+	hasGo := false
+	for _, f := range files {
+		if key := byFile[f].Package; key != "" {
+			packages = append(packages, domain.FilePackage{Path: f, Key: key})
+		}
+		if syntax, _ := domain.SyntaxForPath(f); syntax == domain.SyntaxGo {
+			hasGo = true
+		}
+	}
+	ts := tsResolve(NewResolver(tree, aliases))
+	var golang *GoResolver
+	if hasGo {
+		golang = NewGoResolver(tree, files)
+	}
+	resolve := func(from, spec string) []string {
+		syntax, ok := domain.SyntaxForPath(from)
+		switch {
+		case !ok:
+			return nil
+		case syntax == domain.SyntaxGo:
+			return golang.ResolveAll(spec)
+		default:
+			return ts(from, spec)
+		}
+	}
+	edges, err := collectEdges(ctx, files, resolve, byFile)
+	if err != nil {
+		return domain.Graph{}, nil, err
+	}
+	return domain.Graph{Edges: edges, Packages: packages}, aliasErr, nil
+}
+
+// readImports reads the imports of every file once, looking at ctx before each file.
+func readImports(ctx context.Context, files []string, src SourceImports) (map[string]domain.FileImports, error) {
+	out := make(map[string]domain.FileImports, len(files))
+	for _, f := range files {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		out[f] = src(ctx, f)
+	}
+	return out, nil
+}
+
+// tsResolve adapts the TS/JS Resolver to the many-target form of collectEdges.
+func tsResolve(r *Resolver) func(from, spec string) []string {
+	return func(from, spec string) []string {
+		to, ok := r.Resolve(from, spec)
+		if !ok {
+			return nil
+		}
+		return []string{to}
+	}
+}
+
+// collectEdges resolves the specifiers of every file in order and keeps the targets that are
+// another walked file with a supported extension; duplicates are dropped. ctx is looked at
+// before each file and every ctxCheckEvery specifiers or targets.
+func collectEdges(ctx context.Context, files []string, resolve func(from, spec string) []string, imports map[string]domain.FileImports) ([]domain.Edge, error) {
 	walked := make(map[string]struct{}, len(files))
 	for _, f := range files {
 		walked[f] = struct{}{}
 	}
 	edges := []domain.Edge{}
 	seen := make(map[domain.Edge]struct{})
-	resolved := 0
+	work := 0
+	tick := func() error {
+		if work++; work%ctxCheckEvery == 0 {
+			return ctx.Err()
+		}
+		return nil
+	}
 	for _, from := range files {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		for _, spec := range specs(ctx, from) {
-			if resolved++; resolved%ctxCheckEvery == 0 {
-				if err := ctx.Err(); err != nil {
-					return nil, err
+		for _, spec := range imports[from].Specs {
+			if err := tick(); err != nil {
+				return nil, err
+			}
+			for i, to := range resolve(from, spec) {
+				if i > 0 {
+					if err := tick(); err != nil {
+						return nil, err
+					}
 				}
+				if to == from {
+					continue
+				}
+				if _, inWalk := walked[to]; !inWalk {
+					continue
+				}
+				if _, supported := domain.SyntaxForPath(to); !supported {
+					continue
+				}
+				e := domain.Edge{From: from, To: to}
+				if _, dup := seen[e]; dup {
+					continue
+				}
+				seen[e] = struct{}{}
+				edges = append(edges, e)
 			}
-			to, ok := r.Resolve(from, spec)
-			if !ok || to == from {
-				continue
-			}
-			if _, inWalk := walked[to]; !inWalk {
-				continue
-			}
-			if _, supported := domain.SyntaxForPath(to); !supported {
-				continue
-			}
-			e := domain.Edge{From: from, To: to}
-			if _, dup := seen[e]; dup {
-				continue
-			}
-			seen[e] = struct{}{}
-			edges = append(edges, e)
 		}
 	}
 	return edges, nil
-}
-
-// Build loads the root tsconfig aliases and builds the edges of the walked files. aliasErr
-// explains, in content-free words (categories and clone-relative config paths, see LoadAliases),
-// why alias resolution is off or partial; the caller logs it, the edges are still built from relative imports. err is only ctx's error.
-func Build(ctx context.Context, fs domain.SourceFS, root string, files []string, specs SpecifierSource) (edges []domain.Edge, aliasErr, err error) {
-	tree := NewTree(fs, root, files)
-	aliases, aliasErr := LoadAliases(ctx, tree)
-	if err := ctx.Err(); err != nil {
-		return nil, nil, err
-	}
-	edges, err = BuildEdges(ctx, files, NewResolver(tree, aliases), specs)
-	return edges, aliasErr, err
 }
