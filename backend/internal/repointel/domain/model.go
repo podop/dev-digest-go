@@ -101,6 +101,8 @@ const (
 	SyntaxTSX
 	// SyntaxJavaScript is the grammar of .js, .mjs and .cjs files.
 	SyntaxJavaScript
+	// SyntaxGo is the grammar of .go files.
+	SyntaxGo
 )
 
 // String names the grammar.
@@ -112,13 +114,15 @@ func (s Syntax) String() string {
 		return "tsx"
 	case SyntaxJavaScript:
 		return "javascript"
+	case SyntaxGo:
+		return "go"
 	}
 	return "unknown"
 }
 
 // SyntaxForPath returns the grammar for a file path by its extension, compared
-// case-insensitively; ok is false for every other extension. These are the six supported
-// extensions: .ts, .tsx, .js, .jsx, .mjs, .cjs.
+// case-insensitively; ok is false for every other extension. The supported extensions are
+// .ts, .tsx, .js, .jsx, .mjs, .cjs and .go.
 func SyntaxForPath(p string) (Syntax, bool) {
 	switch strings.ToLower(path.Ext(p)) {
 	case ".ts":
@@ -127,9 +131,35 @@ func SyntaxForPath(p string) (Syntax, bool) {
 		return SyntaxTSX, true
 	case ".js", ".mjs", ".cjs":
 		return SyntaxJavaScript, true
+	case ".go":
+		return SyntaxGo, true
 	}
 	return 0, false
 }
+
+// FileImports is what the parser reads from one file's import statements: the file's declared
+// package (Go and Java; "" for TypeScript and JavaScript) and its raw import specifiers.
+type FileImports struct {
+	Package string
+	Specs   []string
+}
+
+// FilePackage maps a source file to the key of its package (see GoPackageKey).
+type FilePackage struct {
+	Path string
+	Key  string
+}
+
+// Graph is the result of building the import graph: file-to-file edges and the package key of
+// each file that has one. Both slices are non-nil.
+type Graph struct {
+	Edges    []Edge
+	Packages []FilePackage
+}
+
+// GoPackageKey returns the package key of a Go file: "go:" plus its repo-relative directory
+// ("go:." for the repository root).
+func GoPackageKey(file string) string { return "go:" + path.Dir(file) }
 
 // Repo is the part of a repository row the indexer needs.
 type Repo struct {

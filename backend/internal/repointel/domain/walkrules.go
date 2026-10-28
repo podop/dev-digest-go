@@ -16,7 +16,7 @@ func IsExcludedDir(name string) bool {
 	return false
 }
 
-// IsSupported reports whether p has one of the six supported extensions, compared
+// IsSupported reports whether p has one of the supported extensions, compared
 // case-insensitively. Like Node's path.extname, a name whose only dot is the first character
 // (".ts") has no extension.
 func IsSupported(p string) bool {
@@ -45,7 +45,7 @@ func SelectFiles(entries []FileEntry) WalkResult {
 	var res WalkResult
 	files := make([]string, 0, len(entries))
 	for _, e := range entries {
-		if !IsSupported(e.Path) || inExcludedDir(e.Path) {
+		if !IsSupported(e.Path) || isGeneratedGoPath(e.Path) || inExcludedDir(e.Path) {
 			continue
 		}
 		res.Stats.TotalCandidates++
@@ -76,4 +76,10 @@ func inExcludedDir(p string) bool {
 		}
 	}
 	return false
+}
+
+// isGeneratedGoPath reports whether p is protobuf-generated Go (.pb.go, .pb.gw.go); such files
+// are neither candidates nor indexed.
+func isGeneratedGoPath(p string) bool {
+	return strings.HasSuffix(p, ".pb.go") || strings.HasSuffix(p, ".pb.gw.go")
 }
