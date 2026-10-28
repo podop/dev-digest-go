@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
@@ -337,5 +338,33 @@ func TestImportGraph_NoTSConfigRaisesNoAliasError(t *testing.T) {
 	}
 	if diff := cmp.Diff([]domain.Edge{{From: "a.ts", To: "b.ts"}}, g.Edges); diff != "" {
 		t.Errorf("Build() edges mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// TestGoResolver_DeepChainOverARealClone is S-M1 over the real file system: one .go file at the
+// bottom of a 1,000-deep directory chain made NewGoResolver probe go.mod in every ancestor, each
+// probe O(depth) (depth 500: 46 s, 1,000: over 9 min). Only the first 64 levels are probed now.
+func TestGoResolver_DeepChainOverARealClone(t *testing.T) {
+	root := t.TempDir()
+	rel := strings.Repeat("a/", 1000) + "x.go"
+	writeText(t, root, rel, "package a\n")
+	writeText(t, root, "go.mod", "module m\n")
+	fs := clonetree.New()
+	walk, err := fs.Walk(t.Context(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if diff := cmp.Diff([]string{rel}, walk.Files); diff != "" {
+		t.Fatalf("Walk() files mismatch (-want +got):\n%s", diff)
+	}
+	start := time.Now()
+	_, err = importgraph.NewGoResolver(t.Context(), importgraph.NewTree(fs, root, walk.Files), walk.Files)
+	took := time.Since(start)
+	if err != nil {
+		t.Fatalf("NewGoResolver() error = %v", err)
+	}
+	t.Logf("NewGoResolver(1,000-deep file) took %v", took)
+	if took > time.Second {
+		t.Errorf("NewGoResolver(1,000-deep file) took %v, want under 1s", took)
 	}
 }

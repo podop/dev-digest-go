@@ -44,9 +44,13 @@ func NewJavaResolver(pkgFiles map[string][]string) *JavaResolver {
 // package a.b; when there are none, the last segment is dropped and the lookup repeated
 // ("a.b.C.Inner" reaches C.java), until fewer than two segments remain. "a.b.*" is every file of
 // package a.b. "static:a.b.C.m" and "static:a.b.C.*" resolve as the class a.b.C. It returns nil
-// for the JDK, libraries and unknown classes. Several files of one name (a class duplicated
-// across source roots) are all returned. The returned slice must not be modified.
+// for the JDK, libraries, unknown classes and a spec over maxSpecBytes. Several files of one name
+// (a class duplicated across source roots) are all returned. The returned slice must not be
+// modified.
 func (r *JavaResolver) ResolveAll(spec string) []string {
+	if len(spec) > maxSpecBytes {
+		return nil
+	}
 	spec, static := strings.CutPrefix(spec, staticPrefix)
 	if !static {
 		if pkg, ok := strings.CutSuffix(spec, ".*"); ok {

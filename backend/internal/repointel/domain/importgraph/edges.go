@@ -129,7 +129,9 @@ func Build(ctx context.Context, fs domain.SourceFS, root string, files []string,
 	ts := tsResolve(NewResolver(tree, aliases))
 	var golang *GoResolver
 	if hasGo {
-		golang = NewGoResolver(tree, files)
+		if golang, err = NewGoResolver(ctx, tree, files); err != nil {
+			return domain.Graph{}, nil, err
+		}
 	}
 	resolve := func(from, spec string) []string {
 		syntax, ok := domain.SyntaxForPath(from)

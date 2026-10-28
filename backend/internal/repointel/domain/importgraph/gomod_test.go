@@ -2,14 +2,28 @@ package importgraph_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io/fs"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 
 	"dev-digest-go/backend/internal/repointel/domain"
 	"dev-digest-go/backend/internal/repointel/domain/importgraph"
 )
+
+// newGoResolver is NewGoResolver with the test's context; an error fails the test.
+func newGoResolver(t *testing.T, tree importgraph.Tree, files []string) *importgraph.GoResolver {
+	t.Helper()
+	r, err := importgraph.NewGoResolver(t.Context(), tree, files)
+	if err != nil {
+		t.Fatalf("NewGoResolver() error = %v", err)
+	}
+	return r
+}
 
 // importsOf returns a SourceImports that serves fixed specifiers per file, with the Go package
 // key for .go files as the parser reports it.
@@ -43,7 +57,7 @@ func TestGoResolver_SingleModule(t *testing.T) {
 		"internal/svc/a_test.go": "",
 		"internal/svc/x.ts":      "",
 	}
-	r := importgraph.NewGoResolver(tree, treeFiles(tree))
+	r := newGoResolver(t, tree, treeFiles(tree))
 	tests := []struct {
 		spec string
 		want []string
@@ -76,7 +90,7 @@ func TestGoResolver_NestedModuleLongestPrefix(t *testing.T) {
 		"tools/x/x.go":   "",
 		"x/wrong.go":     "",
 	}
-	r := importgraph.NewGoResolver(tree, treeFiles(tree))
+	r := newGoResolver(t, tree, treeFiles(tree))
 	if diff := cmp.Diff([]string{"tools/x/x.go"}, r.ResolveAll("example.com/r/tools/x")); diff != "" {
 		t.Errorf("ResolveAll(example.com/r/tools/x) mismatch (-want +got):\n%s", diff)
 	}
@@ -122,7 +136,7 @@ func TestGoResolver_GoModWithoutModuleOrTooLarge(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tree := fakeTree{"go.mod": tc.gomod, "main.go": "", "a/a.go": ""}
-			r := importgraph.NewGoResolver(tree, treeFiles(tree))
+			r := newGoResolver(t, tree, treeFiles(tree))
 			if got := r.ResolveAll("example.com/r/a"); got != nil {
 				t.Errorf("ResolveAll(example.com/r/a) = %v, want nil", got)
 			}
@@ -130,7 +144,7 @@ func TestGoResolver_GoModWithoutModuleOrTooLarge(t *testing.T) {
 	}
 	t.Run("no go.mod at all", func(t *testing.T) {
 		tree := fakeTree{"main.go": "", "a/a.go": ""}
-		if got := importgraph.NewGoResolver(tree, treeFiles(tree)).ResolveAll("a"); got != nil {
+		if got := newGoResolver(t, tree, treeFiles(tree)).ResolveAll("a"); got != nil {
 			t.Errorf("ResolveAll(a) = %v, want nil", got)
 		}
 	})
@@ -233,9 +247,163 @@ func TestBuild_TSOnlyCloneReadsNoGoMod(t *testing.T) {
 // above a walked file (the root included), nowhere else.
 func TestNewGoResolver_ReadsGoModOnlyWhereFilesAreWalked(t *testing.T) {
 	tree := &countTree{perFile: map[string]int{}, files: map[string]string{}}
-	importgraph.NewGoResolver(tree, []string{"a/b/c.go", "a/b/d.go", "e/f.ts"})
+	newGoResolver(t, tree, []string{"a/b/c.go", "a/b/d.go", "e/f.ts"})
 	want := map[string]int{"go.mod": 1, "a/go.mod": 1, "a/b/go.mod": 1, "e/go.mod": 1}
 	if diff := cmp.Diff(want, tree.perFile); diff != "" {
 		t.Errorf("NewGoResolver() reads mismatch (-want +got):\n%s", diff)
+	}
+}
+
+// deepDir returns a directory of depth segments "a".
+func deepDir(depth int) string { return strings.TrimSuffix(strings.Repeat("a/", depth), "/") }
+
+// TestNewGoResolver_DeepChainProbesOnlyShallowDirectories is S-M1: one file 1,000 directories
+// deep made NewGoResolver probe go.mod in all 1,000 ancestors, each probe costing O(depth) in the
+// clone file system (depth 500: 46 s). Only directories of at most 64 segments are probed now.
+func TestNewGoResolver_DeepChainProbesOnlyShallowDirectories(t *testing.T) {
+	tree := &countTree{perFile: map[string]int{}, files: map[string]string{}}
+	start := time.Now()
+	newGoResolver(t, tree, []string{deepDir(1000) + "/x.go"})
+	if took := time.Since(start); took > time.Second {
+		t.Errorf("NewGoResolver(1,000-deep file) took %v, want under 1s", took)
+	}
+	if got := tree.reads.Load(); got != 65 {
+		t.Errorf("NewGoResolver(1,000-deep file) read %d go.mod files, want 65 (the root and 64 levels)", got)
+	}
+	deepest := 0
+	for rel := range tree.perFile {
+		deepest = max(deepest, strings.Count(rel, "/"))
+	}
+	if deepest > 64 {
+		t.Errorf("NewGoResolver() read a go.mod %d directories deep, want at most 64", deepest)
+	}
+}
+
+// TestGoResolver_GoModDepthLimit: a go.mod 64 directories deep is a module root; one deeper is
+// ignored, like a missing one.
+func TestGoResolver_GoModDepthLimit(t *testing.T) {
+	for _, tc := range []struct {
+		depth int
+		want  bool
+	}{{64, true}, {65, false}} {
+		t.Run(fmt.Sprintf("depth %d", tc.depth), func(t *testing.T) {
+			dir := deepDir(tc.depth)
+			tree := fakeTree{dir + "/go.mod": "module example.com/deep\n", dir + "/p/p.go": ""}
+			got := newGoResolver(t, tree, treeFiles(tree)).ResolveAll("example.com/deep/p")
+			if (got != nil) != tc.want {
+				t.Errorf("ResolveAll(example.com/deep/p) with go.mod at depth %d = %v, want resolved: %v", tc.depth, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewGoResolver_CancelledContext(t *testing.T) {
+	tree := &countTree{files: map[string]string{}}
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	r, err := importgraph.NewGoResolver(ctx, tree, []string{deepDir(1000) + "/x.go", "b/y.go"})
+	if !errors.Is(err, context.Canceled) || r != nil {
+		t.Errorf("NewGoResolver(cancelled) = resolver %t, %v, want nil and context.Canceled", r != nil, err)
+	}
+	if got := tree.reads.Load(); got != 0 {
+		t.Errorf("NewGoResolver(cancelled) read %d go.mod files, want none", got)
+	}
+}
+
+func TestBuild_CancelledWhileProbingGoMod(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	src := &cancelFS{onGoMod: cancel}
+	_, _, err := importgraph.Build(ctx, src, "/clone", []string{"a/x.go", "b/y.go", "c/z.go"}, importsOf(nil))
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Build() error = %v, want context.Canceled", err)
+	}
+	if src.goMods != 1 {
+		t.Errorf("Build() read %d go.mod files, want it to stop after the first", src.goMods)
+	}
+}
+
+// cancelFS is a SourceFS without files that calls onGoMod on every go.mod read.
+type cancelFS struct {
+	onGoMod func()
+	goMods  int
+}
+
+func (f *cancelFS) Walk(context.Context, string) (domain.WalkResult, error) {
+	return domain.WalkResult{}, nil
+}
+
+func (f *cancelFS) ReadFile(_, rel string) ([]byte, error) {
+	if strings.HasSuffix(rel, "go.mod") {
+		f.goMods++
+		f.onGoMod()
+	}
+	return nil, fs.ErrNotExist
+}
+
+// TestResolveAll_LongSpecResolvesToNothing is S-M3: every step of the prefix walk hashed the rest
+// of the specifier, so one 400 KB specifier took about 2 s. A specifier over 1,024 bytes is no
+// import path and resolves to nothing at once.
+func TestResolveAll_LongSpecResolvesToNothing(t *testing.T) {
+	const size = domain.MaxFileBytes
+	goSpec := "m/" + strings.Repeat("a/", size/2-2) + "a"
+	javaSpec := strings.Repeat("a.", size/2-1) + "A"
+	tree := &countTree{gen: func(rel string) (string, bool) {
+		dir, ok := strings.CutSuffix(rel, "go.mod")
+		return "module m/" + dir + "\n", ok
+	}}
+	var files []string
+	for i := range 16 {
+		files = append(files, fmt.Sprintf("d%c/a.go", 'a'+i))
+	}
+	goRes := newGoResolver(t, tree, files)
+	pkgs := map[string][]string{}
+	for i := range 16 {
+		pkgs[fmt.Sprintf("p%c", 'a'+i)] = []string{"p/A.java"}
+	}
+	javaRes := importgraph.NewJavaResolver(pkgs)
+	tests := []struct {
+		name    string
+		resolve func(string) []string
+		spec    string
+	}{
+		{"go", goRes.ResolveAll, goSpec},
+		{"java", javaRes.ResolveAll, javaSpec},
+		{"java static", javaRes.ResolveAll, "static:" + javaSpec + ".*"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			start := time.Now()
+			got := tc.resolve(tc.spec)
+			took := time.Since(start)
+			t.Logf("ResolveAll(%d-byte spec) took %v", len(tc.spec), took)
+			if got != nil {
+				t.Errorf("ResolveAll(%d-byte spec) = %v, want nil", len(tc.spec), got)
+			}
+			if took > 10*time.Millisecond {
+				t.Errorf("ResolveAll(%d-byte spec) took %v, want under 10ms", len(tc.spec), took)
+			}
+		})
+	}
+}
+
+// TestResolveAll_SpecLengthLimit: a resolvable specifier of exactly 1,024 bytes still resolves.
+func TestResolveAll_SpecLengthLimit(t *testing.T) {
+	goPkg := strings.Repeat("b", 1024-len("example.com/r/"))
+	tree := fakeTree{"go.mod": "module example.com/r\n", goPkg + "/b.go": ""}
+	goRes := newGoResolver(t, tree, treeFiles(tree))
+	if got := goRes.ResolveAll("example.com/r/" + goPkg); len(got) != 1 {
+		t.Errorf("ResolveAll(1,024-byte Go spec) = %v, want its file", got)
+	}
+	if got := goRes.ResolveAll("example.com/r/" + goPkg + "c"); got != nil {
+		t.Errorf("ResolveAll(1,025-byte Go spec) = %v, want nil", got)
+	}
+	javaPkg := strings.Repeat("p", 1024-len(".A"))
+	javaRes := importgraph.NewJavaResolver(map[string][]string{javaPkg: {"x/A.java"}})
+	if got := javaRes.ResolveAll(javaPkg + ".A"); len(got) != 1 {
+		t.Errorf("ResolveAll(1,024-byte Java spec) = %v, want its file", got)
+	}
+	if got := javaRes.ResolveAll(javaPkg + ".AB"); got != nil {
+		t.Errorf("ResolveAll(1,025-byte Java spec) = %v, want nil", got)
 	}
 }
