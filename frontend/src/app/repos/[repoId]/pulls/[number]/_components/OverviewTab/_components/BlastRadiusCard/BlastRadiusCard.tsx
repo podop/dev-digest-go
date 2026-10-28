@@ -9,6 +9,7 @@ import { useTranslations } from "next-intl";
 import { Badge, Button, ErrorState, Icon, Skeleton } from "@devdigest/ui";
 import { ApiError } from "@/lib/api";
 import { useBlastRadius, useResyncBlast } from "@/lib/hooks/blast";
+import { hasNoSourceFiles, useRepoIntelStatus } from "@/lib/hooks/repo-intel";
 import { useLinkRepo } from "@/lib/link-repo";
 import { BlastGraph } from "./_components/BlastGraph";
 import { BlastTree } from "./_components/BlastTree";
@@ -26,6 +27,7 @@ export interface BlastRadiusCardProps {
 export function BlastRadiusCard({ prId, repoId, headSha }: BlastRadiusCardProps) {
   const t = useTranslations("blast");
   const tc = useTranslations("common");
+  const intel = useRepoIntelStatus(repoId);
   const { data, isLoading, isError, error, refetch } = useBlastRadius(prId);
   const resync = useResyncBlast(repoId, prId);
   const repo = useLinkRepo();
@@ -45,6 +47,7 @@ export function BlastRadiusCard({ prId, repoId, headSha }: BlastRadiusCardProps)
 
   const stats = blastStats(data);
   const degraded = data.degraded === true;
+  const noSourceFiles = degraded && hasNoSourceFiles(intel.data);
 
   return (
     <section style={s.card} aria-label={t("title")}>
@@ -83,12 +86,22 @@ export function BlastRadiusCard({ prId, repoId, headSha }: BlastRadiusCardProps)
             {t("degraded.badge")}
           </Badge>
           <span style={s.degradedText}>
-            {t(`degraded.reason.${degradedReasonKey(data.reason)}`)} {t("degraded.notImpact")}
-            {resync.isSuccess && ` ${t("degraded.resyncStarted")}`}
+            {noSourceFiles ? (
+              <>
+                {t("degraded.noSourceFiles")} <span>{tc("repoIntel.supportedLanguages")}</span> {t("degraded.notImpact")}
+              </>
+            ) : (
+              <>
+                {t(`degraded.reason.${degradedReasonKey(data.reason)}`)} {t("degraded.notImpact")}
+                {resync.isSuccess && ` ${t("degraded.resyncStarted")}`}
+              </>
+            )}
           </span>
-          <Button kind="secondary" size="sm" icon="RefreshCw" loading={resync.isPending} onClick={() => resync.mutate()}>
-            {t("degraded.resync")}
-          </Button>
+          {!noSourceFiles && (
+            <Button kind="secondary" size="sm" icon="RefreshCw" loading={resync.isPending} onClick={() => resync.mutate()}>
+              {t("degraded.resync")}
+            </Button>
+          )}
         </div>
       )}
 

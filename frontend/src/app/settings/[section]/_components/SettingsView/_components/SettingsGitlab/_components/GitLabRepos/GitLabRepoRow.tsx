@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 import { Icon } from "@devdigest/ui";
 import { KitBadge, ListRow, MonoAction, RowMeta } from "@/components/settings-kit";
 import { isNotConnected } from "@/lib/code-host";
-import { useRepoIntelStatus } from "@/lib/hooks";
+import { hasNoSourceFiles, useRepoIntelStatus } from "@/lib/hooks";
 import type { Repo } from "@/lib/types";
 import { indexedAge, isNotIndexed } from "../../../RepoIndex";
 import { s } from "./styles";
@@ -13,11 +13,14 @@ import { s } from "./styles";
  *  when no connection serves its host, "Not connected" with its hint. */
 export function GitLabRepoRow({ repo, onRemove }: { repo: Repo; onRemove: () => void }) {
   const t = useTranslations("gitlabIntegration.repos");
+  const tc = useTranslations("common");
   const index = useRepoIntelStatus(repo.id);
+  const noSourceFiles = hasNoSourceFiles(index.data);
 
   let indexText: string | null = null;
   if (index.data) {
-    if (isNotIndexed(index.data)) indexText = t("notIndexed");
+    if (noSourceFiles) indexText = t("noSourceFiles");
+    else if (isNotIndexed(index.data)) indexText = t("notIndexed");
     else {
       const age = indexedAge(index.data.updatedAt);
       indexText = age.unit === "justNow" ? t("indexed.justNow") : t(`indexed.${age.unit}`, { count: age.count });
@@ -47,6 +50,7 @@ export function GitLabRepoRow({ repo, onRemove }: { repo: Repo; onRemove: () => 
           {t("remove")}
         </MonoAction>
       </ListRow>
+      {noSourceFiles && <div style={s.hint}>{tc("repoIntel.supportedLanguages")}</div>}
       {notConnected && <div style={s.hint}>{t("notConnectedHint", { host: repo.host ?? "" })}</div>}
     </li>
   );

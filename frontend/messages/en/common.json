@@ -30,5 +30,8 @@
   "notFound": {
     "title": "Page not found",
     "body": "There is nothing at this address. The link may be stale, or the page was moved."
+  },
+  "repoIntel": {
+    "supportedLanguages": "Only TypeScript, JavaScript, Go and Java files are indexed."
   }
 }

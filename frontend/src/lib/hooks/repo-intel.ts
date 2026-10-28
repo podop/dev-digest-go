@@ -32,6 +32,12 @@ export function isRepoIndexed(state: RepoIndexState | undefined): boolean {
   return !!state && state.lastIndexedSha !== "";
 }
 
+/** The repo was indexed and held no file in a supported language (TypeScript, JavaScript, Go, Java): the
+    API answers `reason: "no_files"` with zero files. A never-indexed or failed repo is not this (EC13). */
+export function hasNoSourceFiles(state: RepoIndexState | undefined): boolean {
+  return isRepoIndexed(state) && state?.reason === "no_files" && state.filesIndexed === 0;
+}
+
 /** Waits for a repo's first index state (first-run setup, FR25): refetches GET
     /repos/:id/index-state every `intervalMs` until it is indexed or `maxMs` has passed,
     then stops. `timedOut` flips once that deadline passes without an indexed state. */

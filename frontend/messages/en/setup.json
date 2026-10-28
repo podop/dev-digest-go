@@ -84,6 +84,7 @@
       "degraded": "Limited index — search falls back to ripgrep",
       "failed": "Indexing failed"
     },
-    "background": "Indexing continues in the background."
+    "background": "Indexing continues in the background.",
+    "noSourceFiles": "{name} has no supported source files"
   }
 }

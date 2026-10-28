@@ -206,6 +206,32 @@ describe("TourView — states", () => {
     expect(screen.getByRole("button", { name: "Generate tour" })).toBeDisabled();
   });
 
+  it("says the repo has no source files DevDigest can index, with the languages line, and keeps Generate disabled (FR31, AC22)", async () => {
+    setup(
+      { status: "none" },
+      { "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "no_files", lastIndexedSha: "abc", indexerVersion: 1, updatedAt: "2026-10-01T00:00:00.000Z" } },
+    );
+    renderWithProviders(view());
+
+    expect(
+      await screen.findByText("This repository has no source files DevDigest can index, so a tour can't be generated."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Only TypeScript, JavaScript, Go and Java files are indexed.")).toBeInTheDocument();
+    expect(screen.queryByText(/Index this repo first/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Generate tour" })).toBeDisabled();
+  });
+
+  it("keeps today's hint for a partial index with a budget reason and no files (AC22)", async () => {
+    setup(
+      { status: "none" },
+      { "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "budget", lastIndexedSha: "abc", indexerVersion: 1, updatedAt: "2026-10-01T00:00:00.000Z" } },
+    );
+    renderWithProviders(view());
+    expect(await screen.findByText(/Index this repo first/)).toBeInTheDocument();
+    expect(screen.queryByText(/no source files DevDigest can index/)).toBeNull();
+    expect(screen.queryByText("Only TypeScript, JavaScript, Go and Java files are indexed.")).toBeNull();
+  });
+
   it("shows the stale banner with its own Regenerate", async () => {
     const api = setup(ready("Old.", { stale: true, stale_reason: "index_changed" }), {
       "POST /repos/r1/onboarding": ready("New."),

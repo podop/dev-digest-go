@@ -16,7 +16,8 @@
     "cta": "Generate tour",
     "generating": "Generating…",
     "indexNotReady": "Index this repo first — the repository has no indexed files yet.",
-    "status": "Generating… (one LLM call)"
+    "status": "Generating… (one LLM call)",
+    "noSourceFiles": "This repository has no source files DevDigest can index, so a tour can't be generated."
   },
   "stale": {
     "title": "This tour may be out of date",

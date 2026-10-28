@@ -1257,7 +1257,7 @@ describe("Go backend golden responses", () => {
       durationMs: 0,
       reason: "no_data",
       lastIndexedSha: "",
-      indexerVersion: 2,
+      indexerVersion: 3,
       degraded: true,
       degradedReason: "no_data",
     });

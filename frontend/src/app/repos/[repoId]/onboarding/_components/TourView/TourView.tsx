@@ -10,7 +10,7 @@ import { Button, ErrorState } from "@devdigest/ui";
 import { ONBOARDING_SECTION_IDS } from "@devdigest/shared/constants/onboarding";
 import { AppShell } from "@/components/app-shell";
 import { RepoNotFound } from "@/components/repo-not-found";
-import { useGenerateOnboardingTour, useOnboardingTour, useRepoIntelStatus } from "@/lib/hooks";
+import { useGenerateOnboardingTour, hasNoSourceFiles, useOnboardingTour, useRepoIntelStatus } from "@/lib/hooks";
 import { useActiveRepo, useRepoNotFound } from "@/lib/repo-context";
 import { copyText } from "@/lib/clipboard";
 import { useToast } from "@/lib/toast";
@@ -38,6 +38,7 @@ export function TourView({ repoId }: { repoId: string }) {
   const generating = generate.isPending;
   const ready = readyTour(tourQuery.data);
   const indexNotReady = intel.data?.filesIndexed === 0;
+  const noSourceFiles = hasNoSourceFiles(intel.data);
   const showCards = tourQuery.isLoading || generating || ready !== null;
   const { active, goTo } = useActiveSection(ONBOARDING_SECTION_IDS, ready !== null && !generating);
   const providerMissing = generate.isError && describeGenerateError(generate.error).code === PROVIDER_NOT_CONFIGURED;
@@ -129,7 +130,7 @@ export function TourView({ repoId }: { repoId: string }) {
           {showCards ? (
             <TourSections tour={generating ? null : (ready?.tour ?? null)} />
           ) : (
-            !tourQuery.isError && <EmptyTour indexNotReady={indexNotReady} onGenerate={onGenerate} />
+            !tourQuery.isError && <EmptyTour indexNotReady={indexNotReady} noSourceFiles={noSourceFiles} onGenerate={onGenerate} />
           )}
         </div>
       </div>

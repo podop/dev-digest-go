@@ -83,6 +83,7 @@
       "hours": "indexed {count} h ago",
       "days": "indexed {count} d ago"
     },
-    "retry": "Retry"
+    "retry": "Retry",
+    "noSourceFiles": "no supported source files"
   }
 }

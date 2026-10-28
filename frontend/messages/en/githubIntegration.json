@@ -33,7 +33,8 @@
       "hours": "indexed {count} h ago",
       "days": "indexed {count} d ago"
     },
-    "protectionNote": "Blocking merges is branch protection, not a DevDigest setting — mark the CI check required in the repo's rules."
+    "protectionNote": "Blocking merges is branch protection, not a DevDigest setting — mark the CI check required in the repo's rules.",
+    "noSourceFiles": "no supported source files"
   },
   "removeDialog": {
     "title": "Remove {repo}?",

@@ -33,7 +33,8 @@
     },
     "notImpact": "This is unknown, not “no impact”.",
     "resync": "Resync",
-    "resyncStarted": "Resync started — reload this card in a minute."
+    "resyncStarted": "Resync started — reload this card in a minute.",
+    "noSourceFiles": "This repository has no source files DevDigest can index, so callers can't be looked up."
   },
   "graph": {
     "empty": "No downstream callers to graph.",

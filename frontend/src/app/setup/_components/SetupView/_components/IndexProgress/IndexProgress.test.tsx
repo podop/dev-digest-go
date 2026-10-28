@@ -52,4 +52,21 @@ describe("IndexProgress (FR25, EC16)", () => {
     await advance(30_000);
     await waitFor(() => expect(api.requests("GET", "/repos/r1/index-state")).toHaveLength(seen));
   });
+
+  it("says the repo has no supported source files, with the languages line (FR30, AC22)", async () => {
+    mockFetch({ "GET /repos/:id/index-state": { ...INDEXED, status: "partial", filesIndexed: 0, reason: "no_files" } });
+    renderWithProviders(<IndexProgress repo={REPO} />);
+    expect(await screen.findByText("acme/api has no supported source files")).toBeInTheDocument();
+    expect(screen.getByText("Only TypeScript, JavaScript, Go and Java files are indexed.")).toBeInTheDocument();
+    expect(screen.queryByText("acme/api is indexed")).toBeNull();
+    expect(screen.queryByText("Partial index")).toBeNull();
+  });
+
+  it("renders a partial index with files as before (AC22)", async () => {
+    mockFetch({ "GET /repos/:id/index-state": { ...INDEXED, status: "partial", filesIndexed: 12, reason: "budget" } });
+    renderWithProviders(<IndexProgress repo={REPO} />);
+    expect(await screen.findByText("acme/api is indexed")).toBeInTheDocument();
+    expect(screen.getByText("Partial index")).toBeInTheDocument();
+    expect(screen.queryByText(/no supported source files/)).toBeNull();
+  });
 });

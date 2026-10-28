@@ -141,6 +141,39 @@ describe("BlastRadiusCard", () => {
     expect(await within(card).findByRole("link", { name: "src/router.ts:23" })).toBeInTheDocument();
   });
 
+  it("a degraded answer for a repo with no supported source files says so, has no Resync, and keeps the unknown line (FR32, AC22)", async () => {
+    mockFetch({
+      "GET /repos": [GITHUB_REPO],
+      "GET /pulls/pr-1/blast": { changed_symbols: [], downstream: [], summary: "s", degraded: true, reason: "index_partial" } satisfies BlastRadius,
+      "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 0, filesSkipped: 0, durationMs: 1, reason: "no_files", lastIndexedSha: "abc", indexerVersion: 1, updatedAt: "2026-10-01T00:00:00.000Z" },
+    });
+    renderCard();
+
+    const card = await screen.findByRole("region", { name: "Blast radius" });
+    expect(
+      await within(card).findByText(/This repository has no source files DevDigest can index, so callers can't be looked up\./),
+    ).toBeInTheDocument();
+    expect(within(card).getByText("Only TypeScript, JavaScript, Go and Java files are indexed.")).toBeInTheDocument();
+    expect(within(card).getByText(/unknown, not “no impact”/)).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "Resync" })).toBeNull();
+    expect(within(card).queryByText(/index of this repo is partial/)).toBeNull();
+  });
+
+  it("a degraded answer with a budget-limited index still shows the partial reason and Resync (AC22)", async () => {
+    mockFetch({
+      "GET /repos": [GITHUB_REPO],
+      "GET /pulls/pr-1/blast": { changed_symbols: [], downstream: [], summary: "s", degraded: true, reason: "index_partial" } satisfies BlastRadius,
+      "GET /repos/r1/index-state": { repoId: "r1", status: "partial", filesIndexed: 12, filesSkipped: 0, durationMs: 1, reason: "budget", lastIndexedSha: "abc", indexerVersion: 1, updatedAt: "2026-10-01T00:00:00.000Z" },
+    });
+    renderCard();
+
+    const card = await screen.findByRole("region", { name: "Blast radius" });
+    expect(await within(card).findByRole("button", { name: "Resync" })).toBeInTheDocument();
+    expect(within(card).getByText(/index of this repo is partial/)).toBeInTheDocument();
+    expect(within(card).queryByText(/no source files DevDigest can index/)).toBeNull();
+    expect(within(card).queryByText("Only TypeScript, JavaScript, Go and Java files are indexed.")).toBeNull();
+  });
+
   it("an API error shows the error state, and Retry reloads the card", async () => {
     const api = mockFetch({
       "GET /pulls/pr-1/blast": jsonResponse({ error: { code: "boom", message: "Index exploded" } }, 500),

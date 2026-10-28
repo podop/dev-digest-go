@@ -75,6 +75,32 @@ describe("RepoRow", () => {
   });
 });
 
+describe("RepoRow no supported source files (FR29, AC22)", () => {
+  const LANGUAGES = "Only TypeScript, JavaScript, Go and Java files are indexed.";
+  const partial = (over: Record<string, unknown>) => ({
+    ...indexState("abc", new Date(Date.now() - 3 * 3_600_000).toISOString()),
+    status: "partial",
+    filesIndexed: 0,
+    ...over,
+  });
+
+  it("says 'no supported source files' with the languages hint instead of 'indexed … ago'", async () => {
+    mockFetch({ "GET /repos/r1/index-state": partial({ reason: "no_files" }) });
+    renderRow();
+    expect(await screen.findByText("no supported source files")).toBeInTheDocument();
+    expect(screen.getByText(LANGUAGES)).toBeInTheDocument();
+    expect(screen.queryByText(/^indexed /)).not.toBeInTheDocument();
+  });
+
+  it("renders as before for a partial index that has files", async () => {
+    mockFetch({ "GET /repos/r1/index-state": partial({ filesIndexed: 12, reason: "budget" }) });
+    renderRow();
+    expect(await screen.findByText("indexed 3 h ago")).toBeInTheDocument();
+    expect(screen.queryByText("no supported source files")).not.toBeInTheDocument();
+    expect(screen.queryByText(LANGUAGES)).not.toBeInTheDocument();
+  });
+});
+
 describe("RepoRow messages (AC22)", () => {
   it.each([
     ["indexed", () => indexState("abc", new Date(Date.now() - 2 * 60_000).toISOString()), "⟦githubIntegration.repos.indexed.minutes⟧"],
