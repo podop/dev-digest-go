@@ -4,6 +4,7 @@
 package rank
 
 import (
+	"context"
 	"math"
 	"sort"
 
@@ -31,8 +32,31 @@ func FileRank(files []string, edges []domain.Edge) []domain.FileRankRow {
 // FileRankLimit is FileRank with an explicit iteration limit; a small limit forces the
 // non-convergence fallback (EC3027).
 func FileRankLimit(files []string, edges []domain.Edge, maxIterations int) []domain.FileRankRow {
+	rows, _ := fileRank(files, edges, maxIterations, func() error { return nil })
+	return rows
+}
+
+// ctxCheckEvery is the number of edges or nodes FileRankContext visits between two looks at ctx.
+const ctxCheckEvery = 1024
+
+// FileRankContext is FileRank that looks at ctx every ctxCheckEvery edges or nodes visited and
+// returns ctx's error, and no rows, when it ends: up to domain.MaxRows edges make each of the
+// MaxIterations rounds long enough for a cancel or the job timeout to matter.
+func FileRankContext(ctx context.Context, files []string, edges []domain.Edge) ([]domain.FileRankRow, error) {
+	work := 0
+	return fileRank(files, edges, MaxIterations, func() error {
+		if work++; work%ctxCheckEvery == 1 {
+			return ctx.Err()
+		}
+		return nil
+	})
+}
+
+// fileRank is FileRankLimit with tick called once per edge or node visited; a tick error stops
+// it and is returned.
+func fileRank(files []string, edges []domain.Edge, maxIterations int, tick func() error) ([]domain.FileRankRow, error) {
 	if len(files) == 0 {
-		return []domain.FileRankRow{}
+		return []domain.FileRankRow{}, nil
 	}
 	// Nodes are the distinct files in first-appearance order (graphology mergeNode).
 	index := make(map[string]int, len(files))
@@ -41,9 +65,15 @@ func FileRankLimit(files []string, edges []domain.Edge, maxIterations int) []dom
 			index[f] = len(index)
 		}
 	}
-	out := adjacency(index, edges)
+	out, err := adjacency(index, edges, tick)
+	if err != nil {
+		return nil, err
+	}
 
-	scores, converged := pagerank(len(index), out, maxIterations)
+	scores, converged, err := pagerank(len(index), out, maxIterations, tick)
+	if err != nil {
+		return nil, err
+	}
 	if !converged {
 		uniform := 1 / float64(len(files))
 		scores = make([]float64, len(index))
@@ -58,15 +88,18 @@ func FileRankLimit(files []string, edges []domain.Edge, maxIterations int) []dom
 		rows[i] = domain.FileRankRow{Path: f, PageRank: s, Hotness: 0, Rank: s}
 	}
 	assignPercentiles(rows)
-	return rows
+	return rows, nil
 }
 
 // adjacency builds the distinct out-neighbours of every node, dropping self-edges, unknown
-// endpoints and duplicates.
-func adjacency(index map[string]int, edges []domain.Edge) [][]int {
+// endpoints and duplicates. tick is called once per edge.
+func adjacency(index map[string]int, edges []domain.Edge, tick func() error) ([][]int, error) {
 	out := make([][]int, len(index))
 	seen := make(map[[2]int]struct{}, len(edges))
 	for _, e := range edges {
+		if err := tick(); err != nil {
+			return nil, err
+		}
 		from, ok := index[e.From]
 		if !ok {
 			continue
@@ -82,14 +115,14 @@ func adjacency(index map[string]int, edges []domain.Edge) [][]int {
 		seen[key] = struct{}{}
 		out[from] = append(out[from], to)
 	}
-	return out
+	return out, nil
 }
 
 // pagerank mirrors graphology-metrics 2.4.0 operation by operation (see spec section 7.6), so
 // the floating-point sums come out bit-identical: the same summation order and the same grouping
 // of every expression. Explicit float64 conversions stop the compiler from fusing a multiply and
-// an add (FMA) on architectures that would.
-func pagerank(n int, out [][]int, maxIterations int) (scores []float64, converged bool) {
+// an add (FMA) on architectures that would. tick is called once per node of every round.
+func pagerank(n int, out [][]int, maxIterations int, tick func() error) (scores []float64, converged bool, err error) {
 	alpha := Alpha // variables, not constants: constant arithmetic would not round to float64
 	tolerance := Tolerance
 	p := 1 / float64(n)
@@ -120,6 +153,9 @@ func pagerank(n int, out [][]int, maxIterations int) (scores []float64, converge
 
 		share := float64(dangleSum * p)
 		for i := 0; i < n; i++ {
+			if err := tick(); err != nil {
+				return nil, false, err
+			}
 			for _, to := range out[i] {
 				x[to] += float64(float64(alpha*last[i]) * weight[i])
 			}
@@ -131,10 +167,10 @@ func pagerank(n int, out [][]int, maxIterations int) (scores []float64, converge
 			diff += math.Abs(x[i] - last[i])
 		}
 		if diff < limit {
-			return x, true
+			return x, true, nil
 		}
 	}
-	return nil, false
+	return nil, false, nil
 }
 
 // assignPercentiles sets Percentile on every row: ascending by rank, a tie group is a maximal run

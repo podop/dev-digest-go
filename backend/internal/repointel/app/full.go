@@ -84,7 +84,9 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 
 	var ranks []domain.FileRankRow
 	if !stopped {
-		ranks = rank.FileRank(walk.Files, edges)
+		if ranks, err = rank.FileRankContext(ctx, walk.Files, edges); err != nil {
+			return Result{}, fmt.Errorf("rank files: %w", err)
+		}
 	}
 	rankCount := len(ranks)
 

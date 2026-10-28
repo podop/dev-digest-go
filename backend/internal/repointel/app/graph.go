@@ -81,8 +81,13 @@ func (g *ImportGraph) sourceImports(root string) importgraph.SourceImports {
 	}
 }
 
+// edgeBudgetReason is the graphFailed value of a graph over the edge budget
+// (importgraph.ErrEdgeBudget): a fixed word, not the error text.
+const edgeBudgetReason = "edge_budget"
+
 // buildGraph runs the GraphBuilder for the indexer: the graph, or the message of a builder
-// failure (graphFailed, empty graph). It returns an error only when ctx ended.
+// failure (graphFailed, empty graph; edgeBudgetReason for importgraph.ErrEdgeBudget). It returns
+// an error only when ctx ended.
 func (ix *Indexer) buildGraph(ctx context.Context, root string, files []string) (graph domain.Graph, graphFailed string, err error) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -93,6 +98,9 @@ func (ix *Indexer) buildGraph(ctx context.Context, root string, files []string) 
 	if gerr != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return domain.Graph{}, "", fmt.Errorf("build import graph: %w", ctxErr)
+		}
+		if errors.Is(gerr, importgraph.ErrEdgeBudget) {
+			return domain.Graph{}, edgeBudgetReason, nil
 		}
 		return domain.Graph{}, errorText(ix.d.Redact, gerr.Error()), nil
 	}

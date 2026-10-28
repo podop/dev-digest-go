@@ -1,9 +1,14 @@
 package rank_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"dev-digest-go/backend/internal/repointel/domain"
 	"dev-digest-go/backend/internal/repointel/domain/rank"
@@ -158,5 +163,60 @@ func TestFileRank_NoEdgesIsOneTieGroup(t *testing.T) {
 		if row.Percentile != 100 {
 			t.Errorf("FileRank(no edges)[%d].Percentile = %d, want 100", i, row.Percentile)
 		}
+	}
+}
+
+// cancelAfter is a context whose Err is nil for the first n calls and context.Canceled after.
+type cancelAfter struct {
+	context.Context
+	n, calls int
+}
+
+func (c *cancelAfter) Err() error {
+	if c.calls++; c.calls > c.n {
+		return context.Canceled
+	}
+	return nil
+}
+
+// budgetGraph is a graph of 5,000 files and domain.MaxRows edges, the most Build emits.
+func budgetGraph() ([]string, []domain.Edge) {
+	files := names(5000)
+	edges := make([]domain.Edge, 0, domain.MaxRows)
+	for i := 0; len(edges) < domain.MaxRows; i++ {
+		for d := 1; d <= 100 && len(edges) < domain.MaxRows; d++ {
+			edges = append(edges, domain.Edge{From: files[i], To: files[(i+d)%len(files)]})
+		}
+	}
+	return files, edges
+}
+
+func TestFileRankContext_MatchesFileRank(t *testing.T) {
+	files, edges := budgetGraph()
+	start := time.Now()
+	got, err := rank.FileRankContext(t.Context(), files, edges)
+	t.Logf("FileRankContext(%d files, %d edges) took %v", len(files), len(edges), time.Since(start))
+	if err != nil {
+		t.Fatalf("FileRankContext() error = %v", err)
+	}
+	if diff := cmp.Diff(rank.FileRank(files, edges), got); diff != "" {
+		t.Errorf("FileRankContext() mismatch with FileRank (-want +got):\n%s", diff)
+	}
+}
+
+// The rank honours a cancel or JobTimeout while it runs, not only before it starts.
+func TestFileRankContext_StopsWhenCtxEnds(t *testing.T) {
+	files, edges := budgetGraph()
+	for _, n := range []int{0, 1, 50} {
+		t.Run(fmt.Sprintf("cancelled after %d checks", n), func(t *testing.T) {
+			ctx := &cancelAfter{Context: t.Context(), n: n}
+			rows, err := rank.FileRankContext(ctx, files, edges)
+			if !errors.Is(err, context.Canceled) || rows != nil {
+				t.Fatalf("FileRankContext() = %d rows, %v, want no rows and context.Canceled", len(rows), err)
+			}
+			if ctx.calls != n+1 {
+				t.Errorf("FileRankContext() looked at ctx %d times, want it to stop at the first look after the cancel (%d)", ctx.calls, n+1)
+			}
+		})
 	}
 }

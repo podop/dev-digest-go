@@ -33,6 +33,15 @@ const (
 	MaxNameUnits = 255
 	// DefaultTokenBudget is the repo-map budget in cl100k_base tokens.
 	DefaultTokenBudget = 1500
+	// MaxRows is the held-row budget of a full index: the symbol and reference rows it may hold
+	// in memory before it stops starting files (L4 of the security review, NFR3002: at most
+	// 1 GiB), and the most import edges importgraph.Build emits. The rows stay in memory until
+	// the transaction writes them, twice over while the per-file results are folded. Measured
+	// per row, with append slack: 73 bytes for a reference, 272 for a symbol with a 120-unit
+	// signature. 500,000 rows are therefore about 36 MB of references to 136 MB of symbols, 73 to
+	// 272 MB folded; the files in flight when the budget is reached add at most one file each
+	// (about 82,000 references in a 400 KiB file), so even seven workers stay under 0.5 GiB.
+	MaxRows = 500_000
 	// MaxParseDegraded bounds the parseDegraded list kept in the state's stats.
 	MaxParseDegraded = 50
 	// MaxErrorChars bounds error texts kept in state rows and logs.

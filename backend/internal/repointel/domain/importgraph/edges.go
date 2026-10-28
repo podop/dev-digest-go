@@ -2,6 +2,7 @@ package importgraph
 
 import (
 	"context"
+	"errors"
 	"path"
 	"strings"
 
@@ -72,8 +73,14 @@ func BuildEdges(ctx context.Context, files []string, r *Resolver, specs Specifie
 	if err != nil {
 		return nil, err
 	}
-	return collectEdges(ctx, files, tsResolve(r), imports)
+	return collectEdges(ctx, files, tsResolve(r), imports, 0)
 }
+
+// ErrEdgeBudget is returned by Build when the graph would hold more than domain.MaxRows edges: a
+// package that imports itself (a Java wildcard of the own package, a Go file importing its own
+// directory) names files × files edges, 25 million for 5,000 files. The caller treats it like
+// any other graph failure.
+var ErrEdgeBudget = errors.New("import graph exceeds the edge budget")
 
 // javaKeyPrefix is the prefix of the package key of a Java file (see domain.JavaPackageKey).
 const javaKeyPrefix = "java:"
@@ -88,7 +95,8 @@ type SourceImports func(ctx context.Context, file string) domain.FileImports
 // one row per file whose imports name a package, in walk order; both slices are non-nil.
 // aliasErr explains, in content-free words (categories and clone-relative config paths, see
 // LoadAliases), why alias resolution is off or partial; the caller logs it, the edges are still
-// built from relative imports. err is only ctx's error.
+// built from relative imports. err is ctx's error, or ErrEdgeBudget when the edges would
+// exceed domain.MaxRows (no more than that many are ever held).
 func Build(ctx context.Context, fs domain.SourceFS, root string, files []string, imports SourceImports) (g domain.Graph, aliasErr, err error) {
 	tree := NewTree(fs, root, files)
 	aliases, aliasErr := LoadAliases(ctx, tree)
@@ -138,7 +146,7 @@ func Build(ctx context.Context, fs domain.SourceFS, root string, files []string,
 			return nil // an unsupported syntax resolves to nothing
 		}
 	}
-	edges, err := collectEdges(ctx, files, resolve, byFile)
+	edges, err := collectEdges(ctx, files, resolve, byFile, domain.MaxRows)
 	if err != nil {
 		return domain.Graph{}, nil, err
 	}
@@ -170,8 +178,9 @@ func tsResolve(r *Resolver) func(from, spec string) []string {
 
 // collectEdges resolves the specifiers of every file in order and keeps the targets that are
 // another walked file with a supported extension; duplicates are dropped. ctx is looked at
-// before each file and every ctxCheckEvery specifiers or targets.
-func collectEdges(ctx context.Context, files []string, resolve func(from, spec string) []string, imports map[string]domain.FileImports) ([]domain.Edge, error) {
+// before each file and every ctxCheckEvery specifiers or targets. With maxEdges > 0 it returns
+// ErrEdgeBudget as soon as a distinct edge beyond maxEdges is found.
+func collectEdges(ctx context.Context, files []string, resolve func(from, spec string) []string, imports map[string]domain.FileImports, maxEdges int) ([]domain.Edge, error) {
 	walked := make(map[string]struct{}, len(files))
 	for _, f := range files {
 		walked[f] = struct{}{}
@@ -211,6 +220,9 @@ func collectEdges(ctx context.Context, files []string, resolve func(from, spec s
 				e := domain.Edge{From: from, To: to}
 				if _, dup := seen[e]; dup {
 					continue
+				}
+				if maxEdges > 0 && len(edges) == maxEdges {
+					return nil, ErrEdgeBudget
 				}
 				seen[e] = struct{}{}
 				edges = append(edges, e)

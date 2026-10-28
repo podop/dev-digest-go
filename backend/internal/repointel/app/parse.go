@@ -10,13 +10,8 @@ import (
 )
 
 // defaultMaxHeldRows is the number of symbol and reference rows a full index may hold in memory
-// before it stops starting files (L4 of the security review, NFR3002: at most 1 GiB). The rows
-// stay in memory until the transaction writes them, twice over while the per-file results are
-// folded. Measured per row, with append slack: 73 bytes for a reference, 272 for a symbol with a
-// 120-unit signature. 500,000 rows are therefore about 36 MB of references to 136 MB of symbols,
-// 73 to 272 MB folded; the files in flight when the budget is reached add at most one file each
-// (about 82,000 references in a 400 KiB file), so even seven workers stay under 0.5 GiB.
-const defaultMaxHeldRows = 500_000
+// before it stops starting files (see domain.MaxRows).
+const defaultMaxHeldRows = domain.MaxRows
 
 // parseTimeoutReason is the reason of a file whose parse ran past domain.ParseTimeout (FR3017).
 const parseTimeoutReason = "parse timed out after 2000 ms"

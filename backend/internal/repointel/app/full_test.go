@@ -17,6 +17,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	"dev-digest-go/backend/internal/repointel/domain"
+	"dev-digest-go/backend/internal/repointel/domain/importgraph"
 )
 
 func TestFull_CleanIndexWritesEverything(t *testing.T) {
@@ -300,6 +301,8 @@ func TestFull_GraphBuilderFailure(t *testing.T) {
 	}{
 		{name: "error", graph: fakeGraph{err: errors.New("resolver broke, key sk-secret")}, want: "resolver broke, key [redacted]"},
 		{name: "panic", graph: fakeGraph{panics: true}, want: "import graph panicked: graph exploded"},
+		// S-H2: more edges than the row budget is a graph failure with its own reason value.
+		{name: "edge budget", graph: fakeGraph{err: fmt.Errorf("build import graph: %w", importgraph.ErrEdgeBudget)}, want: "edge_budget"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

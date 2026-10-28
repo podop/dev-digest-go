@@ -407,3 +407,98 @@ func FuzzLoadAliases(f *testing.F) {
 		}
 	})
 }
+
+// TestBuild_EdgeBudget is the S-H2 probe: 5,000 files of one Java package importing it with a
+// wildcard, or 5,000 Go files importing their own directory, name 25 million edges (Build took
+// 50 s and 7.8 GB). Build now stops at domain.MaxRows edges with ErrEdgeBudget.
+func TestBuild_EdgeBudget(t *testing.T) {
+	const n = 5000
+	tests := []struct {
+		name    string
+		file    func(i int) string
+		imports domain.FileImports
+		gomod   string
+	}{
+		{
+			name:    "java wildcard of the own package",
+			file:    func(i int) string { return fmt.Sprintf("src/main/java/p/F%04d.java", i) },
+			imports: domain.FileImports{Package: "java:p", Specs: []string{"p.*"}},
+		},
+		{
+			name:    "go import of the own directory",
+			file:    func(i int) string { return fmt.Sprintf("p/f%04d.go", i) },
+			imports: domain.FileImports{Package: "go:p", Specs: []string{"m/p"}},
+			gomod:   "module m\n",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			files := make([]string, n)
+			for i := range files {
+				files[i] = tc.file(i)
+			}
+			src := &countFS{files: map[string]string{}, names: map[string]int{}}
+			if tc.gomod != "" {
+				src.files["go.mod"] = tc.gomod
+			}
+			imports := func(context.Context, string) domain.FileImports { return tc.imports }
+
+			var before, after runtime.MemStats
+			runtime.GC()
+			runtime.ReadMemStats(&before)
+			start := time.Now()
+			g, _, err := importgraph.Build(t.Context(), src, "/clone", files, imports)
+			elapsed := time.Since(start)
+			runtime.ReadMemStats(&after)
+			allocated := after.TotalAlloc - before.TotalAlloc
+			t.Logf("Build() took %v and allocated %d MB", elapsed, allocated>>20)
+			if !errors.Is(err, importgraph.ErrEdgeBudget) || g.Edges != nil {
+				t.Errorf("Build() = %d edges, %v, want no graph and ErrEdgeBudget", len(g.Edges), err)
+			}
+			if elapsed > 5*time.Second {
+				t.Errorf("Build() took %v, want under 5s", elapsed)
+			}
+			if allocated > 512<<20 {
+				t.Errorf("Build() allocated %d MB, want under 512", allocated>>20)
+			}
+		})
+	}
+}
+
+// TestBuild_EdgeBudgetAllowsExactlyMaxRows: a graph of exactly domain.MaxRows edges is built.
+func TestBuild_EdgeBudgetAllowsExactlyMaxRows(t *testing.T) {
+	// 1,000 files of one package import it: 999 edges each, plus one importer for the rest.
+	const n = 1000
+	files := make([]string, 0, n+1)
+	for i := range n {
+		files = append(files, fmt.Sprintf("p/F%04d.java", i))
+	}
+	files = append(files, "q/Z.java")
+	perFile := n - 1
+	full := domain.MaxRows / perFile // importers with all of p
+	rest := domain.MaxRows - full*perFile
+	specs := map[string][]string{}
+	for i := range full {
+		specs[files[i]] = []string{"p.*"}
+	}
+	var restSpecs []string
+	for i := range rest {
+		restSpecs = append(restSpecs, fmt.Sprintf("p.F%04d", i))
+	}
+	specs["q/Z.java"] = restSpecs
+	imports := func(_ context.Context, file string) domain.FileImports {
+		pkg := "java:p"
+		if strings.HasPrefix(file, "q/") {
+			pkg = "java:q"
+		}
+		return domain.FileImports{Package: pkg, Specs: specs[file]}
+	}
+	src := &countFS{files: map[string]string{}, names: map[string]int{}}
+	if full > n {
+		t.Fatalf("fixture: %d importers needed, only %d files", full, n)
+	}
+	g, _, err := importgraph.Build(t.Context(), src, "/clone", files, imports)
+	if err != nil || len(g.Edges) != domain.MaxRows {
+		t.Errorf("Build() = %d edges, %v, want %d and no error", len(g.Edges), err, domain.MaxRows)
+	}
+}

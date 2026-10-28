@@ -141,7 +141,11 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 				if err := w.ResolveReferences(ctx, repoID, true); err != nil {
 					return fmt.Errorf("resolve references: %w", err)
 				}
-				if err := w.ReplaceFileRank(ctx, repoID, rank.FileRank(walk.Files, edges)); err != nil {
+				ranks, err := rank.FileRankContext(ctx, walk.Files, edges)
+				if err != nil {
+					return fmt.Errorf("rank files: %w", err)
+				}
+				if err := w.ReplaceFileRank(ctx, repoID, ranks); err != nil {
 					return fmt.Errorf("replace file rank: %w", err)
 				}
 				return ix.replaceRepoMap(ctx, repoID, head)

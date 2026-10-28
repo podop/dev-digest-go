@@ -10,6 +10,7 @@ import (
 
 	"dev-digest-go/backend/internal/platform/gitcli"
 	"dev-digest-go/backend/internal/repointel/domain"
+	"dev-digest-go/backend/internal/repointel/domain/importgraph"
 )
 
 // incrementalEnv is an env with a previous index at "old-sha" of the given status, a clone of
@@ -299,6 +300,26 @@ func TestIncremental_SavepointFailureKeepsTheSliceAndMarksPartial(t *testing.T) 
 	}
 	if diff := cmp.Diff(prev.maps, d.maps); diff != "" {
 		t.Errorf("repo maps changed (-want +got):\n%s", diff)
+	}
+}
+
+func TestIncremental_EdgeBudgetIsAGraphFailure(t *testing.T) {
+	e := incrementalEnv(t, domain.StatusFull)
+	e.git.diff = []string{"src/a.ts"}
+	e.graph.err = fmt.Errorf("build import graph: %w", importgraph.ErrEdgeBudget)
+	prev := e.store.snapshot()
+	if _, err := e.ix.Incremental(t.Context(), repoID); err != nil {
+		t.Fatalf("Incremental() error = %v", err)
+	}
+	st := e.state(t)
+	if st.Status != domain.StatusPartial || statStr(st, "graphFailed") != "edge_budget" {
+		t.Errorf("state = %+v, want partial with graphFailed edge_budget", st)
+	}
+	if diff := cmp.Diff(prev.edges, e.store.data.edges); diff != "" {
+		t.Errorf("file_edges changed (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(prev.ranks, e.store.data.ranks); diff != "" {
+		t.Errorf("file_rank changed (-want +got):\n%s", diff)
 	}
 }
 
