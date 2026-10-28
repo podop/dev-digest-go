@@ -156,6 +156,14 @@ func (s *Store) ReplaceFilePackages(ctx context.Context, repoID string, pkgs []d
 // reset or on a first run). A second step (FR20) then resolves the references still NULL within
 // the package: file G gets the reference from F when G is the only other file with F's package
 // key that has a symbol named like the reference, exported or not.
+//
+// Both steps run with nested loops switched off (withoutNestedLoops): the rows were inserted in
+// this very transaction, so the planner has no statistics for them, and the statistics of the
+// other repos' rows (or tables vacuumed while empty) put the new repo at about one row. The
+// import step then nested the repo's file edges × its references × its symbols: a Go import is
+// an edge to every file of the imported package, and holocron (129 files, 953 edges, 26k
+// references) took 77 s in that one statement (live acceptance L-1); with hash joins it is about
+// a second.
 func (s *Store) ResolveReferences(ctx context.Context, repoID string, reset bool) error {
 	conn := s.conn(ctx)
 	if reset {
@@ -165,11 +173,47 @@ func (s *Store) ResolveReferences(ctx context.Context, repoID string, reset bool
 			return fmt.Errorf("reset decl_file: %w", err)
 		}
 	}
+	return withoutNestedLoops(conn, func() error {
+		if err := resolveImported(conn, repoID); err != nil {
+			return fmt.Errorf("resolve references: %w", err)
+		}
+		if err := resolveInPackage(conn, repoID); err != nil {
+			return fmt.Errorf("resolve references in package: %w", err)
+		}
+		return nil
+	})
+}
+
+// withoutNestedLoops runs fn with nested loops switched off and restores the previous setting
+// after it, so the rest of the index transaction plans as before. SET LOCAL lasts until the
+// transaction ends and a failed statement rolls the transaction back, setting included; outside
+// a transaction (tests) both settings are no-ops. ANALYZE is no option inside the transaction: it
+// serialises concurrent index jobs.
+func withoutNestedLoops(conn *gorm.DB, fn func() error) error {
+	// GUCs: the builder has no form for them.
+	var nestLoop string
+	if err := conn.Raw(`SELECT current_setting('enable_nestloop')`).Scan(&nestLoop).Error; err != nil {
+		return fmt.Errorf("read enable_nestloop: %w", err)
+	}
+	if err := conn.Exec(`SET LOCAL enable_nestloop = off`).Error; err != nil {
+		return fmt.Errorf("switch nested loops off: %w", err)
+	}
+	if err := fn(); err != nil {
+		return err
+	}
+	if err := conn.Exec(`SELECT set_config('enable_nestloop', ?, true)`, nestLoop).Error; err != nil {
+		return fmt.Errorf("restore enable_nestloop: %w", err)
+	}
+	return nil
+}
+
+// resolveImported is the FR3030 (import) step of ResolveReferences.
+func resolveImported(conn *gorm.DB, repoID string) error {
 	// UPDATE ... FROM over an aggregate sub-select: the builder has no form for it.
-	// One aggregate per reference, no second pass over it: the rows were inserted in this very
-	// transaction, so the planner has no statistics for them, and a self-join of the candidates
-	// (WITH cand ... JOIN uniq) was re-run once per candidate row (67 s for 138k references).
-	err := conn.Exec(`
+	// One aggregate per reference, no second pass over it: without statistics a self-join of the
+	// candidates (WITH cand ... JOIN uniq) was re-run once per candidate row (67 s for 138k
+	// references).
+	return conn.Exec(`
 UPDATE "references" r
 SET decl_file = c.decl
 FROM (
@@ -183,13 +227,6 @@ FROM (
 	HAVING count(DISTINCT e.to_file) = 1
 ) c
 WHERE r.id = c.ref_id`, repoID).Error
-	if err != nil {
-		return fmt.Errorf("resolve references: %w", err)
-	}
-	if err := resolveInPackage(conn, repoID); err != nil {
-		return fmt.Errorf("resolve references in package: %w", err)
-	}
-	return nil
 }
 
 // resolveInPackage is the FR20 step of ResolveReferences. The symbols are first aggregated to one
@@ -202,21 +239,11 @@ WHERE r.id = c.ref_id`, repoID).Error
 //
 // Without statistics every estimate is one row, and the planner still picks nested loops over
 // the aggregate (90,000 references × 300 package rows × the aggregate: 6 s, 100,000 × 5,000:
-// 112 s), so nested loops are switched off for this one statement and the setting restored
-// after it: the plan is then hash joins only. SET LOCAL lasts until the transaction ends and a
-// failed statement rolls the transaction back, setting included; outside a transaction (tests)
-// both settings are no-ops. ANALYZE is no option inside the transaction: it serialises
-// concurrent index jobs.
+// 112 s). ResolveReferences therefore runs this statement, like the import step before it,
+// inside withoutNestedLoops: the plan is then hash joins only.
 func resolveInPackage(conn *gorm.DB, repoID string) error {
-	// GUCs and UPDATE ... FROM over a materialized CTE: the builder has no form for them.
-	var nestLoop string
-	if err := conn.Raw(`SELECT current_setting('enable_nestloop')`).Scan(&nestLoop).Error; err != nil {
-		return fmt.Errorf("read enable_nestloop: %w", err)
-	}
-	if err := conn.Exec(`SET LOCAL enable_nestloop = off`).Error; err != nil {
-		return fmt.Errorf("switch nested loops off: %w", err)
-	}
-	err := conn.Exec(`
+	// UPDATE ... FROM over a materialized CTE: the builder has no form for it.
+	return conn.Exec(`
 WITH decl AS MATERIALIZED (
 	SELECT fp.package_key, s.name, count(DISTINCT s.path) AS n, min(s.path) AS mn, max(s.path) AS mx
 	FROM symbols s
@@ -231,13 +258,6 @@ WHERE r.repo_id = ? AND r.decl_file IS NULL
 	AND fp.repo_id = r.repo_id AND fp.file_path = r.from_path
 	AND d.package_key = fp.package_key AND d.name = r.to_symbol
 	AND ((d.n = 1 AND d.mn <> r.from_path) OR (d.n = 2 AND r.from_path IN (d.mn, d.mx)))`, repoID, repoID).Error
-	if err != nil {
-		return err
-	}
-	if err := conn.Exec(`SELECT set_config('enable_nestloop', ?, true)`, nestLoop).Error; err != nil {
-		return fmt.Errorf("restore enable_nestloop: %w", err)
-	}
-	return nil
 }
 
 // ReplaceFileRank deletes the repo's file_rank rows and inserts rows.

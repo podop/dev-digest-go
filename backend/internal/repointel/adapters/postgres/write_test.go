@@ -825,20 +825,188 @@ func TestResolveReferences_SamePackageFreshRowsResolveInTime(t *testing.T) {
 	}
 }
 
-// The in-package step switches nested loops off for its one statement only: the rest of the
-// index transaction plans as before.
-func TestResolveReferences_RestoresEnableNestloop(t *testing.T) {
-	e := newEnv(t)
-	var got string
-	err := e.tx.InTx(t.Context(), func(ctx context.Context) error {
-		if err := e.store.ResolveReferences(ctx, e.repo, false); err != nil {
-			return err
+// goFanOut is a Go-shaped index: an import is an edge to every file of the imported package.
+// 130 files in 20 packages, each file importing 5 packages (some 30 edges per file), 200
+// references and 9 exported symbols per file: half of the references name a symbol declared
+// once among the imports (import step), a quarter a name declared in every package (ambiguous
+// across the imports, resolved within the package unless the file declares it itself), a
+// quarter nothing.
+type goFanOut struct {
+	syms  []domain.SymbolRow
+	refs  []domain.ReferenceRow
+	edges []domain.Edge
+	pkgs  []domain.FilePackage
+	want  map[string]string // decl_file by "from_path:line", "" for NULL
+}
+
+func newGoFanOut() goFanOut {
+	const packages, files, imports, perFile = 20, 130, 5, 200
+	file := func(i int) string { return fmt.Sprintf("pkg%02d/f%d.go", i%packages, i/packages) }
+	members := make([][]int, packages)
+	for i := range files {
+		members[i%packages] = append(members[i%packages], i)
+	}
+	var (
+		syms  []domain.SymbolRow
+		refs  []domain.ReferenceRow
+		edges []domain.Edge
+		p     []domain.FilePackage
+	)
+	want := map[string]string{}
+	for i := range files {
+		pk, k := i%packages, i/packages
+		p = append(p, domain.FilePackage{Path: file(i), Key: fmt.Sprintf("go:pkg%02d", pk)})
+		for m := range 9 {
+			name := fmt.Sprintf("P%02dF%dS%d", pk, k, m)
+			if m < 5 {
+				name = fmt.Sprintf("Shared%d_%d", k, m)
+			}
+			syms = append(syms, sym(file(i), name, m+1, true))
 		}
-		return platformpg.Conn(ctx, e.db).Raw(`SHOW enable_nestloop`).Scan(&got).Error
-	})
-	must(t, err)
-	if got != "on" {
-		t.Errorf("enable_nestloop after ResolveReferences = %q, want on", got)
+		for d := 1; d <= imports; d++ {
+			for _, j := range members[(pk+d)%packages] {
+				edges = append(edges, domain.Edge{From: file(i), To: file(j)})
+			}
+		}
+		for l := range perFile {
+			var to, decl string
+			switch l % 4 {
+			case 0, 1:
+				q := (pk + 1 + l%imports) % packages
+				j := members[q][(l/4)%len(members[q])]
+				to, decl = fmt.Sprintf("P%02dF%dS%d", q, j/packages, 5+(l/4)%4), file(j)
+			case 2:
+				kk := (l / 4) % 6
+				to = fmt.Sprintf("Shared%d_%d", kk, (l/4)%5)
+				if kk != k {
+					decl = file(kk*packages + pk)
+				}
+			default:
+				to = fmt.Sprintf("Missing%d", l)
+			}
+			refs = append(refs, domain.ReferenceRow{FromPath: file(i), ToSymbol: to, Line: l + 1})
+			want[fmt.Sprintf("%s:%d", file(i), l+1)] = decl
+		}
+	}
+	return goFanOut{syms: syms, refs: refs, edges: edges, pkgs: p, want: want}
+}
+
+// write inserts the index rows for repo through the store, inside ctx's transaction if any.
+func (f goFanOut) write(t *testing.T, ctx context.Context, e *env, repo string) {
+	t.Helper()
+	must(t, e.store.InsertSymbols(ctx, repo, f.syms))
+	must(t, e.store.InsertReferences(ctx, repo, f.refs))
+	must(t, e.store.ReplaceEdges(ctx, repo, f.edges))
+	must(t, e.store.ReplaceFilePackages(ctx, repo, f.pkgs))
+}
+
+// declFilesByLine returns decl_file of each reference of repo by "from_path:line" ("" for NULL).
+func declFilesByLine(t *testing.T, e *env, repo string) map[string]string {
+	t.Helper()
+	var rows []struct {
+		FromPath string
+		Line     int
+		DeclFile *string
+	}
+	must(t, e.db.Raw(`SELECT from_path, line, decl_file FROM "references" WHERE repo_id = ?`, repo).Scan(&rows).Error)
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		key := fmt.Sprintf("%s:%d", r.FromPath, r.Line)
+		out[key] = ""
+		if r.DeclFile != nil {
+			out[key] = *r.DeclFile
+		}
+	}
+	return out
+}
+
+// A Go-shaped index written and resolved in one transaction: the planner has no statistics for
+// the fresh rows, and with nested loops the import step alone took 77 s for holocron (129 files,
+// 953 edges, 26k references; live acceptance L-1). The live tables held another repo's rows and
+// their statistics, which say the new repo has next to no rows.
+func TestResolveReferences_GoImportFanOutFreshRowsResolveInTime(t *testing.T) {
+	f := newGoFanOut()
+	cases := []struct {
+		name    string
+		prepare func(t *testing.T, e *env)
+	}{
+		{name: "tables vacuumed while empty", prepare: func(t *testing.T, e *env) {
+			must(t, e.db.Exec(`VACUUM "references", symbols, file_packages, file_edges`).Error)
+		}},
+		{name: "statistics of another repo only", prepare: func(t *testing.T, e *env) {
+			f.write(t, t.Context(), e, e.addRepo(t, "o", "other", "/clones/o/other"))
+			must(t, e.db.Exec(`ANALYZE "references", symbols, file_packages, file_edges`).Error)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			tc.prepare(t, e)
+			var took time.Duration
+			err := e.tx.InTx(t.Context(), func(ctx context.Context) error {
+				f.write(t, ctx, e, e.repo)
+				start := time.Now()
+				defer func() { took = time.Since(start) }()
+				return e.store.ResolveReferences(ctx, e.repo, false)
+			})
+			must(t, err)
+			t.Logf("ResolveReferences of %d fresh references over %d import edges took %v", len(f.refs), len(f.edges), took)
+			if took > 5*time.Second {
+				t.Errorf("ResolveReferences of %d fresh references over %d import edges took %v, want under 5s", len(f.refs), len(f.edges), took)
+			}
+			got := declFilesByLine(t, e, e.repo)
+			if len(got) != len(f.want) {
+				t.Fatalf("references stored = %d, want %d", len(got), len(f.want))
+			}
+			wrong := 0
+			for key, w := range f.want {
+				if got[key] != w {
+					if wrong < 5 {
+						t.Errorf("decl_file of reference %s = %q, want %q", key, got[key], w)
+					}
+					wrong++
+				}
+			}
+			if wrong > 0 {
+				t.Errorf("references with a wrong decl_file = %d of %d", wrong, len(f.want))
+			}
+		})
+	}
+}
+
+// ResolveReferences switches nested loops off for its two statements (import step and in-package
+// step) only: the rest of the index transaction plans as before, whatever the setting was.
+func TestResolveReferences_RestoresEnableNestloop(t *testing.T) {
+	for _, before := range []string{"on", "off"} {
+		t.Run("enable_nestloop "+before, func(t *testing.T) {
+			e := newEnv(t)
+			var got string
+			err := e.tx.InTx(t.Context(), func(ctx context.Context) error {
+				conn := platformpg.Conn(ctx, e.db)
+				if err := conn.Exec(`SELECT set_config('enable_nestloop', ?, true)`, before).Error; err != nil {
+					return err
+				}
+				f := goFanOut{
+					syms:  []domain.SymbolRow{sym("lib/l.go", "Run", 1, true), sym("p/b.go", "helper", 1, false)},
+					refs:  []domain.ReferenceRow{{FromPath: "p/a.go", ToSymbol: "Run", Line: 1}, {FromPath: "p/a.go", ToSymbol: "helper", Line: 2}},
+					edges: []domain.Edge{{From: "p/a.go", To: "lib/l.go"}},
+					pkgs:  pkgs("p/a.go", "go:p", "p/b.go", "go:p", "lib/l.go", "go:lib"),
+				}
+				f.write(t, ctx, e, e.repo)
+				if err := e.store.ResolveReferences(ctx, e.repo, false); err != nil {
+					return err
+				}
+				return conn.Raw(`SHOW enable_nestloop`).Scan(&got).Error
+			})
+			must(t, err)
+			if got != before {
+				t.Errorf("enable_nestloop after ResolveReferences = %q, want %q", got, before)
+			}
+			want := map[string]string{"Run": "lib/l.go", "helper": "p/b.go"}
+			if diff := cmp.Diff(want, declFiles(t, e)); diff != "" {
+				t.Errorf("decl_file after ResolveReferences in a transaction mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
