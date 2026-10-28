@@ -28,6 +28,22 @@ func TestIsSupported(t *testing.T) {
 	}
 }
 
+func TestSelectFiles_SkipsGeneratedGo(t *testing.T) {
+	in := []FileEntry{
+		{"x.go", 10},
+		{"gen/x.pb.go", 10},
+		{"gen/y_grpc.pb.go", 10},
+		{"gw/z.pb.gw.go", 10},
+	}
+	got := SelectFiles(in)
+	if diff := cmp.Diff([]string{"x.go"}, got.Files); diff != "" {
+		t.Errorf("SelectFiles(%v).Files mismatch (-want +got):\n%s", in, diff)
+	}
+	if got.Stats.TotalCandidates != 1 {
+		t.Errorf("SelectFiles(%v).Stats.TotalCandidates = %d, want 1", in, got.Stats.TotalCandidates)
+	}
+}
+
 func TestIsExcludedDir(t *testing.T) {
 	for _, n := range []string{"node_modules", "dist", "build", "coverage", ".next", "out", "vendor", ".git"} {
 		if !IsExcludedDir(n) {
