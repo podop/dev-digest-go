@@ -105,6 +105,8 @@ func ExtractFacts(path, text string) (facts FileFacts, ok bool) {
 	switch syn, _ := SyntaxForPath(path); syn {
 	case SyntaxGo:
 		facts.Endpoints, facts.Crons = extractGoFacts(text)
+	case SyntaxJava:
+		facts.Endpoints, facts.Crons = extractJavaFacts(text)
 	case SyntaxTypeScript, SyntaxTSX, SyntaxJavaScript:
 		facts.Endpoints, facts.Crons = ExtractEndpoints(text), ExtractCrons(text)
 	}
