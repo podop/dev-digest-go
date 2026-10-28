@@ -2,6 +2,7 @@ package openaicompat
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -104,7 +105,7 @@ func (a *CustomAdapter) Policy() llm.Policy { return a.policy }
 // Complete sends one chat completion shaped by at.Mode: strict (also the empty mode) is the
 // built-in OpenAI body with a strict json_schema response format, json_object sends
 // {"type":"json_object"} only, prompt_only sends no response_format (the caller put the schema
-// in the prompt, FR33). The cost is usage.cost when it is a finite number >= 0.
+// in the prompt, FR33). The cost is wire.GatewayCost: usage.cost, else the LiteLLM cost header.
 func (a *CustomAdapter) Complete(ctx context.Context, _ string, at llm.Attempt) (llm.AttemptResult, error) {
 	if a.initErr != nil {
 		return llm.AttemptResult{}, a.initErr
@@ -120,9 +121,10 @@ func (a *CustomAdapter) Complete(ctx context.Context, _ string, at llm.Attempt) 
 		return llm.AttemptResult{}, fmt.Errorf("custom provider %s: unsupported structured output mode %q", a.name, string(at.Mode))
 	}
 	var resp chatResponse
+	var header http.Header
 	err := wire.Do(ctx, a.hc, wire.Call{
 		Provider: a.name, Op: "chat completions", Method: http.MethodPost, URL: a.base + "/chat/completions",
-		Headers: a.headers, Body: req, ErrorMessage: true, Gateway: a.gateway,
+		Headers: a.headers, Body: req, ErrorMessage: true, Gateway: a.gateway, ResponseHeader: &header,
 	}, &resp)
 	if err != nil {
 		return llm.AttemptResult{}, err
@@ -131,12 +133,12 @@ func (a *CustomAdapter) Complete(ctx context.Context, _ string, at llm.Attempt) 
 	if len(resp.Choices) > 0 && resp.Choices[0].Message.Content != nil {
 		out.Raw = *resp.Choices[0].Message.Content
 	}
+	var usageCost json.RawMessage
 	if u := resp.Usage; u != nil {
 		out.Usage = &llm.Usage{TokensIn: u.PromptTokens, TokensOut: u.CompletionTokens}
-		if cost, ok := wire.JSONNumber(u.Cost); ok && cost >= 0 {
-			out.CostUSD = &cost
-		}
+		usageCost = u.Cost
 	}
+	out.CostUSD = wire.GatewayCost(usageCost, header)
 	return out, nil
 }
 

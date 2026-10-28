@@ -2,6 +2,7 @@ package wire_test
 
 import (
 	"encoding/json"
+	"net/http"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -66,5 +67,41 @@ func TestCustomHeaders(t *testing.T) {
 	want := map[string]string{"X-Api-Key": "k", "Anthropic-Version": "9", "X-A": "1", "X-D": "d"}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("CustomHeaders() mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestGatewayCost(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		cost   string // usage.cost as raw JSON, "" = absent
+		header string // X-Litellm-Response-Cost, "" = absent
+		want   *float64
+	}{
+		{name: "usage cost", cost: "0.25", want: new(0.25)},
+		{name: "usage cost wins over the header", cost: "0.25", header: "9.4e-06", want: new(0.25)},
+		{name: "header when usage has no cost", header: "9.4e-06", want: new(9.4e-06)},
+		{name: "header with spaces", header: " 0.5 ", want: new(0.5)},
+		{name: "zero header", header: "0.0", want: new(0.0)},
+		{name: "header when usage cost is unusable", cost: `"0.25"`, header: "0.5", want: new(0.5)},
+		{name: "negative usage cost falls back to the header", cost: "-1", header: "0.5", want: new(0.5)},
+		{name: "negative header", header: "-0.5"},
+		{name: "non-number header", header: "None"},
+		{name: "NaN header", header: "NaN"},
+		{name: "infinite header", header: "1e999"},
+		{name: "nothing"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := http.Header{}
+			if tc.header != "" {
+				h.Set(wire.LiteLLMCostHeader, tc.header)
+			}
+			got := wire.GatewayCost(json.RawMessage(tc.cost), h)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("GatewayCost(%q, %q) mismatch (-want +got):\n%s", tc.cost, tc.header, diff)
+			}
+		})
 	}
 }

@@ -1110,6 +1110,9 @@ change ships with the matching backend change; every new or changed shape gets a
   gateway rejected the request without a key (HTTP N)") instead of the scrubbed gateway text, because gateways echo
   masked keys; other errors are scrubbed of whole secrets, their escaped forms and ≥ 4-byte fragments (security r1 L1,
   orchestrator, 2026-10-26).
+- D38 — FR12/EC9: when `usage.cost` is absent or unusable, the gateway-reported cost is the response header
+  `x-litellm-response-cost` (a LiteLLM proxy reports its cost only there), under the same rules (a finite number ≥ 0,
+  D35's cap), before the manual price; both protocols (`wire.GatewayCost`) (user, 2026-10-27).
 - Follow-up (user, 2026-10-26): FR5 is kept — a PUT that changes `base_url` keeps the stored key and header values
   (security r1 L5); not hardened.
 

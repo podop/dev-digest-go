@@ -197,6 +197,38 @@ func TestClone_ReplacesPartialDirectory(t *testing.T) {
 	}
 }
 
+// killedClone leaves at dest what a `git clone` killed before its first pack arrived leaves: a
+// .git with origin set and HEAD on an unborn branch.
+func killedClone(t *testing.T, dest, url string) {
+	t.Helper()
+	if err := os.MkdirAll(dest, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dest, "init", "-q", "-b", "main")
+	git(t, dest, "remote", "add", "origin", url)
+}
+
+// A .git without a commit is a partial directory: Clone replaces it instead of fetching into it
+// and reporting a clone with nothing checked out.
+func TestClone_ReplacesKilledClone(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	root := t.TempDir()
+	killedClone(t, filepath.Join(root, "o", "r"), r.url)
+	c := newClient(t, gitcli.Options{CloneRoot: root})
+
+	dest, err := c.Clone(t.Context(), "o", "r", r.url, gitcli.CloneOptions{Depth: 1})
+	if err != nil {
+		t.Fatalf("Clone() error: %v", err)
+	}
+	if b := readFile(t, filepath.Join(dest, "a.txt")); b != "one" {
+		t.Errorf("a.txt = %q, want %q", b, "one")
+	}
+	if shallow := git(t, dest, "rev-parse", "--is-shallow-repository"); shallow != "true" {
+		t.Errorf("is-shallow-repository = %q, want true (a fresh depth-1 clone)", shallow)
+	}
+}
+
 func TestSync_AdvancesToNewCommit(t *testing.T) {
 	hermeticGit(t)
 	r := newRemote(t)

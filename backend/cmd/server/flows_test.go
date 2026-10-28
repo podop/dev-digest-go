@@ -834,14 +834,14 @@ func (m *memJobStore) Finish(_ context.Context, id string, _ jobs.Status, _ int,
 	return nil
 }
 
-// AC303 (composition root): registerJobs gives conventions.extract a 300 s per-attempt limit and
-// leaves clone and refresh on the runner's 120 s default.
+// AC303 (composition root): registerJobs gives conventions.extract a 300 s per-attempt limit,
+// clone a 240 s one, and leaves refresh on the runner's 120 s default.
 func TestRegisterJobs_PerKindTimeouts(t *testing.T) {
 	tests := []struct {
 		kind     string
 		wantTook time.Duration
 	}{
-		{kind: reposapp.KindClone, wantTook: 120 * time.Second},
+		{kind: reposapp.KindClone, wantTook: 240 * time.Second},
 		{kind: reposapp.KindRefresh, wantTook: 120 * time.Second},
 		{kind: conventionsapp.KindExtract, wantTook: 300 * time.Second},
 	}
@@ -866,6 +866,38 @@ func TestRegisterJobs_PerKindTimeouts(t *testing.T) {
 				}
 				if got := store.rows[id]; !strings.Contains(got, "timed out after") {
 					t.Errorf("%s job error = %q, want a timeout", tc.kind, got)
+				}
+			})
+		})
+	}
+}
+
+// registerJobs makes clone retry a timed-out attempt (a hung connect) and leaves a timed-out
+// refresh final.
+func TestRegisterJobs_CloneRetriesTimeouts(t *testing.T) {
+	tests := []struct {
+		kind      string
+		wantCalls int
+	}{
+		{kind: reposapp.KindClone, wantCalls: 1 + jobs.DefaultRetries},
+		{kind: reposapp.KindRefresh, wantCalls: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.kind, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				r := jobs.New(&memJobStore{rows: map[string]string{}}, jobs.Options{})
+				calls := 0
+				block := func(ctx context.Context, _ json.RawMessage) error { calls++; <-ctx.Done(); return ctx.Err() }
+				registerJobs(r, block, block, block, conventionsapp.JobTimeout, nil)
+
+				if _, err := r.Enqueue(t.Context(), "ws", tc.kind, nil); err != nil {
+					t.Fatal(err)
+				}
+				if err := r.Wait(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+				if calls != tc.wantCalls {
+					t.Errorf("%s handler calls = %d, want %d", tc.kind, calls, tc.wantCalls)
 				}
 			})
 		})

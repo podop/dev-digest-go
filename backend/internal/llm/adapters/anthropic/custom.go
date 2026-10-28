@@ -113,7 +113,7 @@ func (a *CustomAdapter) Policy() llm.Policy { return a.policy }
 // forced tool call and the raw output is the tool input as JSON text; prompt_only sends no tools
 // and no tool_choice (the caller put the schema in the prompt, FR33) and the raw output is the
 // text content blocks joined in order. json_object does not exist for this protocol and is
-// refused. The cost is usage.cost when it is a finite number >= 0.
+// refused. The cost is wire.GatewayCost: usage.cost, else the LiteLLM cost header.
 func (a *CustomAdapter) Complete(ctx context.Context, _ string, at llm.Attempt) (llm.AttemptResult, error) {
 	if a.initErr != nil {
 		return llm.AttemptResult{}, a.initErr
@@ -129,9 +129,10 @@ func (a *CustomAdapter) Complete(ctx context.Context, _ string, at llm.Attempt) 
 		return llm.AttemptResult{}, fmt.Errorf("custom provider %s: unsupported structured output mode %q", a.name, string(at.Mode))
 	}
 	var resp messagesResponse
+	var header http.Header
 	err := wire.Do(ctx, a.hc, wire.Call{
 		Provider: a.name, Op: "messages", Method: http.MethodPost, URL: a.base + "/messages",
-		Headers: a.headers, Body: req, ErrorMessage: true, Gateway: a.gateway,
+		Headers: a.headers, Body: req, ErrorMessage: true, Gateway: a.gateway, ResponseHeader: &header,
 	}, &resp)
 	if err != nil {
 		return llm.AttemptResult{}, err
@@ -156,12 +157,12 @@ func (a *CustomAdapter) Complete(ctx context.Context, _ string, at llm.Attempt) 
 			}
 		}
 	}
+	var usageCost json.RawMessage
 	if u := resp.Usage; u != nil {
 		out.Usage = &llm.Usage{TokensIn: u.InputTokens, TokensOut: u.OutputTokens}
-		if cost, ok := wire.JSONNumber(u.Cost); ok && cost >= 0 {
-			out.CostUSD = &cost
-		}
+		usageCost = u.Cost
 	}
+	out.CostUSD = wire.GatewayCost(usageCost, header)
 	return out, nil
 }
 

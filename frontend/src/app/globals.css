@@ -17,13 +17,13 @@ body {
   font-family: var(--font-sans);
 }
 
-/* Global UI scale (user, 2026-10-27: smaller fonts and spacing everywhere). The vendored kit
-   sizes everything in inline px, so a root `zoom` is the one lever that scales it all:
-   0.85 turns 14px into ~12px and 13px into ~11px. Viewport units are not zoomed, so a
-   full-height layout uses --app-vh (one viewport-height percent in zoomed CSS px), e.g.
-   calc(100 * var(--app-vh) - 52px). Change the scale here only. */
+/* Global UI scale (user, 2026-10-27: smaller fonts and spacing everywhere, then 0.85 → 0.98,
+   fonts +15%). The vendored kit sizes everything in inline px, so a root `zoom` is the one
+   lever that scales it all: 0.98 turns 14px into ~13.7px and 13px into ~12.7px. Viewport
+   units are not zoomed, so a full-height layout uses --app-vh (one viewport-height percent
+   in zoomed CSS px), e.g. calc(100 * var(--app-vh) - 52px). Change the scale here only. */
 :root {
-  --ui-zoom: 0.85;
+  --ui-zoom: 0.98;
   --app-vh: calc(1vh / var(--ui-zoom));
 }
 

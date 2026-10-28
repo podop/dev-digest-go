@@ -304,6 +304,37 @@ func TestCustom_cost(t *testing.T) {
 	}
 }
 
+// A LiteLLM proxy reports the cost only in a response header, never in usage.cost.
+func TestCustom_liteLLMCostHeader(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		usage  string
+		header string
+		want   *float64
+	}{
+		{"header only", `{"input_tokens":2,"output_tokens":3}`, "9.4e-06", new(9.4e-06)},
+		{"usage cost wins", `{"input_tokens":2,"output_tokens":3,"cost":0.004}`, "9.4e-06", new(0.004)},
+		{"unusable header", `{"input_tokens":2,"output_tokens":3}`, "None", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			g := newGateway(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("X-Litellm-Response-Cost", tc.header)
+				_, _ = io.WriteString(w, `{"content":[{"type":"tool_use","input":{}}],"usage":`+tc.usage+`}`)
+			})
+			res, err := g.custom().Complete(t.Context(), "", attempt(custom.ModeStrict))
+			if err != nil {
+				t.Fatalf("Complete() error = %v", err)
+			}
+			if diff := cmp.Diff(tc.want, res.CostUSD); diff != "" {
+				t.Errorf("Complete() CostUSD with header %q mismatch (-want +got):\n%s", tc.header, diff)
+			}
+		})
+	}
+}
+
 func TestCustom_statusErrorsKeepTheirStatus(t *testing.T) {
 	t.Parallel()
 	for _, status := range []int{400, 401, 404, 422, 429, 500, 529} {

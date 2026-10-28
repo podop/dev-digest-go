@@ -67,7 +67,9 @@ export function LeaderboardTableRow({ row, rank, open, onToggle, onOpen, repos =
             <Link href={prDetailPath(encodeURIComponent(row.repo_id), row.number)} className="mono" style={s.repoNumber}>
               {pr}
             </Link>
-            <span>{row.author}</span>
+            <span style={s.author} title={row.author}>
+              {row.author}
+            </span>
             {row.draft && <span>{t("draft")}</span>}
           </div>
           <div style={s.title} title={row.title}>

@@ -81,6 +81,12 @@ the same inputs (`base`, `round`, `report`, changed-file list). Base for feature
 ## Gotchas
 - Images are built with `build.network: host`: on this WSL2 machine parallel registry downloads
   get reset on the default bridge network (`frontend/INSIGHTS.md`). Keep it.
+- Behind the corporate TLS-inspecting proxy (Zscaler) builds fail with "server certificate not
+  trusted" (apk, go mod, pnpm): set `BUILD_CA_DIR=/usr/local/share/ca-certificates` in `.env`.
+  Its `*.crt` files reach every build stage and the backend runtime trust store via the compose
+  build context `extra-ca` (default: the empty, git-ignored `certs/`; see `certs/README.md`).
+  Zscaler also 403s some Go module zips ("unscannable file formats", klauspost/compress) — set
+  `BUILD_GOPROXY=https://proxy.golang.org|direct` (pipe: fall back to git on any error).
 - `NEXT_PUBLIC_API_BASE` is baked into the frontend image at build time; changing `API_PORT`
   needs a frontend rebuild.
 - The Node stack may be running at the same time (ports 3000/3001/5432, volume `devdigest_pgdata`)

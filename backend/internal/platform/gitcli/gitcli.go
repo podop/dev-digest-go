@@ -207,8 +207,8 @@ func (e *BlobSizeError) Error() string {
 func (e *BlobSizeError) Is(target error) bool { return target == ErrBlobTooLarge }
 
 // Clone makes sure the clone of owner/name exists and is current. If
-// <root>/<owner>/<name>/.git exists it fetches; otherwise it removes any partial
-// directory and clones rawURL. It returns the absolute clone directory.
+// <root>/<owner>/<name>/.git exists and its HEAD is a commit it fetches; otherwise it removes
+// any partial directory and clones rawURL. It returns the absolute clone directory.
 func (c *Client) Clone(ctx context.Context, owner, name, rawURL string, opts CloneOptions) (string, error) {
 	if _, ok := gitlabHostSegment(owner); ok {
 		return "", ErrGitLabKey
@@ -226,7 +226,11 @@ func (c *Client) Clone(ctx context.Context, owner, name, rawURL string, opts Clo
 	if err := c.prepareDest(dest); err != nil {
 		return "", err
 	}
-	if _, err := os.Lstat(filepath.Join(dest, ".git")); err == nil {
+	cloned, err := c.isClone(ctx, runCfg{}, dest)
+	if err != nil {
+		return "", err
+	}
+	if cloned {
 		if err := c.scrubOrigin(ctx, dest); err != nil {
 			return "", err
 		}
@@ -253,7 +257,8 @@ func (c *Client) Clone(ctx context.Context, owner, name, rawURL string, opts Clo
 
 // CloneRemote is Clone for a GitLab project: owner and name are the GitLab clone key
 // ("@gitlab/<host>[_<port>]", "<project id>"), and the clone fetches from r.URL with r's token.
-// An existing clone gets origin := r.URL first, so a project renamed on GitLab keeps syncing.
+// An existing clone (see Clone) gets origin := r.URL first, so a project renamed on GitLab keeps
+// syncing.
 // Nothing is created when the remote is invalid or its host resolves to a forbidden address.
 func (c *Client) CloneRemote(ctx context.Context, owner, name string, r Remote, opts CloneOptions) (string, error) {
 	dest, err := c.gitlabClonePath(owner, name)
@@ -270,7 +275,11 @@ func (c *Client) CloneRemote(ctx context.Context, owner, name string, r Remote, 
 	if err := c.prepareDest(dest); err != nil {
 		return "", err
 	}
-	if _, err := os.Lstat(filepath.Join(dest, ".git")); err == nil {
+	cloned, err := c.isClone(ctx, runCfg{remote: true}, dest)
+	if err != nil {
+		return "", err
+	}
+	if cloned {
 		if err := c.setOrigin(ctx, dest, r.URL); err != nil {
 			return "", err
 		}
@@ -357,6 +366,21 @@ func (c *Client) gitlabClonePath(owner, name string) (string, error) {
 		return "", ErrNotGitLabKey
 	}
 	return c.ClonePath(owner, name)
+}
+
+// isClone reports whether dest holds a finished clone: a .git whose HEAD is a commit. A clone
+// killed before its first pack arrived (attempt timeout) leaves a .git whose HEAD names an unborn
+// branch; fetching into it would report success with nothing checked out. Any other git failure
+// also means "not a clone" (the caller re-clones the read-only mirror); only ctx's end is an error.
+func (c *Client) isClone(ctx context.Context, cfg runCfg, dest string) (bool, error) {
+	if _, err := os.Lstat(filepath.Join(dest, ".git")); err != nil {
+		return false, nil
+	}
+	_, _, err := c.exec(ctx, cfg, dest, "", "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+	if err != nil && ctx.Err() != nil {
+		return false, err
+	}
+	return err == nil, nil
 }
 
 // setOrigin points origin at rawURL (a credential-free URL checked by remoteCfg).

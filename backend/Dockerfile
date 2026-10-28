@@ -4,9 +4,20 @@
 # The C toolchain lives only in this stage; build (alpine3.23) and runtime (alpine:3.23) share
 # the same musl, so the dynamically linked binary runs unchanged in the runtime image.
 FROM golang:1.27-alpine3.23 AS build
-RUN apk add --no-cache build-base
+# extra-ca (compose additional_contexts, BUILD_CA_DIR): *.crt PEM files of a TLS-inspecting proxy,
+# appended to the system bundle before anything downloads (apk, go mod). Empty by default.
+# git: GOPROXY's `direct` fallback fetches modules with it.
+RUN --mount=type=bind,from=extra-ca,target=/tmp/extra-ca \
+    for f in /tmp/extra-ca/*.crt; do \
+      [ -f "$f" ] || continue; { cat "$f"; echo; } >> /etc/ssl/certs/ca-certificates.crt; \
+    done; \
+    apk add --no-cache build-base git
 WORKDIR /src
 COPY go.mod go.sum ./
+# Compose passes BUILD_GOPROXY. `https://proxy.golang.org|direct` (pipe, not comma) falls back to a
+# git fetch on any proxy error, e.g. a 403 from a TLS-inspecting proxy that blocks a module zip as
+# "unscannable"; go.sum still verifies every module.
+ARG GOPROXY=https://proxy.golang.org,direct
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 # The CI runner is built first, static (cgo off) and reproducible, into the package that embeds
@@ -35,7 +46,15 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 
 # Alpine, not distroless: the backend shells out to `git` (clone, fetch, diff, blame).
 FROM alpine:3.23
-RUN apk add --no-cache git ca-certificates \
+# The extra CAs (see the build stage) also go to /usr/local/share/ca-certificates, so the
+# ca-certificates install keeps them in the bundle git and the server trust at runtime.
+RUN --mount=type=bind,from=extra-ca,target=/tmp/extra-ca \
+    mkdir -p /usr/local/share/ca-certificates; \
+    for f in /tmp/extra-ca/*.crt; do \
+      [ -f "$f" ] || continue; cp "$f" /usr/local/share/ca-certificates/; \
+      { cat "$f"; echo; } >> /etc/ssl/certs/ca-certificates.crt; \
+    done; \
+    apk add --no-cache git ca-certificates \
  && adduser -D -H -u 10001 app \
  && mkdir -p /data \
  && chown app:app /data

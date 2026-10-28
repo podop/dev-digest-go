@@ -224,6 +224,26 @@ func TestRemote_CloneSyncDefaultBranchOverTLS(t *testing.T) {
 	}
 }
 
+// CloneRemote replaces a killed clone (a .git without a commit) with a fresh one.
+func TestRemote_ReplacesKilledClone(t *testing.T) {
+	hermeticGit(t)
+	r := newRemote(t)
+	stub := newGitLabStub(t, r, "")
+	root := t.TempDir()
+	var asked []string
+	c := newClient(t, gitcli.Options{CloneRoot: root, Resolver: resolveTo(&asked, "127.0.0.1")})
+	rem := stub.remoteWith("")
+	killedClone(t, filepath.Join(root, "@gitlab", "example.com_443", "42"), rem.URL)
+
+	dest, err := c.CloneRemote(testCtx(t), glOwnerKey, "42", rem, gitcli.CloneOptions{Depth: 1})
+	if err != nil {
+		t.Fatalf("CloneRemote() error: %v", err)
+	}
+	if b := readFile(t, filepath.Join(dest, "a.txt")); b != "one" {
+		t.Errorf("a.txt = %q, want %q", b, "one")
+	}
+}
+
 func TestRemote_RenamedProjectMovesOrigin(t *testing.T) {
 	hermeticGit(t)
 	r := newRemote(t)

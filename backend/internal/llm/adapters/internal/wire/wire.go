@@ -57,6 +57,9 @@ type Call struct {
 	Key string
 	// ErrorMessage includes the provider's own error message in a StatusError.
 	ErrorMessage bool
+	// ResponseHeader, when non-nil, receives the headers of a 2xx response (a LiteLLM gateway
+	// reports the call cost there, see GatewayCost).
+	ResponseHeader *http.Header
 	// Gateway marks a call to a custom gateway, whose error text is untrusted (spec NFR1): the
 	// *url.Error of a transport failure is unwrapped (its text embeds the request URL), a 401 or
 	// 403 carries a fixed message and any other provider message is scrubbed before it is cut.
@@ -119,6 +122,9 @@ func Do(ctx context.Context, hc *http.Client, c Call, out any) error {
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
 		return errors.New(c.Provider + " " + c.Op + " returned an unreadable response")
+	}
+	if c.ResponseHeader != nil {
+		*c.ResponseHeader = resp.Header
 	}
 	return nil
 }

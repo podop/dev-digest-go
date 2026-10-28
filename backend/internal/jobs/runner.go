@@ -51,6 +51,9 @@ var (
 	ErrShutdownTimeout = errors.New("job runner did not stop in time")
 	// ErrNotFound is returned by a Store when the job row does not exist.
 	ErrNotFound = errors.New("job not found")
+
+	// errAttemptTimeout marks an attempt cut by the runner's per-attempt limit (RetryTimeouts).
+	errAttemptTimeout = errors.New("attempt timed out")
 )
 
 // Handler does the work of one job. It must return promptly once ctx ends: ctx is cancelled when
@@ -93,12 +96,15 @@ type job struct {
 	payload json.RawMessage
 	handler Handler
 	timeout time.Duration // per-attempt limit of this job's kind
+	// retryTimeouts makes a timed-out attempt retryable (RetryTimeouts).
+	retryTimeouts bool
 }
 
 // registration is what Register stores for a kind; timeout 0 means the runner's default.
 type registration struct {
-	handler Handler
-	timeout time.Duration
+	handler       Handler
+	timeout       time.Duration
+	retryTimeouts bool
 }
 
 // RegisterOption tunes one kind at Register time.
@@ -112,6 +118,13 @@ func WithTimeout(d time.Duration) RegisterOption {
 			reg.timeout = d
 		}
 	}
+}
+
+// RetryTimeouts retries a timed-out attempt of the kind like a transient failure (the runner's
+// retries and backoff). It is for work whose hang is usually a passing network fault, such as a
+// git clone stuck while connecting; for other kinds a timeout stays final.
+func RetryTimeouts() RegisterOption {
+	return func(reg *registration) { reg.retryTimeouts = true }
 }
 
 // Runner is the in-process job pool. Create it with New and stop it with Shutdown.
@@ -175,7 +188,7 @@ func New(store Store, opts Options) *Runner {
 }
 
 // Register binds a handler to a job kind. Kinds registered without WithTimeout run under the
-// runner's per-attempt timeout. It panics on a nil handler or a duplicate kind, so a wiring
+// runner's per-attempt timeout, and only kinds registered with RetryTimeouts retry a timeout. It panics on a nil handler or a duplicate kind, so a wiring
 // mistake fails at startup.
 func (r *Runner) Register(kind string, h Handler, opts ...RegisterOption) {
 	if h == nil {
@@ -242,7 +255,9 @@ func (r *Runner) Enqueue(ctx context.Context, workspaceID, kind string, payload 
 	if timeout <= 0 {
 		timeout = r.timeout
 	}
-	r.pending = append(r.pending, job{id: id, kind: kind, payload: raw, handler: reg.handler, timeout: timeout})
+	r.pending = append(r.pending, job{
+		id: id, kind: kind, payload: raw, handler: reg.handler, timeout: timeout, retryTimeouts: reg.retryTimeouts,
+	})
 	r.outstanding++
 	r.dispatchLocked()
 	return id, nil
@@ -336,7 +351,10 @@ func (r *Runner) execute(j job) {
 		Retries:   r.retries,
 		BaseDelay: r.baseDelay,
 		// A runner that is shutting down never retries (Node parity).
-		IsRetryable: func(err error) bool { return r.ctx.Err() == nil && retry.IsTransient(err) },
+		IsRetryable: func(err error) bool {
+			return r.ctx.Err() == nil &&
+				(retry.IsTransient(err) || (j.retryTimeouts && errors.Is(err, errAttemptTimeout)))
+		},
 		OnRetry: func(n int, _ error) {
 			attempts = n
 			if err := r.write(func(ctx context.Context) error { return r.store.SetAttempts(ctx, j.id, n) }); err != nil {
@@ -379,7 +397,7 @@ func (r *Runner) attempt(ctx context.Context, j job) (err error) {
 	}()
 	err = j.handler(actx, j.payload)
 	if err != nil && actx.Err() != nil && ctx.Err() == nil {
-		return fmt.Errorf("attempt timed out after %s: %w", j.timeout, context.DeadlineExceeded)
+		return fmt.Errorf("%w after %s: %w", errAttemptTimeout, j.timeout, context.DeadlineExceeded)
 	}
 	return err
 }

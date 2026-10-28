@@ -29,13 +29,21 @@ services:
       # Build-time only: parallel downloads (go mod, npm) get reset on the default bridge
       # network under WSL2; the running containers still use the compose network.
       network: host
+      # *.crt PEM files of a TLS-inspecting proxy (Zscaler …), trusted by the build and the image.
+      additional_contexts:
+        extra-ca: ${BUILD_CA_DIR:-./certs}
       args:
         # Source commit stamped into the embedded CI runner (12 hex, set by `make`, which passes it
         # only for a clean tree); anything else builds "dev".
         DEVDIGEST_BUILD_ID: ${DEVDIGEST_BUILD_ID:-dev}
         # Release version GET /about reports (letters, digits and . _ + - only); anything else builds "dev".
         DEVDIGEST_VERSION: ${DEVDIGEST_VERSION:-dev}
+        # Module source of `go mod download` (see .env.example BUILD_GOPROXY).
+        GOPROXY: ${BUILD_GOPROXY:-https://proxy.golang.org,direct}
     restart: unless-stopped
+    # An init as PID 1 reaps orphaned git helpers (git-remote-https left behind when a timed-out
+    # git command is killed); the server as PID 1 never waits for them, so they stay zombies.
+    init: true
     env_file:
       - path: .env          # optional: LLM keys, GITHUB_TOKEN (see .env.example)
         required: false
@@ -82,6 +90,8 @@ services:
     build:
       context: ./frontend
       network: host   # see backend.build.network
+      additional_contexts:
+        extra-ca: ${BUILD_CA_DIR:-./certs}   # see backend.build.additional_contexts
       args:
         # The browser calls the API directly, so this is the host-side URL.
         NEXT_PUBLIC_API_BASE: http://localhost:${API_PORT:-3101}

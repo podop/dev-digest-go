@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"dev-digest-go/backend/internal/llm/custom"
 	"dev-digest-go/backend/internal/platform/logging"
@@ -143,6 +144,23 @@ func CustomHeaders(mode custom.AuthMode, authHeader, key string, extra, defaults
 		}
 	}
 	return out, nil
+}
+
+// LiteLLMCostHeader is where a LiteLLM proxy reports the cost of a call in USD; it never puts it
+// in usage.cost.
+const LiteLLMCostHeader = "X-Litellm-Response-Cost"
+
+// GatewayCost is the cost a custom gateway reported for a call: usage.cost when it is a finite
+// number >= 0, else the LiteLLM cost header when that is one; nil when neither is (the call is
+// then priced from manual model prices, or stays unpriced).
+func GatewayCost(usageCost json.RawMessage, h http.Header) *float64 {
+	if cost, ok := JSONNumber(usageCost); ok && cost >= 0 {
+		return &cost
+	}
+	if cost, ok := JSONNumber(json.RawMessage(strings.TrimSpace(h.Get(LiteLLMCostHeader)))); ok && cost >= 0 {
+		return &cost
+	}
+	return nil
 }
 
 // JSONNumber reads raw as a JSON number; anything else (string, null, object) and any number that

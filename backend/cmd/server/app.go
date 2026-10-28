@@ -351,10 +351,11 @@ type wired struct {
 type intelHandlers struct{ index, refresh, resync jobs.Handler }
 
 // registerJobs binds the job kinds. conventions.extract gets its own per-attempt limit (D208);
-// clone and refresh keep the runner's default (AC303); the repo-intel kinds run under 120 s
-// (FR3005). A nil intel leaves the repo-intel kinds unregistered.
+// clone gets reposapp.CloneTimeout and retries a timed-out attempt (a hung connect); refresh keeps
+// the runner's default (AC303); the repo-intel kinds run under 120 s (FR3005). A nil intel leaves
+// the repo-intel kinds unregistered.
 func registerJobs(r *jobs.Runner, clone, refresh, extract jobs.Handler, extractTimeout time.Duration, intel *intelHandlers) {
-	r.Register(reposapp.KindClone, clone)
+	r.Register(reposapp.KindClone, clone, jobs.WithTimeout(reposapp.CloneTimeout), jobs.RetryTimeouts())
 	r.Register(reposapp.KindRefresh, refresh)
 	r.Register(conventionsapp.KindExtract, extract, jobs.WithTimeout(extractTimeout))
 	if intel == nil {

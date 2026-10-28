@@ -8,6 +8,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## What Works
 <!-- approaches and solutions that worked here -->
+- 2026-10-27 — UI screenshots on this WSL host (no ~/.cache/ms-playwright, Zscaler): docker run --rm --network host mcr.microsoft.com/playwright:v1.56.1-noble with a script dir holding npm i playwright@1.56.1 (install with -e NODE_EXTRA_CA_CERTS=<host /etc/ssl/certs/ca-certificates.crt mounted>) drives the compose UI on :3100; host 'npx -y pnpm@10 install' also needs NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 - 2026-10-25 — a wizard whose current step is derived from live 'first incomplete step' state jumps ahead the moment the shown step completes (a passing test hid Continue on /setup) → resolve the step once from ?step + state and router.replace the resolved step into the URL (setup/SetupView helpers resolveStep)
 - 2026-10-15 — src/lib/hooks/evals.test.tsx (TanStack Query refetchInterval polling): vi.useFakeTimers({ shouldAdvanceTime: true }) + await act(() => vi.advanceTimersByTimeAsync(2000)) drives refetchInterval on the fake clock while waitFor still works → use this to test polling hooks (useEvalRun) instead of real 2 s waits
 - 2026-09-22 — src/app/agents/[id]/…/SkillsTab/SkillsTab.test.tsx (@dnd-kit in jsdom): the keyboard sensor picks drop targets from getBoundingClientRect, which jsdom returns as zeros, so arrow keys move nothing → stub getBoundingClientRect to stack rows by index, then user.keyboard(' ') / ArrowUp / ' ' really reorders
@@ -72,6 +73,7 @@ Reviewed monthly: stale entries are removed in a dedicated commit.
 
 ## Tool & Library Notes
 <!-- dependency quirks, versions, flags -->
+- 2026-10-27 — vendor/ui/kit/SearchableSelect (every model picker): mono defaults to TRUE, so the trigger, search box and options render JetBrains Mono, whose 13px reads clearly larger than the 13px Inter of the themed Select next to it → size the open list in CompactSearchableSelect's scoped CSS (options 12px, search 13px; computed styles checked in a browser, 2026-10-27)
 - 2026-10-27 — screenshots of uncommitted UI against the compose backend: CORS_ORIGINS only allows :3100 (the container), so a 'next dev -p 3105' page gets no API data → run NEXT_PUBLIC_API_BASE=http://localhost:3101 next dev -p 3105 and add access-control-allow-origin in Playwright page.route('http://localhost:3101/**') (route.fetch + fulfill; unrouteAll ignoreErrors before close, polling hooks keep requests in flight); the stack stays untouched
 - 2026-10-26 — src/test/render.tsx renderHookWithProviders has no wrapper option → test a hook that needs RepoProvider through a small probe component rendered with renderWithProviders (link-repo.test.tsx)
 - 2026-10-26 — theme in UI checks: data-theme comes from localStorage key dd-theme (default dark), so Playwright colorScheme: "light" does not switch the app → set localStorage dd-theme=light before load for light screenshots (Settings D S26 ac25-light.js)

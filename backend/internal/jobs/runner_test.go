@@ -320,6 +320,73 @@ func TestRunner_PerKindTimeout(t *testing.T) {
 	}
 }
 
+// A kind registered with RetryTimeouts re-runs a timed-out attempt with the runner's retries;
+// after the last one the job ends failed with the same timeout text as without the option.
+func TestRunner_RetryTimeouts(t *testing.T) {
+	tests := []struct {
+		name         string
+		hangs        int // leading calls that block until the attempt times out
+		wantCalls    int
+		wantStatus   jobs.Status
+		wantAttempts int
+		wantErr      string
+	}{
+		{name: "recovers after a timed-out attempt", hangs: 1, wantCalls: 2, wantStatus: jobs.StatusDone, wantAttempts: 1},
+		{name: "gives up after two retries", hangs: 3, wantCalls: 3, wantStatus: jobs.StatusFailed, wantAttempts: 2,
+			wantErr: "attempt timed out after 1m0s: context deadline exceeded"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				store := newFakeStore()
+				r := jobs.New(store, jobs.Options{})
+				calls := 0
+				r.Register("clone", func(ctx context.Context, _ json.RawMessage) error {
+					calls++
+					if calls <= tc.hangs {
+						<-ctx.Done()
+						return ctx.Err()
+					}
+					return nil
+				}, jobs.WithTimeout(time.Minute), jobs.RetryTimeouts())
+
+				id := enqueue(t, r, "clone", nil)
+				if err := r.Wait(t.Context()); err != nil {
+					t.Fatal(err)
+				}
+
+				got := store.get(id)
+				if calls != tc.wantCalls || got.Status != tc.wantStatus || got.Attempts != tc.wantAttempts || got.Error != tc.wantErr {
+					t.Errorf("calls, status, attempts, error = %d, %q, %d, %q; want %d, %q, %d, %q",
+						calls, got.Status, got.Attempts, got.Error, tc.wantCalls, tc.wantStatus, tc.wantAttempts, tc.wantErr)
+				}
+			})
+		})
+	}
+}
+
+// RetryTimeouts retries only the runner's own per-attempt cut, not a deadline error the handler
+// returns by itself.
+func TestRunner_RetryTimeouts_HandlerDeadlineIsNotRetried(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		store := newFakeStore()
+		r := jobs.New(store, jobs.Options{})
+		calls := 0
+		r.Register("clone", func(context.Context, json.RawMessage) error {
+			calls++
+			return fmt.Errorf("remote call: %w", context.DeadlineExceeded)
+		}, jobs.RetryTimeouts())
+
+		id := enqueue(t, r, "clone", nil)
+		if err := r.Wait(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if got := store.get(id); calls != 1 || got.Status != jobs.StatusFailed {
+			t.Errorf("calls, status = %d, %q; want 1, failed", calls, got.Status)
+		}
+	})
+}
+
 // A handler registered with a longer limit survives past the default and finishes done.
 func TestRunner_PerKindTimeoutOutlivesDefault(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {

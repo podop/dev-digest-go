@@ -17,6 +17,11 @@ import (
 const (
 	// cloneDepth is the shallow depth of the first clone.
 	cloneDepth = 1
+	// CloneTimeout is the per-attempt limit of the clone job, registered with jobs.RetryTimeouts:
+	// a hung attempt (a connect that never completes on a flaky VPN) is cut and retried. It stays
+	// below libcurl's 300 s connect timeout, which git cannot lower: past it git fails with its
+	// own error, which is not retried.
+	CloneTimeout = 4 * time.Minute
 	// DefaultRemoteBase is where repositories are cloned from.
 	DefaultRemoteBase = "https://github.com"
 )

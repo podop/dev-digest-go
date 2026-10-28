@@ -169,7 +169,8 @@ Prefix every Go command with `env -u GOROOT PATH="$HOME/.local/go/bin:$PATH"` (s
   - LLM calls: `llm.Client` resolves the provider per call from `Charge.WorkspaceID` (`CustomResolver.Resolve`
     builds the adapter with the stored key and header values, so it is never shared); `Ready`/`ListModels` serve
     built-ins only, custom ids go through `ReadyIn`/`ListModelsIn(ctx, ws, p)` (the reviews and evals peers use
-    them). Cost per attempt: a finite reported cost, else the manual model price on reported usage only, else
+    them). Cost per attempt: a finite reported cost (`usage.cost`, else the LiteLLM header `x-litellm-response-cost`,
+    `wire.GatewayCost`, D38), else the manual model price on reported usage only, else
     NULL — the built-in and live price books are never consulted for a custom model and estimated tokens are never
     priced (SCR7); `GET /settings/spend` counts the NULLs as `unpriced_count`. The mode shapes the body (the
     adapters) and the schema text (the client); a 400/422 in strict mode gets the FR33 hint. Under
