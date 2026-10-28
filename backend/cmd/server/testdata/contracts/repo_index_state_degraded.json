@@ -4,7 +4,7 @@
   "durationMs": 0,
   "filesIndexed": 0,
   "filesSkipped": 0,
-  "indexerVersion": 2,
+  "indexerVersion": 3,
   "lastIndexedSha": "",
   "reason": "no_clone",
   "repoId": "00000000-0000-4000-8000-000000000001",

@@ -101,7 +101,7 @@ func TestNewStateView_DurationMs(t *testing.T) {
 func TestSynthesised(t *testing.T) {
 	// AC3003: the id is echoed as sent.
 	want := StateView{
-		RepoID: "5F0C-UPPER", Status: StatusDegraded, Reason: ptr("no_data"), IndexerVersion: 2,
+		RepoID: "5F0C-UPPER", Status: StatusDegraded, Reason: ptr("no_data"), IndexerVersion: IndexerVersion,
 		UpdatedAt: "1970-01-01T00:00:00.000Z", Degraded: true, DegradedReason: ReasonNoData,
 	}
 	if diff := cmp.Diff(want, Synthesised("5F0C-UPPER")); diff != "" {

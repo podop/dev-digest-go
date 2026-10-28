@@ -111,7 +111,7 @@ func TestIndexState_PersistedFullHasExactlyTheContractKeys(t *testing.T) {
 	code, body := do(t, newServer(svc, fakeTenants{}), http.MethodGet, "/repos/"+repoID+"/index-state", "")
 
 	want := `{"repoId":"` + repoID + `","status":"full","filesIndexed":12,"filesSkipped":3,"durationMs":1234,` +
-		`"lastIndexedSha":"abc123","indexerVersion":2,"updatedAt":"2026-10-22T08:30:15.123Z"}`
+		`"lastIndexedSha":"abc123","indexerVersion":3,"updatedAt":"2026-10-22T08:30:15.123Z"}`
 	if code != http.StatusOK {
 		t.Fatalf("GET index-state status = %d (%s), want 200", code, body)
 	}
@@ -181,7 +181,7 @@ func TestIndexState_UnknownRepoIsSynthesisedWithTheIdAsSent(t *testing.T) {
 	code, body := do(t, newServer(svc, fakeTenants{err: errors.New("tenancy is not consulted")}), http.MethodGet, "/repos/"+upper+"/index-state", "")
 
 	want := `{"repoId":"` + upper + `","status":"degraded","filesIndexed":0,"filesSkipped":0,"durationMs":0,` +
-		`"reason":"no_data","lastIndexedSha":"","indexerVersion":2,"updatedAt":"1970-01-01T00:00:00.000Z",` +
+		`"reason":"no_data","lastIndexedSha":"","indexerVersion":3,"updatedAt":"1970-01-01T00:00:00.000Z",` +
 		`"degraded":true,"degradedReason":"no_data"}`
 	if code != http.StatusOK {
 		t.Fatalf("GET index-state status = %d (%s), want 200", code, body)

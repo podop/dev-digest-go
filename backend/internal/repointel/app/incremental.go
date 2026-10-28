@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 
 	"dev-digest-go/backend/internal/repointel/domain"
@@ -55,6 +56,10 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 			return Result{}, fmt.Errorf("list changed files: %w", ctxErr)
 		}
 		// A base commit missing from the shallow clone or output past the git cap (FR3016).
+		return ix.full(ctx, repoID)
+	}
+	// A module file moves every Go package key: the graph of the whole repo is rebuilt (AC16).
+	if hasGoMod(changedAll) {
 		return ix.full(ctx, repoID)
 	}
 	changed := supportedPaths(changedAll)
@@ -130,6 +135,9 @@ func (ix *Indexer) incremental(ctx context.Context, repoID string) (Result, erro
 				if err := w.ReplaceEdges(ctx, repoID, edges); err != nil {
 					return fmt.Errorf("replace edges: %w", err)
 				}
+				if err := w.ReplaceFilePackages(ctx, repoID, graph.Packages); err != nil {
+					return fmt.Errorf("replace file packages: %w", err)
+				}
 				if err := w.ResolveReferences(ctx, repoID, true); err != nil {
 					return fmt.Errorf("resolve references: %w", err)
 				}
@@ -185,4 +193,9 @@ func supportedPaths(paths []string) []string {
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// hasGoMod reports whether any changed path is a go.mod file, at the root or nested.
+func hasGoMod(paths []string) bool {
+	return slices.ContainsFunc(paths, func(p string) bool { return path.Base(p) == "go.mod" })
 }

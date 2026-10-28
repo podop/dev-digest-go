@@ -40,6 +40,7 @@ type storeData struct {
 	symbols []domain.SymbolRow
 	refs    []domain.ReferenceRow
 	edges   []domain.Edge
+	pkgs    []domain.FilePackage
 	ranks   []domain.FileRankRow
 	facts   []domain.FileFacts
 	maps    []domain.RepoMap
@@ -61,6 +62,7 @@ func (s *fakeStore) snapshot() storeData {
 	d.symbols = slices.Clone(d.symbols)
 	d.refs = slices.Clone(d.refs)
 	d.edges = slices.Clone(d.edges)
+	d.pkgs = slices.Clone(d.pkgs)
 	d.ranks = slices.Clone(d.ranks)
 	d.facts = slices.Clone(d.facts)
 	d.maps = slices.Clone(d.maps)
@@ -185,7 +187,11 @@ func (s *fakeStore) ReplaceEdges(ctx context.Context, repoID string, edges []dom
 func (s *fakeStore) ReplaceFilePackages(ctx context.Context, repoID string, pkgs []domain.FilePackage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.hook(ctx, "ReplaceFilePackages")
+	if err := s.hook(ctx, "ReplaceFilePackages"); err != nil {
+		return err
+	}
+	s.data.pkgs = slices.Clone(pkgs)
+	return nil
 }
 
 func (s *fakeStore) ResolveReferences(ctx context.Context, repoID string, reset bool) error {
@@ -622,7 +628,9 @@ func (g *fakeGit) DiffNames(ctx context.Context, owner, name, base, head string)
 // fakeGraph returns a graph of canned edges.
 type fakeGraph struct {
 	edges []domain.Edge
-	err   error
+	// packages are the package keys of the canned graph.
+	packages []domain.FilePackage
+	err      error
 	// panics makes BuildGraph panic.
 	panics bool
 }
@@ -634,7 +642,7 @@ func (g *fakeGraph) BuildGraph(ctx context.Context, root string, files []string)
 	if g.err != nil {
 		return domain.Graph{}, g.err
 	}
-	return domain.Graph{Edges: g.edges, Packages: []domain.FilePackage{}}, nil
+	return domain.Graph{Edges: g.edges, Packages: append([]domain.FilePackage{}, g.packages...)}, nil
 }
 
 // fakeClock is a settable clock safe for concurrent use; every Now call may advance it.

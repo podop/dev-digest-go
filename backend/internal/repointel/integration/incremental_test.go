@@ -72,8 +72,8 @@ func TestIncremental_OldVersionOrNoStateRunsFull(t *testing.T) {
 			e.mustIncremental()
 
 			st := e.mustState()
-			if isIncremental(st) || st.IndexerVersion != 2 {
-				t.Errorf("state = {incremental %v version %d}, want a full index at version 2", isIncremental(st), st.IndexerVersion)
+			if isIncremental(st) || st.IndexerVersion != domain.IndexerVersion {
+				t.Errorf("state = {incremental %v version %d}, want a full index at the current version", isIncremental(st), st.IndexerVersion)
 			}
 			if _, ok := st.Stats["filesSeen"]; !ok {
 				t.Errorf("stats = %v, want filesSeen of a full index", st.Stats)

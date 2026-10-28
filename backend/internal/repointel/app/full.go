@@ -106,6 +106,9 @@ func (ix *Indexer) full(ctx context.Context, repoID string) (Result, error) {
 			if err := w.ReplaceEdges(ctx, repoID, edges); err != nil {
 				return fmt.Errorf("replace edges: %w", err)
 			}
+			if err := w.ReplaceFilePackages(ctx, repoID, graph.Packages); err != nil {
+				return fmt.Errorf("replace file packages: %w", err)
+			}
 			if err := w.ResolveReferences(ctx, repoID, false); err != nil {
 				return fmt.Errorf("resolve references: %w", err)
 			}

@@ -52,7 +52,7 @@ func TestIncremental_FullIndexFallbacks(t *testing.T) {
 			}
 			st := e.state(t)
 			if _, ok := st.Stats["filesSeen"]; !ok || st.IndexerVersion != domain.IndexerVersion || st.LastIndexedSHA != "head-sha" {
-				t.Errorf("state = %+v, want the result of a full index (stats.filesSeen, version 2, head-sha)", st)
+				t.Errorf("state = %+v, want the result of a full index (stats.filesSeen, current version, head-sha)", st)
 			}
 			if _, ok := st.Stats["incremental"]; ok {
 				t.Error("stats.incremental is set, want a full index")
@@ -372,5 +372,53 @@ func TestIncremental_VanishedRepoInsideSavepointEndsTheIndex(t *testing.T) {
 	}
 	if st := e.state(t); st.LastIndexedSHA != "old-sha" {
 		t.Errorf("state = %+v, want the previous state", st)
+	}
+}
+
+func TestIncremental_WritesFilePackages(t *testing.T) {
+	e := incrementalEnv(t, domain.StatusFull)
+	e.git.diff = []string{"src/a.ts"}
+	e.graph.packages = []domain.FilePackage{{Path: "src/a.ts", Key: "pkg"}}
+
+	if _, err := e.ix.Incremental(t.Context(), repoID); err != nil {
+		t.Fatalf("Incremental() error = %v", err)
+	}
+	if diff := cmp.Diff(e.graph.packages, e.store.data.pkgs); diff != "" {
+		t.Errorf("file_packages mismatch (-want +got):\n%s", diff)
+	}
+	if got, want := callIndex(e.store.calls, "ReplaceFilePackages"), callIndex(e.store.calls, "ResolveReferences"); got < 0 || got > want {
+		t.Errorf("ReplaceFilePackages at %d, ResolveReferences at %d in %v, want packages first", got, want, e.store.calls)
+	}
+
+	// Inside the savepoint: a failing rank step rolls the package write back with the edges.
+	e = incrementalEnv(t, domain.StatusFull)
+	e.git.diff = []string{"src/a.ts"}
+	e.graph.packages = []domain.FilePackage{{Path: "src/a.ts", Key: "pkg"}}
+	e.store.hooks["ReplaceFileRank"] = func(context.Context) error { return errors.New("rank exploded") }
+	if _, err := e.ix.Incremental(t.Context(), repoID); err != nil {
+		t.Fatalf("Incremental() error = %v", err)
+	}
+	if len(e.store.data.pkgs) != 0 {
+		t.Errorf("file_packages = %v after a savepoint rollback, want none", e.store.data.pkgs)
+	}
+}
+
+func TestIncremental_GoModChangeRunsFull(t *testing.T) {
+	for _, changed := range []string{"go.mod", "tools/go.mod"} {
+		t.Run(changed, func(t *testing.T) {
+			e := incrementalEnv(t, domain.StatusFull)
+			e.git.diff = []string{changed}
+			res, err := e.ix.Incremental(t.Context(), repoID)
+			if err != nil {
+				t.Fatalf("Incremental() error = %v", err)
+			}
+			st := e.state(t)
+			if res.Reason == "no_supported_changes" || callIndex(e.store.calls, "DeleteRepoRows") < 0 || st.LastIndexedSHA != "head-sha" {
+				t.Errorf("Incremental() = %+v, calls %v, want a full index (DeleteRepoRows, head-sha)", res, e.store.calls)
+			}
+			if _, ok := st.Stats["incremental"]; ok {
+				t.Error("stats.incremental is set, want a full index")
+			}
+		})
 	}
 }

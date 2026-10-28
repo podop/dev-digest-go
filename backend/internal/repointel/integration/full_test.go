@@ -19,7 +19,7 @@ func TestFull_WritesAllSevenTables(t *testing.T) {
 	e.mustFull()
 
 	st := e.mustState()
-	if st.Status != domain.StatusFull || st.IndexerVersion != 2 || st.LastIndexedSHA != e.git.currentHead() {
+	if st.Status != domain.StatusFull || st.IndexerVersion != domain.IndexerVersion || st.LastIndexedSHA != e.git.currentHead() {
 		t.Errorf("state = {%s v%d %q}, want {full v2 %q}", st.Status, st.IndexerVersion, st.LastIndexedSHA, e.git.currentHead())
 	}
 	wantKeys := []string{

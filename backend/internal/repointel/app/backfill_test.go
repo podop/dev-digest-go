@@ -23,10 +23,10 @@ func backfillStore() *fakeStore {
 			s.states[id] = domain.IndexState{RepoID: id, IndexerVersion: version, Status: domain.StatusFull}
 		}
 	}
-	add("r-b", "ws-2", true, 1)  // old version
-	add("r-a", "ws-1", true, 0)  // no state
-	add("r-c", "ws-1", true, 2)  // current version
-	add("r-d", "ws-1", false, 0) // not cloned
+	add("r-b", "ws-2", true, 1)                     // old version
+	add("r-a", "ws-1", true, 0)                     // no state
+	add("r-c", "ws-1", true, domain.IndexerVersion) // current version
+	add("r-d", "ws-1", false, 0)                    // not cloned
 	return s
 }
 

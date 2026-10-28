@@ -16,7 +16,7 @@ import (
 // Limits and versions of the indexer (spec section 7.1).
 const (
 	// IndexerVersion is written to every state row; a different stored value forces a full index.
-	IndexerVersion = 2
+	IndexerVersion = 3
 	// MaxIndexedFiles bounds the walk: the first files in byte order are kept.
 	MaxIndexedFiles = 5000
 	// MaxFileBytes is the largest source file that is parsed (400 KiB).

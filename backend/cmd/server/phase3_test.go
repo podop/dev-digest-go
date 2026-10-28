@@ -18,6 +18,7 @@ import (
 
 	"dev-digest-go/backend/internal/config"
 	"dev-digest-go/backend/internal/platform/postgres/pgtest"
+	"dev-digest-go/backend/internal/repointel/domain"
 )
 
 // Phase 3 component tests: the two repo-intel routes, the three triggers (clone, refresh,
@@ -26,7 +27,7 @@ import (
 const (
 	// synthesised is the state of a repo without an index row (spec 7.2), byte for byte.
 	synthesised = `{"repoId":"%s","status":"degraded","filesIndexed":0,"filesSkipped":0,"durationMs":0,` +
-		`"reason":"no_data","lastIndexedSha":"","indexerVersion":2,"updatedAt":"1970-01-01T00:00:00.000Z",` +
+		`"reason":"no_data","lastIndexedSha":"","indexerVersion":3,"updatedAt":"1970-01-01T00:00:00.000Z",` +
 		`"degraded":true,"degradedReason":"no_data"}`
 	upperRepoID = "5F0C3A9E-1B2D-4C3E-8F4A-0123456789AB"
 )
@@ -48,7 +49,7 @@ func intelOn(c *config.Config) { c.RepoIntelEnabled = true }
 func putIndexState(t testing.TB, db *gorm.DB, repoID, status string, indexed, skipped int, sha string, stats string) {
 	t.Helper()
 	err := db.Exec(`INSERT INTO repo_index_state (repo_id, last_indexed_sha, indexer_version, status, files_indexed, files_skipped, stats, updated_at)
-		VALUES (?, ?, 2, ?, ?, ?, ?::jsonb, '2026-10-22T10:00:00.123Z')
+		VALUES (?, ?, 3, ?, ?, ?, ?::jsonb, '2026-10-22T10:00:00.123Z')
 		ON CONFLICT (repo_id) DO UPDATE SET last_indexed_sha = EXCLUDED.last_indexed_sha, indexer_version = EXCLUDED.indexer_version,
 			status = EXCLUDED.status, files_indexed = EXCLUDED.files_indexed, files_skipped = EXCLUDED.files_skipped,
 			stats = EXCLUDED.stats, updated_at = EXCLUDED.updated_at`,
@@ -145,7 +146,7 @@ func TestIndexState_PersistedAndSynthesised(t *testing.T) {
 		}
 		got := resp.Obj(t)
 		if got["durationMs"] != float64(1234) || got["repoId"] != repo || got["lastIndexedSha"] != sha ||
-			got["filesIndexed"] != float64(42) || got["filesSkipped"] != float64(3) || got["indexerVersion"] != float64(2) {
+			got["filesIndexed"] != float64(42) || got["filesSkipped"] != float64(3) || got["indexerVersion"] != float64(domain.IndexerVersion) {
 			t.Errorf("GET index-state = %s, want the persisted row", resp.Body)
 		}
 		if at, _ := got["updatedAt"].(string); at != "2026-10-22T10:00:00.123Z" {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -38,7 +39,7 @@ func TestFull_CleanIndexWritesEverything(t *testing.T) {
 	st := e.state(t)
 	if st.Status != domain.StatusFull || st.IndexerVersion != domain.IndexerVersion || st.LastIndexedSHA != "head-sha" ||
 		st.FilesIndexed != 2 || st.FilesSkipped != 0 {
-		t.Errorf("state = %+v, want full, version 2, head-sha, 2 indexed", st)
+		t.Errorf("state = %+v, want full, the current version, head-sha, 2 indexed", st)
 	}
 	if !st.UpdatedAt.Equal(e.clock.t) {
 		t.Errorf("state.UpdatedAt = %v, want the clock's %v", st.UpdatedAt, e.clock.t)
@@ -133,7 +134,7 @@ func TestFull_EndsWithoutIndexing(t *testing.T) {
 			st := e.state(t)
 			if st.Status != domain.StatusDegraded || st.LastIndexedSHA != "" || st.FilesIndexed != 0 || st.FilesSkipped != 0 ||
 				st.IndexerVersion != domain.IndexerVersion {
-				t.Errorf("state = %+v, want degraded, empty sha, zero counters, version 2", st)
+				t.Errorf("state = %+v, want degraded, empty sha, zero counters, the current version", st)
 			}
 			for k, want := range tc.wantStats {
 				if got := statStr(st, k); got != want {
@@ -603,3 +604,37 @@ func TestFull_ErrorFromWalkIsReturned(t *testing.T) {
 		t.Errorf("state = %+v, want failed", st)
 	}
 }
+
+func TestFull_WritesFilePackages(t *testing.T) {
+	e := newEnv(t)
+	e.addFile("a/a.go", "package a", fn("a", 1))
+	e.graph.packages = []domain.FilePackage{{Path: "a/a.go", Key: "example.com/m/a"}}
+
+	if _, err := e.ix.Full(t.Context(), repoID); err != nil {
+		t.Fatalf("Full() error = %v", err)
+	}
+	if diff := cmp.Diff(e.graph.packages, e.store.data.pkgs); diff != "" {
+		t.Errorf("file_packages mismatch (-want +got):\n%s", diff)
+	}
+	if got, want := callIndex(e.store.calls, "ReplaceFilePackages"), callIndex(e.store.calls, "ResolveReferences"); got < 0 || got > want {
+		t.Errorf("ReplaceFilePackages at %d, ResolveReferences at %d in %v, want packages first", got, want, e.store.calls)
+	}
+}
+
+func TestFull_BudgetStopLeavesFilePackages(t *testing.T) {
+	e := newEnv(t)
+	files := manyFiles(e, 20)
+	e.seedIndex(domain.StatusFull)
+	e.graph.packages = []domain.FilePackage{{Path: files[0], Key: "k"}}
+	e.an.onExtract = func(string) { e.clock.Advance(domain.SoftBudget) }
+
+	if _, err := e.ix.Full(t.Context(), repoID); err != nil {
+		t.Fatalf("Full() error = %v", err)
+	}
+	if len(e.store.data.pkgs) != 0 || callIndex(e.store.calls, "ReplaceFilePackages") >= 0 {
+		t.Errorf("file_packages = %v, calls %v, want no package write after a budget stop", e.store.data.pkgs, e.store.calls)
+	}
+}
+
+// callIndex is the position of the first call named name, or -1.
+func callIndex(calls []string, name string) int { return slices.Index(calls, name) }
