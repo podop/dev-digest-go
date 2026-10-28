@@ -38,22 +38,22 @@ type CallerSignature struct {
 // IsCallerScanDir reports a directory name the caller scan never enters, at any depth.
 func IsCallerScanDir(name string) bool {
 	switch name {
-	case ".git", "node_modules", "dist", "build", ".next", "coverage":
+	case ".git", "node_modules", "dist", "build", ".next", "coverage", "vendor", "target":
 		return true
 	}
 	return false
 }
 
 // IsCallerScanFile reports whether p has one of the extensions the caller scan reads
-// (.ts .tsx .js .jsx .mjs .cjs, case-sensitive like Node's path.extname). A name whose only dot
-// is the first character has no extension.
+// (.ts .tsx .js .jsx .mjs .cjs .go .java, case-sensitive like Node's path.extname). A name whose
+// only dot is the first character has no extension.
 func IsCallerScanFile(p string) bool {
 	base := path.Base(p)
 	if strings.LastIndexByte(base, '.') <= 0 {
 		return false
 	}
 	switch path.Ext(base) {
-	case ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs":
+	case ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".go", ".java":
 		return true
 	}
 	return false

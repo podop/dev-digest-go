@@ -17,9 +17,11 @@ func TestScanCallers_ListsByTheCallerRules(t *testing.T) {
 	root := t.TempDir()
 	out := outside(t)
 	for _, p := range []string{
-		"src/b.ts", "src/a.tsx", "src/c.js", "src/d.jsx", "src/e.mjs", "src/f.cjs", "Z.ts", "a/.hidden/h.ts",
-		"out/o.ts", "vendor/v.ts", // excluded by the index walk, not by the caller scan
+		"src/b.ts", "src/a.tsx", "src/c.js", "src/d.jsx", "src/e.mjs", "src/f.cjs", "src/g.go", "src/J.java",
+		"Z.ts", "a/.hidden/h.ts",
+		"out/o.ts", // excluded by the index walk, not by the caller scan
 		"src/notes.md", "src/g.mts", "src/H.TS",
+		"vendor/v.ts", "target/t.ts", // excluded by the caller scan (FR27)
 		"node_modules/n.ts", "dist/d.ts", "build/b.ts", "coverage/c.ts", "src/.next/x.ts", "src/.git/x.ts",
 	} {
 		write(t, root, p, 5)
@@ -36,8 +38,8 @@ func TestScanCallers_ListsByTheCallerRules(t *testing.T) {
 		t.Fatalf("ScanCallers() error = %v", err)
 	}
 	want := []string{
-		"Z.ts", "a/.hidden/h.ts", "out/o.ts", "src/a.tsx", "src/b.ts", "src/big.ts", "src/c.js", "src/d.jsx",
-		"src/e.mjs", "src/f.cjs", "src/over-index-limit.ts", "vendor/v.ts",
+		"Z.ts", "a/.hidden/h.ts", "out/o.ts", "src/J.java", "src/a.tsx", "src/b.ts", "src/big.ts", "src/c.js",
+		"src/d.jsx", "src/e.mjs", "src/f.cjs", "src/g.go", "src/over-index-limit.ts",
 	}
 	if diff := cmp.Diff(want, got); diff != "" {
 		t.Errorf("ScanCallers() mismatch (-want +got):\n%s", diff)

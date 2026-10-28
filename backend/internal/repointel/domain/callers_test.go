@@ -81,7 +81,9 @@ func TestReferenceLines(t *testing.T) {
 func TestIsCallerScanFile(t *testing.T) {
 	for p, want := range map[string]bool{
 		"a.ts": true, "src/a.tsx": true, "b.js": true, "b.jsx": true, "c.mjs": true, "c.cjs": true,
+		"main.go": true, "pkg/x.go": true, "Svc.java": true, "src/main/App.java": true,
 		"a.TS": false, "a.mts": false, "a.d.ts.map": false, ".ts": false, "a": false, "a.json": false,
+		"A.GO": false, "A.JAVA": false,
 	} {
 		if got := domain.IsCallerScanFile(p); got != want {
 			t.Errorf("IsCallerScanFile(%q) = %v, want %v", p, got, want)
@@ -92,7 +94,8 @@ func TestIsCallerScanFile(t *testing.T) {
 func TestIsCallerScanDir(t *testing.T) {
 	for n, want := range map[string]bool{
 		".git": true, "node_modules": true, "dist": true, "build": true, ".next": true, "coverage": true,
-		"out": false, "vendor": false, "src": false,
+		"vendor": true, "target": true,
+		"out": false, "src": false,
 	} {
 		if got := domain.IsCallerScanDir(n); got != want {
 			t.Errorf("IsCallerScanDir(%q) = %v, want %v", n, got, want)
