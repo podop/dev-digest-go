@@ -1449,7 +1449,7 @@ func (r ccResolver) Resolve(context.Context, string, llm.Provider) (llm.CustomCa
 
 // ccTimingClient builds the client of a custom OpenAI-compatible provider the way the server does
 // (customAdapters.Build: the default policy of NFR4) over an in-memory gateway, so that the 120 s,
-// 30 s and 360 s of the policy elapse on the synctest clock.
+// 30 s and 720 s of the policy elapse on the synctest clock.
 func ccTimingClient(t *testing.T, srv *httptest.Server) *llm.Client {
 	t.Helper()
 	hc := srv.Client() // before srv.URL: the in-memory server has no URL until then
@@ -1487,7 +1487,7 @@ func ccChat(text string) string {
 // AC17 (NFR4): the policy a custom provider is built with is the built-in OpenAI limits; on a fake
 // clock a gateway that hangs times out at 120 s (the model list at 30 s) and is not retried; three
 // 500s then a 200 succeed on the fourth request and a fourth 500 gives up; a 17 MiB body fails as a
-// provider error; a call that keeps failing slowly never exceeds the 360 s budget.
+// provider error; a call that keeps failing slowly never exceeds the 720 s budget.
 func TestCustomCalls_TimeoutsRetriesResponseCapAndBudget(t *testing.T) {
 	t.Run("the wired policy is the OpenAI limits", func(t *testing.T) {
 		for _, protocol := range []custom.Protocol{custom.ProtocolOpenAI, custom.ProtocolAnthropic} {
@@ -1501,8 +1501,8 @@ func TestCustomCalls_TimeoutsRetriesResponseCapAndBudget(t *testing.T) {
 				t.Errorf("%s Policy() mismatch (-want +got):\n%s", protocol, diff)
 			}
 		}
-		if llm.DefaultTotalBudget != 360*time.Second {
-			t.Errorf("DefaultTotalBudget = %s, want 360s", llm.DefaultTotalBudget)
+		if llm.DefaultTotalBudget != 720*time.Second {
+			t.Errorf("DefaultTotalBudget = %s, want 12m0s", llm.DefaultTotalBudget)
 		}
 	})
 
@@ -1573,12 +1573,21 @@ func TestCustomCalls_TimeoutsRetriesResponseCapAndBudget(t *testing.T) {
 		})
 	})
 
-	t.Run("a call never exceeds the 360 s budget", func(t *testing.T) {
+	t.Run("a call never exceeds the 720 s budget", func(t *testing.T) {
 		synctest.Test(t, func(t *testing.T) {
+			// 110 s per request (under the 120 s request timeout). Requests 1-3 are 500s and the
+			// 4th (the last retry) a schema-invalid 200, which re-prompts; the re-prompt's 500s
+			// then run past 720 s, so only the budget can end the call.
+			var hits atomic.Int32
 			srv := httptest.NewTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				_, _ = io.Copy(io.Discard, r.Body)
-				select { // 100 s per request, then a 500: four requests would take over 400 s
-				case <-time.After(100 * time.Second):
+				n := hits.Add(1)
+				select {
+				case <-time.After(110 * time.Second):
+					if n%4 == 0 {
+						_, _ = io.WriteString(w, ccChat(`{"nope":1}`))
+						return
+					}
 					http.Error(w, "slow failure", http.StatusInternalServerError)
 				case <-r.Context().Done():
 				}
@@ -1586,8 +1595,10 @@ func TestCustomCalls_TimeoutsRetriesResponseCapAndBudget(t *testing.T) {
 			c := ccTimingClient(t, srv)
 			start := time.Now()
 			_, err := ccAsk(t.Context(), c)
-			if took := time.Since(start); took != 360*time.Second || err == nil || !strings.Contains(err.Error(), "exceeded its total budget of 360000ms") {
-				t.Errorf("slowly failing call took %s with error %v, want it cut at exactly 360s by the budget", took, err)
+			want := fmt.Sprintf("exceeded its total budget of %dms", llm.DefaultTotalBudget.Milliseconds())
+			if took := time.Since(start); took != llm.DefaultTotalBudget || err == nil || !strings.Contains(err.Error(), want) || hits.Load() < 5 {
+				t.Errorf("slowly failing call took %s with error %v after %d requests, want it cut at exactly %s by the budget, after a re-prompt",
+					took, err, hits.Load(), llm.DefaultTotalBudget)
 			}
 		})
 	})

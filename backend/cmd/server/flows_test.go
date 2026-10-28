@@ -843,7 +843,7 @@ func TestRegisterJobs_PerKindTimeouts(t *testing.T) {
 	}{
 		{kind: reposapp.KindClone, wantTook: 240 * time.Second},
 		{kind: reposapp.KindRefresh, wantTook: 120 * time.Second},
-		{kind: conventionsapp.KindExtract, wantTook: 300 * time.Second},
+		{kind: conventionsapp.KindExtract, wantTook: 600 * time.Second},
 	}
 	for _, tc := range tests {
 		t.Run(tc.kind, func(t *testing.T) {
