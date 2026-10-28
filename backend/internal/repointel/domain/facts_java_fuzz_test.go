@@ -73,6 +73,13 @@ func FuzzJavaFacts(f *testing.F) {
 		if ok != (len(facts.Endpoints)+len(facts.Crons) > 0) {
 			t.Fatalf("ExtractFacts(%q) ok = %v with %+v", in, ok, facts)
 		}
+		total := 0
+		for _, ep := range facts.Endpoints {
+			total += len(ep)
+		}
+		if total > javaEndpointOutputFactor*len(in) {
+			t.Fatalf("ExtractFacts(%q) endpoint bytes = %d, want <= %d × %d (NFR3)", in, total, javaEndpointOutputFactor, len(in))
+		}
 		for _, ep := range facts.Endpoints {
 			method, path, found := strings.Cut(ep, " ")
 			if !found || !javaEndpointMethods[method] || !fromLiterals(path) {

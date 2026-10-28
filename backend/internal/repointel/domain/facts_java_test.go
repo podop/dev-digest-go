@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -195,6 +196,44 @@ func TestExtractFacts_Spring(t *testing.T) {
 				t.Errorf("ExtractFacts(%q) mismatch (-want +got):\n%s", tc.in, diff)
 			}
 		})
+	}
+}
+
+// NFR3: a 4 KiB class prefix joined to thousands of distinct tiny mappings must not turn 400 KiB
+// of text into ~80 MB of endpoints; the output stops at javaEndpointOutputFactor × the input and
+// keeps the endpoints before the cut in order.
+func TestExtractFacts_SpringEndpointOutputIsLinear(t *testing.T) {
+	prefix := "/" + strings.Repeat("p", 4000)
+	var sb strings.Builder
+	sb.WriteString("@RequestMapping(\"" + prefix + "\")\nclass C {\n")
+	mappings := 0
+	for ; sb.Len() < 400*1024; mappings++ {
+		fmt.Fprintf(&sb, "@GetMapping(\"%d\")\n", mappings)
+	}
+	sb.WriteString("@Scheduled(cron = \"0 0 * * * *\") void job() {}\n}\n")
+	in := sb.String()
+
+	got, ok := ExtractFacts("src/main/java/C.java", in)
+	if !ok {
+		t.Fatalf("ExtractFacts(amplification input) ok = false, want true")
+	}
+	total := 0
+	for _, ep := range got.Endpoints {
+		total += len(ep)
+	}
+	if limit := javaEndpointOutputFactor * len(in); total > limit {
+		t.Errorf("ExtractFacts(amplification input) endpoint bytes = %d, want <= %d (%d × %d)", total, limit, javaEndpointOutputFactor, len(in))
+	}
+	if len(got.Endpoints) == 0 || len(got.Endpoints) >= mappings {
+		t.Fatalf("ExtractFacts(amplification input) gave %d endpoints for %d mappings, want a non-empty cut", len(got.Endpoints), mappings)
+	}
+	for i, ep := range got.Endpoints[:3] {
+		if want := fmt.Sprintf("GET %s/%d", prefix, i); ep != want {
+			t.Errorf("ExtractFacts(amplification input).Endpoints[%d] = %.40q…, want %.40q…", i, ep, want)
+		}
+	}
+	if diff := cmp.Diff([]string{"0 0 * * * *"}, got.Crons); diff != "" {
+		t.Errorf("ExtractFacts(amplification input) crons mismatch (-want +got):\n%s", diff)
 	}
 }
 

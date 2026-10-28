@@ -312,10 +312,27 @@ var javaRequestMethods = map[string]bool{
 	"GET": true, "HEAD": true, "POST": true, "PUT": true, "PATCH": true, "DELETE": true, "OPTIONS": true, "TRACE": true,
 }
 
+// javaEndpointOutputFactor bounds the total bytes of a Java file's endpoints to this many times
+// the file's length. Every endpoint repeats the class prefix (up to MaxAnnotationBytes), so a
+// hostile clone with a 4 KiB prefix and thousands of tiny mappings would otherwise turn 400 KiB
+// of text into ~80 MB of endpoint strings, an output quadratic in the input (NFR3). Real
+// controllers stay far below it: an endpoint is shorter than the annotation and method that
+// declare it.
+const javaEndpointOutputFactor = 4
+
+// javaEndpointKey identifies an endpoint before its string is built: within one file the prefix
+// is fixed and joinPath(prefix, p) depends only on TrimLeft(p, "/"), so equal keys are equal
+// endpoints and a duplicate costs no join.
+type javaEndpointKey struct{ method, path string }
+
 // extractJavaFacts returns the Spring endpoints and @Scheduled crons of a Java file,
-// de-duplicated in first-seen order. Neither result is nil.
+// de-duplicated in first-seen order. Endpoints stop at the first one that would take their total
+// length past javaEndpointOutputFactor × len(text); those before it are kept. Neither result is
+// nil.
 func extractJavaFacts(text string) (endpoints, crons []string) {
-	eps, cs := newOrderedSet(), newOrderedSet()
+	endpoints, cs := []string{}, newOrderedSet()
+	seen := map[javaEndpointKey]struct{}{}
+	budget, full := javaEndpointOutputFactor*len(text), false
 	anns, declAt := scanJava(text)
 
 	prefixIdx, prefix, prefixKnown := -1, "", true
@@ -338,7 +355,7 @@ func extractJavaFacts(text string) (endpoints, crons []string) {
 			continue
 		}
 		verb, isVerb := javaVerbMappings[name]
-		if i == prefixIdx || !prefixKnown || (!isVerb && name != "RequestMapping") {
+		if full || i == prefixIdx || !prefixKnown || (!isVerb && name != "RequestMapping") {
 			continue
 		}
 		args := javaArgs(a.Args)
@@ -346,16 +363,28 @@ func extractJavaFacts(text string) (endpoints, crons []string) {
 		if !isVerb {
 			methods = javaMethods(args)
 		}
+	paths:
 		for _, p := range javaPaths(args) {
 			if !p.ok {
 				continue
 			}
 			for _, m := range methods {
-				eps.add(m + " " + joinPath(prefix, p.value))
+				k := javaEndpointKey{method: m, path: strings.TrimLeft(p.value, "/")}
+				if _, dup := seen[k]; dup {
+					continue
+				}
+				seen[k] = struct{}{}
+				ep := m + " " + joinPath(prefix, p.value)
+				if len(ep) > budget {
+					full = true
+					break paths
+				}
+				budget -= len(ep)
+				endpoints = append(endpoints, ep)
 			}
 		}
 	}
-	return eps.list, cs.list
+	return endpoints, cs.list
 }
 
 func simpleName(name string) string {
