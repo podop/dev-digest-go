@@ -1,6 +1,6 @@
-/* NeedsAttention — the leaderboard's "Needs attention" card (FR22, mockup): a count, then one row per
-   PR with mono repo#number (a link to the PR detail page), a truncated bold title, the author and outlined reason badges (red for the critical
-   reasons, neutral for the rest). */
+/* NeedsAttention — the leaderboard's "Needs attention" card (FR22, mockup): a count, then one item per
+   PR stacked in four lines — the author, mono repo#number (a link to the PR detail page), a truncated bold title and outlined reason
+   badges (red for the critical reasons, neutral for the rest) — so nothing overflows the narrow card. */
 "use client";
 
 import Link from "next/link";
@@ -40,18 +40,16 @@ const isCriticalReason = (r: LeaderboardAttentionReason): boolean => r.kind === 
 function Item({ item, t, repos }: { item: LeaderboardAttention; t: Translate; repos: RepoLookup }) {
   return (
     <li style={s.item} data-series={item.pr_id}>
-      <div style={s.head}>
-        <Link href={prDetailPath(encodeURIComponent(item.repo_id), item.number)} className="mono" style={s.ref}>
-          {prLabel(repos, item.repo_id, item.repo, item.number)}
-        </Link>
-        <span style={s.prTitle} title={item.title}>
-          {item.title}
-        </span>
-        <span style={s.author}>
-          <Avatar name={item.author} size={20} />
-          {item.author}
-        </span>
-      </div>
+      <span style={s.author}>
+        <Avatar name={item.author} size={20} />
+        <span style={s.authorName}>{item.author}</span>
+      </span>
+      <Link href={prDetailPath(encodeURIComponent(item.repo_id), item.number)} className="mono" style={s.ref}>
+        {prLabel(repos, item.repo_id, item.repo, item.number)}
+      </Link>
+      <span style={s.prTitle} title={item.title}>
+        {item.title}
+      </span>
       <div style={s.reasons}>
         {item.reasons.map((r) => (
           <Badge key={r.kind} style={isCriticalReason(r) ? s.reasonCritical : s.reason}>

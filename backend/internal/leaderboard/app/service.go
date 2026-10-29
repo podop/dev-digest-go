@@ -69,6 +69,8 @@ func (s *Service) Leaderboard(ctx context.Context, workspaceID string, q domain.
 		NeedsAttention:  domain.AttentionList{Total: total, Items: items},
 		HotFiles:        domain.HotFiles(facts.HotFiles),
 		HealthBySize:    domain.HealthBySize(cur),
+		HealthByAuthor:  domain.HealthByAuthor(cur),
+		HealthByRepo:    domain.HealthByRepo(cur),
 		Activity:        domain.Activity(win, cur, facts.Pulls),
 	}, nil
 }

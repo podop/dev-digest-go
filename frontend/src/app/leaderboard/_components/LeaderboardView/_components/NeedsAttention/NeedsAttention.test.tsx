@@ -68,6 +68,19 @@ describe("NeedsAttention", () => {
     expect(second.getByText("no review yet")).not.toHaveStyle({ color: "var(--crit)" });
   });
 
+  it("stacks each item as author, PR link, title, then reasons", () => {
+    renderWithProviders(<NeedsAttention data={data} />);
+
+    const [first] = within(screen.getByRole("list", { name: "Needs attention" })).getAllByRole("listitem");
+    const item = within(first!);
+    const lines = Array.from(first!.children);
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toContainElement(item.getByText("dana-lee"));
+    expect(lines[1]).toBe(item.getByRole("link", { name: "acme/api#41" }));
+    expect(lines[2]).toBe(item.getByText(data.items[0]!.title));
+    expect(lines[3]).toContainElement(item.getByText("merged with 1 open critical"));
+  });
+
   it("shows the empty state and no cap note when nothing needs attention", () => {
     renderWithProviders(<NeedsAttention data={{ total: 0, items: [] }} />);
 

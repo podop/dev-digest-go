@@ -212,6 +212,28 @@ export const LeaderboardSizeBucket = z.object({
 });
 export type LeaderboardSizeBucket = z.infer<typeof LeaderboardSizeBucket>;
 
+/**
+ * Health of one author's rows (`health_by_author`): every author of the rows, worst `avg_health` first
+ * (null last), then more PRs, then the name. `avg_health` is null when none of the author's PRs has a health.
+ */
+export const LeaderboardAuthorHealth = z.object({
+  author: z.string(),
+  prs: z.number().int(),
+  avg_health: z.number().nullable(),
+  avg_findings: z.number().nullable(),
+});
+export type LeaderboardAuthorHealth = z.infer<typeof LeaderboardAuthorHealth>;
+
+/** Health of one repository's rows (`health_by_repo`), ordered like `health_by_author`; `repo` is the name, see `repo_id`. */
+export const LeaderboardRepoHealth = z.object({
+  repo_id: z.string(),
+  repo: z.string(),
+  prs: z.number().int(),
+  avg_health: z.number().nullable(),
+  avg_findings: z.number().nullable(),
+});
+export type LeaderboardRepoHealth = z.infer<typeof LeaderboardRepoHealth>;
+
 /** One bar group of the activity chart: a day or a Monday-started week clipped to the window; `YYYY-MM-DD` in `tz`, `to` inclusive. */
 export const LeaderboardActivityPoint = z.object({
   from: z.string(),
@@ -240,6 +262,8 @@ export const Leaderboard = z.object({
   needs_attention: LeaderboardNeedsAttention,
   hot_files: z.array(LeaderboardHotFile),
   health_by_size: z.array(LeaderboardSizeBucket),
+  health_by_author: z.array(LeaderboardAuthorHealth),
+  health_by_repo: z.array(LeaderboardRepoHealth),
   activity: LeaderboardActivity,
 });
 export type Leaderboard = z.infer<typeof Leaderboard>;

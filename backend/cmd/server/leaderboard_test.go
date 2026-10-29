@@ -809,7 +809,7 @@ func TestLeaderboard_ContractShapeAndHostGuard(t *testing.T) {
 	attention := body["needs_attention"].(map[string]any)
 	activity := body["activity"].(map[string]any)
 
-	check("response", keys(body), "period repos summary previous_summary awards rows needs_attention hot_files health_by_size activity")
+	check("response", keys(body), "period repos summary previous_summary awards rows needs_attention hot_files health_by_size health_by_author health_by_repo activity")
 	check("period", keys(body["period"]), "key tz from to previous_from previous_to")
 	check("repos[]", keys(first(body["repos"])), "id full_name last_polled_at")
 	check("summary", keys(body["summary"]), "prs_reviewed merged avg_health time_to_first_review_s time_to_merge_s critical_found open_critical review_cost_usd")
@@ -825,6 +825,8 @@ func TestLeaderboard_ContractShapeAndHostGuard(t *testing.T) {
 	check("needs_attention.items[]", keys(first(attention["items"])), "pr_id repo_id repo number title author opened_at reasons")
 	check("hot_files[]", keys(first(body["hot_files"])), "path repo_id repo findings critical prs")
 	check("health_by_size[]", keys(first(body["health_by_size"])), "size prs avg_health avg_findings")
+	check("health_by_author[]", keys(first(body["health_by_author"])), "author prs avg_health avg_findings")
+	check("health_by_repo[]", keys(first(body["health_by_repo"])), "repo_id repo prs avg_health avg_findings")
 	check("activity", keys(activity), "granularity points")
 	check("activity.points[]", keys(first(activity["points"])), "from to opened merged critical")
 

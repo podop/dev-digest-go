@@ -60,7 +60,7 @@ In scope:
 Out of scope:
 - No human GitHub reviews, review requests or review comments are fetched; "first review" means the first DevDigest review.
 - No change to the PR list page (`/repos/:repoId/pulls`): its columns, S/M/L buckets and status labels stay as they are.
-- No per-author or per-team ranking; rows are pull requests only.
+- No per-author or per-team ranking; rows are pull requests only (Health by author / repository, D28, are bar cards, not a ranking table).
 - No new LLM calls, jobs or writes are triggered by opening the page or calling the read endpoint.
 - No author avatar images are fetched; authors are shown with the existing initials avatar.
 - No export (CSV/PDF) and no notifications.
@@ -124,6 +124,9 @@ Out of scope:
 - FR14 [api] — Hot files: files with the most snapshot findings over the rows (dismissed excluded), with critical
   count, repository and PR numbers; top 6, ties by critical count, then path ascending.
 - FR15 [api] — Health by size: for XS, S, M, L, XL — row count, mean health, mean findings per PR (C+W+S; null when no rows).
+- FR15a [api] — Health by author / by repository (D28): one group per author / per repository id (label: repository name) over
+  every row, same means as FR15 (mean health null when no row of the group has a health); worst mean health first (null last),
+  then more rows, then the label. The UI shows the top 8 until "Show all N".
 - FR16 [api] — Activity: for `week`/`last_week` one point per calendar day in `tz` (7); for `30d` one point per
   Monday-started week intersecting the window, clipped to it (D22). Each point: PRs opened, PRs merged, CRITICAL
   snapshot findings by their review's time; the critical sum equals the critical-found KPI.
@@ -182,7 +185,10 @@ DB error → 500 envelope. UI: request error → error state with Retry; the pag
   summary: Kpis, previous_summary: Kpis|null,
   awards: { cleanest, hottest, fastest_merge, most_rounds, monster, priciest }: Award|null,
   rows: Row[], needs_attention: { total, items: Attention[] },
-  hot_files: HotFile[], health_by_size: SizeBucket[], activity: { granularity: day|week, points: Point[] } }
+  hot_files: HotFile[], health_by_size: SizeBucket[],
+  health_by_author: { author, prs, avg_health|null, avg_findings|null }[],            // FR15a
+  health_by_repo: { repo_id, repo, prs, avg_health|null, avg_findings|null }[],       // FR15a
+  activity: { granularity: day|week, points: Point[] } }
 Kpis = { prs_reviewed, merged, avg_health|null, time_to_first_review_s|null, time_to_merge_s|null,
          critical_found, open_critical, review_cost_usd }
 Row = { pr_id, repo_id, repo, number, title, author, status, draft, additions, deletions, files_count,
@@ -359,6 +365,7 @@ with the backend (repository rule). GET `/repos` keeps its shape and already ret
 - D25 — "compared with" follows `previous_summary`, not the existence of a previous window (user, 2026-10-23).
 - D26 — Hot files PR numbers are links (user, 2026-10-23).
 - D27 — AC12 accepted with a deviation after fix round r1 (SQL aggregation, output byte-identical): at NFR1 volume 30d/all p95 is 532 ms at host load 3–4 (4-shard build without a clean full-mix run), against the 500 ms limit. The other five variants pass (p95 36–270 ms). The remaining cost is ~4 µs of Postgres CPU per finding. Follow-ups: merge windowReviews into the shard statement, parallel JSON encoding (user, 2026-10-24).
+- D28 — Two more cards next to Health by size: Health by author and Health by repository, computed by the API (FR15a), worst health first, top 8 + "Show all N"; the four bottom cards form a 2×2 grid (user, 2026-10-29).
 
 ## 17. Open questions
 None — Q1–Q10 were resolved on 2026-10-23 by accepting their defaults (D7–D16).

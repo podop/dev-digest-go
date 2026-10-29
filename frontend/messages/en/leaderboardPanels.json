@@ -38,6 +38,26 @@
     "emptyTitle": "No PRs by size",
     "emptyBody": "No pull requests with a known size in this period."
   },
+  "healthByGroup": {
+    "summary": "{prs, plural, one {# PR} other {# PRs}} · {findings} findings",
+    "summaryHint": "Average findings per PR",
+    "healthLabel": "{name}: average health {health}",
+    "noHealth": "—",
+    "showAll": "Show all {count}",
+    "showTop": "Show top {count}"
+  },
+  "healthByAuthor": {
+    "title": "Health by author",
+    "subtitle": "Lowest average health first.",
+    "emptyTitle": "No authors",
+    "emptyBody": "No pull requests were reviewed in this period."
+  },
+  "healthByRepo": {
+    "title": "Health by repository",
+    "subtitle": "Lowest average health first.",
+    "emptyTitle": "No repositories",
+    "emptyBody": "No pull requests were reviewed in this period."
+  },
   "dailyActivity": {
     "title": "Daily activity",
     "subtitle": "Pull requests opened and merged per day",

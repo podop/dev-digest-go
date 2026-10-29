@@ -78,6 +78,7 @@ import {
   LeaderboardActivityPoint,
   LeaderboardAttention,
   LeaderboardAttentionReason,
+  LeaderboardAuthorHealth,
   LeaderboardAward,
   LeaderboardAwards,
   LeaderboardHotFile,
@@ -85,6 +86,7 @@ import {
   LeaderboardNeedsAttention,
   LeaderboardPeriod,
   LeaderboardRepo,
+  LeaderboardRepoHealth,
   LeaderboardRow,
   LeaderboardRowReview,
   LeaderboardSeverityCounts,
@@ -472,6 +474,8 @@ const leaderboard = Leaderboard.extend({
   }).strict(),
   hot_files: z.array(LeaderboardHotFile.strict()),
   health_by_size: z.array(LeaderboardSizeBucket.strict()),
+  health_by_author: z.array(LeaderboardAuthorHealth.strict()),
+  health_by_repo: z.array(LeaderboardRepoHealth.strict()),
   activity: LeaderboardActivity.extend({ points: z.array(LeaderboardActivityPoint.strict()) }).strict(),
 }).strict();
 

@@ -125,6 +125,14 @@ function loaded(over: Partial<Leaderboard> = {}): Leaderboard {
       { size: "L", prs: 0, avg_health: null, avg_findings: null },
       { size: "XL", prs: 1, avg_health: 40, avg_findings: 6 },
     ],
+    health_by_author: [
+      { author: "olga.k", prs: 2, avg_health: 60, avg_findings: 3 },
+      { author: "ivan.petrov", prs: 1, avg_health: 92, avg_findings: 1 },
+    ],
+    health_by_repo: [
+      { repo_id: WEB_ID, repo: "acme/web", prs: 2, avg_health: 60, avg_findings: 3 },
+      { repo_id: API_ID, repo: "acme/api", prs: 3, avg_health: 88, avg_findings: 1.3 },
+    ],
     activity: {
       granularity: "day",
       points: [
@@ -144,6 +152,8 @@ const EMPTY: Leaderboard = loaded({
   needs_attention: { total: 0, items: [] },
   hot_files: [],
   health_by_size: (["XS", "S", "M", "L", "XL"] as const).map((size) => ({ size, prs: 0, avg_health: null, avg_findings: null })),
+  health_by_author: [],
+  health_by_repo: [],
   activity: { granularity: "day", points: [{ from: "2026-09-28", to: "2026-09-28", opened: 0, merged: 0, critical: 0 }] },
 });
 
@@ -200,6 +210,12 @@ describe("LeaderboardView", () => {
     const sizes = within(screen.getByRole("list", { name: "Health by PR size" }));
     expect(sizes.getAllByRole("listitem")).toHaveLength(5);
     expect(sizes.getByText("3 PRs · 0.5 findings")).toBeInTheDocument();
+    const authors = within(screen.getByRole("list", { name: "Health by author" }));
+    expect(authors.getAllByRole("listitem").map((li) => li.getAttribute("data-series"))).toEqual(["olga.k", "ivan.petrov"]);
+    expect(authors.getByRole("img", { name: "olga.k: average health 60" })).toBeInTheDocument();
+    const byRepo = within(screen.getByRole("list", { name: "Health by repository" }));
+    expect(byRepo.getByRole("img", { name: "acme/api: average health 88" })).toBeInTheDocument();
+    expect(byRepo.getByText("3 PRs · 1.3 findings")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Tue 29: 3 opened, 2 merged, 1 critical" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Daily activity" })).toBeInTheDocument();
 
@@ -239,6 +255,10 @@ describe("LeaderboardView", () => {
         { path: "a.go", repo_id: GL_ID, repo: "payments", findings: 2, critical: 0, prs: [12, 14] },
         { path: "b.go", repo_id: API_ID, repo: "acme/api", findings: 1, critical: 0, prs: [41] },
       ],
+      health_by_repo: [
+        { repo_id: GL_ID, repo: "payments", prs: 1, avg_health: 70, avg_findings: 2 },
+        { repo_id: API_ID, repo: "acme/api", prs: 1, avg_health: 90, avg_findings: 0 },
+      ],
     });
     mockFetch({ "GET /repos": [...REPOS, gl, gl2], "GET /leaderboard": data });
     const { user } = renderWithProviders(view());
@@ -258,6 +278,10 @@ describe("LeaderboardView", () => {
     expect(glFile.getByText(/payments · gitlab\.com/)).toBeInTheDocument();
     expect(glFile.getByRole("link", { name: "!12" })).toHaveAttribute("href", `/repos/${GL_ID}/pulls/12`);
     expect(glFile.getByRole("link", { name: "!14" })).toBeInTheDocument();
+
+    const byRepo = within(screen.getByRole("list", { name: "Health by repository" }));
+    expect(byRepo.getByTitle("payments · gitlab.com")).toHaveTextContent("payments· gitlab.com");
+    expect(byRepo.getByText("acme/api")).toBeInTheDocument();
     const ghFile = within(hot.getByText("b.go").closest("li")!);
     expect(ghFile.getByRole("link", { name: "#41" })).toBeInTheDocument();
 
@@ -329,6 +353,8 @@ describe("LeaderboardView", () => {
     expect(screen.getByText("Nothing needs you this week")).toBeInTheDocument();
     expect(screen.getByText("No hot files")).toBeInTheDocument();
     expect(screen.getByText("No PRs by size")).toBeInTheDocument();
+    expect(screen.getByText("No authors")).toBeInTheDocument();
+    expect(screen.getByText("No repositories")).toBeInTheDocument();
     expect(screen.getByText("No activity")).toBeInTheDocument();
     // no award winner → a dash on each card
     expect(within(screen.getByRole("group", { name: "Cleanest PR" })).getByText("—")).toBeInTheDocument();

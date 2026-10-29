@@ -103,6 +103,43 @@
       "value": 1.25
     }
   },
+  "health_by_author": [
+    {
+      "author": "mona",
+      "avg_findings": 5,
+      "avg_health": 69,
+      "prs": 1
+    },
+    {
+      "author": "octo",
+      "avg_findings": 1.7,
+      "avg_health": 91,
+      "prs": 6
+    }
+  ],
+  "health_by_repo": [
+    {
+      "avg_findings": 3,
+      "avg_health": 83,
+      "prs": 2,
+      "repo": "web",
+      "repo_id": "00000020-0000-4000-8000-000000000002"
+    },
+    {
+      "avg_findings": 2,
+      "avg_health": 90,
+      "prs": 4,
+      "repo": "api",
+      "repo_id": "00000020-0000-4000-8000-000000000001"
+    },
+    {
+      "avg_findings": 1,
+      "avg_health": 90,
+      "prs": 1,
+      "repo": "ops",
+      "repo_id": "00000020-0000-4000-8000-000000000003"
+    }
+  ],
   "health_by_size": [
     {
       "avg_findings": 0.8,

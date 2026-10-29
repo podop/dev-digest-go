@@ -21,15 +21,25 @@ export const s = {
   item: {
     display: "flex",
     flexDirection: "column",
-    gap: 3,
-    padding: "5px 0",
+    alignItems: "flex-start",
+    gap: 4,
+    padding: "7px 0",
     borderTop: "1px solid var(--border)",
-  } satisfies CSSProperties,
-  head: { display: "flex", alignItems: "center", gap: 8, minWidth: 0 } satisfies CSSProperties,
-  ref: { flexShrink: 0, fontSize: 11, color: "var(--accent-text)", textDecoration: "none" } satisfies CSSProperties,
-  prTitle: {
-    flex: 1,
     minWidth: 0,
+  } satisfies CSSProperties,
+  author: { display: "inline-flex", alignItems: "center", gap: 6, maxWidth: "100%", fontSize: 11, color: "var(--text-secondary)" } satisfies CSSProperties,
+  authorName: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
+  ref: {
+    maxWidth: "100%",
+    fontSize: 11,
+    color: "var(--accent-text)",
+    textDecoration: "none",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  } satisfies CSSProperties,
+  prTitle: {
+    maxWidth: "100%",
     fontSize: 12,
     fontWeight: 600,
     color: "var(--text-primary)",
@@ -37,7 +47,6 @@ export const s = {
     overflow: "hidden",
     textOverflow: "ellipsis",
   } satisfies CSSProperties,
-  author: { display: "inline-flex", alignItems: "center", gap: 5, flexShrink: 0, fontSize: 10.5, color: "var(--text-secondary)" } satisfies CSSProperties,
   reasons: { display: "flex", flexWrap: "wrap", gap: 4 } satisfies CSSProperties,
   /** Outlined badge; neutral by default, red for the reasons that mean an open critical finding. */
   reason: {

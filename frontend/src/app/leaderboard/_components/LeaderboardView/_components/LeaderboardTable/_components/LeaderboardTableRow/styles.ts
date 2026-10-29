@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 export const s = {
-  td: { padding: "8px 8px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", fontSize: 11.5, verticalAlign: "middle" } satisfies CSSProperties,
+  td: { padding: "11px 8px", borderBottom: "1px solid var(--border)", whiteSpace: "nowrap", fontSize: 11.5, verticalAlign: "middle" } satisfies CSSProperties,
   row: { cursor: "pointer" } satisfies CSSProperties,
   muted: { color: "var(--text-muted)" } satisfies CSSProperties,
   rank: { color: "var(--text-muted)", fontWeight: 600 } satisfies CSSProperties,
@@ -18,7 +18,7 @@ export const s = {
   } satisfies CSSProperties,
   /** Shrinks before the PR reference does. */
   author: { flexShrink: 10, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" } satisfies CSSProperties,
-  title: { fontWeight: 650, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 3 } satisfies CSSProperties,
+  title: { fontWeight: 650, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 5 } satisfies CSSProperties,
   /** Size badge and line stats on one line, so a row stays two text lines tall. */
   stack: { display: "flex", alignItems: "center", gap: 6 } satisfies CSSProperties,
   sizeBadge: (color: string): CSSProperties => ({ border: `1px solid ${color}`, fontSize: 10, padding: "0 5px", lineHeight: 1.4 }),
@@ -28,7 +28,7 @@ export const s = {
   del: { color: "var(--crit)" } satisfies CSSProperties,
   risk: { display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11 } satisfies CSSProperties,
   riskDot: (color: string): CSSProperties => ({ width: 7, height: 7, borderRadius: 99, background: color, flex: "none" }),
-  time: { display: "flex", flexDirection: "column", gap: 0, fontSize: 10.5, color: "var(--text-secondary)" } satisfies CSSProperties,
+  time: { display: "flex", flexDirection: "column", gap: 3, fontSize: 10.5, color: "var(--text-secondary)" } satisfies CSSProperties,
   detail: { padding: "10px 12px 12px 48px", borderBottom: "1px solid var(--border)", background: "var(--bg-surface)" } satisfies CSSProperties,
   toggle: { all: "unset", cursor: "pointer", color: "var(--text-muted)", width: 16, textAlign: "center" } satisfies CSSProperties,
 } as const;

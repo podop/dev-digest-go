@@ -161,6 +161,21 @@ type sizeBucketDTO struct {
 	AvgFindings *float64 `json:"avg_findings"`
 }
 
+type authorHealthDTO struct {
+	Author      string   `json:"author"`
+	PRs         int      `json:"prs"`
+	AvgHealth   *int     `json:"avg_health"`
+	AvgFindings *float64 `json:"avg_findings"`
+}
+
+type repoHealthDTO struct {
+	RepoID      string   `json:"repo_id"`
+	Repo        string   `json:"repo"`
+	PRs         int      `json:"prs"`
+	AvgHealth   *int     `json:"avg_health"`
+	AvgFindings *float64 `json:"avg_findings"`
+}
+
 type activityPointDTO struct {
 	From     string `json:"from"`
 	To       string `json:"to"`
@@ -184,6 +199,8 @@ type leaderboardDTO struct {
 	NeedsAttention  needsAttentionDTO `json:"needs_attention"`
 	HotFiles        []hotFileDTO      `json:"hot_files"`
 	HealthBySize    []sizeBucketDTO   `json:"health_by_size"`
+	HealthByAuthor  []authorHealthDTO `json:"health_by_author"`
+	HealthByRepo    []repoHealthDTO   `json:"health_by_repo"`
 	Activity        activityDTO       `json:"activity"`
 }
 
@@ -324,6 +341,14 @@ func toLeaderboard(lb domain.Leaderboard) leaderboardDTO {
 	for i, b := range lb.HealthBySize {
 		buckets[i] = sizeBucketDTO{Size: string(b.Size), PRs: b.PRs, AvgHealth: b.AvgHealth, AvgFindings: b.AvgFindings}
 	}
+	authors := make([]authorHealthDTO, len(lb.HealthByAuthor))
+	for i, g := range lb.HealthByAuthor {
+		authors[i] = authorHealthDTO{Author: g.Label, PRs: g.PRs, AvgHealth: g.AvgHealth, AvgFindings: g.AvgFindings}
+	}
+	byRepo := make([]repoHealthDTO, len(lb.HealthByRepo))
+	for i, g := range lb.HealthByRepo {
+		byRepo[i] = repoHealthDTO{RepoID: g.Key, Repo: g.Label, PRs: g.PRs, AvgHealth: g.AvgHealth, AvgFindings: g.AvgFindings}
+	}
 	points := make([]activityPointDTO, len(lb.Activity.Points))
 	for i, p := range lb.Activity.Points {
 		points[i] = activityPointDTO{From: p.From, To: p.To, Opened: p.Opened, Merged: p.Merged, Critical: p.Critical}
@@ -332,7 +357,7 @@ func toLeaderboard(lb domain.Leaderboard) leaderboardDTO {
 		Period: toPeriod(lb.Window), Repos: repos,
 		Summary: toKpis(lb.Summary), PreviousSummary: toPreviousKpis(lb.PreviousSummary),
 		Awards: toAwards(lb.Awards), Rows: toRows(lb.Rows), NeedsAttention: toAttention(lb.NeedsAttention),
-		HotFiles: files, HealthBySize: buckets,
+		HotFiles: files, HealthBySize: buckets, HealthByAuthor: authors, HealthByRepo: byRepo,
 		Activity: activityDTO{Granularity: lb.Activity.Granularity, Points: points},
 	}
 }

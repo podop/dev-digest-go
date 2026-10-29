@@ -302,7 +302,7 @@ func TestLeaderboard_EmptyAnswerKeepsEveryListAnArray(t *testing.T) {
 		`"previous_from":"2026-10-12T00:00:00.000+03:00","previous_to":"2026-10-19T00:00:00.000+03:00"},` +
 		`"repos":[],"summary":` + kpis + `,"previous_summary":null,` +
 		`"awards":{"cleanest":null,"hottest":null,"fastest_merge":null,"most_rounds":null,"monster":null,"priciest":null},` +
-		`"rows":[],"needs_attention":{"total":0,"items":[]},"hot_files":[],"health_by_size":[],"activity":{"granularity":"day","points":[]}}`
+		`"rows":[],"needs_attention":{"total":0,"items":[]},"hot_files":[],"health_by_size":[],"health_by_author":[],"health_by_repo":[],"activity":{"granularity":"day","points":[]}}`
 	if r.Status != http.StatusOK || strings.TrimSpace(r.Body) != want {
 		t.Errorf("GET /leaderboard = %d\n%s\nwant\n%s", r.Status, r.Body, want)
 	}
@@ -382,6 +382,14 @@ func TestLeaderboard_WireShape(t *testing.T) {
 			{Size: domain.SizeXS}, {Size: domain.SizeS, PRs: 1, AvgHealth: ptr(90), AvgFindings: ptr(3.5)},
 			{Size: domain.SizeM}, {Size: domain.SizeL}, {Size: domain.SizeXL},
 		},
+		HealthByAuthor: []domain.HealthGroup{
+			{Key: "ann", Label: "ann", PRs: 1, AvgHealth: ptr(90), AvgFindings: ptr(3.0)},
+			{Key: "bob", Label: "bob", PRs: 1, AvgFindings: ptr(0.0)},
+		},
+		HealthByRepo: []domain.HealthGroup{
+			{Key: repoID, Label: "api", PRs: 1, AvgHealth: ptr(90), AvgFindings: ptr(3.0)},
+			{Key: "r2", Label: "web", PRs: 1, AvgFindings: ptr(0.0)},
+		},
 		Activity: domain.ActivityChart{Granularity: domain.GranularityDay, Points: []domain.ActivityPoint{
 			{From: "2026-10-19", To: "2026-10-19", Opened: 1, Critical: 1},
 		}},
@@ -434,6 +442,10 @@ func TestLeaderboard_WireShape(t *testing.T) {
 	                     {"size":"M","prs":0,"avg_health":null,"avg_findings":null},
 	                     {"size":"L","prs":0,"avg_health":null,"avg_findings":null},
 	                     {"size":"XL","prs":0,"avg_health":null,"avg_findings":null}],
+	  "health_by_author": [{"author":"ann","prs":1,"avg_health":90,"avg_findings":3},
+	                       {"author":"bob","prs":1,"avg_health":null,"avg_findings":0}],
+	  "health_by_repo": [{"repo_id":"` + repoID + `","repo":"api","prs":1,"avg_health":90,"avg_findings":3},
+	                     {"repo_id":"r2","repo":"web","prs":1,"avg_health":null,"avg_findings":0}],
 	  "activity": {"granularity":"day","points":[{"from":"2026-10-19","to":"2026-10-19","opened":1,"merged":0,"critical":1}]}
 	}`
 	if diff := cmp.Diff(decode(t, want), decode(t, r.Body)); diff != "" {

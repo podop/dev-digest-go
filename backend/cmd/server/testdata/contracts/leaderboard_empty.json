@@ -61,6 +61,8 @@
     "most_rounds": null,
     "priciest": null
   },
+  "health_by_author": [],
+  "health_by_repo": [],
   "health_by_size": [
     {
       "avg_findings": null,

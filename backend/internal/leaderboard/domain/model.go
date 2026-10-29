@@ -16,7 +16,8 @@
 //	cur, prev := BuildRows(win, facts, now)       // rows of the window / of the previous window (nil without one)
 //	Rank(cur); Rank(prev)
 //	Kpis(cur-span, cur, facts), Kpis(prev-span, prev, facts) (only when prev has rows), Awards(cur-span, cur),
-//	Attention(cur-span, cur, facts.Pulls, now), HotFiles(cur), HealthBySize(cur), Activity(win, cur, facts.Pulls)
+//	Attention(cur-span, cur, facts.Pulls, now), HotFiles(cur), HealthBySize(cur),
+//	HealthByAuthor(cur), HealthByRepo(cur), Activity(win, cur, facts.Pulls)
 //
 // # Function signatures (implemented in W1, one file per lane; NOT in this file)
 //
@@ -41,6 +42,9 @@
 //	// files.go (S8)
 //	func HotFiles(rows []Row) []HotFile
 //	func HealthBySize(rows []Row) []SizeBucket
+//	// health_groups.go: one group per author / repository, worst health first
+//	func HealthByAuthor(rows []Row) []HealthGroup
+//	func HealthByRepo(rows []Row) []HealthGroup
 //	// daily.go (S8, the activity chart): one point per day (week, last_week) or per clipped Monday-started week (30d)
 //	func Activity(win Window, rows []Row, pulls []PullFact) ActivityChart
 //
@@ -616,5 +620,8 @@ type Leaderboard struct {
 	NeedsAttention  AttentionList
 	HotFiles        []HotFile
 	HealthBySize    []SizeBucket
-	Activity        ActivityChart
+	// HealthByAuthor and HealthByRepo hold every author / repository of the rows, worst health first.
+	HealthByAuthor []HealthGroup
+	HealthByRepo   []HealthGroup
+	Activity       ActivityChart
 }

@@ -20,6 +20,7 @@ import { useActiveRepo } from "@/lib/repo-context";
 import { AwardCards } from "./_components/AwardCards";
 import { DailyActivity } from "./_components/DailyActivity";
 import { Header } from "./_components/Header";
+import { HealthByAuthor, HealthByRepo } from "./_components/HealthByGroup";
 import { HealthBySize } from "./_components/HealthBySize";
 import { HotFiles } from "./_components/HotFiles";
 import { KpiTiles } from "./_components/KpiTiles";
@@ -115,11 +116,17 @@ function LoadedPage({ data, pullsRepoId }: { data: Leaderboard; pullsRepoId: str
           <HotFiles files={data.hot_files} repos={repos} />
         </div>
       </div>
-      <div style={s.main}>
-        <div style={s.half}>
+      <div style={s.quad}>
+        <div style={s.cell}>
           <HealthBySize buckets={data.health_by_size} />
         </div>
-        <div style={s.half}>
+        <div style={s.cell}>
+          <HealthByAuthor items={data.health_by_author} />
+        </div>
+        <div style={s.cell}>
+          <HealthByRepo items={data.health_by_repo} repos={repos} />
+        </div>
+        <div style={s.cell}>
           <DailyActivity activity={data.activity} />
         </div>
       </div>
