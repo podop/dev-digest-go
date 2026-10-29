@@ -95,6 +95,18 @@ function LoadedPage({ data, pullsRepoId }: { data: Leaderboard; pullsRepoId: str
     <div style={s.loaded}>
       <KpiTiles summary={data.summary} previous={data.previous_summary} />
       <AwardCards awards={data.awards} repos={repos} />
+      <div style={s.health}>
+        <div style={s.cell}>
+          <HealthBySize buckets={data.health_by_size} />
+        </div>
+        <div style={s.cell}>
+          <HealthByAuthor items={data.health_by_author} />
+        </div>
+        <div style={s.cell}>
+          <HealthByRepo items={data.health_by_repo} repos={repos} />
+        </div>
+      </div>
+      <DailyActivity activity={data.activity} />
       <div style={s.main}>
         <div style={s.mainWide}>
           {data.rows.length > 0 ? (
@@ -114,20 +126,6 @@ function LoadedPage({ data, pullsRepoId }: { data: Leaderboard; pullsRepoId: str
         <div style={s.mainSide}>
           <NeedsAttention data={data.needs_attention} repos={repos} />
           <HotFiles files={data.hot_files} repos={repos} />
-        </div>
-      </div>
-      <div style={s.quad}>
-        <div style={s.cell}>
-          <HealthBySize buckets={data.health_by_size} />
-        </div>
-        <div style={s.cell}>
-          <HealthByAuthor items={data.health_by_author} />
-        </div>
-        <div style={s.cell}>
-          <HealthByRepo items={data.health_by_repo} repos={repos} />
-        </div>
-        <div style={s.cell}>
-          <DailyActivity activity={data.activity} />
         </div>
       </div>
     </div>

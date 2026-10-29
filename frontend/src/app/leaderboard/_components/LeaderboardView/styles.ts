@@ -11,10 +11,10 @@ export const s = {
   /** The table takes every pixel the side column leaves. */
   mainWide: { flex: "1 1 720px", minWidth: 0 } satisfies CSSProperties,
   mainSide: { flex: "0 1 360px", minWidth: 280, display: "flex", flexDirection: "column", gap: 8 } satisfies CSSProperties,
-  /** The bottom cards: two columns (one below ~700px), cards in a row stretched to the same height. */
-  quad: {
+  /** The health cards above the table: at most three columns (fewer as the page narrows), cards in a row stretched to the same height. */
+  health: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, max(340px, calc((100% - 8px) / 2))), 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, max(320px, calc((100% - 16px) / 3))), 1fr))",
     gap: 8,
   } satisfies CSSProperties,
   /** A one-item grid, so the card inside fills the row height. */

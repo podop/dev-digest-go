@@ -206,7 +206,14 @@ describe("LeaderboardView", () => {
     expect(attention.getByText("2 open critical")).toBeInTheDocument();
     expect(within(screen.getByRole("list", { name: "Hot files" })).getByText("internal/billing/invoice.go")).toBeInTheDocument();
 
-    // bottom row
+    // health cards and daily activity, placed above the table and needs attention
+    const following = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const activityHeading = screen.getByRole("heading", { name: "Daily activity" });
+    for (const card of [...["Health by PR size", "Health by author", "Health by repository"].map((name) => screen.getByRole("list", { name })), activityHeading]) {
+      expect(following(card, screen.getByRole("table", { name: "Pull requests ranked by health" }))).toBe(true);
+      expect(following(card, screen.getByRole("list", { name: "Needs attention" }))).toBe(true);
+    }
+    expect(following(screen.getByRole("list", { name: "Health by repository" }), activityHeading)).toBe(true);
     const sizes = within(screen.getByRole("list", { name: "Health by PR size" }));
     expect(sizes.getAllByRole("listitem")).toHaveLength(5);
     expect(sizes.getByText("3 PRs · 0.5 findings")).toBeInTheDocument();

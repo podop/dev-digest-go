@@ -21,8 +21,8 @@ export const s = {
   } satisfies CSSProperties,
   labelText: { minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } satisfies CSSProperties,
   repoLabel: { display: "flex", gap: 4, minWidth: 0, whiteSpace: "nowrap" } satisfies CSSProperties,
-  /** Shrinks only after the host is gone. */
-  repoName: { flexShrink: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" } satisfies CSSProperties,
+  /** Never shrinks (a weighted shrink still clipped ~1px of it): the host gives way first, max-width clips a name longer than the column. */
+  repoName: { flexShrink: 0, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" } satisfies CSSProperties,
   repoHost: { flexShrink: 1000, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", fontWeight: 400, color: "var(--text-muted)" } satisfies CSSProperties,
   track: { height: 8, background: "var(--bg-hover)", borderRadius: 3, overflow: "hidden" } satisfies CSSProperties,
   fill: { height: "100%", borderRadius: 3 } satisfies CSSProperties,
