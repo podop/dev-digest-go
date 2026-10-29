@@ -25,6 +25,7 @@ export function RepoSwitcher({ ctx }: { ctx: ShellContext }) {
     <Dropdown
       align="left"
       width={204}
+      itemFontSize={11}
       items={items}
       trigger={
         <div

@@ -2,7 +2,7 @@ import React from "react";
 import { Icon } from "../icons";
 import { type DropdownItemDef } from "./types";
 
-function DropdownItem({ it, onClose }: { it: DropdownItemDef; onClose: () => void }) {
+function DropdownItem({ it, onClose, fontSize }: { it: DropdownItemDef; onClose: () => void; fontSize: number }) {
   const [h, setH] = React.useState(false);
   const I = it.icon ? Icon[it.icon] : null;
   return (
@@ -23,7 +23,7 @@ function DropdownItem({ it, onClose }: { it: DropdownItemDef; onClose: () => voi
         border: "none",
         background: h ? "var(--bg-hover)" : "transparent",
         color: it.muted ? "var(--text-secondary)" : "var(--text-primary)",
-        fontSize: 14,
+        fontSize,
         fontWeight: 500,
         textAlign: "left",
         cursor: "pointer",
@@ -64,11 +64,14 @@ export function Dropdown({
   items,
   align = "left",
   width = 230,
+  itemFontSize = 14,
 }: {
   trigger: React.ReactNode;
   items: DropdownItemDef[];
   align?: "left" | "right";
   width?: number;
+  /** Local addition (not in dev-digest): font size of the item labels; the sidebar repo switcher uses 11. */
+  itemFontSize?: number;
 }) {
   const [open, setOpen] = React.useState(false);
   const ref = React.useRef<HTMLDivElement>(null);
@@ -102,7 +105,7 @@ export function Dropdown({
             it.divider ? (
               <div key={i} style={{ height: 1, background: "var(--border)", margin: "6px 0" }} />
             ) : (
-              <DropdownItem key={i} it={it} onClose={() => setOpen(false)} />
+              <DropdownItem key={i} it={it} fontSize={itemFontSize} onClose={() => setOpen(false)} />
             )
           )}
         </div>

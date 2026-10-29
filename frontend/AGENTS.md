@@ -32,7 +32,8 @@
 ## Do not touch
 - `src/vendor/ui` (`@devdigest/ui`) — vendored primitives; compose, don't edit. Local exceptions (keep them on
   any re-sync): registration lists `icons.tsx`/`nav.ts` (9ef3155) and the additive `onClick` prop of
-  `AutoTriggerStatus.tsx` (0722f1a, Settings C D18), and the compact sizes of `shell/Sidebar.tsx`, `NavItem.tsx`,
+  `AutoTriggerStatus.tsx` (0722f1a, Settings C D18), the additive `itemFontSize` prop of `kit/Dropdown.tsx`
+  (default 14; the repo switcher passes 11, user 2026-10-29), and the compact sizes of `shell/Sidebar.tsx`, `NavItem.tsx`,
   `RepoSwitcher.tsx`, `Topbar.tsx` (prototype chrome.jsx sizes, user 2026-10-27), and `RepoSwitcher.tsx` showing
   "Add repository…" only when `ctx.onAddRepo` is provided (the app passes none; repositories are added in Settings ›
   First-run setup; user 2026-10-27).
